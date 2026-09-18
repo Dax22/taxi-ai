@@ -9,6 +9,7 @@ export function createConversationController({ client, view, visible = () => !do
 
   async function show(ride, user) {
     if (!user || user.role === 'admin' || !ride) { reset(); return; }
+    if (current && current.user.id !== user.id) reset();
     if (current?.user.id !== user.id || current?.ride.id !== ride.id) {
       generation++; pending = null; reading = 0;
       current = { ride, user, messages: [], thread: null };

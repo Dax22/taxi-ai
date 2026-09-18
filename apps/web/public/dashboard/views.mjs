@@ -223,6 +223,9 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
     setBusy(value) { busy = value; updateButtons(); },
     select(id) { selectedId = id; },
     selected: selectedRide,
-    reset() { selectedId = null; detailId = null; renderedLists = ''; renderedDetail = ''; },
+    reset() {
+      selectedId = null; detailId = null; renderedLists = ''; renderedDetail = '';
+      $('chat-reports-list').replaceChildren();
+    },
   });
 }

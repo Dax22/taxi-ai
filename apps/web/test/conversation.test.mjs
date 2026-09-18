@@ -45,6 +45,7 @@ test('switching account within a shared ride ignores the earlier account respons
   } });
   const first = controller.show(ride(), customer);
   await controller.show(ride(), { id: 'driver', role: 'driver' });
+  assert.equal(view.draft, '', 'changing accounts clears private drafts immediately');
   resolveOld(page('ride-1', [{ id: 'old-session', sequence: 1 }]));
   await first;
   assert.equal(view.shown.user.id, 'driver');
