@@ -1,0 +1,12 @@
+{
+  "name": "taxi-ai",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Taxi Ai project foundation for Abuja rides, food and courier delivery",
+  "type": "module",
+  "engines": { "node": ">=24" },
+  "scripts": {
+    "test": "node --test packages/shared/test/*.test.mjs",
+    "demo": "node scripts/fare-demo.mjs"
+  }
+}
