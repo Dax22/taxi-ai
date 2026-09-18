@@ -17,6 +17,8 @@ test('the local site serves HTML, modules and artwork with correct content types
       ['/dashboard.css', 'text/css'], ['/dashboard.mjs', 'text/javascript'], ['/styles.css', 'text/css'],
       ['/dashboard/api-client.mjs', 'text/javascript'], ['/dashboard/auth-form.mjs', 'text/javascript'],
       ['/dashboard/dom.mjs', 'text/javascript'], ['/dashboard/views.mjs', 'text/javascript'],
+      ['/dashboard/trip-model.mjs', 'text/javascript'], ['/dashboard/trip-view.mjs', 'text/javascript'],
+      ['/shared/trip-lifecycle.mjs', 'text/javascript'],
       ['/dashboard/conversation-model.mjs', 'text/javascript'],
       ['/dashboard/conversation-controller.mjs', 'text/javascript'],
       ['/dashboard/conversation-view.mjs', 'text/javascript'],

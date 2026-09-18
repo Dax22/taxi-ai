@@ -12,7 +12,8 @@ administrators cannot open that conversation through the chat API.
 | Requested, no driver | Waiting message; chat has not opened |
 | Negotiating | Both participants can send messages and structured fare offers |
 | Fare agreed | Messaging continues; the agreed fare cannot change |
-| Cancelled after assignment | Saved conversation remains readable/reportable; new messages are rejected |
+| Booked, on the way, arrived or in progress | Messaging continues; fare changes remain unavailable |
+| Completed or cancelled after assignment | Saved conversation remains readable/reportable; new messages are rejected |
 
 Messages are plain text, limited to 2,000 JavaScript string units and 500 messages
 per ride in this preview. There are no attachments, edits or deletions. The API
@@ -86,7 +87,7 @@ Message fields are `id`, `rideId`, `sequence`, `senderId`, `body` and `createdAt
 Actor IDs, times and sequence numbers come from the server. Unexpected input
 fields, invalid cursors and unsupported report reasons are rejected. Unrelated
 and unknown ride/message IDs return 404 after authorization checks. An owner's
-unassigned ride returns `CHAT_NOT_READY`; new sends to cancelled/full threads
+unassigned ride returns `CHAT_NOT_READY`; new sends to completed/cancelled/full threads
 return `CHAT_CLOSED`/`MESSAGE_LIMIT`.
 
 ## Module and migration

@@ -42,7 +42,18 @@ fare does not dispatch a car. Follow the manual checklist in `apps/web/README.md
 Complete [the browser chat checklist](chat.md#manual-review). Private voice calls,
 staffed safety operations and production communication security remain planned.
 
-## 2c — Real ride pilot
+## 2c — Complete test ride journey (implemented; browser review pending)
+
+- Customer booking confirmation at the immutable agreed fare.
+- Driver departure, arrival, PIN-verified start and trip completion.
+- Participant availability checks, durable PIN cooldown and retry protection.
+- Pre-start cancellation with actor/reason, trip activity and paginated history.
+- Schema-three migration preserving existing accounts, fares and conversations.
+
+Follow [the trip guide](trips.md) for the contract and manual browser review.
+Private voice calls are the next communication milestone.
+
+## 2d — Real ride pilot
 
 Harden authentication and hosting; add verified driver onboarding, maps, vehicle
 matching, operational booking state, receipts and payment-provider integration. Implement authenticated

@@ -161,7 +161,11 @@ test('stale counteroffers, self-acceptance, forged clocks and invalid amounts ne
   assert.equal(first.status, 200); assert.equal(second.status, 200);
   assert.equal(first.body.ride.negotiation.agreement.amountKobo, 470000);
   assert.equal(h.db.prepare("SELECT count(*) AS count FROM fare_events WHERE type = 'accept'").get().count, 1);
-  assert.equal((await customer.post(`${path}/cancel`, { expectedVersion: first.body.ride.version })).body.error.code, 'REQUEST_CLOSED');
+  const cancelled = await customer.post(`${path}/cancel`, { expectedVersion: first.body.ride.version });
+  assert.equal(cancelled.status, 200);
+  assert.equal(cancelled.body.ride.status, 'cancelled');
+  assert.deepEqual(cancelled.body.ride.negotiation.agreement, first.body.ride.negotiation.agreement,
+    'cancelling the journey preserves the immutable fare agreement');
 });
 
 test('a failed retry-key write rolls back the fare, ride version and audit, then the same command can succeed', async (t) => {

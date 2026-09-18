@@ -1,29 +1,33 @@
 import { DEMO_AREAS, createDemoQuote, formatNaira, nairaToKobo } from '/shared/demo-booking.mjs';
 import { $, element } from './dom.mjs';
 import { renderChatReports } from './chat-reports-view.mjs';
+import { RIDE_STATUS_LABELS as statuses, isActiveRide } from '/shared/trip-lifecycle.mjs';
+import { createTripView } from './trip-view.mjs';
 
-const statuses = { requested: 'Waiting for a driver', negotiating: 'Negotiating', agreed: 'Fare agreed', cancelled: 'Cancelled' };
 
 /** DOM rendering and UI events. No network, session storage or backend imports. */
-export function createDashboardView({ onCommand, onReview, onReportReview, onSelectionChange, serverNow }) {
+export function createDashboardView({ onCommand, onReview, onReportReview, onSelectionChange, onHistory, serverNow }) {
   let state = { user: null, rides: [], available: [], drivers: [] };
   let selectedId = null, detailId = null;
   let renderedLists = '', renderedDetail = '';
   let busy = false;
-  function selectedRide() { return state.rides.find((ride) => ride.id === selectedId); }
+  const tripView = createTripView({ onCommand, serverNow });
+  function selectedRide() { return state.rides.find((ride) => ride.id === selectedId) ?? state.history?.find((ride) => ride.id === selectedId); }
 
   function updateButtons() {
     const ride = selectedRide();
     const offer = ride?.negotiation?.currentOffer;
     const remaining = offer ? offer.expiresAt - serverNow() : 0;
     const canAccept = ride?.status === 'negotiating' && offer && offer.proposedBy !== state.user?.id && remaining > 0;
+    tripView.tick();
+    $('history-more').dataset.locked = String(!state.historyCursor);
     $('accept-fare').dataset.locked = String(!canAccept);
     $('fare-expiry').textContent = ride?.status === 'negotiating' && offer
       ? remaining > 0 ? `Offer expires in ${Math.ceil(remaining / 1000)} seconds.` : 'This offer expired. Send a new offer to continue.' : '';
     for (const button of document.querySelectorAll('button')) {
       button.disabled = busy || button.dataset.locked === 'true';
     }
-    $('request-fields').disabled = busy || state.rides.some((item) => ['requested', 'negotiating'].includes(item.status));
+    $('request-fields').disabled = busy || state.rides.some((item) => isActiveRide(item.status));
   }
 
   function render(nextState = state) {
@@ -48,20 +52,21 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
     $('admin-dashboard').hidden = !admin;
     $('chat-reports-panel').hidden = !admin;
     $('available-section').hidden = !driver || user.driver.status !== 'approved';
-    $('open-request-note').hidden = !state.rides.some((ride) => ['requested', 'negotiating'].includes(ride.status));
+    $('open-request-note').hidden = !state.rides.some((ride) => isActiveRide(ride.status));
     if (driver) {
       $('driver-status').textContent = user.driver.status.toUpperCase();
       $('driver-vehicle').textContent = `${user.driver.vehicle.model} · ${user.driver.vehicle.plate}`;
       $('driver-guidance').textContent = user.driver.status === 'pending'
         ? 'Your application is waiting for administrator approval. This page will update when it is reviewed.'
         : user.driver.status === 'rejected' ? 'Your application was not approved. Contact the local administrator.'
-          : 'You can respond to test requests. One negotiation at a time keeps your availability clear.';
+          : 'You can respond to test requests. Finish your current negotiation or booked trip before taking another.';
     }
-    if (!state.rides.some((ride) => ride.id === selectedId)) {
-      selectedId = state.rides.find((ride) => ['requested', 'negotiating'].includes(ride.status))?.id ?? state.rides[0]?.id ?? null;
+    if (!selectedRide()) {
+      selectedId = state.rides.find((ride) => isActiveRide(ride.status))?.id ?? state.rides[0]?.id ?? null;
     }
     const listKey = JSON.stringify({ user, rides: state.rides.map((ride) => [ride.id, ride.version]),
-      available: state.available, drivers: state.drivers, reports: state.reports, unread: state.chatUnread, selectedId });
+      available: state.available, drivers: state.drivers, reports: state.reports, unread: state.chatUnread, selectedId,
+      history: state.history?.map((ride) => [ride.id, ride.version]), historyCursor: state.historyCursor });
     if (listKey !== renderedLists) {
       renderedLists = listKey;
       renderLists();
@@ -71,10 +76,15 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
   }
 
   function renderLists() {
-    $('ride-count').textContent = `${state.rides.length} saved`;
+    const currentRides = state.rides.filter((ride) => !['completed', 'cancelled'].includes(ride.status));
+    $('ride-count').textContent = `${currentRides.length} current`;
     $('ride-list').replaceChildren();
-    if (!state.rides.length) $('ride-list').append(element('p', 'Your journeys will appear here. Start with a test request.', 'empty-state'));
-    for (const ride of state.rides) {
+    $('history-list').replaceChildren();
+    if (!currentRides.length) $('ride-list').append(element('p', 'No current requests. Start with a test request.', 'empty-state'));
+    if (!state.history?.length) $('history-list').append(element('p', 'Completed and cancelled trips will appear here.', 'empty-state'));
+    $('history-more').hidden = !state.historyCursor;
+    $('history-count').textContent = `${state.history?.length ?? 0} loaded`;
+    for (const ride of [...currentRides, ...(state.history ?? [])]) {
       const button = element('button', undefined, 'request-row');
       button.type = 'button';
       button.setAttribute('aria-pressed', String(ride.id === selectedId));
@@ -85,11 +95,11 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
       if (unread) description.append(element('small', `${unread} unread message${unread === 1 ? '' : 's'}`, 'chat-unread-count'));
       button.append(description, element('span', statuses[ride.status], 'status-badge'));
       button.addEventListener('click', () => { selectedId = ride.id; render(); onSelectionChange(selectedRide()); });
-      $('ride-list').append(button);
+      $(['completed', 'cancelled'].includes(ride.status) ? 'history-list' : 'ride-list').append(button);
     }
     $('available-list').replaceChildren();
     if (!state.available.length) $('available-list').append(element('p', 'No open requests right now. New ones appear automatically.', 'empty-state'));
-    const driverBusy = state.rides.some((ride) => ride.status === 'negotiating');
+    const driverBusy = state.rides.some((ride) => isActiveRide(ride.status));
     for (const ride of state.available) {
       const row = element('div', undefined, 'request-row');
       const description = element('div');
@@ -127,6 +137,7 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
 
   function renderDetail() {
     const ride = selectedRide();
+    tripView.render(ride, state.user);
     $('ride-detail').hidden = !ride;
     if (!ride) { detailId = null; renderedDetail = ''; return; }
     const key = `${ride.id}:${ride.version}:${state.user.id}`;
@@ -151,8 +162,6 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
     // acceptance is never automatically resubmitted against a newer counteroffer.
     $('accept-fare').onclick = () => onCommand(`/api/rides/${ride.id}/accept`, {
       expectedVersion: ride.version, offerId: offer.id }, 'Your fare agreement has been saved.');
-    $('cancel-request').hidden = !['requested', 'negotiating'].includes(ride.status);
-    $('cancel-request').onclick = () => onCommand(`/api/rides/${ride.id}/cancel`, { expectedVersion: ride.version }, 'Request cancelled.');
     $('agreed-note').hidden = ride.status !== 'agreed';
     if (agreement) {
       $('fare-label').textContent = 'YOUR AGREED FARE';
@@ -217,15 +226,18 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
   });
 
   updateQuote();
+  $('history-refresh').addEventListener('click', () => onHistory(null));
+  $('history-more').addEventListener('click', () => { if (state.historyCursor) onHistory(state.historyCursor); });
   return Object.freeze({
     render,
     tick: updateButtons,
-    setBusy(value) { busy = value; updateButtons(); },
+    setBusy(value) { busy = value; tripView.setBusy(value); updateButtons(); },
     select(id) { selectedId = id; },
     selected: selectedRide,
     reset() {
       selectedId = null; detailId = null; renderedLists = ''; renderedDetail = '';
       $('chat-reports-list').replaceChildren();
+      $('ride-list').replaceChildren(); $('history-list').replaceChildren(); tripView.reset();
     },
   });
 }

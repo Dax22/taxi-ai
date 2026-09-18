@@ -29,14 +29,14 @@ switching. Do not discard them to make a checkout succeed. With a clean working
 tree, run:
 
 ```bash
-git switch feat/private-chat
-git pull --ff-only origin feat/private-chat
+git switch feat/ride-lifecycle
+git pull --ff-only origin feat/ride-lifecycle
 npm run verify
 ```
 
 Git normally creates a tracking branch when the name exists only on `origin`.
 If the switch reports an ambiguous branch name, explicitly use
-`git switch --track origin/feat/private-chat` for the first checkout.
+`git switch --track origin/feat/ride-lifecycle` for the first checkout.
 
 ## Save your own changes to GitHub
 
@@ -74,7 +74,7 @@ account, including its private noreply address if preferred. This does not requi
 a Taxi Ai business mailbox.
 
 Existing milestones are stacked: project foundation → web booking demo → accounts
-and rides → modular architecture → private chat. Each pull request reviews only its next layer.
+and rides → modular architecture → private chat → ride lifecycle. Each pull request reviews only its next layer.
 Pushing keeps the code on GitHub; it does not merge the stack into `main`. Review
 the dependencies before merging or retargeting their pull requests.
 
