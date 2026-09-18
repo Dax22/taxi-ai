@@ -1,10 +1,15 @@
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
+import { openDatabase } from '../../services/api/src/database.mjs';
+import { handleApi, json, localOrigin } from '../../services/api/src/http.mjs';
 
 // Explicit allowlist: never serve the repository root or arbitrary disk paths.
 const routes = new Map([
   ['/', ['public/index.html', 'text/html; charset=utf-8']],
+  ['/app', ['public/dashboard.html', 'text/html; charset=utf-8']],
+  ['/dashboard.css', ['public/dashboard.css', 'text/css; charset=utf-8']],
+  ['/dashboard.mjs', ['public/dashboard.mjs', 'text/javascript; charset=utf-8']],
   ['/styles.css', ['public/styles.css', 'text/css; charset=utf-8']],
   ['/app.mjs', ['public/app.mjs', 'text/javascript; charset=utf-8']],
   ['/favicon.svg', ['public/favicon.svg', 'image/svg+xml']],
@@ -15,23 +20,39 @@ const routes = new Map([
   ['/shared/demo-booking.mjs', ['../../packages/shared/src/demo-booking.mjs', 'text/javascript; charset=utf-8']],
 ]);
 
-export function createDemoServer() {
-  return createServer(async (request, response) => {
+export function createAppServer({ db = openDatabase(':memory:'), clock = Date.now } = {}) {
+  const server = createServer(async (request, response) => {
     response.setHeader('X-Content-Type-Options', 'nosniff');
     response.setHeader('Referrer-Policy', 'no-referrer');
     response.setHeader('Cache-Control', 'no-store');
-    response.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
-    if (!['GET', 'HEAD'].includes(request.method)) {
-      response.writeHead(405, { Allow: 'GET, HEAD' });
-      response.end('Method not allowed');
-      return;
-    }
+    response.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
+    response.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
     let pathname;
     try {
       pathname = new URL(request.url, 'http://localhost').pathname;
     } catch {
       response.writeHead(400);
       response.end('Bad request');
+      return;
+    }
+    try {
+      localOrigin(request);
+      if (pathname.startsWith('/api/')) {
+        await handleApi({ request, response, pathname, db, clock });
+        return;
+      }
+    } catch (error) {
+      if (response.destroyed) return;
+      const status = error.status ?? 500;
+      if (status === 405) response.setHeader('Allow', 'GET, POST');
+      if (status === 429) response.setHeader('Retry-After', '60');
+      json(response, status, { error: { code: error.status ? error.code : 'INTERNAL_ERROR',
+        message: error.status ? error.message : 'Something went wrong. Retry the same action or refresh the page.' } });
+      return;
+    }
+    if (!['GET', 'HEAD'].includes(request.method)) {
+      response.writeHead(405, { Allow: 'GET, HEAD' });
+      response.end('Method not allowed');
       return;
     }
     const route = routes.get(pathname);
@@ -49,6 +70,10 @@ export function createDemoServer() {
       response.end(request.method === 'HEAD' ? undefined : 'Unable to load this page');
     }
   });
+  server.requestTimeout = 15_000;
+  server.headersTimeout = 10_000;
+  server.on('close', () => db.close());
+  return server;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
@@ -57,16 +82,18 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     console.error('PORT must be an integer between 1 and 65535.');
     process.exitCode = 1;
   } else {
-    const server = createDemoServer();
+    const server = createAppServer({ db: openDatabase() });
     server.on('error', (error) => {
       console.error(error.code === 'EADDRINUSE'
         ? `Port ${port} is busy. Try: PORT=3001 npm run dev`
-        : `Could not start the demo: ${error.message}`);
+        : `Could not start Taxi Ai: ${error.message}`);
       process.exitCode = 1;
     });
     server.listen(port, '127.0.0.1', () => {
-      console.log(`Taxi Ai web demo: http://localhost:${port}`);
-      console.log('Local preview only. No real bookings or payments. Press Ctrl+C to stop.');
+      console.log(`Taxi Ai: http://localhost:${port} — accounts and ride requests at /app`);
+      console.log('Local development only. Requests are saved on this computer. No real dispatch or payments.');
+      console.log('Press Ctrl+C to stop.');
     });
+    for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => server.close());
   }
 }

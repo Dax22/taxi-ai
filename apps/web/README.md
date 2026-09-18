@@ -1,62 +1,58 @@
-# Taxi Ai web preview
+# Taxi Ai web
 
-From the repository root, run `npm run dev`, then open http://localhost:3000.
-Node.js 22.12+ works; no dependency installation is required. Press Ctrl+C to stop.
+Run `npm run dev` from the repository root, then open http://localhost:3000.
+The **Your account** button opens `/app`. Node.js 22.12+ works; no dependency
+installation or provider credentials are required.
 
-The website uses original Taxi Ai copy, the selected yellow forward-motion logo,
-and an amber/graphite palette on pale backgrounds. See the
-[brand guide](../../docs/brand.md) for colour values and logo assets. The spacious
-layout follows the supplied design reference. The two car images are AI-generated concept artwork
-from the earlier Taxi Ai design exploration, encoded as WebP for this project.
-They do not depict an operational fleet or an available autonomous service.
+The website retains the approved yellow motion emblem, amber/graphite palette,
+pale backgrounds and original concept artwork. See [the brand guide](../../docs/brand.md).
+Car illustrations do not depict an operational fleet. Eats, courier and autonomous
+services are informational sections with accurate planned-service labels.
 
-## Working interactions
+## Two working experiences
 
-- Ride, Eats and Courier tabs, including arrow-key navigation.
-- Sample Abuja pickup/destination selection, route swap and duplicate-area validation.
-- A clearly labelled fictional fare suggestion.
-- Customer/driver role switching in one local demonstration.
-- Explicit offers, counteroffers, acceptance, expiry and cancellation through
-  the shared domain module. Suggestions never become accepted fares by themselves.
-- A final agreed-fare view with an offer history.
-- Native modal keyboard handling, semantic labels, visible focus and reduced-motion CSS.
+- `/`: the original landing page and single-browser fare demonstration. Its
+  customer/driver role buttons operate only on temporary in-memory sample state.
+- `/app`: password registration/sign-in, role-specific dashboards, administrator
+  review, persistent test requests and fare negotiation between real separate
+  account sessions. Roles and agreements are checked by the local backend.
 
-Eats/courier ordering, actual driver matching, maps, communication and payments
-are not connected. Service tabs explain this; no buttons claim to book those
-services. The source includes phone, tablet and desktop breakpoints.
+The dashboard refreshes every three seconds while visible. It keeps an offer's
+exact ID and version when sending acceptance and asks the user to review again
+after a conflict. Network retries reuse the same mutation key during the page
+session. Refreshing the browser reloads saved requests from the server.
 
-## Local implementation
+`server.mjs` serves an explicit file allowlist and `/api` from the same origin. It
+never serves repository configuration or database files. Host/Origin checks permit
+only its loopback addresses. CSP permits same-origin scripts, styles, images and
+API connections, with inline code and embedding disabled. Camera, microphone and
+geolocation permissions remain disabled until their features are implemented.
 
-`server.mjs` serves an explicit allowlist of public files plus the shared domain
-modules. It listens on `127.0.0.1`, has no writable endpoints and never serves
-arbitrary repository files. `PORT=3001 npm run dev` selects a different local port.
+See [the root setup guide](../../README.md) for creating the first administrator
+and using two independent browser sessions. Separate ordinary tabs share cookies;
+use a second browser/profile or a private window for the driver.
 
-All demo state lives in the browser memory. There is no local storage, telemetry,
-real identity or network submission. Closing the dialog or refreshing resets the
-demonstration. A production backend must authenticate actors and enforce all fare
-and booking invariants server-side before this becomes a real service.
+## Manual browser review
 
-## Validation and manual browser review
+Automated API and domain tests do not establish browser layout, accessibility or
+complete browser interaction correctness. The available cloud browser blocks
+local server/file previews; visual and browser interaction review is outstanding.
 
-`npm test` covers the domain rules, decimal-money parsing, sample-route validation
-and HTTP asset serving/access boundaries. All 25 tests pass on Node.js 22.12.0 and
-24.19.0. Source syntax checks also pass.
-
-Visual and interactive browser verification is outstanding: the available cloud
-browser blocked access to both the local server and the local file preview.
-These tests do not establish cross-browser layout or accessibility compliance.
-
-When reviewing locally:
-
-1. Check the landing page at 390px, 768px and 1440px widths for clipping or overflow.
-2. Select the same pickup and destination; confirm that a clear error appears.
-3. Open a Wuse II → Maitama demo. As customer, send 4500. Switch to driver and
-   counter with 4700. Switch to customer and accept 4700. Confirm the result says
-   no ride was booked and that both offers remain in history.
-4. Confirm the offer sender cannot accept their own offer, and a two-minute-old
-   offer cannot be accepted. Verify that cancellation and reopening work.
-5. Use only the keyboard: reach the booking form, open the dialog, switch roles,
-   enter an amount, close with Escape and check that focus returns to the page.
-6. Check Eats/Courier service labels, future autonomous status and image loading.
-
-See the [roadmap](../../docs/roadmap.md) for the next implementation milestone.
+1. Check both pages at 390px, 768px and 1440px widths for overflow, readable text,
+   usable controls and correct amber-logo rendering.
+2. Use the keyboard through sign-in, registration, vehicle fields, the request
+   form and fare controls. Check labels, focus visibility and error announcements.
+3. Create customer, driver and separate operator accounts. Promote the operator
+   using the documented command, sign in again and approve the pending driver.
+4. Submit a customer request. In a second session, select it as the driver. Offer
+   ₦5,000; counter as the customer with ₦4,700; accept as the driver. Check both
+   screens, refresh, and restart the server. The agreement should remain.
+5. Check that the offer author cannot accept their own price. Let an offer expire
+   and verify that a new offer is needed. Open two customer tabs and check that an
+   out-of-date acceptance cannot accept or replace a newer driver's offer.
+6. Sign out. Protected requests should fail until sign-in. Pending and rejected
+   driver accounts should see their status without access to claim controls.
+7. Stop the server while a page is open, restart it and use Refresh. Confirm the
+   connection status recovers, and retries do not duplicate requests or agreements.
+8. Check the original homepage demo, Eats/Courier labels and autonomous section.
+   Chat, calls, payments and live dispatch must not appear as available actions.
