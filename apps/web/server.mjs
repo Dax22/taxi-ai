@@ -1,8 +1,11 @@
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
-import { openDatabase } from '../../services/api/src/database.mjs';
-import { handleApi, json, localOrigin } from '../../services/api/src/http.mjs';
+import { openDatabase } from '../../services/api/src/infrastructure/database.mjs';
+import { createApplication } from '../../services/api/src/application.mjs';
+import { createApiRouter } from '../../services/api/src/http/router.mjs';
+import { sendError } from '../../services/api/src/http/responses.mjs';
+import { localOrigin } from '../../services/api/src/http/security.mjs';
 
 // Explicit allowlist: never serve the repository root or arbitrary disk paths.
 const routes = new Map([
@@ -10,6 +13,10 @@ const routes = new Map([
   ['/app', ['public/dashboard.html', 'text/html; charset=utf-8']],
   ['/dashboard.css', ['public/dashboard.css', 'text/css; charset=utf-8']],
   ['/dashboard.mjs', ['public/dashboard.mjs', 'text/javascript; charset=utf-8']],
+  ['/dashboard/api-client.mjs', ['public/dashboard/api-client.mjs', 'text/javascript; charset=utf-8']],
+  ['/dashboard/auth-form.mjs', ['public/dashboard/auth-form.mjs', 'text/javascript; charset=utf-8']],
+  ['/dashboard/dom.mjs', ['public/dashboard/dom.mjs', 'text/javascript; charset=utf-8']],
+  ['/dashboard/views.mjs', ['public/dashboard/views.mjs', 'text/javascript; charset=utf-8']],
   ['/styles.css', ['public/styles.css', 'text/css; charset=utf-8']],
   ['/app.mjs', ['public/app.mjs', 'text/javascript; charset=utf-8']],
   ['/favicon.svg', ['public/favicon.svg', 'image/svg+xml']],
@@ -21,6 +28,7 @@ const routes = new Map([
 ]);
 
 export function createAppServer({ db = openDatabase(':memory:'), clock = Date.now } = {}) {
+  const handleApi = createApiRouter(createApplication({ db, clock }));
   const server = createServer(async (request, response) => {
     response.setHeader('X-Content-Type-Options', 'nosniff');
     response.setHeader('Referrer-Policy', 'no-referrer');
@@ -38,16 +46,11 @@ export function createAppServer({ db = openDatabase(':memory:'), clock = Date.no
     try {
       localOrigin(request);
       if (pathname.startsWith('/api/')) {
-        await handleApi({ request, response, pathname, db, clock });
+        await handleApi({ request, response, pathname });
         return;
       }
     } catch (error) {
-      if (response.destroyed) return;
-      const status = error.status ?? 500;
-      if (status === 405) response.setHeader('Allow', 'GET, POST');
-      if (status === 429) response.setHeader('Retry-After', '60');
-      json(response, status, { error: { code: error.status ? error.code : 'INTERNAL_ERROR',
-        message: error.status ? error.message : 'Something went wrong. Retry the same action or refresh the page.' } });
+      sendError(response, error);
       return;
     }
     if (!['GET', 'HEAD'].includes(request.method)) {

@@ -1,5 +1,6 @@
-import { openDatabase } from '../services/api/src/database.mjs';
-import { bootstrapAdmin } from '../services/api/src/rides.mjs';
+import { openDatabase } from '../services/api/src/infrastructure/database.mjs';
+import { createApplication } from '../services/api/src/application.mjs';
+import { ApplicationError } from '../services/api/src/shared/errors.mjs';
 
 if (process.argv.length !== 3) {
   console.error('Usage: npm run admin -- your-admin-email@example.com');
@@ -9,11 +10,11 @@ if (process.argv.length !== 3) {
   let db;
   try {
     db = openDatabase();
-    const user = bootstrapAdmin(db, process.argv[2]);
+    const user = createApplication({ db }).accounts.bootstrapAdmin(process.argv[2]);
     console.log(`Administrator enabled for ${user.email}. Sign in again at http://localhost:${process.env.PORT ?? 3000}/app.`);
     console.log('Driver approval here enables local testing only; identity and vehicle verification are not implemented.');
   } catch (error) {
-    console.error(error.status ? error.message : 'Unable to open or update the local database. Check its path and permissions.');
+    console.error(error instanceof ApplicationError ? error.message : 'Unable to open or update the local database. Check its path and permissions.');
     process.exitCode = 1;
   } finally { db?.close(); }
 }

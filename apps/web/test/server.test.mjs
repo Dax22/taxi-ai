@@ -15,6 +15,8 @@ test('the local site serves HTML, modules and artwork with correct content types
   await withServer(async (base) => {
     for (const [path, type] of [['/', 'text/html'], ['/app', 'text/html'],
       ['/dashboard.css', 'text/css'], ['/dashboard.mjs', 'text/javascript'], ['/styles.css', 'text/css'],
+      ['/dashboard/api-client.mjs', 'text/javascript'], ['/dashboard/auth-form.mjs', 'text/javascript'],
+      ['/dashboard/dom.mjs', 'text/javascript'], ['/dashboard/views.mjs', 'text/javascript'],
       ['/app.mjs', 'text/javascript'], ['/shared/fare-negotiation.mjs', 'text/javascript'],
       ['/shared/demo-booking.mjs', 'text/javascript'], ['/assets/taxi-hero.webp', 'image/webp'],
       ['/assets/autonomous.webp', 'image/webp'], ['/favicon.svg?v=amber', 'image/svg+xml'],

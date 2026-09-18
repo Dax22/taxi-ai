@@ -1,96 +1,166 @@
-# Architecture direction
+# Taxi Ai architecture
 
-Start with a modular backend and shared business rules. Keep rides, food and
-courier as separate modules where their workflows differ. Do not introduce
-microservices solely to fill the directory structure.
+Taxi Ai uses a **modular monolith**: one backend process and database, with
+separate business modules and explicit dependencies. The current code implements
+accounts, driver review and ride/fare negotiation. The structure supports adding
+Eats, courier and communication without mixing their workflows into ride logic.
+See [ADR 0001](decisions/0001-modular-monolith.md) for the decision and tradeoffs.
 
-## Hybrid AI approach
+## Implemented modules
 
-Use conventional, deterministic rules for authentication, permissions, fare
-acceptance, booking state, dispatch commitments, payments and refunds. Predictive
-models can suggest fares, ETAs and matches. Agentic components can later assist
-with discovery, support and vendor tasks through narrowly authorized tools.
+| Module | Responsibility | Owns |
+| --- | --- | --- |
+| Accounts | Registration, authentication, sessions, first-admin setup, own profile | `users`, `sessions` |
+| Drivers | Application profile and administrator review | `drivers` |
+| Rides | Requests, exclusive claims, fare commands and retries | `rides`, `fare_events`, `idempotency` |
+| Shared domain | Pure fare state machine, integer money helpers and sample quotes | No storage or network |
+| Infrastructure | SQLite, migrations, password hashing, random tokens, audit and rate limits | `audit_events`, `rate_limits`, connection lifecycle |
+| HTTP | Route dispatch, request parsing, cookies, CSRF and error/status translation | No business state |
 
-An assistant must not interpret a casual chat message as payment authorization
-or independently settle a fare. Suggestions require explicit user actions where
-they affect bookings or money.
+Every feature lives under `services/api/src/modules/<feature>/`:
 
-## Current domain module
+- `service.mjs` implements use cases and authorization, receiving dependencies as
+  factory arguments. It contains no SQL or HTTP objects.
+- `repository.mjs` owns feature SQL and returns plain records. It participates in
+  the caller's transaction and never commits independently.
+- `routes.mjs` adapts HTTP inputs/results to an injected service. The shared router
+  performs session, Origin/CSRF, body-size and rate-limit checks.
+- `domain.mjs`, where useful, contains pure feature rules. The rides module uses
+  it to check participants/versions and reconstruct the shared fare model.
 
-`FareNegotiation` is an in-memory model for a single customer/driver pair. It has
-`open`, `agreed` and `cancelled` states. Every mutation needs an authorized
-participant ID and the version the caller last saw. Each counteroffer gets a new
-offer ID and version. Acceptance checks the offer ID, version, author and expiry.
-The module returns copied snapshots so consumers cannot mutate internal state.
+`services/api/src/application.mjs` creates and connects services, repositories and
+adapters. It is the only composition root. Business modules do not import one
+another's internals. For example, rides receives a `getAccount(id)` port; account
+registration receives driver-profile `find`/`insert` operations. The shared
+transaction spans user and driver creation. Dependencies are plain functions and
+objects, without a dependency-injection framework or service locator.
 
-Amounts are positive safe integers in kobo. The suggestion is optional and
-nonbinding. Offers default to a two-minute lifetime in this prototype; that is a
-configurable demonstration policy, not a confirmed launch setting.
+The runtime relationships are:
 
-The `in_app`, `chat` and `voice_call` labels describe where a negotiation began.
-They do not implement messaging, calling or transcription. Every channel uses
-the same explicit `propose` and `accept` commands.
+```mermaid
+flowchart TD
+  Web[Web dashboard] --> HTTP[HTTP adapters]
+  HTTP --> Accounts[Accounts service]
+  HTTP --> Drivers[Drivers service]
+  HTTP --> Rides[Rides service]
+  Accounts --> Repos[Injected repositories]
+  Drivers --> Repos
+  Rides --> Repos
+  Rides --> Domain[Pure fare domain]
+  Repos --> DB[SQLite]
+```
 
-## Local persistence and authenticated commands
+Arrows represent calls, not permission to import an implementation. The
+composition root supplies dependencies. Authentication is session based; passing
+a user ID from the browser never grants access to that user's account or ride.
 
-The website now serves a local account/ride API and separate customer, driver and
-administrator dashboards. SQLite stores users, driver applications, sessions,
-ride requests, fare events, idempotency keys and audit events. Migrations run at
-startup; account data is excluded from Git. Passwords use salted scrypt; sessions
-use random tokens with only their hashes stored in the database.
-
-The server derives the actor from its session, checks ownership and driver
-approval, and executes each ride mutation within a short database transaction.
-Ride versions prevent stale changes; unique constraints and atomic claims prevent
-two drivers from taking the same request. A per-user command key makes retries
-idempotent. The fare model is reconstituted by replaying server-written commands,
-never by trusting snapshots or timestamps sent by a browser.
+## Commands, persistence and consistency
 
 Requests progress from `requested` to `negotiating` to `agreed`, or are cancelled
-before agreement. A driver claim starts one exclusive conversation; it is not a
-fare agreement or operational dispatch. Actual trip state is not implemented.
-The UI polls every three seconds and restores saved state after refresh/restart.
+before agreement. A driver claim selects one negotiation participant; it does not
+establish a fare agreement or operational dispatch. Actual trip state is future
+work. The original homepage demo remains an independent in-memory example.
 
-See [the API notes](../services/api/README.md) for security boundaries, routes,
-limits and migration considerations. The original homepage demonstration still
-uses the in-memory module and does not create an authenticated request.
+For each authenticated ride mutation, the service:
 
-## Before this can back real bookings
+1. Validates the command key and begins a synchronous unit of work.
+2. Reloads the actor, checks a previous key's command fingerprint, or validates
+   permissions and the current ride version.
+3. Applies the command using server time and the pure fare rules.
+4. Writes the ride, fare event when applicable, audit event and retry key together.
+5. Returns a projection only after the transaction succeeds. Any failure rolls
+   back all these writes. HTTP then serializes the result.
 
-- Add verified identity, account recovery and production authentication/session
-  operations. Preserve session-derived actors and participant checks.
-- Add genuine driver/document verification, eligibility and suspension workflows.
-- Establish a production database, backup/restore and retention process. Preserve
-  atomic version checks, event integrity, idempotency and one winning driver.
-- Validate cross-process concurrency and scale for the chosen hosting setup.
-- Keep expiry on trusted server time. Complete the operational booking/trip state
-  machine; a fare agreement alone does not establish driver arrival or dispatch.
-- Use payment-provider idempotency and webhook verification. Do not equate a
-  successful client screen with settled payment.
-- Extend local limits, validation and audit events with production monitoring,
-  distributed abuse protection and an operational support process.
+The SQLite adapter uses `BEGIN IMMEDIATE`, foreign keys and unique constraints for
+one open request per customer and one active negotiation per driver. A replayed
+key returns the current saved ride; a different command with that key is rejected.
+Rate-limit counters are intentionally a separate transaction so failed attempts
+still count. Expensive password work runs outside transactions.
 
-## Private communication
+Repository operations and `unitOfWork(callback)` are synchronous contracts in
+this version. Async callbacks and promise results are rejected; never schedule
+background writes inside them. A future PostgreSQL adapter requires coordinated
+async contract changes, migration and transaction/concurrency tests. Changing the
+repository constructor alone is insufficient.
 
-Choose an in-app internet voice provider or a WebRTC implementation when the
-authenticated communication milestone begins. Issue short-lived room credentials
-for the assigned participants and use application IDs as public identities.
-Phone numbers must not appear in peer profiles, chat payloads or call-room IDs.
-Provide report/block controls and an explicit consent design for any future
-recording or transcription. Provider selection remains open.
+The existing `data/taxi-ai.sqlite` location and schema version 1 are preserved.
+Startup applies migrations; no database deletion or account reset is required for
+this refactor. Local data and secrets are excluded from Git and static serving.
+See [API notes](../services/api/README.md) for routes and current security limits.
 
-## Client direction
+## Fare rules
 
-The web clients use browser-native HTML/CSS/JavaScript and a same-origin Node
-server without third-party runtime dependencies. The landing demo imports the
-shared fare model directly; the authenticated dashboard sends commands to the
-API, which owns state and applies those same domain rules. The sample quote
-fixtures are not an AI estimator or live market prices.
+`packages/shared/src/fare-negotiation.mjs` models one customer/driver pair in
+`open`, `agreed` or `cancelled` state. Every mutation checks the participant and
+expected version. Every counteroffer has a new offer ID. Acceptance requires the
+current offer ID/version, an unexpired offer and the other person's explicit
+consent. Returned snapshots are copies, not mutable internal state.
 
-The website and mobile clients should share domain contracts while adapting
-their interfaces for web, iOS, Android and tablets. The vendor and administrator
-areas require role-based permissions on the backend as well as in their UI.
+Amounts are positive safe integer kobo. Suggestions are nonbinding; sample quotes
+are fictional, not an AI estimator. Server-persisted events reconstruct the fare
+model; clients cannot upload snapshots or set event clocks. Ride versions also
+include claiming/cancelling before a fare conversation; fare-event versions track
+only the shared model. Their distinct sequences are validated separately.
 
-The API will later orchestrate external maps, communication and payment
-providers. No provider credentials or production integrations are included in
-this repository yet.
+The domain's `in_app`, `chat` and `voice_call` labels describe where an offer began;
+they do not implement communication. The current API accepts in-app offers only.
+Future chat/voice flows must use the same explicit offer and acceptance commands.
+
+## Web and future mobile clients
+
+The website uses native HTML/CSS/JavaScript. `apps/web/server.mjs` composes the
+application/router and serves an explicit static allowlist. It remains loopback
+only. At `/app`, `dashboard.mjs` coordinates page/session state and polling:
+
+| Client module | Responsibility |
+| --- | --- |
+| `dashboard/api-client.mjs` | Same-origin requests, CSRF, timeout and stable retry keys |
+| `dashboard/auth-form.mjs` | Login/registration form state and input collection |
+| `dashboard/views.mjs` | Role-specific rendering and user action callbacks |
+| `dashboard/dom.mjs` | Small DOM helpers using text content |
+
+Views do not call `fetch`. The client retains the displayed offer ID/version and
+refreshes on a conflict; it never automatically accepts a new price. Dashboards
+poll every three seconds while visible. Browser rendering/accessibility checks
+remain a separate manual review, documented in the web README.
+
+Native iOS/Android apps and tablet layouts remain planned. They should use the
+same server use cases through reviewed API contracts. The current browser-cookie
+transport is not a completed native authentication design. TypeScript, OpenAPI
+schemas and client generation are future decisions; this code is JavaScript ESM.
+
+## Adding planned features
+
+| Future module | Boundary to preserve |
+| --- | --- |
+| Communication | Participant-only chat/call rooms; short-lived provider credentials; no peer phone numbers |
+| Taxi Ai Eats | Vendors, fixed-price menus, ordering and fulfilment; show delivery fees at checkout |
+| Courier | Parcel details, vehicle eligibility and proof of delivery; confirm its pricing policy separately |
+| Payments | Provider adapters, payment states, verified webhooks and provider idempotency |
+| AI assistance | Fare/ETA suggestions and authorized assistance through explicit application commands |
+
+Create modules when implementing these workflows, without empty service shells.
+Motorcycles belong to food/small-parcel delivery; passenger rides use cars. Larger
+courier jobs can use suitable cars/vans. Autonomous taxis remain **Coming soon**;
+the site does not imply an operational fleet or a launch date.
+
+Choose chat/voice providers when implementing communication. Use application IDs
+in peer payloads and room identities, with report/block controls and an explicit
+consent design for any recording/transcription. Provider credentials belong in
+server adapters. AI may assist discovery/support; it must not independently
+accept fares, authorize charges or change safety permissions.
+
+## Enforced conventions and deployment limits
+
+`npm run check` checks syntax, missing imports, dependency direction, cycles and
+our SQL/network placement conventions. It assumes static ESM imports and uses a
+small convention checker, not a complete JavaScript parser or a security sandbox.
+`npm run verify` adds domain, API client, HTTP and persistence tests. GitHub Actions
+runs the same command on Node 22.12.0 and Node 24 for pushes and pull requests.
+
+A modular structure is a maintainability foundation, not production readiness.
+Before real bookings, implement verified onboarding/account recovery, HTTPS and
+production session operations, database backup/restore and retention, deployment
+monitoring and measured concurrency/scale. Actual dispatch, trip lifecycle,
+safety operations, maps and payments are additional product milestones. Current
+administrator approval grants local test access only, not document verification.

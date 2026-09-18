@@ -5,6 +5,22 @@ It uses `node:sqlite` with explicit schema migrations and no third-party runtime
 dependencies. This milestone is a local prototype, not a production auth service
 or transport dispatch system.
 
+## Code boundaries
+
+`src/application.mjs` wires the accounts, drivers and rides modules. Each module
+contains a service, repository and route factory; rides also has pure domain
+helpers. Services receive repositories, clock and cross-module operations as
+explicit dependencies. They do not import HTTP or database adapters. Repositories
+own their tables and participate in the service's unit of work.
+
+`src/http/` handles transport and error/status translation. `src/infrastructure/`
+implements SQLite, password/token operations, audit and rate limits. `src/shared/`
+contains small common errors, validation and authorization policies. See
+[the architecture](../../docs/architecture.md) for ownership and transaction contracts.
+
+This refactor preserves schema version 1 and `data/taxi-ai.sqlite`; existing test
+accounts and rides can be used without a reset.
+
 ## Implemented boundaries
 
 - Passwords: salted scrypt (`N=32768, r=8, p=3`), 12–128 characters, timing-safe
@@ -109,8 +125,12 @@ accepting live bookings. No provider keys or live integrations are present.
 
 ## Validation
 
-`npm test` runs the shared rules and HTTP integration tests, including competing
+`npm run verify` checks module boundaries and runs the shared rules, client and
+HTTP integration tests, including competing
 claims, duplicate requests/acceptance, role and record isolation, CSRF/Origin/Host
 checks, offer expiry, cancellation, session revocation and full server/database
 restart. Tests use isolated memory databases or disposable temporary files and
-never read the developer's account database.
+never read the developer's account database. A fault-injection test fails the
+final retry-key write and verifies that fare, ride and audit changes all roll back
+and the same command can safely be retried. Transaction tests reject asynchronous
+callbacks. GitHub Actions runs verification on Node 22.12.0 and Node 24.

@@ -35,7 +35,7 @@ repository folder, then use **Terminal → New Terminal**:
 
 ```bash
 node --version
-npm test
+npm run verify
 npm run dev
 ```
 
@@ -47,7 +47,11 @@ No `npm install`, paid service or API key is needed. The scripts enable Node's
 built-in SQLite API, including the flag required by Node 22.12. A SQLite
 experimental warning on that version is expected.
 
-## Set up the first administrator
+## Set up the first administrator when needed
+
+This can wait while you work on the code and homepage demo. A Taxi Ai business
+mailbox is not required for development. Complete this setup when you want to
+test driver approval and a full customer/driver negotiation.
 
 1. At `/app`, create a **separate customer account** for the administrator. Choose
    your own email and password; there are no default accounts or passwords.
@@ -99,13 +103,26 @@ current HTTP cookies and authentication setup are for local development. Read
 | Path | Purpose |
 | --- | --- |
 | `apps/web/` | Website, responsive dashboards and local HTTP server |
-| `services/api/src/` | Accounts/sessions, permissions and persistent ride commands |
+| `apps/web/public/dashboard/` | Separate views, auth form, DOM helpers and API client |
+| `services/api/src/application.mjs` | Connects services, repositories and adapters |
+| `services/api/src/modules/accounts/` | Account/session services, repository and routes |
+| `services/api/src/modules/drivers/` | Driver application/review services, repository and routes |
+| `services/api/src/modules/rides/` | Ride/fare services, domain rules, repository and routes |
+| `services/api/src/http/` | Request parsing, routing, cookies and response mapping |
+| `services/api/src/infrastructure/` | Database, password, token, audit and rate-limit adapters |
 | `services/api/migrations/` | Versioned SQLite schema |
 | `services/api/test/` | API, permissions, competing-request and restart tests |
 | `packages/shared/` | Fare domain rules, money helpers and sample-area fixtures |
 | `scripts/create-admin.mjs` | Local first-administrator setup |
+| `scripts/check.mjs` | Syntax, imports and module-boundary checks |
+| `.github/workflows/ci.yml` | Automated verification on Node 22.12.0 and 24 |
 | `apps/customer/`, `apps/driver/` | Native-app planning notes |
 | `docs/` | Requirements, architecture, roadmap and approved brand |
+
+The backend is a **modular monolith**: business modules share one process/database
+and communicate through explicitly supplied functions. HTTP and storage details
+stay outside business services. The existing database is compatible; the refactor
+does not require resetting accounts or rides.
 
 The terminal example runs with `npm run demo`. Read [the architecture](docs/architecture.md),
 [roadmap](docs/roadmap.md), [requirements](docs/requirements.md) and
@@ -113,9 +130,15 @@ The terminal example runs with `npm run demo`. Read [the architecture](docs/arch
 
 ## Development and review
 
-Use a branch and pull request for changes. Review the changed files, commit, and
-push/sync from VS Code. Run `npm test` before pushing a milestone. Never commit
-secrets or local account data. No licence has been selected for this private project.
+Read [CONTRIBUTING.md](CONTRIBUTING.md) for the GitHub/VS Code workflow and where
+new code belongs. `npm run check` validates syntax and module conventions;
+`npm test` checks behaviour; `npm run verify` runs both. GitHub Actions is configured
+to run verification on pushes and pull requests.
+
+Use a branch and pull request for changes. Saving in VS Code is local; commit and
+push to upload changes to GitHub. Existing milestone branches hold work that has
+not yet been merged into `main`. Never commit secrets or local account data.
+No licence has been selected for this private project.
 
 Browser visual and interaction review is still required: the available cloud
 browser blocks local previews. Follow [the manual review steps](apps/web/README.md).
