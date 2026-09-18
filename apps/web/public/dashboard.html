@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#F4B400">
+  <meta name="robots" content="noindex">
+  <title>Taxi Ai — Your account</title>
+  <link rel="icon" href="/favicon.svg?v=amber" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/dashboard.css">
+  <script type="module" src="/dashboard.mjs"></script>
+</head>
+<body class="account-page">
+  <a class="skip-link" href="#account-main">Skip to account</a>
+  <header class="site-header shell">
+    <a class="brand" href="/" aria-label="Taxi Ai home"><img class="brand-mark" src="/assets/taxi-ai-mark.svg" width="48" height="36" alt=""><span>Taxi Ai</span></a>
+    <div class="account-header-actions"><span id="account-identity"></span><button class="button button-outline button-small" id="logout" type="button" hidden>Sign out</button><a class="text-link" href="/">Home ↗</a></div>
+  </header>
+  <main id="account-main" class="shell account-shell">
+    <p class="environment-note"><span class="tiny-dot" aria-hidden="true"></span> DEVELOPMENT PREVIEW · ABUJA · NO LIVE RIDES</p>
+    <p id="page-error" class="error-text page-message" role="alert"></p>
+    <p id="page-notice" class="page-message" role="status"></p>
+    <p id="loading">Opening Taxi Ai…</p>
+
+    <section id="auth-panel" class="auth-layout" hidden aria-labelledby="welcome-title">
+      <div class="auth-intro"><p class="eyebrow">YOUR JOURNEY STARTS HERE</p><h1 id="welcome-title">One city.<br>A world of<br><span>possibility.</span></h1><p>Find your ride. Have your say on the fare.<br>Move forward, together.</p><div class="auth-promise"><span aria-hidden="true">↗</span><p>Create a customer account or apply to drive. Your requests and agreed fares stay saved when you return.</p></div><p class="small-note">Try with test details. Sample fares are illustrative. This preview does not dispatch a vehicle or take payment.</p></div>
+      <div class="account-card auth-card">
+        <div class="auth-mode" role="group" aria-label="Choose account action"><button id="show-login" type="button" aria-pressed="true">Sign in</button><button id="show-register" type="button" aria-pressed="false">Create account</button></div>
+        <h2 id="auth-title">Welcome back.</h2><p class="supporting-copy" id="auth-description">Sign in to pick up where you left off.</p>
+        <form id="auth-form" class="stack-form">
+          <div id="registration-fields" hidden><label for="account-name">Your name</label><input id="account-name" autocomplete="name" minlength="2" maxlength="80" disabled><label for="account-role">I want to</label><select id="account-role" disabled><option value="customer">Request rides</option><option value="driver">Drive with Taxi Ai</option></select></div>
+          <label for="account-email">Email address</label><input id="account-email" type="email" autocomplete="username" maxlength="254" required>
+          <label for="account-password">Password</label><input id="account-password" type="password" autocomplete="current-password" minlength="12" maxlength="128" required aria-describedby="password-help"><p id="password-help" class="small-note">Use 12–128 characters. Account recovery is not available in this preview.</p>
+          <fieldset id="vehicle-fields" hidden disabled><legend>Your car</legend><label for="vehicle-model">Make and model</label><input id="vehicle-model" placeholder="e.g. Toyota Corolla" minlength="2" maxlength="80"><label for="vehicle-plate">Number plate</label><input id="vehicle-plate" placeholder="Use a test plate for this preview" minlength="2" maxlength="15"><p class="small-note">A local administrator must approve your application before you can respond to requests. Passenger rides use cars.</p></fieldset>
+          <button id="auth-submit" class="button button-primary button-full" type="submit">Sign in <span aria-hidden="true">↗</span></button>
+        </form>
+      </div>
+    </section>
+
+    <section id="dashboard" hidden aria-labelledby="dashboard-title">
+      <div class="dashboard-heading"><div><p class="eyebrow" id="dashboard-role"></p><h1 id="dashboard-title">Let’s get moving.</h1><p class="supporting-copy" id="dashboard-description"></p></div><div class="refresh-controls"><span id="sync-status" role="status">Connecting…</span><button id="refresh" class="button button-outline button-small" type="button">Refresh</button></div></div>
+      <div class="dashboard-layout" id="ride-dashboard">
+        <aside class="dashboard-sidebar">
+          <section class="account-card" id="customer-panel" hidden aria-labelledby="request-title"><p class="eyebrow">YOUR NEXT JOURNEY</p><h2 id="request-title">Where to?</h2><form id="request-form" class="stack-form"><fieldset id="request-fields"><legend class="visually-hidden">Choose your journey</legend><label for="request-pickup">Pickup area</label><select id="request-pickup" required></select><label for="request-destination">Destination</label><select id="request-destination" required></select><div class="quote-preview"><span>Suggested fare</span><strong id="request-quote"></strong><p class="small-note">Sample price, not a live quote or AI estimate. You and the driver agree the final fare.</p></div><button class="button button-primary button-full" type="submit">Request a test ride <span aria-hidden="true">↗</span></button></fieldset></form><p id="open-request-note" class="small-note" hidden>Finish or cancel your open request before creating another.</p></section>
+          <section id="driver-panel" class="account-card" hidden aria-labelledby="driver-title"><p class="eyebrow">DRIVE WITH TAXI AI</p><h2 id="driver-title">Your driver profile.</h2><p id="driver-status" class="status-badge"></p><p id="driver-vehicle"></p><p id="driver-guidance" class="supporting-copy"></p></section>
+          <section class="sidebar-note"><p class="eyebrow">A CLEAR AGREEMENT</p><p>Either person can make an offer. The other person must accept that exact price before the fare is agreed.</p><p class="small-note">Chat and private in-app calls are planned. No phone numbers are shared here.</p></section>
+        </aside>
+        <div class="ride-workspace">
+          <section id="available-section" class="account-card" hidden aria-labelledby="available-title"><div class="card-topline"><h2 id="available-title">Available requests</h2><span class="status-badge">ABUJA</span></div><div id="available-list" class="request-list"></div></section>
+          <section class="account-card" aria-labelledby="your-requests-title"><div class="card-topline"><h2 id="your-requests-title">Your requests</h2><span id="ride-count" class="small-note"></span></div><div id="ride-list" class="request-list"></div></section>
+          <section id="ride-detail" class="account-card detail-card" hidden aria-labelledby="detail-title">
+            <div class="card-topline"><p class="eyebrow">JOURNEY DETAILS</p><span id="detail-status" class="status-badge"></span></div><h2 id="detail-title"></h2><p id="detail-person" class="supporting-copy"></p><p id="detail-reference" class="small-note"></p>
+            <div class="fare-display" aria-live="polite" aria-atomic="true"><p id="fare-label" class="eyebrow"></p><strong id="fare-value"></strong><p id="fare-guidance"></p></div>
+            <p id="fare-expiry" class="small-note"></p>
+            <button id="accept-fare" class="button button-primary button-full" type="button" hidden></button>
+            <form id="live-offer-form" class="stack-form" hidden><label for="live-offer-amount">Your offer in naira (₦)</label><div class="live-offer-row"><input id="live-offer-amount" inputmode="decimal" autocomplete="off" maxlength="14" required aria-describedby="live-offer-consent"><button class="button button-primary" type="submit">Send offer ↗</button></div><p id="live-offer-consent" class="small-note">Sending an offer confirms your agreement to this price. The other person must accept it within two minutes.</p></form>
+            <button id="cancel-request" class="text-link cancel-link" type="button" hidden>Cancel request</button>
+            <p id="agreed-note" class="agreement-note" hidden>Your agreed fare is saved. No live ride has been booked and no payment has been taken.</p>
+            <div id="live-history" class="history-section" hidden><h3>Fare history</h3><ol id="live-offer-history"></ol></div>
+          </section>
+        </div>
+      </div>
+      <section id="admin-dashboard" class="account-card" hidden aria-labelledby="applications-title"><div class="card-topline"><h2 id="applications-title">Driver applications</h2><span class="status-badge">LOCAL TESTING</span></div><p class="supporting-copy">Review the name and car details before granting access to test requests. This approval does not verify identity, licences or vehicle documents.</p><div id="driver-applications" class="request-list"></div></section>
+    </section>
+    <noscript><p class="account-card">Enable JavaScript to sign in and use Taxi Ai accounts.</p></noscript>
+  </main>
+  <footer class="shell account-footer"><p>Taxi Ai · Starting with Abuja.</p><p>Eats, courier and autonomous taxis are coming later.</p></footer>
+</body>
+</html>

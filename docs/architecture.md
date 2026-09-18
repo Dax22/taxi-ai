@@ -31,23 +31,44 @@ The `in_app`, `chat` and `voice_call` labels describe where a negotiation began.
 They do not implement messaging, calling or transcription. Every channel uses
 the same explicit `propose` and `accept` commands.
 
+## Local persistence and authenticated commands
+
+The website now serves a local account/ride API and separate customer, driver and
+administrator dashboards. SQLite stores users, driver applications, sessions,
+ride requests, fare events, idempotency keys and audit events. Migrations run at
+startup; account data is excluded from Git. Passwords use salted scrypt; sessions
+use random tokens with only their hashes stored in the database.
+
+The server derives the actor from its session, checks ownership and driver
+approval, and executes each ride mutation within a short database transaction.
+Ride versions prevent stale changes; unique constraints and atomic claims prevent
+two drivers from taking the same request. A per-user command key makes retries
+idempotent. The fare model is reconstituted by replaying server-written commands,
+never by trusting snapshots or timestamps sent by a browser.
+
+Requests progress from `requested` to `negotiating` to `agreed`, or are cancelled
+before agreement. A driver claim starts one exclusive conversation; it is not a
+fare agreement or operational dispatch. Actual trip state is not implemented.
+The UI polls every three seconds and restores saved state after refresh/restart.
+
+See [the API notes](../services/api/README.md) for security boundaries, routes,
+limits and migration considerations. The original homepage demonstration still
+uses the in-memory module and does not create an authenticated request.
+
 ## Before this can back real bookings
 
-- Authenticate requests on the server. Derive the actor ID from the session;
-  never trust an actor ID, role or price state supplied by a client.
-- Verify participant membership, driver eligibility and request ownership.
-- Persist state and an audit log. In a database transaction, update only when
-  the stored version equals the submitted expected version. The current class
-  detects stale changes on one instance; it is not a distributed lock or a
-  persistence layer.
-- Use server time for offer expiry. Client-controlled clocks are not authoritative.
-- Make booking creation idempotent and ensure only one driver can win a request,
-  even if several negotiations are open. A fare agreement is one prerequisite
-  for booking, not the complete booking state machine.
+- Add verified identity, account recovery and production authentication/session
+  operations. Preserve session-derived actors and participant checks.
+- Add genuine driver/document verification, eligibility and suspension workflows.
+- Establish a production database, backup/restore and retention process. Preserve
+  atomic version checks, event integrity, idempotency and one winning driver.
+- Validate cross-process concurrency and scale for the chosen hosting setup.
+- Keep expiry on trusted server time. Complete the operational booking/trip state
+  machine; a fare agreement alone does not establish driver arrival or dispatch.
 - Use payment-provider idempotency and webhook verification. Do not equate a
   successful client screen with settled payment.
-- Add rate limits, scoped access, validation, structured audit events and an
-  operational support process at the API boundary.
+- Extend local limits, validation and audit events with production monitoring,
+  distributed abuse protection and an operational support process.
 
 ## Private communication
 
@@ -60,16 +81,16 @@ recording or transcription. Provider selection remains open.
 
 ## Client direction
 
-The first web milestone uses browser-native HTML/CSS/JavaScript and a Node static
-server without external dependencies. It imports the same fare module as the
-unit tests. All role switching and agreements are local demonstration state; this
-does not create an authenticated multi-user application or a trusted booking API.
-The sample quote fixtures are not an AI estimator or live market prices.
+The web clients use browser-native HTML/CSS/JavaScript and a same-origin Node
+server without third-party runtime dependencies. The landing demo imports the
+shared fare model directly; the authenticated dashboard sends commands to the
+API, which owns state and applies those same domain rules. The sample quote
+fixtures are not an AI estimator or live market prices.
 
 The website and mobile clients should share domain contracts while adapting
 their interfaces for web, iOS, Android and tablets. The vendor and administrator
 areas require role-based permissions on the backend as well as in their UI.
 
-The planned API will orchestrate external maps, communication and payment
+The API will later orchestrate external maps, communication and payment
 providers. No provider credentials or production integrations are included in
 this repository yet.

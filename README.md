@@ -4,30 +4,34 @@ Rides, Taxi Ai Eats and courier delivery, starting in Abuja, Nigeria.
 
 ## What works today
 
-This is a product preview, not a launched transport service. It includes a
-responsive website, an interactive ride/fare demo, shared fare-negotiation rules,
-25 automated tests and a terminal demonstration. There are no external runtime
-dependencies.
+The yellow Taxi Ai website now includes **local customer, driver and administrator
+accounts** at `/app`. Customers request a sample journey; an approved driver can
+take the request, make offers and agree a fare with the customer from a separate
+browser session. Accounts, requests, fare history and agreements survive refresh
+and server restart. Dashboards refresh every three seconds while visible.
 
-The customer or driver can send an offer. The other participant can accept or
-counter it. Accepting the current, unexpired offer records their agreed fare in
-NGN. Suggestions are advisory. Chat and voice-call origins use the same explicit
-offer/accept rules; chat messages and spoken agreements alone cannot set a fare.
+This is a **local development prototype**, not a launched transport service.
+Use test details. Fares are fictional examples and all requests are test requests.
+There is no live dispatch, payment or operational booking confirmation. Driver
+approval grants test access; it does not verify identity or vehicle documents.
 
-The browser demo lets you select sample Abuja areas, swap the route, view a
-fictional suggested fare, switch between customer/driver, counteroffer, accept or
-cancel. The fare expires after two minutes. Closing the demo or refreshing the
-page discards its in-memory state.
+- Customer/driver registration and password sign-in, with separate dashboards.
+- Pending driver applications, vehicle details and administrator approval.
+- Persistent SQLite data, password hashes and revocable sessions.
+- One open request per customer and one negotiation per driver.
+- Server-checked offers, counteroffers, two-minute expiry and explicit acceptance.
+- Atomic writes, version checks, retry protection and an internal audit log.
+- The original in-browser fare demo and terminal example remain available.
 
-**Not implemented yet:** mobile apps, user accounts, actual chat or calls, live
-maps, dispatch, restaurant ordering, parcel tracking, AI models and payments.
-Eats, courier and autonomous taxis have informational sections only. Native app
-and API directories remain planning placeholders.
+**Still planned:** chat, private in-app voice calls, verified identity and driver
+documents, maps/GPS, actual dispatch, trip-start PIN, payments/receipts, password
+recovery, food/vendor ordering, motorcycle courier delivery, AI estimators and
+native iOS/Android apps. Autonomous taxis remain **Coming soon**, with no launch date.
 
-## Run locally
+## Run in VS Code
 
-Use Node.js 22.12 or later. Node.js 24 is the version selected by `.nvmrc` for
-new setups. From this repository's directory:
+Use Node.js **22.12 or later**; `.nvmrc` selects Node 24 for new setups. Open the
+repository folder, then use **Terminal → New Terminal**:
 
 ```bash
 node --version
@@ -35,47 +39,83 @@ npm test
 npm run dev
 ```
 
-Open **http://localhost:3000** in your browser. Keep the terminal running; press
-**Ctrl+C** to stop the server. If port 3000 is occupied, use
-`PORT=3001 npm run dev` and open http://localhost:3001.
+Open **http://localhost:3000/app** for accounts or **http://localhost:3000** for the
+website. Keep the terminal running. Press **Ctrl+C** to stop it. If port 3000 is
+busy, use `PORT=3001 npm run dev` and open http://localhost:3001/app.
 
-The original terminal demo is also available:
+No `npm install`, paid service or API key is needed. The scripts enable Node's
+built-in SQLite API, including the flag required by Node 22.12. A SQLite
+experimental warning on that version is expected.
 
-```bash
-npm run demo
-```
+## Set up the first administrator
 
-No `npm install`, API keys or database are needed for this preview.
-If you use nvm, `nvm install` and `nvm use` select the version in `.nvmrc`.
+1. At `/app`, create a **separate customer account** for the administrator. Choose
+   your own email and password; there are no default accounts or passwords.
+2. Before that account creates any rides, open a second VS Code terminal and run
+   the following, replacing the example email with the one you just registered:
 
-The sample prices are **fictional** inputs, not estimates of real Abuja fares.
-The local server binds to this computer only. It is a development preview, not a
-production hosting setup or a shared multi-user service.
+   ```bash
+   npm run admin -- your-admin-email@example.com
+   ```
+
+3. Sign in again. That account now has the driver-approval dashboard. The command
+   revokes its old sessions and works only when no administrator exists yet.
+4. Register a driver account in another browser session. In the administrator
+   dashboard, review the application and click **Approve**.
+
+The administrator role cannot be selected during registration or granted through
+an HTTP endpoint. Additional administrators and account recovery are not built yet.
+
+## Try a complete customer/driver journey
+
+1. Register a separate **customer** account. Choose Wuse II → Maitama and click
+   **Request a test ride**.
+2. Open a different browser/profile or one private window and sign in as the
+   approved driver. Two ordinary tabs share a login; use separate sessions.
+3. The driver selects **Start negotiation** and offers ₦5,000.
+4. The customer counters with ₦4,700. The driver clicks **Accept ₦4,700**.
+5. Both dashboards show the same saved agreement. Refresh both pages, then stop
+   and restart the server. The agreement and history remain available.
+
+These actions save a test fare agreement only. They do not dispatch a car.
+
+## Your local data
+
+The database is created automatically at `data/taxi-ai.sqlite` inside this repo.
+Keep that file and its SQLite sidecar files on your own computer. They are ignored
+by Git and are never served by the website. Source code goes to GitHub; accounts,
+password hashes and ride history do not.
+
+`TAXI_AI_DB=/absolute/path/to/test.sqlite npm run dev` selects another database.
+Use the same variable for `npm run admin` when using a custom path. Migrations run
+automatically at startup. There is no production backup/retention process yet.
+
+The server listens on **127.0.0.1 only** and accepts its localhost origins. The
+current HTTP cookies and authentication setup are for local development. Read
+[the backend notes](services/api/README.md) before planning public hosting.
 
 ## Project layout
 
-| Path | Purpose | Status |
-| --- | --- | --- |
-| `packages/shared/src/fare-negotiation.mjs` | Fare offer and agreement rules | Implemented, tested in memory |
-| `packages/shared/test/` | Business-rule tests | Runnable |
-| `scripts/fare-demo.mjs` | Terminal example | Runnable |
-| `apps/web/` | Website, local server and interactive ride demo | Implemented preview; vendor/admin portals planned |
-| `apps/customer/` | iOS/Android customer app, including tablets | Planned |
-| `apps/driver/` | Driver and delivery rider app | Planned |
-| `services/api/` | Authenticated backend and integrations | Planned |
-| `docs/` | Requirements, architecture and milestones | Written |
+| Path | Purpose |
+| --- | --- |
+| `apps/web/` | Website, responsive dashboards and local HTTP server |
+| `services/api/src/` | Accounts/sessions, permissions and persistent ride commands |
+| `services/api/migrations/` | Versioned SQLite schema |
+| `services/api/test/` | API, permissions, competing-request and restart tests |
+| `packages/shared/` | Fare domain rules, money helpers and sample-area fixtures |
+| `scripts/create-admin.mjs` | Local first-administrator setup |
+| `apps/customer/`, `apps/driver/` | Native-app planning notes |
+| `docs/` | Requirements, architecture, roadmap and approved brand |
 
-Read [the requirements](docs/requirements.md), [architecture](docs/architecture.md)
-and [roadmap](docs/roadmap.md) before adding features. The selected yellow logo and
-colour palette are documented in [the brand guide](docs/brand.md).
+The terminal example runs with `npm run demo`. Read [the architecture](docs/architecture.md),
+[roadmap](docs/roadmap.md), [requirements](docs/requirements.md) and
+[brand guide](docs/brand.md) for the product direction.
 
-## Development
+## Development and review
 
-Use a branch and a pull request for each change. Run `npm test` before opening a
-pull request. Keep example accounts and fares clearly marked as demonstration data.
-Do not commit secrets or customer information.
+Use a branch and pull request for changes. Review the changed files, commit, and
+push/sync from VS Code. Run `npm test` before pushing a milestone. Never commit
+secrets or local account data. No licence has been selected for this private project.
 
-This preview uses browser-native HTML/CSS/JavaScript and the same ES-module domain
-rules as the tests. A web/mobile framework and TypeScript toolchain can be chosen
-when the authenticated applications begin.
-No license has been selected for this private project.
+Browser visual and interaction review is still required: the available cloud
+browser blocks local previews. Follow [the manual review steps](apps/web/README.md).

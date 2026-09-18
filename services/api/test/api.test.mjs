@@ -1,0 +1,300 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { once } from 'node:events';
+import { get as httpGet } from 'node:http';
+import { randomUUID } from 'node:crypto';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { createAppServer } from '../../../apps/web/server.mjs';
+import { openDatabase } from '../src/database.mjs';
+import { bootstrapAdmin } from '../src/rides.mjs';
+
+// Test fixtures only. No accounts or passwords are seeded into the application.
+const PASSWORD = 'A long test-only password 123';
+
+async function harness(t, { persistent = false } = {}) {
+  const folder = persistent ? await mkdtemp(join(tmpdir(), 'taxi-ai-test-')) : null;
+  const filename = folder ? join(folder, 'test.sqlite') : ':memory:';
+  let now = 1_000_000, server, db, base, stopped = true;
+  async function start() {
+    db = openDatabase(filename);
+    server = createAppServer({ db, clock: () => now });
+    server.listen(0, '127.0.0.1');
+    await once(server, 'listening');
+    base = `http://127.0.0.1:${server.address().port}`;
+    stopped = false;
+  }
+  async function stop() {
+    if (stopped) return;
+    await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+    stopped = true;
+  }
+  await start();
+  t.after(async () => { await stop(); if (folder) await rm(folder, { recursive: true, force: true }); });
+  return { get db() { return db; }, get base() { return base; },
+    advance(ms) { now += ms; }, async restart() { await stop(); await start(); },
+    client() {
+      const client = { cookie: '', csrf: '', user: null };
+      client.send = async (path, { method = 'GET', data, headers = {}, rawBody } = {}) => {
+        const requestHeaders = { ...(client.cookie ? { Cookie: client.cookie } : {}),
+          ...(method === 'POST' ? { Origin: base, 'Content-Type': 'application/json', 'X-CSRF-Token': client.csrf } : {}), ...headers };
+        for (const key of Object.keys(requestHeaders)) if (requestHeaders[key] === null) delete requestHeaders[key];
+        const response = await fetch(base + path, { method, headers: requestHeaders,
+          ...(method === 'POST' ? { body: rawBody ?? JSON.stringify(data ?? {}) } : {}) });
+        const cookie = response.headers.get('set-cookie');
+        if (cookie) client.cookie = cookie.split(';')[0];
+        const body = await response.json();
+        if (Object.hasOwn(body, 'csrfToken')) client.csrf = body.csrfToken;
+        if (Object.hasOwn(body, 'user')) client.user = body.user;
+        return { status: response.status, body, headers: response.headers };
+      };
+      client.post = (path, data, key = randomUUID()) => client.send(path, { method: 'POST', data, headers: { 'Idempotency-Key': key } });
+      client.register = async (name, role = 'customer') => {
+        const result = await client.post('/api/auth/register', { name, email: `${name}@example.test`, password: PASSWORD, role,
+          ...(role === 'driver' ? { vehicle: { model: 'Toyota Corolla', plate: `TEST-${name.slice(0, 5)}` } } : {}) });
+        assert.equal(result.status, 201, JSON.stringify(result.body));
+        return result;
+      };
+      return client;
+    } };
+}
+
+async function participants(h, driverCount = 1) {
+  const customer = h.client(); await customer.register('customer');
+  const admin = h.client(); await admin.register('operator');
+  bootstrapAdmin(h.db, admin.user.email);
+  const login = await admin.post('/api/auth/login', { email: admin.user.email, password: PASSWORD });
+  assert.equal(login.status, 200);
+  const drivers = [];
+  for (let i = 0; i < driverCount; i++) {
+    const driver = h.client(); await driver.register(`driver${i}`, 'driver');
+    const result = await admin.post(`/api/admin/drivers/${driver.user.id}/review`, { decision: 'approved' });
+    assert.equal(result.status, 200);
+    drivers.push(driver);
+  }
+  return { customer, admin, drivers, driver: drivers[0] };
+}
+
+async function requestRide(customer) {
+  const result = await customer.post('/api/rides', { pickupId: 'wuse-ii', destinationId: 'maitama' });
+  assert.equal(result.status, 201, JSON.stringify(result.body));
+  return result.body.ride;
+}
+
+async function claimRide(driver, ride) {
+  const result = await driver.post(`/api/rides/${ride.id}/claim`, { expectedVersion: ride.version });
+  assert.equal(result.status, 200, JSON.stringify(result.body));
+  return result.body.ride;
+}
+
+test('registration stores salted password hashes and sessions; identities and roles cannot be supplied as privileges', async (t) => {
+  const h = await harness(t);
+  const first = h.client(), second = h.client();
+  const registered = await first.register('alice');
+  await second.register('bob');
+  assert.match(registered.headers.get('set-cookie'), /HttpOnly; SameSite=Strict/);
+  const users = h.db.prepare('SELECT password_hash FROM users ORDER BY email').all();
+  assert.ok(users.every((user) => user.password_hash.startsWith('scrypt$') && !user.password_hash.includes(PASSWORD)));
+  assert.notEqual(users[0].password_hash, users[1].password_hash);
+  assert.ok(h.db.prepare('SELECT token_hash FROM sessions').all().every((row) => !first.cookie.includes(row.token_hash)));
+  assert.equal((await first.post('/api/auth/register', { name: 'intruder', email: 'i@example.test', password: PASSWORD, role: 'admin' })).status, 400);
+  assert.equal((await first.post('/api/auth/register', { name: 'driver', email: 'd@example.test', password: PASSWORD, role: 'driver', approved: true })).status, 400);
+  assert.equal((await first.post('/api/auth/register', { name: 'Alice', email: 'ALICE@example.test', password: PASSWORD, role: 'customer' })).status, 409);
+  assert.equal((await second.post('/api/auth/login', { email: 'alice@example.test', password: 'This is the wrong password' })).status, 401);
+  const me = await first.send('/api/session');
+  assert.equal(me.body.user.id, first.user.id);
+  assert.ok(!JSON.stringify(me.body).includes('password_hash'));
+});
+
+test('login rotates sessions; logout and expiry prevent reuse of previous cookies', async (t) => {
+  const h = await harness(t);
+  const client = h.client(); await client.register('alice');
+  const old = h.client(); old.cookie = client.cookie;
+  await client.post('/api/auth/login', { email: client.user.email, password: PASSWORD });
+  assert.notEqual(client.cookie, old.cookie);
+  assert.equal((await old.send('/api/rides')).status, 401);
+  const loggedOutCookie = client.cookie;
+  assert.equal((await client.post('/api/auth/logout')).status, 200);
+  old.cookie = loggedOutCookie;
+  assert.equal((await old.send('/api/rides')).status, 401);
+  await client.post('/api/auth/login', { email: 'alice@example.test', password: PASSWORD });
+  h.advance(12 * 60 * 60_000);
+  assert.equal((await client.send('/api/session')).body.user, null);
+  assert.equal((await client.send('/api/rides')).status, 401);
+});
+
+test('writes require same-origin JSON and a session CSRF token; malformed, oversized and foreign-host requests fail', async (t) => {
+  const h = await harness(t);
+  const client = h.client(); await client.register('alice');
+  const data = { pickupId: 'wuse-ii', destinationId: 'maitama' };
+  for (const headers of [{ Origin: 'https://example.org' }, { Origin: null },
+    { 'X-CSRF-Token': null }, { 'X-CSRF-Token': 'wrong' }, { 'X-CSRF-Token': 'é'.repeat(64) },
+    { 'Sec-Fetch-Site': 'cross-site' }]) {
+    const response = await client.send('/api/rides', { method: 'POST', data, headers });
+    assert.equal(response.status, 403, JSON.stringify(headers));
+  }
+  // Fetch implementations may normalize Host. Send the exact header using HTTP.
+  const hostStatus = await new Promise((resolve, reject) => {
+    httpGet(`${h.base}/api/session`, { headers: { Host: 'attacker.example' } }, (response) => {
+      response.resume(); response.on('end', () => resolve(response.statusCode));
+    }).on('error', reject);
+  });
+  assert.equal(hostStatus, 403);
+  assert.equal((await client.send('/api/rides', { method: 'POST', data, headers: { 'Content-Type': 'text/plain' } })).status, 415);
+  assert.equal((await client.send('/api/rides', { method: 'POST', rawBody: '{' })).status, 400);
+  assert.equal((await client.send('/api/rides', { method: 'POST', rawBody: JSON.stringify({ tooMuch: 'a'.repeat(17000) }) })).status, 413);
+  assert.equal((await client.send('/api/rides', { method: 'DELETE' })).status, 405);
+  assert.equal(h.db.prepare('SELECT count(*) AS count FROM rides').get().count, 0);
+  assert.equal((await h.client().post('/api/rides', data)).status, 401);
+});
+
+test('only the local first-admin command creates an admin and only admins can review pending drivers', async (t) => {
+  const h = await harness(t);
+  const customer = h.client(), driver = h.client(), admin = h.client();
+  await customer.register('customer'); await driver.register('driver', 'driver'); await admin.register('admin');
+  assert.equal(driver.user.driver.status, 'pending');
+  const ride = await requestRide(customer);
+  assert.deepEqual((await driver.send('/api/rides')).body.available, []);
+  assert.equal((await driver.post(`/api/rides/${ride.id}/claim`, { expectedVersion: 0 })).status, 403);
+  assert.equal((await customer.send('/api/admin/drivers')).status, 403);
+  assert.equal((await driver.post(`/api/admin/drivers/${driver.user.id}/review`, { decision: 'approved' })).status, 403);
+  bootstrapAdmin(h.db, admin.user.email);
+  assert.equal((await admin.send('/api/rides')).status, 401, 'promotion revokes existing sessions');
+  assert.throws(() => bootstrapAdmin(h.db, customer.user.email), { code: 'ADMIN_EXISTS' });
+  await admin.post('/api/auth/login', { email: admin.user.email, password: PASSWORD });
+  assert.equal((await admin.post(`/api/admin/drivers/${driver.user.id}/review`, { decision: 'approved' })).status, 200);
+  assert.equal((await admin.post(`/api/admin/drivers/${driver.user.id}/review`, { decision: 'rejected' })).status, 409);
+  assert.equal((await driver.send('/api/session')).body.user.driver.status, 'approved');
+  assert.equal((await driver.send('/api/rides')).body.available.length, 1);
+  await claimRide(driver, ride);
+});
+
+test('ride creation is idempotent, validates the route, and permits one open request per customer', async (t) => {
+  const h = await harness(t);
+  const client = h.client(); await client.register('alice');
+  const key = randomUUID();
+  const data = { pickupId: 'wuse-ii', destinationId: 'maitama' };
+  assert.equal((await client.post('/api/rides', { ...data, destinationId: data.pickupId })).status, 400);
+  assert.equal((await client.post('/api/rides', { ...data, customerId: 'someone-else' })).status, 400);
+  assert.equal((await client.send('/api/rides', { method: 'POST', data })).status, 400);
+  const [one, two] = await Promise.all([client.post('/api/rides', data, key), client.post('/api/rides', data, key)]);
+  assert.deepEqual([one.status, two.status].sort(), [200, 201]);
+  assert.equal(one.body.ride.id, two.body.ride.id);
+  assert.equal(one.body.ride.suggestedFareKobo, 450000);
+  assert.equal((await client.post('/api/rides', data)).body.error.code, 'OPEN_REQUEST_EXISTS');
+  assert.equal((await client.post('/api/rides', { ...data, destinationId: 'jabi' }, key)).body.error.code, 'KEY_REUSED');
+  assert.equal(h.db.prepare('SELECT count(*) AS count FROM rides').get().count, 1);
+});
+
+test('competing approved drivers cannot both claim a request or hold two negotiations', async (t) => {
+  const h = await harness(t);
+  const { customer, drivers } = await participants(h, 2);
+  const ride = await requestRide(customer);
+  const attempts = await Promise.all(drivers.map((driver) => driver.post(`/api/rides/${ride.id}/claim`, { expectedVersion: 0 })));
+  assert.deepEqual(attempts.map((result) => result.status).sort(), [200, 409]);
+  const winnerIndex = attempts.findIndex((result) => result.status === 200);
+  const winner = drivers[winnerIndex], loser = drivers[1 - winnerIndex];
+  const other = h.client(); await other.register('other');
+  const otherRide = await requestRide(other);
+  assert.equal((await winner.post(`/api/rides/${otherRide.id}/claim`, { expectedVersion: 0 })).body.error.code, 'DRIVER_BUSY');
+  assert.equal((await loser.send(`/api/rides/${ride.id}`)).status, 404);
+  await claimRide(loser, otherRide);
+});
+
+test('participants alone can read or change a request, and peer payloads contain no email or credentials', async (t) => {
+  const h = await harness(t);
+  const { customer, driver } = await participants(h);
+  const outsider = h.client(); await outsider.register('outsider');
+  const requested = await requestRide(customer);
+  const available = (await driver.send('/api/rides')).body.available[0];
+  assert.ok(!Object.hasOwn(available, 'customer'));
+  const ride = await claimRide(driver, requested);
+  assert.equal((await outsider.send(`/api/rides/${ride.id}`)).status, 404);
+  assert.equal((await outsider.post(`/api/rides/${ride.id}/offers`, { expectedVersion: ride.version, amountKobo: 470000 })).status, 404);
+  assert.equal((await outsider.post(`/api/rides/${ride.id}/cancel`, { expectedVersion: ride.version })).status, 404);
+  assert.equal((await driver.post('/api/rides', { pickupId: 'garki', destinationId: 'jabi' })).status, 403);
+  const payload = JSON.stringify((await customer.send(`/api/rides/${ride.id}`)).body);
+  for (const secret of ['@example.test', 'password', 'csrf', 'token_hash', 'phone']) assert.ok(!payload.includes(secret), secret);
+  assert.ok(payload.includes('Toyota Corolla'));
+});
+
+test('stale counteroffers, self-acceptance, forged clocks and invalid amounts never create an agreement', async (t) => {
+  const h = await harness(t);
+  const { customer, driver } = await participants(h);
+  let ride = await claimRide(driver, await requestRide(customer));
+  const path = `/api/rides/${ride.id}`;
+  assert.equal((await customer.post(`${path}/accept`, { expectedVersion: ride.version, offerId: 'suggestion' })).body.error.code, 'NO_OFFER');
+  for (const data of [{ expectedVersion: ride.version, amountKobo: '450000' },
+    { expectedVersion: ride.version, amountKobo: 0 }, { expectedVersion: ride.version, amountKobo: 12.5 },
+    { expectedVersion: ride.version, amountKobo: 450000, now: 0 },
+    { expectedVersion: String(ride.version), amountKobo: 450000 },
+    { expectedVersion: ride.version, amountKobo: 450000, actorId: driver.user.id }]) {
+    assert.equal((await customer.post(`${path}/offers`, data)).status, 400);
+  }
+  ride = (await driver.post(`${path}/offers`, { expectedVersion: ride.version, amountKobo: 500000 })).body.ride;
+  const old = ride;
+  assert.equal((await driver.post(`${path}/accept`, { expectedVersion: ride.version, offerId: ride.negotiation.currentOffer.id })).body.error.code, 'SELF_ACCEPTANCE');
+  ride = (await customer.post(`${path}/offers`, { expectedVersion: ride.version, amountKobo: 470000 })).body.ride;
+  assert.equal((await customer.post(`${path}/accept`, { expectedVersion: old.version, offerId: old.negotiation.currentOffer.id })).body.error.code, 'STALE_VERSION');
+  assert.equal((await driver.post(`${path}/accept`, { expectedVersion: ride.version, offerId: old.negotiation.currentOffer.id })).body.error.code, 'STALE_OFFER');
+  assert.equal((await driver.send(path)).body.ride.negotiation.agreement, null);
+  const key = randomUUID();
+  const acceptance = { expectedVersion: ride.version, offerId: ride.negotiation.currentOffer.id };
+  const [first, second] = await Promise.all([driver.post(`${path}/accept`, acceptance, key), driver.post(`${path}/accept`, acceptance, key)]);
+  assert.equal(first.status, 200); assert.equal(second.status, 200);
+  assert.equal(first.body.ride.negotiation.agreement.amountKobo, 470000);
+  assert.equal(h.db.prepare("SELECT count(*) AS count FROM fare_events WHERE type = 'accept'").get().count, 1);
+  assert.equal((await customer.post(`${path}/cancel`, { expectedVersion: first.body.ride.version })).body.error.code, 'REQUEST_CLOSED');
+});
+
+test('offer expiry uses the server clock at the exact deadline and cancellation prevents later acceptance', async (t) => {
+  const h = await harness(t);
+  const { customer, driver } = await participants(h);
+  let ride = await claimRide(driver, await requestRide(customer));
+  const path = `/api/rides/${ride.id}`;
+  ride = (await customer.post(`${path}/offers`, { expectedVersion: ride.version, amountKobo: 450000 })).body.ride;
+  h.advance(120000);
+  const acceptance = { expectedVersion: ride.version, offerId: ride.negotiation.currentOffer.id };
+  assert.equal((await driver.post(`${path}/accept`, acceptance)).body.error.code, 'OFFER_EXPIRED');
+  assert.equal((await driver.send(path)).body.ride.version, ride.version);
+  ride = (await driver.post(`${path}/cancel`, { expectedVersion: ride.version })).body.ride;
+  assert.equal(ride.status, 'cancelled');
+  assert.equal((await customer.post(`${path}/accept`, { ...acceptance, expectedVersion: ride.version })).body.error.code, 'REQUEST_CLOSED');
+  const next = await requestRide(customer);
+  assert.notEqual(next.id, ride.id);
+  assert.equal((await customer.post(`/api/rides/${next.id}/cancel`, { expectedVersion: 0 })).body.ride.status, 'cancelled');
+});
+
+test('requests, offers, acceptance, sessions and retry keys survive a complete database/server restart', async (t) => {
+  const h = await harness(t, { persistent: true });
+  const { customer, driver } = await participants(h);
+  let ride = await claimRide(driver, await requestRide(customer));
+  const path = `/api/rides/${ride.id}`;
+  ride = (await driver.post(`${path}/offers`, { expectedVersion: ride.version, amountKobo: 500000 })).body.ride;
+  await h.restart();
+  assert.equal((await customer.send('/api/session')).body.user.name, 'customer');
+  assert.equal((await customer.send(path)).body.ride.negotiation.currentOffer.amountKobo, 500000);
+  const key = randomUUID();
+  const data = { expectedVersion: ride.version, offerId: ride.negotiation.currentOffer.id };
+  const agreed = (await customer.post(`${path}/accept`, data, key)).body.ride;
+  await h.restart();
+  const restored = (await driver.send(path)).body.ride;
+  assert.deepEqual(restored, agreed);
+  const replay = await customer.post(`${path}/accept`, data, key);
+  assert.equal(replay.status, 200);
+  assert.equal(replay.body.replayed, true);
+  assert.equal(h.db.prepare("SELECT count(*) AS count FROM fare_events WHERE type = 'accept'").get().count, 1);
+  assert.equal(h.db.prepare("SELECT count(*) AS count FROM audit_events WHERE kind = 'fare.accept'").get().count, 1);
+});
+
+test('authentication rate limits survive restart and expire after their window', async (t) => {
+  const h = await harness(t, { persistent: true });
+  const client = h.client();
+  for (let i = 0; i < 30; i++) assert.equal((await client.post('/api/auth/login', {})).status, 400);
+  assert.equal((await client.post('/api/auth/login', {})).status, 429);
+  await h.restart();
+  assert.equal((await client.post('/api/auth/login', {})).status, 429);
+  h.advance(10 * 60_000);
+  assert.equal((await client.post('/api/auth/login', {})).status, 400);
+});

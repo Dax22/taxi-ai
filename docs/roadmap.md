@@ -16,12 +16,25 @@ confirmation to the tested shared fare module, with mobile/tablet/desktop CSS.
 
 Complete the manual browser review in `apps/web/README.md` before treating layout
 and end-to-end interaction as verified. The current cloud browser blocked local
-preview access. Vendor/customer/driver authentication remains a later milestone.
+preview access. Vendor authentication remains a later milestone.
 
-## 2 — Real ride pilot
+## 2a — Local accounts and saved ride requests (implemented; browser review pending)
 
-Add accounts, approved drivers, database persistence, maps, vehicle matching,
-booking state, receipts and payment-provider integration. Implement authenticated
+- Customer/driver password accounts and role-specific dashboards.
+- Local first-administrator setup and pending driver approval with vehicle details.
+- SQLite storage, session cookies and server-side access checks.
+- Persistent test requests, exclusive driver claiming, fare negotiation and history.
+- Versioned transactions, duplicate-request protection and server-controlled expiry.
+- Three-second dashboard polling, separate browser sessions and restart durability.
+
+This milestone uses sample areas and fictional fares. Approval enables local
+testing; identity and vehicle verification are not implemented. An agreed test
+fare does not dispatch a car. Follow the manual checklist in `apps/web/README.md`.
+
+## 2b — Real ride pilot
+
+Harden authentication and hosting; add verified driver onboarding, maps, vehicle
+matching, operational booking state, receipts and payment-provider integration. Implement authenticated
 chat and private voice calls. Exercise concurrency, permission checks and
 recovery from interrupted requests before enabling real transactions.
 
