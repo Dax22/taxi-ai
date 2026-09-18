@@ -60,6 +60,12 @@ recording or transcription. Provider selection remains open.
 
 ## Client direction
 
+The first web milestone uses browser-native HTML/CSS/JavaScript and a Node static
+server without external dependencies. It imports the same fare module as the
+unit tests. All role switching and agreements are local demonstration state; this
+does not create an authenticated multi-user application or a trusted booking API.
+The sample quote fixtures are not an AI estimator or live market prices.
+
 The website and mobile clients should share domain contracts while adapting
 their interfaces for web, iOS, Android and tablets. The vendor and administrator
 areas require role-based permissions on the backend as well as in their UI.
