@@ -1,10 +1,11 @@
 import { DEMO_AREAS, createDemoQuote, formatNaira, nairaToKobo } from '/shared/demo-booking.mjs';
 import { $, element } from './dom.mjs';
+import { renderChatReports } from './chat-reports-view.mjs';
 
 const statuses = { requested: 'Waiting for a driver', negotiating: 'Negotiating', agreed: 'Fare agreed', cancelled: 'Cancelled' };
 
 /** DOM rendering and UI events. No network, session storage or backend imports. */
-export function createDashboardView({ onCommand, onReview, serverNow }) {
+export function createDashboardView({ onCommand, onReview, onReportReview, onSelectionChange, serverNow }) {
   let state = { user: null, rides: [], available: [], drivers: [] };
   let selectedId = null, detailId = null;
   let renderedLists = '', renderedDetail = '';
@@ -45,6 +46,7 @@ export function createDashboardView({ onCommand, onReview, serverNow }) {
     $('driver-panel').hidden = !driver;
     $('ride-dashboard').hidden = admin;
     $('admin-dashboard').hidden = !admin;
+    $('chat-reports-panel').hidden = !admin;
     $('available-section').hidden = !driver || user.driver.status !== 'approved';
     $('open-request-note').hidden = !state.rides.some((ride) => ['requested', 'negotiating'].includes(ride.status));
     if (driver) {
@@ -59,7 +61,7 @@ export function createDashboardView({ onCommand, onReview, serverNow }) {
       selectedId = state.rides.find((ride) => ['requested', 'negotiating'].includes(ride.status))?.id ?? state.rides[0]?.id ?? null;
     }
     const listKey = JSON.stringify({ user, rides: state.rides.map((ride) => [ride.id, ride.version]),
-      available: state.available, drivers: state.drivers, selectedId });
+      available: state.available, drivers: state.drivers, reports: state.reports, unread: state.chatUnread, selectedId });
     if (listKey !== renderedLists) {
       renderedLists = listKey;
       renderLists();
@@ -79,8 +81,10 @@ export function createDashboardView({ onCommand, onReview, serverNow }) {
       const description = element('span');
       description.append(element('strong', `${ride.pickup.name} → ${ride.destination.name}`),
         element('small', new Date(ride.createdAt).toLocaleString()));
+      const unread = state.chatUnread?.[ride.id] ?? 0;
+      if (unread) description.append(element('small', `${unread} unread message${unread === 1 ? '' : 's'}`, 'chat-unread-count'));
       button.append(description, element('span', statuses[ride.status], 'status-badge'));
-      button.addEventListener('click', () => { selectedId = ride.id; render(); });
+      button.addEventListener('click', () => { selectedId = ride.id; render(); onSelectionChange(selectedRide()); });
       $('ride-list').append(button);
     }
     $('available-list').replaceChildren();
@@ -118,6 +122,7 @@ export function createDashboardView({ onCommand, onReview, serverNow }) {
       } else row.append(element('span', driver.status.toUpperCase(), 'status-badge'));
       $('driver-applications').append(row);
     }
+    renderChatReports(state.reports ?? [], onReportReview);
   }
 
   function renderDetail() {
@@ -217,6 +222,7 @@ export function createDashboardView({ onCommand, onReview, serverNow }) {
     tick: updateButtons,
     setBusy(value) { busy = value; updateButtons(); },
     select(id) { selectedId = id; },
+    selected: selectedRide,
     reset() { selectedId = null; detailId = null; renderedLists = ''; renderedDetail = ''; },
   });
 }

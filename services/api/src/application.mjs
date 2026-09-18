@@ -9,6 +9,8 @@ import { createDriversRepository } from './modules/drivers/repository.mjs';
 import { createDriversService } from './modules/drivers/service.mjs';
 import { createRidesRepository } from './modules/rides/repository.mjs';
 import { createRidesService } from './modules/rides/service.mjs';
+import { createChatRepository } from './modules/chat/repository.mjs';
+import { createChatService } from './modules/chat/service.mjs';
 
 /** Composition root: the only place that wires business modules to adapters. */
 export function createApplication({ db, clock = Date.now }) {
@@ -24,6 +26,8 @@ export function createApplication({ db, clock = Date.now }) {
     getAccount: accounts.profile, unitOfWork, audit, clock });
   const rides = createRidesService({ repository: rideRepository,
     getAccount: accounts.profile, unitOfWork, audit, tokens, clock });
+  const chat = createChatService({ repository: createChatRepository(db), getAccount: accounts.profile,
+    getRideContext: rides.conversationContext, listConversationIds: rides.conversationIds, unitOfWork, audit, tokens, clock });
   const rateLimiter = createRateLimiter({ db, unitOfWork, digest: tokens.digest });
-  return Object.freeze({ accounts, drivers, rides, rateLimiter, clock });
+  return Object.freeze({ accounts, drivers, rides, chat, rateLimiter, clock });
 }

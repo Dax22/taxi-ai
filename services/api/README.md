@@ -7,7 +7,7 @@ or transport dispatch system.
 
 ## Code boundaries
 
-`src/application.mjs` wires the accounts, drivers and rides modules. Each module
+`src/application.mjs` wires the accounts, drivers, rides and chat modules. Each module
 contains a service, repository and route factory; rides also has pure domain
 helpers. Services receive repositories, clock and cross-module operations as
 explicit dependencies. They do not import HTTP or database adapters. Repositories
@@ -18,8 +18,9 @@ implements SQLite, password/token operations, audit and rate limits. `src/shared
 contains small common errors, validation and authorization policies. See
 [the architecture](../../docs/architecture.md) for ownership and transaction contracts.
 
-This refactor preserves schema version 1 and `data/taxi-ai.sqlite`; existing test
-accounts and rides can be used without a reset.
+Migration `002_chat.sql` adds the chat tables and moves the schema to version 2.
+The `data/taxi-ai.sqlite` location, existing test accounts, sessions and rides are
+preserved. No reset is required. Earlier schema-one code refuses the upgraded file.
 
 ## Implemented boundaries
 
@@ -106,6 +107,19 @@ sessions, refuses an account with ride history and refuses if an admin exists.
 Driver review supports pending → approved/rejected. There is no document upload,
 licence check, resubmission, suspension or appeals workflow yet.
 
+## Participant chat
+
+The chat module uses account and ride service ports injected at composition. Only
+the assigned participants can open a thread. Sends validate plain text, generate
+server identities/times, and commit the message, audit and retry key together.
+Messages are capped at 500 per ride and paged in batches of 100. Monotonic read
+cursors track each participant separately. Message text cannot mutate a fare.
+
+Reported messages are visible in a dedicated administrator queue; administrators
+cannot use chat routes to read unreported conversation content. This is a local
+moderation preview, not a staffed safety service or end-to-end encrypted chat.
+See [the chat contract](../../docs/chat.md) for routes, lifecycle and limitations.
+
 ## Before public hosting or a real pilot
 
 Select a production authentication approach with email/phone verification,
@@ -134,3 +148,9 @@ never read the developer's account database. A fault-injection test fails the
 final retry-key write and verifies that fare, ride and audit changes all roll back
 and the same command can safely be retried. Transaction tests reject asynchronous
 callbacks. GitHub Actions runs verification on Node 22.12.0 and Node 24.
+
+Chat tests also cover participant isolation, duplicate sends, atomic rollback,
+pagination, unread cursors, report access/review, restart persistence and the
+version-one database upgrade. Controller tests check stale responses across rides
+and accounts, hidden/unread behaviour, drafts after failed sends and interrupted
+pagination. Full browser interaction remains a manual review requirement.

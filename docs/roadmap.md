@@ -31,11 +31,22 @@ This milestone uses sample areas and fictional fares. Approval enables local
 testing; identity and vehicle verification are not implemented. An agreed test
 fare does not dispatch a car. Follow the manual checklist in `apps/web/README.md`.
 
-## 2b — Real ride pilot
+## 2b — Private ride chat (implemented; browser review pending)
+
+- Persistent plain-text conversation for the customer and assigned driver only.
+- Unread counts, monotonic read cursors, pagination and retry-safe sends.
+- Structured fare cards and explicit acceptance using the existing ride rules.
+- Message reports and a limited administrator review queue.
+- Schema-two migration preserving existing local data.
+
+Complete [the browser chat checklist](chat.md#manual-review). Private voice calls,
+staffed safety operations and production communication security remain planned.
+
+## 2c — Real ride pilot
 
 Harden authentication and hosting; add verified driver onboarding, maps, vehicle
 matching, operational booking state, receipts and payment-provider integration. Implement authenticated
-chat and private voice calls. Exercise concurrency, permission checks and
+production-ready messaging and private voice calls. Exercise concurrency, permission checks and
 recovery from interrupted requests before enabling real transactions.
 
 ## 3 — Delivery and operations

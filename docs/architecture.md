@@ -2,7 +2,7 @@
 
 Taxi Ai uses a **modular monolith**: one backend process and database, with
 separate business modules and explicit dependencies. The current code implements
-accounts, driver review and ride/fare negotiation. The structure supports adding
+accounts, driver review, ride/fare negotiation and participant chat. The structure supports adding
 Eats, courier and communication without mixing their workflows into ride logic.
 See [ADR 0001](decisions/0001-modular-monolith.md) for the decision and tradeoffs.
 
@@ -13,6 +13,7 @@ See [ADR 0001](decisions/0001-modular-monolith.md) for the decision and tradeoff
 | Accounts | Registration, authentication, sessions, first-admin setup, own profile | `users`, `sessions` |
 | Drivers | Application profile and administrator review | `drivers` |
 | Rides | Requests, exclusive claims, fare commands and retries | `rides`, `fare_events`, `idempotency` |
+| Chat | Participant messages, read markers, retries and reports | `chat_messages`, `chat_reads`, `chat_commands`, `chat_reports` |
 | Shared domain | Pure fare state machine, integer money helpers and sample quotes | No storage or network |
 | Infrastructure | SQLite, migrations, password hashing, random tokens, audit and rate limits | `audit_events`, `rate_limits`, connection lifecycle |
 | HTTP | Route dispatch, request parsing, cookies, CSRF and error/status translation | No business state |
@@ -43,10 +44,13 @@ flowchart TD
   HTTP --> Accounts[Accounts service]
   HTTP --> Drivers[Drivers service]
   HTTP --> Rides[Rides service]
+  HTTP --> Chat[Chat service]
   Accounts --> Repos[Injected repositories]
   Drivers --> Repos
   Rides --> Repos
   Rides --> Domain[Pure fare domain]
+  Chat --> Repos
+  Chat --> Rides
   Repos --> DB[SQLite]
 ```
 
@@ -83,9 +87,9 @@ background writes inside them. A future PostgreSQL adapter requires coordinated
 async contract changes, migration and transaction/concurrency tests. Changing the
 repository constructor alone is insufficient.
 
-The existing `data/taxi-ai.sqlite` location and schema version 1 are preserved.
-Startup applies migrations; no database deletion or account reset is required for
-this refactor. Local data and secrets are excluded from Git and static serving.
+The existing `data/taxi-ai.sqlite` location is preserved. Chat migration
+`002_chat.sql` upgrades schema 1 to 2 without resetting existing records. Startup
+applies migrations; older schema-one binaries refuse the upgraded database. Local data and secrets are excluded from Git and static serving.
 See [API notes](../services/api/README.md) for routes and current security limits.
 
 ## Fare rules
@@ -103,8 +107,9 @@ include claiming/cancelling before a fare conversation; fare-event versions trac
 only the shared model. Their distinct sequences are validated separately.
 
 The domain's `in_app`, `chat` and `voice_call` labels describe where an offer began;
-they do not implement communication. The current API accepts in-app offers only.
-Future chat/voice flows must use the same explicit offer and acceptance commands.
+they do not themselves implement communication. The current chat presents fare
+cards and calls the same in-app offer/accept endpoints. Free text never changes
+the fare. Voice calls remain planned and must preserve explicit consent.
 
 ## Web and future mobile clients
 
@@ -117,6 +122,10 @@ only. At `/app`, `dashboard.mjs` coordinates page/session state and polling:
 | `dashboard/api-client.mjs` | Same-origin requests, CSRF, timeout and stable retry keys |
 | `dashboard/auth-form.mjs` | Login/registration form state and input collection |
 | `dashboard/views.mjs` | Role-specific rendering and user action callbacks |
+| `dashboard/conversation-controller.mjs` | Chat pagination, selected-account isolation and read acknowledgement |
+| `dashboard/conversation-view.mjs` | Plain-text transcript, fare cards, drafts and reporting form |
+| `dashboard/conversation-model.mjs` | Pure timeline and offer-card presentation rules |
+| `dashboard/chat-reports-view.mjs` | Administrator view of reported messages |
 | `dashboard/dom.mjs` | Small DOM helpers using text content |
 
 Views do not call `fetch`. The client retains the displayed offer ID/version and
@@ -129,11 +138,25 @@ same server use cases through reviewed API contracts. The current browser-cookie
 transport is not a completed native authentication design. TypeScript, OpenAPI
 schemas and client generation are future decisions; this code is JavaScript ESM.
 
+## Participant chat
+
+Chat receives account and narrow ride-membership/status ports through the
+composition root, so chat polling does not replay fare history. Its
+repository owns only chat tables. Send commands recheck participants inside a
+transaction and commit the message, audit reference and retry key together. Read
+markers advance monotonically. The dashboard discards delayed responses after
+changing rides or accounts and keeps unsent drafts in memory per conversation.
+
+The chat transcript projects fare cards from ride state; it does not duplicate
+price decisions in chat storage. Administrators can review explicitly reported
+messages through dedicated endpoints, without access to full conversations.
+See [the chat guide](chat.md) for the API contract and development limits.
+
 ## Adding planned features
 
 | Future module | Boundary to preserve |
 | --- | --- |
-| Communication | Participant-only chat/call rooms; short-lived provider credentials; no peer phone numbers |
+| Voice communication | Extend participant-only access to call rooms; short-lived provider credentials; no peer phone numbers |
 | Taxi Ai Eats | Vendors, fixed-price menus, ordering and fulfilment; show delivery fees at checkout |
 | Courier | Parcel details, vehicle eligibility and proof of delivery; confirm its pricing policy separately |
 | Payments | Provider adapters, payment states, verified webhooks and provider idempotency |
@@ -144,7 +167,7 @@ Motorcycles belong to food/small-parcel delivery; passenger rides use cars. Larg
 courier jobs can use suitable cars/vans. Autonomous taxis remain **Coming soon**;
 the site does not imply an operational fleet or a launch date.
 
-Choose chat/voice providers when implementing communication. Use application IDs
+Choose a voice provider when implementing calls. Use application IDs
 in peer payloads and room identities, with report/block controls and an explicit
 consent design for any recording/transcription. Provider credentials belong in
 server adapters. AI may assist discovery/support; it must not independently

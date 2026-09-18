@@ -2,29 +2,48 @@ import { $ } from './dashboard/dom.mjs';
 import { createApiClient } from './dashboard/api-client.mjs';
 import { bindAuthForm } from './dashboard/auth-form.mjs';
 import { createDashboardView } from './dashboard/views.mjs';
+import { createConversationView } from './dashboard/conversation-view.mjs';
+import { createConversationController } from './dashboard/conversation-controller.mjs';
 
 // Page controller: owns session/view state and coordinates network work with UI.
-const emptyState = () => ({ user: null, rides: [], available: [], drivers: [] });
+const emptyState = () => ({ user: null, rides: [], available: [], drivers: [], reports: [], chatUnread: {} });
 let state = emptyState();
 let busy = false;
 let refreshing = null;
 let serverTime = { now: Date.now(), received: performance.now() };
 const client = createApiClient({ onServerTime(now) { serverTime = { now, received: performance.now() }; } });
-const view = createDashboardView({
-  serverNow: () => serverTime.now + performance.now() - serverTime.received,
-  onCommand: (path, data, message) => runAction(async () => {
+function rideCommand(path, data, message) {
+  return runAction(async () => {
     const result = await client.rideCommand(path, data);
     view.select(result.ride.id);
-  }, message),
+  }, message);
+}
+const conversationView = createConversationView({
+  serverNow: () => serverTime.now + performance.now() - serverTime.received,
+  onAccept: rideCommand,
+  onSend: (data) => runAction(() => conversation.send(data)),
+  onReport: (data) => runAction(() => conversation.report(data), 'Report saved for local administrator review.'),
+  onRead: () => conversation.markRead(),
+});
+const conversation = createConversationController({ client, view: conversationView,
+  onRead(rideId, unread) { state.chatUnread[rideId] = unread; view.render(state); },
+});
+const view = createDashboardView({
+  serverNow: () => serverTime.now + performance.now() - serverTime.received,
+  onCommand: rideCommand,
+  onSelectionChange: (ride) => conversation.show(ride, state.user),
   onReview: (id, decision, message) => runAction(() => client.request(`/api/admin/drivers/${id}/review`, {
     method: 'POST', data: { decision },
   }), message),
+  onReportReview: (id) => runAction(() => client.request(`/api/admin/chat-reports/${id}/review`, {
+    method: 'POST', data: {},
+  }), 'Report marked reviewed.'),
 });
 const authForm = bindAuthForm({ onSubmit: (path, data) => runAction(async () => {
   const result = await client.request(path, { method: 'POST', data });
   state = { ...emptyState(), user: result.user };
   client.reset(); client.setCsrf(result.csrfToken);
-  view.reset(); authForm.reset();
+  view.reset(); conversation.reset(); authForm.reset();
 }) });
 
 async function refresh() {
@@ -32,19 +51,22 @@ async function refresh() {
   refreshing = (async () => {
     const session = await client.request('/api/session');
     if (state.user?.id !== session.user?.id) {
-      state = emptyState(); client.reset(); view.reset();
+      state = emptyState(); client.reset(); view.reset(); conversation.reset();
     }
     state.user = session.user;
     client.setCsrf(session.csrfToken);
     if (session.user?.role === 'admin') {
-      state.drivers = (await client.request('/api/admin/drivers')).drivers;
+      const [drivers, reports] = await Promise.all([client.request('/api/admin/drivers'), client.request('/api/admin/chat-reports')]);
+      state.drivers = drivers.drivers; state.reports = reports.reports;
     } else if (session.user) {
-      const data = await client.request('/api/rides');
+      const [data, chat] = await Promise.all([client.request('/api/rides'), client.request('/api/chat')]);
+      state.chatUnread = Object.fromEntries(chat.conversations.map((item) => [item.rideId, item.unread]));
       state.rides = data.rides;
       state.available = data.available;
     }
     $('sync-status').textContent = 'Up to date · refreshes every 3s';
     view.render(state);
+    await conversation.show(view.selected(), state.user);
   })();
   try { await refreshing; }
   finally { refreshing = null; }
@@ -52,7 +74,7 @@ async function refresh() {
 
 async function runAction(action, message) {
   if (busy) return;
-  busy = true; view.setBusy(true);
+  busy = true; view.setBusy(true); conversationView.setBusy(true);
   $('page-error').textContent = '';
   $('page-notice').textContent = '';
   try {
@@ -66,7 +88,7 @@ async function runAction(action, message) {
     if ([401, 403, 409].includes(error.status)) {
       try { await refresh(); } catch { /* Preserve the original error. */ }
     }
-  } finally { busy = false; view.setBusy(false); }
+  } finally { busy = false; view.setBusy(false); conversationView.setBusy(false); }
 }
 
 async function poll() {
@@ -83,10 +105,10 @@ async function poll() {
 
 $('logout').addEventListener('click', () => runAction(async () => {
   await client.request('/api/auth/logout', { method: 'POST' });
-  state = emptyState(); client.reset(); view.reset(); view.render(state);
+  state = emptyState(); client.reset(); view.reset(); conversation.reset(); view.render(state);
 }));
 $('refresh').addEventListener('click', () => runAction(() => refresh()));
 document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });
-setInterval(() => view.tick(), 1000);
+setInterval(() => { view.tick(); conversationView.tick(); }, 1000);
 setInterval(poll, 3000);
 poll();

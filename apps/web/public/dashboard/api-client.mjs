@@ -25,7 +25,7 @@ export function createApiClient({ fetchImpl = globalThis.fetch, makeKey = () => 
     return body;
   }
 
-  async function rideCommand(path, data) {
+  async function command(path, data) {
     const fingerprint = `${path}:${JSON.stringify(data)}`;
     const key = retryKeys.get(fingerprint) ?? makeKey();
     retryKeys.set(fingerprint, key);
@@ -39,7 +39,7 @@ export function createApiClient({ fetchImpl = globalThis.fetch, makeKey = () => 
     }
   }
 
-  return Object.freeze({ request, rideCommand,
+  return Object.freeze({ request, command, rideCommand: command,
     setCsrf(token) { csrfToken = token; },
     reset() { csrfToken = null; retryKeys.clear(); },
   });

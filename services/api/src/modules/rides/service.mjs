@@ -127,5 +127,16 @@ export function createRidesService({ repository, getAccount, unitOfWork, audit, 
     });
   }
 
-  return Object.freeze({ get, list, mutate });
+  // Narrow read ports for communication: no fare replay or peer-profile loading.
+  function conversationContext(user, id) {
+    const ride = record(id);
+    requireParticipant(ride, user);
+    return { id: ride.id, status: ride.status, driverId: ride.driverId };
+  }
+
+  function conversationIds(user) {
+    return repository.listFor(user.id).filter((ride) => ride.driverId).map((ride) => ride.id);
+  }
+
+  return Object.freeze({ get, list, mutate, conversationContext, conversationIds });
 }
