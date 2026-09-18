@@ -3,24 +3,24 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#f8f8f5">
+  <meta name="theme-color" content="#F4B400">
   <meta name="description" content="Meet Taxi Ai. A new vision for rides, food and deliveries in Abuja. Try our fare-negotiation preview.">
   <title>Taxi Ai — Your city. Your terms.</title>
-  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="/favicon.svg?v=amber" type="image/svg+xml">
   <link rel="stylesheet" href="/styles.css">
   <script type="module" src="/app.mjs"></script>
 </head>
 <body>
   <a class="skip-link" href="#book">Skip to booking demo</a>
   <header class="site-header shell">
-    <a class="brand" href="#top" aria-label="Taxi Ai home"><span class="brand-symbol" aria-hidden="true">t<span>↗</span></span>taxi<span class="brand-ai">Ai</span><span class="brand-dot">.</span></a>
+    <a class="brand" href="#top" aria-label="Taxi Ai home"><img class="brand-mark" src="/assets/taxi-ai-mark.svg" width="48" height="36" alt=""><span>Taxi Ai</span></a>
     <nav class="desktop-nav" aria-label="Main navigation">
       <a href="#book" data-service="ride">Ride</a>
       <a href="#book" data-service="eats">Taxi Ai Eats</a>
       <a href="#book" data-service="courier">Courier</a>
       <a href="#future">The future <span class="tiny-dot" aria-hidden="true"></span></a>
     </nav>
-    <div class="header-end"><span class="location"><span aria-hidden="true">◎</span> Abuja, NG</span><a class="button button-dark button-small" href="#book" data-service="ride">Try the demo <span aria-hidden="true">↗</span></a></div>
+    <div class="header-end"><span class="location"><span aria-hidden="true">◎</span> Abuja, NG</span><a class="button button-primary button-small" href="#book" data-service="ride">Try the demo <span aria-hidden="true">↗</span></a></div>
   </header>
 
   <main id="top">
@@ -47,7 +47,7 @@
                 <div class="field location-field"><span class="route-square" aria-hidden="true"></span><label for="destination">Destination</label><select id="destination" name="destination" required><option value="">Choose a sample area</option></select></div>
               </div>
               <p id="trip-error" class="error-text" role="alert"></p>
-              <button class="button button-dark button-full" type="submit">See suggested fare <span aria-hidden="true">↗</span></button>
+              <button class="button button-primary button-full" type="submit">See suggested fare <span aria-hidden="true">↗</span></button>
             </form>
             <p class="booking-footnote">Sample Abuja areas · Prices are illustrative</p>
           </div>
@@ -88,7 +88,7 @@
 
     <section class="connected-section shell" aria-labelledby="connected-title"><p class="eyebrow">YOUR WORLD, CONNECTED</p><h2 id="connected-title">Built around people.<br>Designed for what’s next.</h2><div class="connected-grid"><article><span aria-hidden="true">◎</span><h3>Private by design.</h3><p>Planned in-app chat and internet calls will let you talk without sharing real phone numbers.</p></article><article><span aria-hidden="true">↔</span><h3>Every screen. One journey.</h3><p>Try the web preview on your phone, tablet or desktop. Native iOS and Android apps are planned.</p></article><article><span aria-hidden="true">✳</span><h3>Intelligence with intention.</h3><p>Future AI features will assist with fares, arrival estimates and support. You stay in control of agreement.</p></article></div></section>
   </main>
-  <footer class="site-footer shell"><a class="brand" href="#top">taxi<span class="brand-ai">Ai</span><span class="brand-dot">.</span></a><p>Starting with Abuja.<br>Built for the possibilities ahead.</p><div><a href="#book" data-service="ride">Try the ride demo ↗</a><p>Taxi Ai · Product preview</p></div></footer>
+  <footer class="site-footer shell"><a class="brand" href="#top" aria-label="Taxi Ai home"><img class="brand-mark" src="/assets/taxi-ai-mark.svg" width="48" height="36" alt=""><span>Taxi Ai</span></a><p>Starting with Abuja.<br>Built for the possibilities ahead.</p><div><a href="#book" data-service="ride">Try the ride demo ↗</a><p>Taxi Ai · Product preview</p></div></footer>
   <noscript><p class="noscript-note">Enable JavaScript to try fare negotiation. This site is a product preview and cannot book real rides.</p></noscript>
 
   <dialog id="booking-dialog" aria-labelledby="dialog-title" aria-describedby="dialog-description">
@@ -101,12 +101,12 @@
           <div class="role-row"><span>Preview as</span><div class="role-switch" role="group" aria-label="Switch preview role"><button type="button" data-role="customer" aria-pressed="true">Customer</button><button type="button" data-role="driver" aria-pressed="false">Driver</button></div></div>
           <div class="current-offer" aria-live="polite" aria-atomic="true"><span id="offer-owner">YOUR FARE, YOUR SAY</span><strong id="offer-amount">Make the first offer.</strong><p id="offer-guidance">You or the driver can start the conversation.</p></div>
           <p id="offer-expiry" class="expiry-note"></p>
-          <button class="button button-dark button-full" id="accept-offer" type="button" disabled>Accept current offer</button>
-          <form id="offer-form"><label for="fare-amount">Your offer in naira (₦)</label><div class="offer-input-row"><input id="fare-amount" name="amount" inputmode="decimal" autocomplete="off" maxlength="14" required aria-describedby="offer-consent"><button class="button button-dark" type="submit">Send offer <span aria-hidden="true">↗</span></button></div><p id="offer-consent" class="small-note">Sending an offer confirms your agreement to that price. The other person must accept it.</p></form>
+          <button class="button button-primary button-full" id="accept-offer" type="button" disabled>Accept current offer</button>
+          <form id="offer-form"><label for="fare-amount">Your offer in naira (₦)</label><div class="offer-input-row"><input id="fare-amount" name="amount" inputmode="decimal" autocomplete="off" maxlength="14" required aria-describedby="offer-consent"><button class="button button-primary" type="submit">Send offer <span aria-hidden="true">↗</span></button></div><p id="offer-consent" class="small-note">Sending an offer confirms your agreement to that price. The other person must accept it.</p></form>
           <p id="negotiation-error" class="error-text" role="alert"></p>
           <button id="cancel-negotiation" class="text-link muted-link" type="button">Cancel this demo negotiation</button>
         </div>
-        <div id="negotiation-result" class="negotiation-result" hidden tabindex="-1"><span class="result-symbol" id="result-symbol" aria-hidden="true">✓</span><h3 id="result-title"></h3><strong id="result-amount"></strong><p id="result-detail"></p><p class="small-note">No ride was booked or payment taken.</p><button id="new-demo" class="button button-dark" type="button">Start another demo <span aria-hidden="true">↗</span></button></div>
+        <div id="negotiation-result" class="negotiation-result" hidden tabindex="-1"><span class="result-symbol" id="result-symbol" aria-hidden="true">✓</span><h3 id="result-title"></h3><strong id="result-amount"></strong><p id="result-detail"></p><p class="small-note">No ride was booked or payment taken.</p><button id="new-demo" class="button button-primary" type="button">Start another demo <span aria-hidden="true">↗</span></button></div>
         <div class="history-section"><h3>Fare history</h3><ol id="offer-history"><li>No offers yet.</li></ol></div>
       </section>
     </div>

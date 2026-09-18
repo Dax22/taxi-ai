@@ -66,7 +66,8 @@ production hosting setup or a shared multi-user service.
 | `docs/` | Requirements, architecture and milestones | Written |
 
 Read [the requirements](docs/requirements.md), [architecture](docs/architecture.md)
-and [roadmap](docs/roadmap.md) before adding features.
+and [roadmap](docs/roadmap.md) before adding features. The selected yellow logo and
+colour palette are documented in [the brand guide](docs/brand.md).
 
 ## Development
 

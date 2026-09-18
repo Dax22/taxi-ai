@@ -3,8 +3,10 @@
 From the repository root, run `npm run dev`, then open http://localhost:3000.
 Node.js 22.12+ works; no dependency installation is required. Press Ctrl+C to stop.
 
-The website uses original Taxi Ai copy and a monochrome visual direction inspired
-by the supplied reference. The two car images are AI-generated concept artwork
+The website uses original Taxi Ai copy, the selected yellow forward-motion logo,
+and an amber/graphite palette on pale backgrounds. See the
+[brand guide](../../docs/brand.md) for colour values and logo assets. The spacious
+layout follows the supplied design reference. The two car images are AI-generated concept artwork
 from the earlier Taxi Ai design exploration, encoded as WebP for this project.
 They do not depict an operational fleet or an available autonomous service.
 
