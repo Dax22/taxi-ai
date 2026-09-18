@@ -48,15 +48,24 @@
         </aside>
         <div class="ride-workspace">
           <section id="available-section" class="account-card" hidden aria-labelledby="available-title"><div class="card-topline"><h2 id="available-title">Available requests</h2><span class="status-badge">ABUJA</span></div><div id="available-list" class="request-list"></div></section>
-          <section class="account-card" aria-labelledby="your-requests-title"><div class="card-topline"><h2 id="your-requests-title">Your requests</h2><span id="ride-count" class="small-note"></span></div><div id="ride-list" class="request-list"></div></section>
+          <section class="account-card" aria-labelledby="your-requests-title"><div class="card-topline"><h2 id="your-requests-title">Current journeys</h2><span id="ride-count" class="small-note"></span></div><div id="ride-list" class="request-list"></div></section>
           <section id="ride-detail" class="account-card detail-card" hidden aria-labelledby="detail-title">
             <div class="card-topline"><p class="eyebrow">JOURNEY DETAILS</p><span id="detail-status" class="status-badge"></span></div><h2 id="detail-title"></h2><p id="detail-person" class="supporting-copy"></p><p id="detail-reference" class="small-note"></p>
             <div class="fare-display" aria-live="polite" aria-atomic="true"><p id="fare-label" class="eyebrow"></p><strong id="fare-value"></strong><p id="fare-guidance"></p></div>
             <p id="fare-expiry" class="small-note"></p>
             <button id="accept-fare" class="button button-primary button-full" type="button" hidden></button>
 
+            <p id="agreed-note" class="agreement-note" hidden>Your fare is saved. The customer must confirm the booking to reserve this test trip.</p>
+            <section id="trip-panel" class="trip-panel" hidden aria-labelledby="trip-title">
+              <p class="eyebrow">YOUR TRIP</p><h3 id="trip-title"></h3><p id="trip-guidance" class="supporting-copy"></p>
+              <button id="trip-confirm" class="button button-primary button-full" type="button" hidden>Confirm test booking</button>
+              <button id="trip-action" class="button button-primary button-full" type="button" hidden></button>
+              <div id="pickup-pin-panel" class="pickup-pin-panel" hidden><p class="eyebrow">YOUR PICKUP PIN</p><output id="pickup-pin-value" aria-label="Your six-digit pickup PIN"></output><p class="small-note">Share this with your driver in person after checking the vehicle. Keep it private until pickup.</p></div>
+              <form id="pickup-pin-form" class="stack-form" hidden><fieldset id="pickup-pin-fields"><legend>Verify pickup</legend><label for="driver-pickup-pin">Customer’s six-digit PIN</label><input id="driver-pickup-pin" type="password" inputmode="numeric" pattern="[0-9]{6}" minlength="6" maxlength="6" autocomplete="off" required aria-describedby="pickup-pin-help pickup-pin-lock"><p id="pickup-pin-help" class="small-note">Ask the customer for their PIN when they are at the vehicle.</p><p id="pickup-pin-lock" class="error-text" role="status"></p><button id="trip-start" class="button button-primary button-full" type="submit">Verify PIN and start trip</button></fieldset></form>
+            </section>
             <button id="cancel-request" class="text-link cancel-link" type="button" hidden>Cancel request</button>
-            <p id="agreed-note" class="agreement-note" hidden>Your agreed fare is saved. No live ride has been booked and no payment has been taken.</p>
+            <form id="trip-cancel-form" class="stack-form cancellation-form" hidden><fieldset id="trip-cancel-fields"><legend>Cancel this journey?</legend><label for="trip-cancel-reason">Reason</label><select id="trip-cancel-reason" required><option value="plans_changed">Plans changed</option><option value="pickup_problem">Pickup problem</option><option value="other">Other reason</option></select><p class="small-note">This ends the request or booking. No cancellation fee is charged in this preview.</p><div class="review-actions"><button id="trip-cancel-submit" type="submit" class="button button-outline button-small">Confirm cancellation</button><button id="trip-cancel-dismiss" type="button" class="button button-primary button-small">Keep journey</button></div></fieldset></form>
+            <section id="trip-activity" class="history-section" hidden aria-labelledby="trip-activity-title"><h3 id="trip-activity-title">Trip activity</h3><ol id="trip-timeline" class="trip-timeline"></ol></section>
             <div id="live-history" class="history-section" hidden><h3>Fare history</h3><ol id="live-offer-history"></ol></div>
           </section>
           <section id="chat-panel" class="account-card chat-panel" hidden aria-labelledby="chat-title">
@@ -73,6 +82,7 @@
               <section id="chat-report-panel" class="chat-report-panel" hidden aria-labelledby="chat-report-title"><h3 id="chat-report-title">Report this message</h3><blockquote id="chat-report-preview" class="chat-body"></blockquote><form id="chat-report-form" class="stack-form"><fieldset id="chat-report-fields"><legend class="visually-hidden">Report reason</legend><label for="chat-report-reason">Reason</label><select id="chat-report-reason" required><option value="harassment">Harassment or abuse</option><option value="unsafe_request">Unsafe request</option><option value="spam">Spam</option><option value="other">Other concern</option></select><div class="review-actions"><button class="button button-primary button-small" type="submit">Send report</button><button id="chat-report-cancel" class="button button-outline button-small" type="button">Cancel</button></div></fieldset></form><p class="small-note">This preview saves reports for local review. It is not an emergency response service.</p></section>
             </div>
           </section>
+          <section class="account-card" aria-labelledby="trip-history-title"><div class="card-topline"><h2 id="trip-history-title">Trip history</h2><span id="history-count" class="small-note"></span></div><p class="small-note">Completed and cancelled journeys, newest first.</p><button id="history-refresh" type="button" class="text-link history-refresh">Refresh history</button><div id="history-list" class="request-list"></div><button id="history-more" type="button" class="button button-outline button-full" hidden>Load older trips</button></section>
         </div>
       </div>
       <section id="admin-dashboard" class="account-card" hidden aria-labelledby="applications-title"><div class="card-topline"><h2 id="applications-title">Driver applications</h2><span class="status-badge">LOCAL TESTING</span></div><p class="supporting-copy">Review the name and car details before granting access to test requests. This approval does not verify identity, licences or vehicle documents.</p><div id="driver-applications" class="request-list"></div></section>

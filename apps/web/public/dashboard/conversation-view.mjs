@@ -1,4 +1,5 @@
 import { formatNaira } from '/shared/demo-booking.mjs';
+import { canChatDuringRide } from '/shared/trip-lifecycle.mjs';
 import { $, element } from './dom.mjs';
 import { conversationItems, offerState } from './conversation-model.mjs';
 
@@ -51,11 +52,11 @@ export function createConversationView({ onSend, onReport, onAccept, onRead, ser
 
   function render(context) {
     current = context;
-    canSend = context.thread.canSend && ['negotiating', 'agreed'].includes(context.ride.status);
+    canSend = context.thread.canSend && canChatDuringRide(context.ride.status);
     read(context.thread.unread);
     $('chat-error').textContent = '';
-    $('chat-compose-note').textContent = context.ride.status === 'cancelled'
-      ? 'This request was cancelled. You can still read and report saved messages.'
+    $('chat-compose-note').textContent = ['completed', 'cancelled'].includes(context.ride.status)
+      ? 'This trip has ended. You can still read and report saved messages.'
       : !canSend ? 'This test conversation has reached its 500-message limit.'
         : 'Messages stay in Taxi Ai. Sending a message does not agree a fare.';
     const key = JSON.stringify([keyFor(context), context.ride.version, context.messages.at(-1)?.sequence,

@@ -6,7 +6,8 @@ import { createConversationView } from './dashboard/conversation-view.mjs';
 import { createConversationController } from './dashboard/conversation-controller.mjs';
 
 // Page controller: owns session/view state and coordinates network work with UI.
-const emptyState = () => ({ user: null, rides: [], available: [], drivers: [], reports: [], chatUnread: {} });
+const emptyState = () => ({ user: null, rides: [], available: [], drivers: [], reports: [], chatUnread: {},
+  history: [], historyCursor: null, historyLoaded: false });
 let state = emptyState();
 let busy = false;
 let refreshing = null;
@@ -16,6 +17,7 @@ function rideCommand(path, data, message) {
   return runAction(async () => {
     const result = await client.rideCommand(path, data);
     view.select(result.ride.id);
+    if (['completed', 'cancelled'].includes(result.ride.status)) state.historyLoaded = false;
   }, message);
 }
 const conversationView = createConversationView({
@@ -32,6 +34,12 @@ const view = createDashboardView({
   serverNow: () => serverTime.now + performance.now() - serverTime.received,
   onCommand: rideCommand,
   onSelectionChange: (ride) => conversation.show(ride, state.user),
+  onHistory: (before) => runAction(async () => {
+    const data = await client.request(`/api/rides/history${before ? `?before=${encodeURIComponent(before)}` : ''}`);
+    const entries = before ? [...state.history, ...data.rides] : data.rides;
+    state.history = [...new Map(entries.map((ride) => [ride.id, ride])).values()];
+    state.historyCursor = data.nextBefore; state.historyLoaded = true;
+  }),
   onReview: (id, decision, message) => runAction(() => client.request(`/api/admin/drivers/${id}/review`, {
     method: 'POST', data: { decision },
   }), message),
@@ -61,6 +69,11 @@ async function refresh() {
     } else if (session.user) {
       const [data, chat] = await Promise.all([client.request('/api/rides'), client.request('/api/chat')]);
       state.chatUnread = Object.fromEntries(chat.conversations.map((item) => [item.rideId, item.unread]));
+      if (!state.historyLoaded || data.rides.some((ride) => ['completed', 'cancelled'].includes(ride.status)
+        && !state.rides.some((old) => old.id === ride.id && old.version === ride.version))) {
+        const history = await client.request('/api/rides/history');
+        state.history = history.rides; state.historyCursor = history.nextBefore; state.historyLoaded = true;
+      }
       state.rides = data.rides;
       state.available = data.available;
     }
@@ -85,7 +98,7 @@ async function runAction(action, message) {
     catch { $('page-error').textContent = 'Your action was saved, but the latest view could not load. Click Refresh.'; }
   } catch (error) {
     $('page-error').textContent = error.message;
-    if ([401, 403, 409].includes(error.status)) {
+    if ([401, 403, 409].includes(error.status) || error.code === 'INVALID_PICKUP_PIN') {
       try { await refresh(); } catch { /* Preserve the original error. */ }
     }
   } finally { busy = false; view.setBusy(false); conversationView.setBusy(false); }

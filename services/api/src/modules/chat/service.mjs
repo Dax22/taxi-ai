@@ -2,6 +2,7 @@ import { check } from '../../shared/errors.mjs';
 import { fields } from '../../shared/validation.mjs';
 import { requireRole } from '../../shared/policies.mjs';
 import { messageBody, sequence, MESSAGE_LIMIT, PAGE_SIZE, REPORT_REASONS } from './domain.mjs';
+import { canChatDuringRide } from '../../../../../packages/shared/src/trip-lifecycle.mjs';
 
 /** Participant-scoped communication. Fare decisions remain in the rides service. */
 export function createChatService({ repository, getAccount, getRideContext, listConversationIds, unitOfWork, audit, tokens, clock }) {
@@ -37,7 +38,7 @@ export function createChatService({ repository, getAccount, getRideContext, list
       nextAfter: messages.at(-1)?.sequence ?? after, lastSequence,
       readThrough: repository.readThrough(rideId, userId), unread: repository.unread(rideId, userId),
       reportedMessageIds: repository.reportedMessages(rideId, userId),
-      canSend: ['negotiating', 'agreed'].includes(ride.status) && lastSequence < MESSAGE_LIMIT };
+      canSend: canChatDuringRide(ride.status) && lastSequence < MESSAGE_LIMIT };
   }
 
   function send({ userId, rideId, key, data }) {
@@ -53,7 +54,7 @@ export function createChatService({ repository, getAccount, getRideContext, list
         check(previous.fingerprint === fingerprint, 'KEY_REUSED', 'This request key was already used for another message.');
         return { message: repository.findMessage(previous.messageId), replayed: true };
       }
-      check(['negotiating', 'agreed'].includes(ride.status), 'CHAT_CLOSED', 'This request is closed. Its conversation is read-only.');
+      check(canChatDuringRide(ride.status), 'CHAT_CLOSED', 'This trip is closed. Its conversation is read-only.');
       const next = repository.latest(rideId) + 1;
       check(next <= MESSAGE_LIMIT, 'MESSAGE_LIMIT', 'This test conversation has reached its message limit.');
       const message = { id: tokens.id(), rideId, sequence: next, senderId: userId, body, createdAt: clock() };

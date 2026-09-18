@@ -7,18 +7,22 @@ Rides, Taxi Ai Eats and courier delivery, starting in Abuja, Nigeria.
 The yellow Taxi Ai website now includes **local customer, driver and administrator
 accounts** at `/app`. Customers request a sample journey; an approved driver can
 take the request, make offers and agree a fare with the customer from a separate
-browser session. Accounts, requests, fare history and agreements survive refresh
+browser session. The customer can confirm a booking, and the driver can record
+arrival, verify the pickup PIN, start and complete the test trip.
+Accounts, requests, trip history and agreements survive refresh
 and server restart. Dashboards refresh every three seconds while visible.
 
 This is a **local development prototype**, not a launched transport service.
 Use test details. Fares are fictional examples and all requests are test requests.
-There is no live dispatch, payment or operational booking confirmation. Driver
+There is no live dispatch, GPS tracking or payment. Driver
 approval grants test access; it does not verify identity or vehicle documents.
 
 - Customer/driver registration and password sign-in, with separate dashboards.
 - Pending driver applications, vehicle details and administrator approval.
 - Persistent SQLite data, password hashes and revocable sessions.
-- One open request per customer and one negotiation per driver.
+- One open request/active trip per customer and one negotiation/active trip per driver.
+- Explicit booking confirmation, driver progress, pickup PIN verification and completion.
+- Cancellation reasons, saved trip activity and paginated completed/cancelled history.
 - Server-checked offers, counteroffers, two-minute expiry and explicit acceptance.
 - Atomic writes, version checks, retry protection and an internal audit log.
 - Private customer/assigned-driver chat with saved messages, unread counts and
@@ -26,7 +30,7 @@ approval grants test access; it does not verify identity or vehicle documents.
 - The original in-browser fare demo and terminal example remain available.
 
 **Still planned:** private in-app voice calls, verified identity and driver
-documents, maps/GPS, actual dispatch, trip-start PIN, payments/receipts, password
+documents, maps/GPS, actual dispatch, payments/receipts, password
 recovery, food/vendor ordering, motorcycle courier delivery, AI estimators and
 native iOS/Android apps. Autonomous taxis remain **Coming soon**, with no launch date.
 
@@ -80,14 +84,19 @@ an HTTP endpoint. Additional administrators and account recovery are not built y
    approved driver. Two ordinary tabs share a login; use separate sessions.
 3. The driver selects **Start negotiation** and offers ₦5,000.
 4. The customer counters with ₦4,700. The driver clicks **Accept ₦4,700**.
-5. Both dashboards show the same saved agreement. Refresh both pages, then stop
-   and restart the server. The agreement and history remain available.
+5. The customer reviews the driver/fare and clicks **Confirm test booking**.
+   Only the customer sees the six-digit pickup PIN.
+6. The driver clicks **On my way**, then **I have arrived**, enters the customer’s
+   PIN and starts the trip. The driver then clicks **Complete trip**.
+7. Check Trip history in both accounts. Refresh and restart the server; saved
+   fare, trip activity and chat remain. No vehicle is dispatched or payment taken.
 
-These actions save a test fare agreement only. They do not dispatch a car.
+Read [the trip guide](docs/trips.md) for cancellation, pickup verification,
+history, database migration and the manual review checklist.
 
 Once a driver claims the request, its **Your conversation** panel opens. Send a
 message, propose a fare with the structured form, or accept the current offer.
-Typing agreement in a message does not set the fare. After cancellation, saved
+Typing agreement in a message does not set the fare. After completion or cancellation, saved
 chat remains read-only. See [the chat guide](docs/chat.md) for reporting, unread
 behaviour and a complete manual review checklist.
 
@@ -102,9 +111,9 @@ password hashes and ride history do not.
 Use the same variable for `npm run admin` when using a custom path. Migrations run
 automatically at startup. There is no production backup/retention process yet.
 
-The chat milestone upgrades the database from schema 1 to 2 without resetting
-existing records. Older branches that support only schema 1 cannot open the
-upgraded database; use a separate test database when comparing versions.
+The trip milestone upgrades the database from schema 1 or 2 to 3 without resetting
+existing records or automatically booking old agreements. Earlier branches cannot
+open the upgraded database; use a separate test database when comparing versions.
 
 The server listens on **127.0.0.1 only** and accepts its localhost origins. The
 current HTTP cookies and authentication setup are for local development. Read
@@ -119,13 +128,13 @@ current HTTP cookies and authentication setup are for local development. Read
 | `services/api/src/application.mjs` | Connects services, repositories and adapters |
 | `services/api/src/modules/accounts/` | Account/session services, repository and routes |
 | `services/api/src/modules/drivers/` | Driver application/review services, repository and routes |
-| `services/api/src/modules/rides/` | Ride/fare services, domain rules, repository and routes |
+| `services/api/src/modules/rides/` | Ride/fare/trip services, domain rules, repository and routes |
 | `services/api/src/modules/chat/` | Participant-only messages, unread cursors, retry keys and reports |
 | `services/api/src/http/` | Request parsing, routing, cookies and response mapping |
 | `services/api/src/infrastructure/` | Database, password, token, audit and rate-limit adapters |
 | `services/api/migrations/` | Versioned SQLite schema |
 | `services/api/test/` | API, permissions, competing-request and restart tests |
-| `packages/shared/` | Fare domain rules, money helpers and sample-area fixtures |
+| `packages/shared/` | Fare rules, trip lifecycle vocabulary, money helpers and sample-area fixtures |
 | `scripts/create-admin.mjs` | Local first-administrator setup |
 | `scripts/check.mjs` | Syntax, imports and module-boundary checks |
 | `.github/workflows/ci.yml` | Automated verification on Node 22.12.0 and 24 |
@@ -134,8 +143,7 @@ current HTTP cookies and authentication setup are for local development. Read
 
 The backend is a **modular monolith**: business modules share one process/database
 and communicate through explicitly supplied functions. HTTP and storage details
-stay outside business services. The existing database is compatible; the refactor
-does not require resetting accounts or rides.
+stay outside business services. Versioned migrations preserve existing accounts, sessions and rides.
 
 The terminal example runs with `npm run demo`. Read [the architecture](docs/architecture.md),
 [roadmap](docs/roadmap.md), [requirements](docs/requirements.md) and
@@ -143,7 +151,7 @@ The terminal example runs with `npm run demo`. Read [the architecture](docs/arch
 
 ## Development and review
 
-The latest development branch for this milestone is `feat/private-chat`.
+The latest development branch for this milestone is `feat/ride-lifecycle`.
 Read [CONTRIBUTING.md](CONTRIBUTING.md) for the GitHub/VS Code workflow and where
 new code belongs. `npm run check` validates syntax and module conventions;
 `npm test` checks behaviour; `npm run verify` runs both. GitHub Actions is configured

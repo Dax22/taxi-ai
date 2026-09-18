@@ -16,6 +16,9 @@ The homepage's independent sample demonstration remains in `public/app.mjs`.
 isolation. `conversation-view.mjs` renders plain-text messages and structured fare
 cards using `conversation-model.mjs`; `chat-reports-view.mjs` renders the admin
 queue. Fare controls retain the existing ride commands and consent rules.
+`trip-view.mjs` and `trip-model.mjs` handle booking, pickup, progress and cancellation;
+shared lifecycle vocabulary lives in `packages/shared/src/trip-lifecycle.mjs`.
+Completed/cancelled history loads in cursor-based pages of 20.
 
 `npm run verify` checks imports/module boundaries as well as domain, HTTP/static
 serving and client transport behaviour. Client tests cover lost/truncated
@@ -76,3 +79,5 @@ local server/file previews; visual and browser interaction review is outstanding
    Chat belongs to the account preview; calls, payments and live dispatch remain
    unavailable. Follow [the chat review steps](../../docs/chat.md#manual-review)
    for message history, unread state, retries, reporting and fare cards.
+9. Follow [the trip review steps](../../docs/trips.md#validation-and-manual-review)
+   for booking, PIN verification, progress, cancellation and paginated trip history.

@@ -18,9 +18,9 @@ implements SQLite, password/token operations, audit and rate limits. `src/shared
 contains small common errors, validation and authorization policies. See
 [the architecture](../../docs/architecture.md) for ownership and transaction contracts.
 
-Migration `002_chat.sql` adds the chat tables and moves the schema to version 2.
+Ordered migrations add chat and trip tables, bringing the schema to version 3.
 The `data/taxi-ai.sqlite` location, existing test accounts, sessions and rides are
-preserved. No reset is required. Earlier schema-one code refuses the upgraded file.
+preserved. No reset is required. Earlier code refuses the upgraded file; use a separate database when comparing branches.
 
 ## Implemented boundaries
 
@@ -53,9 +53,12 @@ it. See [the Node 22.12 documentation](https://nodejs.org/download/release/v22.1
 
 ## Request and fare state
 
-`requested → negotiating → agreed` is the normal test flow. A requested or
-negotiating request can be cancelled. An agreed fare is immutable; actual trip
-cancellation, dispatch and payment are separate future workflows.
+`requested → negotiating → agreed` remains the fare flow. Customer confirmation
+creates a booked trip, followed by driver departure, arrival, PIN-verified start
+and completion. Cancellation is allowed before starting; an agreed fare remains
+immutable even after cancellation. Actual dispatch and payment remain planned.
+See [the trip contract](../../docs/trips.md) for transitions, PIN privacy/limits,
+idempotent failed guesses, cancellation and cursor-based history.
 
 The first approved driver to claim gets the only negotiation slot. Claiming does
 not agree a fare. Offers begin after the driver is assigned; either person can
@@ -94,7 +97,11 @@ the client refreshes without automatically accepting a replacement price.
 | `POST /api/rides/:id/claim` | Approved driver; `{ expectedVersion }` |
 | `POST /api/rides/:id/offers` | Participant; `{ expectedVersion, amountKobo }` |
 | `POST /api/rides/:id/accept` | Other participant; `{ expectedVersion, offerId }` |
-| `POST /api/rides/:id/cancel` | Participant; `{ expectedVersion }` |
+| `POST /api/rides/:id/cancel` | Participant before start; `{ expectedVersion, reason? }` |
+| `POST /api/rides/:id/confirm` | Customer; `{ expectedVersion }` |
+| `POST /api/rides/:id/depart`, `/arrive`, `/complete` | Assigned approved driver; `{ expectedVersion }` |
+| `POST /api/rides/:id/start` | Assigned approved driver; `{ expectedVersion, pickupPin }` |
+| `GET /api/rides/history?before=:id` | Own completed/cancelled journeys, 20 per page |
 | `GET /api/admin/drivers` | Administrator only |
 | `POST /api/admin/drivers/:id/review` | Administrator; `{ decision }` approved or rejected |
 
@@ -134,7 +141,7 @@ SQLite's synchronous API is intentionally bounded here; it is not a commitment t
 the eventual multi-instance deployment architecture.
 
 Add verified driver/vehicle onboarding, maps, matching/reassignment, operational
-trip states, trip safety, communication and payment-provider integrations before
+trip recovery/safety operations, communication and payment-provider integrations before
 accepting live bookings. No provider keys or live integrations are present.
 
 ## Validation

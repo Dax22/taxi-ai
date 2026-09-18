@@ -2,7 +2,7 @@
 
 Taxi Ai uses a **modular monolith**: one backend process and database, with
 separate business modules and explicit dependencies. The current code implements
-accounts, driver review, ride/fare negotiation and participant chat. The structure supports adding
+accounts, driver review, ride/fare negotiation, trip lifecycle and participant chat. The structure supports adding
 Eats, courier and communication without mixing their workflows into ride logic.
 See [ADR 0001](decisions/0001-modular-monolith.md) for the decision and tradeoffs.
 
@@ -12,9 +12,9 @@ See [ADR 0001](decisions/0001-modular-monolith.md) for the decision and tradeoff
 | --- | --- | --- |
 | Accounts | Registration, authentication, sessions, first-admin setup, own profile | `users`, `sessions` |
 | Drivers | Application profile and administrator review | `drivers` |
-| Rides | Requests, exclusive claims, fare commands and retries | `rides`, `fare_events`, `idempotency` |
+| Rides | Requests, fares, bookings, pickup verification, progress, cancellation and history | `rides`, `fare_events`, `idempotency`, `ride_trips`, `ride_activity` |
 | Chat | Participant messages, read markers, retries and reports | `chat_messages`, `chat_reads`, `chat_commands`, `chat_reports` |
-| Shared domain | Pure fare state machine, integer money helpers and sample quotes | No storage or network |
+| Shared domain | Pure fare state machine, lifecycle vocabulary, money helpers and sample quotes | No storage or network |
 | Infrastructure | SQLite, migrations, password hashing, random tokens, audit and rate limits | `audit_events`, `rate_limits`, connection lifecycle |
 | HTTP | Route dispatch, request parsing, cookies, CSRF and error/status translation | No business state |
 
@@ -60,10 +60,11 @@ a user ID from the browser never grants access to that user's account or ride.
 
 ## Commands, persistence and consistency
 
-Requests progress from `requested` to `negotiating` to `agreed`, or are cancelled
-before agreement. A driver claim selects one negotiation participant; it does not
-establish a fare agreement or operational dispatch. Actual trip state is future
-work. The original homepage demo remains an independent in-memory example.
+Requests progress from `requested` to `negotiating` to `agreed`. The customer then
+confirms a booking. Its driver records on-way/arrival, starts with the pickup PIN
+and completes the trip. Pre-start cancellation preserves any agreed fare.
+See [the trip contract](trips.md) for availability, transitions and PIN handling.
+These are test journeys; the homepage demo remains an independent in-memory example.
 
 For each authenticated ride mutation, the service:
 
@@ -72,11 +73,15 @@ For each authenticated ride mutation, the service:
    permissions and the current ride version.
 3. Applies the command using server time and the pure fare rules.
 4. Writes the ride, fare event when applicable, audit event and retry key together.
-5. Returns a projection only after the transaction succeeds. Any failure rolls
-   back all these writes. HTTP then serializes the result.
+5. Returns a projection only after the transaction succeeds. Persistence failures
+   roll back all these writes. Incorrect PIN submissions instead commit their
+   failure counter, audit reference and failed-command key before returning a
+   validation error; retrying one cannot count as a second guess.
 
 The SQLite adapter uses `BEGIN IMMEDIATE`, foreign keys and unique constraints for
-one open request per customer and one active negotiation per driver. A replayed
+one open request per customer, one active negotiation per driver and one active
+trip per participant. Service checks also prevent mixing an active trip with a
+new request/negotiation under the same transaction. A replayed
 key returns the current saved ride; a different command with that key is rejected.
 Rate-limit counters are intentionally a separate transaction so failed attempts
 still count. Expensive password work runs outside transactions.
@@ -87,9 +92,10 @@ background writes inside them. A future PostgreSQL adapter requires coordinated
 async contract changes, migration and transaction/concurrency tests. Changing the
 repository constructor alone is insufficient.
 
-The existing `data/taxi-ai.sqlite` location is preserved. Chat migration
-`002_chat.sql` upgrades schema 1 to 2 without resetting existing records. Startup
-applies migrations; older schema-one binaries refuse the upgraded database. Local data and secrets are excluded from Git and static serving.
+The existing `data/taxi-ai.sqlite` location is preserved. Ordered migrations
+`002_chat.sql` and `003_trip_lifecycle.sql` upgrade schemas 1/2 to 3 without resetting
+records or silently booking prior agreements. Older binaries refuse the upgraded
+database. Local data and secrets are excluded from Git and static serving.
 See [API notes](../services/api/README.md) for routes and current security limits.
 
 ## Fare rules
@@ -184,6 +190,6 @@ runs the same command on Node 22.12.0 and Node 24 for pushes and pull requests.
 A modular structure is a maintainability foundation, not production readiness.
 Before real bookings, implement verified onboarding/account recovery, HTTPS and
 production session operations, database backup/restore and retention, deployment
-monitoring and measured concurrency/scale. Actual dispatch, trip lifecycle,
+monitoring and measured concurrency/scale. Actual dispatch, production trip
 safety operations, maps and payments are additional product milestones. Current
 administrator approval grants local test access only, not document verification.
