@@ -85,3 +85,38 @@
   @media (max-width: 800px) { .auth-layout { grid-template-columns: 1fr; max-width: 520px; padding-top: 28px; } .auth-intro h1 { font-size: 52px; } .auth-intro h1 br { display: none; } .auth-intro h1 { max-width: 380px; } .auth-promise { margin-block: 23px 15px; } .dashboard-layout { grid-template-columns: 1fr; } .dashboard-heading { align-items: start; flex-direction: column; } .sidebar-note { display: none; } #account-identity { max-width: 130px; font-size: 11px; } .account-header-actions { gap: 12px; } }
   @media (max-width: 580px) { .account-page .site-header { height: 76px; } .account-header-actions > a { display: none; } #account-identity { display: none; } .account-shell { padding-block: 22px 45px; } .environment-note { font-size: 8px; letter-spacing: .025em; } .auth-layout { gap: 20px; } .auth-intro h1 { font-size: 46px; } .auth-intro > p:not(.eyebrow) { font-size: 13px; } .auth-card { padding: 22px; } .account-card { padding: 21px; } .dashboard-heading { padding-block: 30px 24px; } .request-row { flex-wrap: wrap; padding: 14px; gap: 14px; } .review-actions { width: 100%; } .card-topline h2 { font-size: 22px; } .fare-display { padding: 20px; } .live-offer-row { gap: 8px; } .live-offer-row .button { padding-inline: 12px; font-size: 12px; } .account-footer { flex-direction: column; gap: 6px; } }
 }
+
+@layer components {
+  .chat-panel .card-topline { align-items: start; }
+  .chat-panel .eyebrow { margin-bottom: 10px; }
+  .chat-panel .card-topline h2 { overflow-wrap: anywhere; }
+  .chat-privacy { padding-bottom: 16px; border-bottom: 1px solid var(--line); }
+  .chat-feed { height: 390px; overflow-y: auto; overscroll-behavior: contain; padding: 20px 2px; display: flex; flex-direction: column; gap: 16px; }
+  .chat-entry { max-width: 88%; flex-shrink: 0; padding: 15px 18px; border-radius: 12px 12px 12px 3px; background: var(--soft); align-self: flex-start; min-width: 0; }
+  .chat-own { background: var(--brand-soft); align-self: flex-end; border-radius: 12px 12px 3px 12px; }
+  .chat-body { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; line-height: 1.6; margin: 8px 0; }
+  .chat-meta { display: flex; align-items: baseline; flex-wrap: wrap; gap: 14px; font-size: 11px; }
+  .chat-entry time { font-size: 10px; color: var(--muted); }
+  .chat-report-button { padding: 5px 0; background: transparent; color: var(--muted); text-decoration: underline; font-size: 10px; }
+  .chat-offer { width: 85%; align-self: center; background: #fff; border: 1px solid var(--brand); border-radius: 8px; }
+  .chat-price { display: block; font-size: 28px; margin-block: 8px; }
+  .chat-offer .button { margin-top: 12px; }
+  .chat-offer .button:disabled { opacity: .5; cursor: not-allowed; }
+  .chat-agreement { align-self: center; text-align: center; background: var(--brand-soft); border-radius: 8px; }
+  .chat-compose { margin-top: 14px; }
+  .chat-compose label { margin-top: 0; }
+  .chat-compose textarea { width: 100%; resize: vertical; min-height: 86px; max-height: 240px; padding: 12px; border: 1px solid var(--line); border-radius: 6px; font: inherit; font-size: 16px; }
+  .chat-compose .button { margin-top: 12px; }
+  #chat-compose-note { margin-top: 12px; }
+  #chat-error:not(:empty) { padding-top: 12px; }
+  .chat-report-panel { margin-top: 22px; padding: 18px; border: 1px solid var(--line); border-radius: 8px; }
+  .chat-report-panel blockquote, .chat-report-card blockquote { margin-inline: 0; padding: 12px; background: var(--paper); border-left: 3px solid var(--brand); max-height: 180px; overflow-y: auto; }
+  .chat-report-panel .review-actions { margin-block: 16px; flex-wrap: wrap; }
+  .chat-reports-panel { margin-top: 24px; }
+  .chat-report-card { padding: 20px 0; border-bottom: 1px solid var(--line); }
+  .chat-report-card .button, .chat-report-card .status-badge { margin-top: 14px; }
+  .request-row .chat-unread-count { color: var(--brand-strong); font-weight: 700; }
+}
+@layer responsive {
+  @media (max-width: 580px) { .chat-feed { height: 340px; } .chat-entry { max-width: 94%; padding: 12px 14px; } .chat-offer { width: 94%; } .chat-panel .card-topline { flex-wrap: wrap; } }
+}

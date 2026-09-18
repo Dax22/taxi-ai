@@ -51,3 +51,17 @@ test('reset drops credentials/retry keys and external API destinations are rejec
   await assert.rejects(client.request('https://example.com/api'), /same-origin/);
   assert.equal(calls.length, 2);
 });
+
+test('chat retries reuse the key, while intentionally sending identical text again gets a fresh key', async () => {
+  const keys = []; let issued = 0;
+  const client = createApiClient({ makeKey: () => `key-${++issued}`, fetchImpl: async (path, options) => {
+    keys.push(options.headers['Idempotency-Key']);
+    if (keys.length === 1) throw new Error('Lost response');
+    return response(201, { message: { id: 'saved' } });
+  } });
+  const path = '/api/rides/ride-1/chat/messages', data = { body: 'Hello' };
+  await assert.rejects(client.command(path, data));
+  await client.command(path, data);
+  await client.command(path, data);
+  assert.deepEqual(keys, ['key-1', 'key-1', 'key-2']);
+});

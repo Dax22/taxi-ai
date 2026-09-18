@@ -15,7 +15,7 @@ The code has no third-party dependencies to install. Administrator/email setup
 can wait while you work on the code and homepage demo. Driver approval testing
 requires the separate local administrator setup in [README.md](README.md).
 
-## Get the modular architecture branch
+## Get the current development branch
 
 First check your current branch and changes:
 
@@ -29,14 +29,14 @@ switching. Do not discard them to make a checkout succeed. With a clean working
 tree, run:
 
 ```bash
-git switch refactor/modular-architecture
-git pull --ff-only origin refactor/modular-architecture
+git switch feat/private-chat
+git pull --ff-only origin feat/private-chat
 npm run verify
 ```
 
 Git normally creates a tracking branch when the name exists only on `origin`.
 If the switch reports an ambiguous branch name, explicitly use
-`git switch --track origin/refactor/modular-architecture` for the first checkout.
+`git switch --track origin/feat/private-chat` for the first checkout.
 
 ## Save your own changes to GitHub
 
@@ -74,7 +74,7 @@ account, including its private noreply address if preferred. This does not requi
 a Taxi Ai business mailbox.
 
 Existing milestones are stacked: project foundation → web booking demo → accounts
-and rides → modular architecture. Each pull request reviews only its next layer.
+and rides → modular architecture → private chat. Each pull request reviews only its next layer.
 Pushing keeps the code on GitHub; it does not merge the stack into `main`. Review
 the dependencies before merging or retargeting their pull requests.
 
@@ -86,13 +86,14 @@ Read [the architecture](docs/architecture.md) and its
 | Change | Location |
 | --- | --- |
 | Pure fare/money rules | `packages/shared/src/` |
-| Account, driver or ride use case | Its `services/api/src/modules/<feature>/service.mjs` |
+| Account, driver, ride or chat use case | Its `services/api/src/modules/<feature>/service.mjs` |
 | Feature SQL | Its `repository.mjs` |
 | Route mapping | Its `routes.mjs` |
 | HTTP parsing/cookies/error translation | `services/api/src/http/` |
 | Database/password/token/audit adapters | `services/api/src/infrastructure/` |
 | Dependency wiring | `services/api/src/application.mjs` |
 | Dashboard presentation | `apps/web/public/dashboard/views.mjs` |
+| Chat coordination and rendering | `apps/web/public/dashboard/conversation-*.mjs` |
 | Dashboard transport/retry policy | `apps/web/public/dashboard/api-client.mjs` |
 
 Use named exports and static ESM imports. Inject clock, storage and cross-module

@@ -12,6 +12,11 @@ registration forms (`auth-form.mjs`), role-specific rendering (`views.mjs`) and
 small DOM helpers (`dom.mjs`). Views receive callbacks and never call the network.
 The homepage's independent sample demonstration remains in `public/app.mjs`.
 
+`conversation-controller.mjs` coordinates chat pages, retries and selected-account
+isolation. `conversation-view.mjs` renders plain-text messages and structured fare
+cards using `conversation-model.mjs`; `chat-reports-view.mjs` renders the admin
+queue. Fare controls retain the existing ride commands and consent rules.
+
 `npm run verify` checks imports/module boundaries as well as domain, HTTP/static
 serving and client transport behaviour. Client tests cover lost/truncated
 responses, stable retry keys, original offer/version preservation and clearing
@@ -68,4 +73,6 @@ local server/file previews; visual and browser interaction review is outstanding
 7. Stop the server while a page is open, restart it and use Refresh. Confirm the
    connection status recovers, and retries do not duplicate requests or agreements.
 8. Check the original homepage demo, Eats/Courier labels and autonomous section.
-   Chat, calls, payments and live dispatch must not appear as available actions.
+   Chat belongs to the account preview; calls, payments and live dispatch remain
+   unavailable. Follow [the chat review steps](../../docs/chat.md#manual-review)
+   for message history, unread state, retries, reporting and fare cards.

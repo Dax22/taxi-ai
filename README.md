@@ -21,9 +21,11 @@ approval grants test access; it does not verify identity or vehicle documents.
 - One open request per customer and one negotiation per driver.
 - Server-checked offers, counteroffers, two-minute expiry and explicit acceptance.
 - Atomic writes, version checks, retry protection and an internal audit log.
+- Private customer/assigned-driver chat with saved messages, unread counts and
+  fare cards; reported messages appear in the local administrator dashboard.
 - The original in-browser fare demo and terminal example remain available.
 
-**Still planned:** chat, private in-app voice calls, verified identity and driver
+**Still planned:** private in-app voice calls, verified identity and driver
 documents, maps/GPS, actual dispatch, trip-start PIN, payments/receipts, password
 recovery, food/vendor ordering, motorcycle courier delivery, AI estimators and
 native iOS/Android apps. Autonomous taxis remain **Coming soon**, with no launch date.
@@ -83,6 +85,12 @@ an HTTP endpoint. Additional administrators and account recovery are not built y
 
 These actions save a test fare agreement only. They do not dispatch a car.
 
+Once a driver claims the request, its **Your conversation** panel opens. Send a
+message, propose a fare with the structured form, or accept the current offer.
+Typing agreement in a message does not set the fare. After cancellation, saved
+chat remains read-only. See [the chat guide](docs/chat.md) for reporting, unread
+behaviour and a complete manual review checklist.
+
 ## Your local data
 
 The database is created automatically at `data/taxi-ai.sqlite` inside this repo.
@@ -93,6 +101,10 @@ password hashes and ride history do not.
 `TAXI_AI_DB=/absolute/path/to/test.sqlite npm run dev` selects another database.
 Use the same variable for `npm run admin` when using a custom path. Migrations run
 automatically at startup. There is no production backup/retention process yet.
+
+The chat milestone upgrades the database from schema 1 to 2 without resetting
+existing records. Older branches that support only schema 1 cannot open the
+upgraded database; use a separate test database when comparing versions.
 
 The server listens on **127.0.0.1 only** and accepts its localhost origins. The
 current HTTP cookies and authentication setup are for local development. Read
@@ -108,6 +120,7 @@ current HTTP cookies and authentication setup are for local development. Read
 | `services/api/src/modules/accounts/` | Account/session services, repository and routes |
 | `services/api/src/modules/drivers/` | Driver application/review services, repository and routes |
 | `services/api/src/modules/rides/` | Ride/fare services, domain rules, repository and routes |
+| `services/api/src/modules/chat/` | Participant-only messages, unread cursors, retry keys and reports |
 | `services/api/src/http/` | Request parsing, routing, cookies and response mapping |
 | `services/api/src/infrastructure/` | Database, password, token, audit and rate-limit adapters |
 | `services/api/migrations/` | Versioned SQLite schema |
@@ -130,6 +143,7 @@ The terminal example runs with `npm run demo`. Read [the architecture](docs/arch
 
 ## Development and review
 
+The latest development branch for this milestone is `feat/private-chat`.
 Read [CONTRIBUTING.md](CONTRIBUTING.md) for the GitHub/VS Code workflow and where
 new code belongs. `npm run check` validates syntax and module conventions;
 `npm test` checks behaviour; `npm run verify` runs both. GitHub Actions is configured

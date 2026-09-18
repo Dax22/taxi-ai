@@ -30,10 +30,11 @@ export function openDatabase(path = process.env.TAXI_AI_DB ?? DEFAULT_DATABASE) 
     db.exec('PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000; PRAGMA journal_mode = WAL; PRAGMA synchronous = FULL;');
     transaction(db, () => {
       const version = db.prepare('PRAGMA user_version').get().user_version;
-      if (version > 1) throw new Error('This database requires a newer version of Taxi Ai.');
-      if (version === 0) {
-        db.exec(readFileSync(new URL('../../migrations/001_initial.sql', import.meta.url), 'utf8'));
-        db.exec('PRAGMA user_version = 1');
+      const migrations = ['001_initial.sql', '002_chat.sql'];
+      if (version > migrations.length) throw new Error('This database requires a newer version of Taxi Ai.');
+      for (let index = version; index < migrations.length; index++) {
+        db.exec(readFileSync(new URL(`../../migrations/${migrations[index]}`, import.meta.url), 'utf8'));
+        db.exec(`PRAGMA user_version = ${index + 1}`);
       }
     });
     return db;
