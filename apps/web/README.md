@@ -4,6 +4,19 @@ Run `npm run dev` from the repository root, then open http://localhost:3000.
 The **Your account** button opens `/app`. Node.js 22.12+ works; no dependency
 installation or provider credentials are required.
 
+## Client structure
+
+`public/dashboard.mjs` coordinates state, refresh and actions. Its modules in
+`public/dashboard/` separate API transport/retry keys (`api-client.mjs`), login and
+registration forms (`auth-form.mjs`), role-specific rendering (`views.mjs`) and
+small DOM helpers (`dom.mjs`). Views receive callbacks and never call the network.
+The homepage's independent sample demonstration remains in `public/app.mjs`.
+
+`npm run verify` checks imports/module boundaries as well as domain, HTTP/static
+serving and client transport behaviour. Client tests cover lost/truncated
+responses, stable retry keys, original offer/version preservation and clearing
+credentials on session reset. These tests do not replace browser interaction review.
+
 The website retains the approved yellow motion emblem, amber/graphite palette,
 pale backgrounds and original concept artwork. See [the brand guide](../../docs/brand.md).
 Car illustrations do not depict an operational fleet. Eats, courier and autonomous

@@ -7,8 +7,10 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createAppServer } from '../../../apps/web/server.mjs';
-import { openDatabase } from '../src/database.mjs';
-import { bootstrapAdmin } from '../src/rides.mjs';
+import { openDatabase } from '../src/infrastructure/database.mjs';
+import { createApplication } from '../src/application.mjs';
+
+const bootstrapAdmin = (db, email) => createApplication({ db }).accounts.bootstrapAdmin(email);
 
 // Test fixtures only. No accounts or passwords are seeded into the application.
 const PASSWORD = 'A long test-only password 123';
@@ -246,6 +248,37 @@ test('stale counteroffers, self-acceptance, forged clocks and invalid amounts ne
   assert.equal(first.body.ride.negotiation.agreement.amountKobo, 470000);
   assert.equal(h.db.prepare("SELECT count(*) AS count FROM fare_events WHERE type = 'accept'").get().count, 1);
   assert.equal((await customer.post(`${path}/cancel`, { expectedVersion: first.body.ride.version })).body.error.code, 'REQUEST_CLOSED');
+});
+
+test('a failed retry-key write rolls back the fare, ride version and audit, then the same command can succeed', async (t) => {
+  const h = await harness(t);
+  const { customer, driver } = await participants(h);
+  const ride = await claimRide(driver, await requestRide(customer));
+  const auditCount = h.db.prepare('SELECT count(*) AS count FROM audit_events').get().count;
+  const key = randomUUID();
+  const path = `/api/rides/${ride.id}/offers`;
+  const command = { expectedVersion: ride.version, amountKobo: 470000 };
+  // Fail at the last persistence step, after the fare, ride and audit writes.
+  h.db.exec(`CREATE TRIGGER reject_retry_write BEFORE INSERT ON idempotency
+    BEGIN SELECT RAISE(ABORT, 'test-only storage failure'); END`);
+  const failed = await customer.post(path, command, key);
+  assert.equal(failed.status, 500);
+  assert.ok(!JSON.stringify(failed.body).includes('test-only storage failure'));
+  assert.equal(h.db.prepare('SELECT version FROM rides WHERE id = ?').get(ride.id).version, ride.version);
+  assert.equal(h.db.prepare('SELECT count(*) AS count FROM fare_events').get().count, 0);
+  assert.equal(h.db.prepare('SELECT count(*) AS count FROM audit_events').get().count, auditCount);
+  assert.equal(h.db.prepare('SELECT count(*) AS count FROM idempotency WHERE key = ?').get(key).count, 0);
+
+  h.db.exec('DROP TRIGGER reject_retry_write');
+  const saved = await customer.post(path, command, key);
+  assert.equal(saved.status, 200);
+  assert.equal(saved.body.ride.version, ride.version + 1);
+  assert.equal(saved.body.ride.negotiation.currentOffer.amountKobo, 470000);
+  const replayed = await customer.post(path, command, key);
+  assert.equal(replayed.status, 200);
+  assert.equal(replayed.body.ride.version, saved.body.ride.version);
+  assert.equal(h.db.prepare('SELECT count(*) AS count FROM fare_events').get().count, 1);
+  assert.equal(h.db.prepare('SELECT count(*) AS count FROM audit_events').get().count, auditCount + 1);
 });
 
 test('offer expiry uses the server clock at the exact deadline and cancellation prevents later acceptance', async (t) => {
