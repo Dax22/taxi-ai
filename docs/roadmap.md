@@ -1,19 +1,22 @@
 # Delivery milestones
 
-## 0 — Repository foundation (this change)
+## 0 — Repository foundation (implemented)
 
 - Record the accepted product scope and open decisions.
 - Establish the app, service, shared code and documentation directories.
 - Implement and test explicit fare offers, counteroffers and agreement.
 - Provide a local terminal demonstration.
 
-## 1 — First browser experience
+## 1 — First browser experience (implemented preview; visual review pending)
 
-Build the Taxi Ai landing page and responsive ride-request form, with clearly
-identified demo locations and fares until real integrations are connected.
-Include Eats, courier and autonomous taxis with accurate availability labels.
-Demonstrate fare suggestion, offer/counteroffer and confirmation on mobile,
-tablet and desktop layouts.
+The Taxi Ai landing page and ride-request form now use clearly identified sample
+locations and fictional fares. Eats, courier and autonomous taxis have accurate
+availability labels. The local demo connects suggestion, offer/counteroffer and
+confirmation to the tested shared fare module, with mobile/tablet/desktop CSS.
+
+Complete the manual browser review in `apps/web/README.md` before treating layout
+and end-to-end interaction as verified. The current cloud browser blocked local
+preview access. Vendor/customer/driver authentication remains a later milestone.
 
 ## 2 — Real ride pilot
 
