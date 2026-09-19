@@ -2,9 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import { createAppServer } from '../server.mjs';
+import { createCallConfig } from '../../../services/api/src/infrastructure/call-config.mjs';
 
-async function withServer(run) {
-  const server = createAppServer();
+async function withServer(run, mode = 'local') {
+  const server = createAppServer({ callConfig: createCallConfig({ TAXI_AI_CALLS_MODE: mode }) });
   server.listen(0, '127.0.0.1');
   await once(server, 'listening');
   try { await run(`http://127.0.0.1:${server.address().port}`); }
@@ -19,6 +20,8 @@ test('the local site serves HTML, modules and artwork with correct content types
       ['/dashboard/dom.mjs', 'text/javascript'], ['/dashboard/views.mjs', 'text/javascript'],
       ['/dashboard/trip-model.mjs', 'text/javascript'], ['/dashboard/trip-view.mjs', 'text/javascript'],
       ['/shared/trip-lifecycle.mjs', 'text/javascript'],
+      ['/dashboard/call-controller.mjs', 'text/javascript'], ['/dashboard/call-media.mjs', 'text/javascript'],
+      ['/dashboard/call-view.mjs', 'text/javascript'], ['/shared/call-lifecycle.mjs', 'text/javascript'],
       ['/dashboard/conversation-model.mjs', 'text/javascript'],
       ['/dashboard/conversation-controller.mjs', 'text/javascript'],
       ['/dashboard/conversation-view.mjs', 'text/javascript'],
@@ -33,6 +36,18 @@ test('the local site serves HTML, modules and artwork with correct content types
       assert.ok((await response.arrayBuffer()).byteLength > 0, path);
     }
   });
+});
+
+test('microphone permission is scoped to the enabled account page, with camera and geolocation still disabled', async () => {
+  for (const mode of ['local', 'off']) await withServer(async (base) => {
+    for (const path of ['/', '/app', '/app?preview=1', '/api/session']) {
+      const result = await fetch(base + path);
+      const policy = result.headers.get('permissions-policy');
+      assert.equal(policy, `camera=(), microphone=${path.startsWith('/app') && mode !== 'off' ? '(self)' : '()'}, geolocation=()`);
+      assert.match(result.headers.get('content-security-policy'), /media-src 'self' blob:/);
+      await result.text();
+    }
+  }, mode);
 });
 
 test('the static routes never expose repository files or accept writes', async () => {

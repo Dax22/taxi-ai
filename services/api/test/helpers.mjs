@@ -7,19 +7,20 @@ import { join } from 'node:path';
 import { createAppServer } from '../../../apps/web/server.mjs';
 import { openDatabase } from '../src/infrastructure/database.mjs';
 import { createApplication } from '../src/application.mjs';
+import { createCallConfig } from '../src/infrastructure/call-config.mjs';
 
 export const bootstrapAdmin = (db, email) => createApplication({ db }).accounts.bootstrapAdmin(email);
 
 // Test fixtures only. No accounts or passwords are seeded into the application.
 export const PASSWORD = 'A long test-only password 123';
 
-export async function harness(t, { persistent = false } = {}) {
+export async function harness(t, { persistent = false, callConfig = createCallConfig({}) } = {}) {
   const folder = persistent ? await mkdtemp(join(tmpdir(), 'taxi-ai-test-')) : null;
   const filename = folder ? join(folder, 'test.sqlite') : ':memory:';
   let now = 1_000_000, server, db, base, stopped = true;
   async function start() {
     db = openDatabase(filename);
-    server = createAppServer({ db, clock: () => now });
+    server = createAppServer({ db, clock: () => now, callConfig });
     server.listen(0, '127.0.0.1');
     await once(server, 'listening');
     base = `http://127.0.0.1:${server.address().port}`;
@@ -87,4 +88,3 @@ export async function claimRide(driver, ride) {
   assert.equal(result.status, 200, JSON.stringify(result.body));
   return result.body.ride;
 }
-

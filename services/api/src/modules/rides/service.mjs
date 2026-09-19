@@ -9,7 +9,7 @@ import { requireParticipant, requireVersion, restoreNegotiation, canonical } fro
  * Ride use cases depend on repository operations and explicit ports, not SQLite
  * or HTTP objects. unitOfWork must encompass state, fare, audit and retry writes.
  */
-export function createRidesService({ repository, getAccount, unitOfWork, audit, tokens, clock }) {
+export function createRidesService({ repository, getAccount, unitOfWork, audit, tokens, clock, onRideClosed = () => {} }) {
   function record(id) {
     const ride = repository.find(id);
     check(ride, 'NOT_FOUND', 'Ride request not found.');
@@ -178,6 +178,7 @@ export function createRidesService({ repository, getAccount, unitOfWork, audit, 
       'STALE_VERSION', 'This trip has changed. Refresh and try again.');
     repository.appendActivity(id, user.id, next, now, reason);
     audit.record(user.id, `trip.${next}`, id, now);
+    if (['completed', 'cancelled'].includes(next)) onRideClosed(id, now);
     return { rideId: id };
   }
 
@@ -212,7 +213,7 @@ export function createRidesService({ repository, getAccount, unitOfWork, audit, 
   function conversationContext(user, id) {
     const ride = record(id);
     requireParticipant(ride, user);
-    return { id: ride.id, status: ride.trip?.status ?? ride.status, driverId: ride.driverId };
+    return { id: ride.id, status: ride.trip?.status ?? ride.status, driverId: ride.driverId, customerId: ride.customerId };
   }
 
   function conversationIds(user) {

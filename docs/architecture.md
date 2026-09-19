@@ -2,8 +2,9 @@
 
 Taxi Ai uses a **modular monolith**: one backend process and database, with
 separate business modules and explicit dependencies. The current code implements
-accounts, driver review, ride/fare negotiation, trip lifecycle and participant chat. The structure supports adding
-Eats, courier and communication without mixing their workflows into ride logic.
+accounts, driver review, ride/fare negotiation, trip lifecycle, participant chat
+and audio calling. The structure supports adding Eats and courier workflows
+without mixing their rules into ride logic.
 See [ADR 0001](decisions/0001-modular-monolith.md) for the decision and tradeoffs.
 
 ## Implemented modules
@@ -14,6 +15,7 @@ See [ADR 0001](decisions/0001-modular-monolith.md) for the decision and tradeoff
 | Drivers | Application profile and administrator review | `drivers` |
 | Rides | Requests, fares, bookings, pickup verification, progress, cancellation and history | `rides`, `fare_events`, `idempotency`, `ride_trips`, `ride_activity` |
 | Chat | Participant messages, read markers, retries and reports | `chat_messages`, `chat_reads`, `chat_commands`, `chat_reports` |
+| Calls | Audio invitations, session/window ownership, signaling, expiry and history | `voice_calls`, `voice_participants`, `voice_commands` |
 | Shared domain | Pure fare state machine, lifecycle vocabulary, money helpers and sample quotes | No storage or network |
 | Infrastructure | SQLite, migrations, password hashing, random tokens, audit and rate limits | `audit_events`, `rate_limits`, connection lifecycle |
 | HTTP | Route dispatch, request parsing, cookies, CSRF and error/status translation | No business state |
@@ -45,12 +47,16 @@ flowchart TD
   HTTP --> Drivers[Drivers service]
   HTTP --> Rides[Rides service]
   HTTP --> Chat[Chat service]
+  HTTP --> Calls[Calls service]
   Accounts --> Repos[Injected repositories]
   Drivers --> Repos
   Rides --> Repos
   Rides --> Domain[Pure fare domain]
   Chat --> Repos
   Chat --> Rides
+  Calls --> Repos
+  Calls --> Accounts
+  Calls --> Rides
   Repos --> DB[SQLite]
 ```
 
@@ -93,7 +99,7 @@ async contract changes, migration and transaction/concurrency tests. Changing th
 repository constructor alone is insufficient.
 
 The existing `data/taxi-ai.sqlite` location is preserved. Ordered migrations
-`002_chat.sql` and `003_trip_lifecycle.sql` upgrade schemas 1/2 to 3 without resetting
+`002_chat.sql`, `003_trip_lifecycle.sql` and `004_voice_calls.sql` upgrade schemas 1–3 to 4 without resetting
 records or silently booking prior agreements. Older binaries refuse the upgraded
 database. Local data and secrets are excluded from Git and static serving.
 See [API notes](../services/api/README.md) for routes and current security limits.
@@ -115,7 +121,8 @@ only the shared model. Their distinct sequences are validated separately.
 The domain's `in_app`, `chat` and `voice_call` labels describe where an offer began;
 they do not themselves implement communication. The current chat presents fare
 cards and calls the same in-app offer/accept endpoints. Free text never changes
-the fare. Voice calls remain planned and must preserve explicit consent.
+the fare. Voice calls also leave fares unchanged; both people must use the
+existing offer/accept controls after discussing a price.
 
 ## Web and future mobile clients
 
@@ -132,6 +139,9 @@ only. At `/app`, `dashboard.mjs` coordinates page/session state and polling:
 | `dashboard/conversation-view.mjs` | Plain-text transcript, fare cards, drafts and reporting form |
 | `dashboard/conversation-model.mjs` | Pure timeline and offer-card presentation rules |
 | `dashboard/chat-reports-view.mjs` | Administrator view of reported messages |
+| `dashboard/call-controller.mjs` | Call polling, explicit microphone consent, session isolation and cleanup |
+| `dashboard/call-media.mjs` | Browser WebRTC, audio tracks and bounded ICE gathering |
+| `dashboard/call-view.mjs` | Call controls, audio playback and recent call history |
 | `dashboard/dom.mjs` | Small DOM helpers using text content |
 
 Views do not call `fetch`. The client retains the displayed offer ID/version and
@@ -158,11 +168,32 @@ price decisions in chat storage. Administrators can review explicitly reported
 messages through dedicated endpoints, without access to full conversations.
 See [the chat guide](chat.md) for the API contract and development limits.
 
+## Participant audio calls
+
+The calls service receives account/session lookup, ride membership and a relay
+configuration adapter through composition. It owns its SQL tables and changes no
+fare records. The rides service receives an `onRideClosed` port that clears live
+call state within the trip completion/cancellation transaction. This callback
+does not start a nested transaction or call back into the rides service.
+
+One transaction reserves both participants, binds the caller's session/window and
+saves the command/audit reference. Answering binds the recipient's session/window.
+Only those two windows can read or submit audio setup. Any authenticated participant
+can hang up, including from a replacement window. Expiry also checks revoked
+sessions and call configuration changes, and releases reservations and temporary
+SDP. Metadata history survives restart; media never lives in the database.
+
+The browser adapter uses WebRTC audio with a single offer/answer and fully gathered
+ICE candidates. HTTP polling supplies signaling only; browser peers or the TURN
+relay carry audio. `call-config.mjs` defaults to local testing without external
+ICE services. Relay mode creates short-lived coturn credentials, and requires relay
+candidates. No TURN service is provisioned. See [the voice contract](voice.md).
+
 ## Adding planned features
 
 | Future module | Boundary to preserve |
 | --- | --- |
-| Voice communication | Extend participant-only access to call rooms; short-lived provider credentials; no peer phone numbers |
+| Production communication | Operated TURN infrastructure, cross-network/mobile validation, push notifications and abuse controls |
 | Taxi Ai Eats | Vendors, fixed-price menus, ordering and fulfilment; show delivery fees at checkout |
 | Courier | Parcel details, vehicle eligibility and proof of delivery; confirm its pricing policy separately |
 | Payments | Provider adapters, payment states, verified webhooks and provider idempotency |
@@ -173,10 +204,10 @@ Motorcycles belong to food/small-parcel delivery; passenger rides use cars. Larg
 courier jobs can use suitable cars/vans. Autonomous taxis remain **Coming soon**;
 the site does not imply an operational fleet or a launch date.
 
-Choose a voice provider when implementing calls. Use application IDs
-in peer payloads and room identities, with report/block controls and an explicit
-consent design for any recording/transcription. Provider credentials belong in
-server adapters. AI may assist discovery/support; it must not independently
+Provision and validate a relay before a public calling pilot. Keep application IDs
+in peer payloads, add report/block controls and require an explicit consent design
+for any future recording/transcription. The TURN shared secret remains in the
+server adapter. AI may assist discovery/support; it must not independently
 accept fares, authorize charges or change safety permissions.
 
 ## Enforced conventions and deployment limits

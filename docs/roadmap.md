@@ -39,8 +39,8 @@ fare does not dispatch a car. Follow the manual checklist in `apps/web/README.md
 - Message reports and a limited administrator review queue.
 - Schema-two migration preserving existing local data.
 
-Complete [the browser chat checklist](chat.md#manual-review). Private voice calls,
-staffed safety operations and production communication security remain planned.
+Complete [the browser chat checklist](chat.md#manual-review). Staffed safety
+operations and production communication security remain planned.
 
 ## 2c — Complete test ride journey (implemented; browser review pending)
 
@@ -51,13 +51,24 @@ staffed safety operations and production communication security remain planned.
 - Schema-three migration preserving existing accounts, fares and conversations.
 
 Follow [the trip guide](trips.md) for the contract and manual browser review.
-Private voice calls are the next communication milestone.
+Audio calling is implemented in the following milestone.
 
-## 2d — Real ride pilot
+## 2d — In-app audio preview (implemented; real audio/browser/relay review pending)
+
+- Participant-only calls with explicit answer, decline, mute and hang-up controls.
+- Session/window ownership, one active call per person and bounded setup/heartbeat timeouts.
+- Retry-safe audio signaling, recent call history and atomic cleanup on trip closure.
+- Local WebRTC mode and configurable coturn relay credentials; no recording or transcription.
+- Schema-four migration preserving earlier local data.
+
+Follow [the voice guide](voice.md) for manual browser and cross-network validation.
+No relay service is provisioned and no working-audio claim is made by automated tests.
+
+## 2e — Real ride pilot
 
 Harden authentication and hosting; add verified driver onboarding, maps, vehicle
 matching, operational booking state, receipts and payment-provider integration. Implement authenticated
-production-ready messaging and private voice calls. Exercise concurrency, permission checks and
+production messaging operations and validate the voice relay on target networks/devices. Exercise concurrency, permission checks and
 recovery from interrupted requests before enabling real transactions.
 
 ## 3 — Delivery and operations

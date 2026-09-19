@@ -3,13 +3,14 @@ export function createApiClient({ fetchImpl = globalThis.fetch, makeKey = () => 
   let csrfToken = null;
   const retryKeys = new Map();
 
-  async function request(path, { method = 'GET', data, key } = {}) {
+  async function request(path, { method = 'GET', data, key, callClient } = {}) {
     if (!path.startsWith('/api/')) throw new Error('Use a same-origin API path.');
     let response, body;
     try {
       response = await fetchImpl(path, { method, credentials: 'same-origin', cache: 'no-store',
-        headers: method === 'POST' ? { 'Content-Type': 'application/json',
-          ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}), ...(key ? { 'Idempotency-Key': key } : {}) } : {},
+        headers: { ...(callClient ? { 'X-Call-Client': callClient } : {}),
+          ...(method === 'POST' ? { 'Content-Type': 'application/json',
+            ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}), ...(key ? { 'Idempotency-Key': key } : {}) } : {}) },
         ...(method === 'POST' ? { body: JSON.stringify(data ?? {}) } : {}), signal: AbortSignal.timeout(12_000) });
       body = await response.json();
     } catch {
@@ -25,12 +26,12 @@ export function createApiClient({ fetchImpl = globalThis.fetch, makeKey = () => 
     return body;
   }
 
-  async function command(path, data) {
-    const fingerprint = `${path}:${JSON.stringify(data)}`;
+  async function command(path, data, { callClient } = {}) {
+    const fingerprint = `${callClient ?? ''}:${path}:${JSON.stringify(data)}`;
     const key = retryKeys.get(fingerprint) ?? makeKey();
     retryKeys.set(fingerprint, key);
     try {
-      const result = await request(path, { method: 'POST', data, key });
+      const result = await request(path, { method: 'POST', data, key, callClient });
       retryKeys.delete(fingerprint);
       return result;
     } catch (error) {

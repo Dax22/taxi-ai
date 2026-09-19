@@ -29,14 +29,14 @@ switching. Do not discard them to make a checkout succeed. With a clean working
 tree, run:
 
 ```bash
-git switch feat/ride-lifecycle
-git pull --ff-only origin feat/ride-lifecycle
+git switch feat/in-app-voice
+git pull --ff-only origin feat/in-app-voice
 npm run verify
 ```
 
 Git normally creates a tracking branch when the name exists only on `origin`.
 If the switch reports an ambiguous branch name, explicitly use
-`git switch --track origin/feat/ride-lifecycle` for the first checkout.
+`git switch --track origin/feat/in-app-voice` for the first checkout.
 
 ## Save your own changes to GitHub
 

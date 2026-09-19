@@ -135,5 +135,5 @@ On your development machine, follow the root account/admin setup if needed, then
    focus, readable offer cards and composer/report forms. Check status/error
    announcements with a screen reader; the transcript itself is keyboard-readable.
 
-Private voice calls are the next communication milestone. No microphone access,
-call provider, call recording or transcription is enabled by this change.
+Audio calling is implemented separately; see [the voice guide](voice.md).
+Chat never opens the microphone. Neither chat nor calls record or transcribe audio.

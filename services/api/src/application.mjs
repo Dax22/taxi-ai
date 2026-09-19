@@ -11,9 +11,12 @@ import { createRidesRepository } from './modules/rides/repository.mjs';
 import { createRidesService } from './modules/rides/service.mjs';
 import { createChatRepository } from './modules/chat/repository.mjs';
 import { createChatService } from './modules/chat/service.mjs';
+import { createCallsRepository } from './modules/calls/repository.mjs';
+import { createCallsService } from './modules/calls/service.mjs';
+import { createCallConfig } from './infrastructure/call-config.mjs';
 
 /** Composition root: the only place that wires business modules to adapters. */
-export function createApplication({ db, clock = Date.now }) {
+export function createApplication({ db, clock = Date.now, callConfig = createCallConfig() }) {
   const unitOfWork = (run) => transaction(db, run);
   const audit = createAudit(db);
   const accountRepository = createAccountsRepository(db);
@@ -24,10 +27,14 @@ export function createApplication({ db, clock = Date.now }) {
     passwords, tokens, unitOfWork, audit, hasRideHistory: rideRepository.hasHistory, clock });
   const drivers = createDriversService({ repository: driverRepository,
     getAccount: accounts.profile, unitOfWork, audit, clock });
+  let calls;
   const rides = createRidesService({ repository: rideRepository,
-    getAccount: accounts.profile, unitOfWork, audit, tokens, clock });
+    getAccount: accounts.profile, unitOfWork, audit, tokens, clock,
+    onRideClosed: (id, now) => calls.closeRide(id, now) });
   const chat = createChatService({ repository: createChatRepository(db), getAccount: accounts.profile,
     getRideContext: rides.conversationContext, listConversationIds: rides.conversationIds, unitOfWork, audit, tokens, clock });
   const rateLimiter = createRateLimiter({ db, unitOfWork, digest: tokens.digest });
-  return Object.freeze({ accounts, drivers, rides, chat, rateLimiter, clock });
+  calls = createCallsService({ repository: createCallsRepository(db), getAccount: accounts.profile,
+    sessionOwner: accounts.sessionOwner, getRideContext: rides.conversationContext, unitOfWork, audit, tokens, clock, config: callConfig });
+  return Object.freeze({ accounts, drivers, rides, chat, calls, rateLimiter, clock });
 }
