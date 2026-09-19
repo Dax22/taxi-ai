@@ -36,7 +36,7 @@ test('schema five gains availability and deadlines while preserving saved route,
   old.close();
   const db = openDatabase(filename);
   try {
-    assert.equal(db.prepare('PRAGMA user_version').get().user_version, 6);
+    assert.equal(db.prepare('PRAGMA user_version').get().user_version, SCHEMA_VERSION);
     for (const name of names) assert.equal(JSON.stringify(legacyRows(db, name)), before.get(name), name);
     assert.equal(db.prepare('SELECT request_expires_at FROM rides').get().request_expires_at, 301000);
     assert.equal(db.prepare('SELECT count(*) AS n FROM driver_availability').get().n, 0, 'migration never makes drivers online');

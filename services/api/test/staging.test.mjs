@@ -157,4 +157,9 @@ test('a complete routed ride, chat, call signaling and GPS survive staging isola
   assert.equal((await customer.send(`/api/rides/${ride.id}/location`)).body.share, null);
   assert.equal((await customer.send('/api/calls')).body.active, null);
   assert.equal((await customer.send('/api/rides/history')).body.rides[0].negotiation.agreement.amountKobo, 470000);
+  const payment = await customer.send(`/api/payments/rides/${ride.id}`);
+  assert.equal(payment.body.payment.amountKobo, 470000); assert.equal(payment.body.payment.status, 'unpaid');
+  assert.equal(payment.body.settings.canSimulate, false);
+  assert.equal((await customer.post(`/api/payments/rides/${ride.id}/start`, { expectedVersion: 0 })).status, 403);
+  assert.equal((await driver.send('/api/driver/earnings')).body.summary.simulatedPaidKobo, '0');
 });

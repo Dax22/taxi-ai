@@ -38,6 +38,11 @@ simulation and live availability updates. `availability-view.mjs` owns its contr
 It stops on a hidden page, claim, offline, stale GPS or lost session, and never
 starts trip GPS. See [matching](../../docs/matching.md) for the local sample flow.
 
+`payments-controller.mjs` isolates selected-trip payment/receipt requests and paged
+earnings/admin records by account. `payments-view.mjs` renders local simulation
+controls, printable receipts and exact totals. No checkout SDK or bank/card input
+is included. See [payments](../../docs/payments.md) for the full test flow.
+
 `npm run verify` checks imports/module boundaries as well as domain, HTTP/static
 serving and client transport behaviour. Client tests cover lost/truncated
 responses, stable retry keys, original offer/version preservation and clearing
@@ -101,8 +106,8 @@ local server/file previews; visual and browser interaction review is outstanding
 7. Stop the server while a page is open, restart it and use Refresh. Confirm the
    connection status recovers, and retries do not duplicate requests or agreements.
 8. Check the original homepage demo, Eats/Courier labels and autonomous section.
-   Chat and audio calling belong to the account preview; payments and live dispatch
-   remain unavailable. Follow [the chat review steps](../../docs/chat.md#manual-review)
+   Chat, audio calling and local simulated payments belong to the account preview;
+   live payment collection and dispatch remain unavailable. Follow [the chat review steps](../../docs/chat.md#manual-review)
    for message history, unread state, retries, reporting and fare cards.
 9. Follow [the trip review steps](../../docs/trips.md#validation-and-manual-review)
    for booking, PIN verification, progress, cancellation and paginated trip history.
@@ -117,6 +122,8 @@ local server/file previews; visual and browser interaction review is outstanding
 
 12. Follow [the matching review steps](../../docs/matching.md#migration-and-validation)
     for Online/Offline, separate GPS consent, local simulation, expiry and competing drivers.
+13. Follow [the payment review steps](../../docs/payments.md#validation-and-manual-review)
+    for failed retries, saved receipts, earnings, stale sessions and print/PDF output.
 
 The [staging guide](../../docs/staging.md) provides a separate private hosting
 configuration for real device review. It is not deployed automatically by GitHub

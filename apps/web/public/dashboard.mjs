@@ -12,6 +12,8 @@ import { createLocationPlanner } from './dashboard/location-planner.mjs';
 import { createLocationSharing } from './dashboard/location-sharing.mjs';
 import { createAvailabilityController } from './dashboard/availability-controller.mjs';
 import { createAvailabilityView } from './dashboard/availability-view.mjs';
+import { createPaymentsController } from './dashboard/payments-controller.mjs';
+import { createPaymentsView } from './dashboard/payments-view.mjs';
 import { createGeolocation } from './dashboard/geolocation.mjs';
 import { isActiveRide } from '/shared/trip-lifecycle.mjs';
 
@@ -50,6 +52,17 @@ const availability = createAvailabilityController({ client, device: createGeoloc
   serverNow: () => serverTime.now + performance.now() - serverTime.received,
   onStatus(online) { if (state.availabilityOnline !== online) { state.availabilityOnline = online; view.render(state); } },
 });
+const paymentsView = createPaymentsView({ onStart: (payment) => payments.start(payment),
+  onSimulate: (payment, outcome) => payments.simulate(payment, outcome), onPage: (before) => payments.page(before),
+  onOpenRide: (id) => runAction(async () => {
+    const { ride } = await client.request(`/api/rides/${id}`);
+    if (!state.history.some((item) => item.id === id)) state.history.unshift(ride);
+    view.select(id);
+    payments.context(state.user, ride); await payments.poll();
+    $('payment-panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }), onPrint: () => { document.body.classList.add('print-receipt'); window.print(); },
+});
+const payments = createPaymentsController({ client, view: paymentsView });
 function rideCommand(path, data, message) {
   return runAction(async () => {
     const result = await client.rideCommand(path, data);
@@ -70,7 +83,8 @@ const conversation = createConversationController({ client, view: conversationVi
 const view = createDashboardView({
   serverNow: () => serverTime.now + performance.now() - serverTime.received,
   onCommand: rideCommand,
-  onSelectionChange: (ride) => { calls.setContext(state.user, ride); sharing.context(state.user, ride); void conversation.show(ride, state.user); },
+  onSelectionChange: (ride) => { calls.setContext(state.user, ride); sharing.context(state.user, ride); void conversation.show(ride, state.user);
+    payments.context(state.user, ride); void payments.poll(); },
   onHistory: (before) => runAction(async () => {
     const data = await client.request(`/api/rides/history${before ? `?before=${encodeURIComponent(before)}` : ''}`);
     const entries = before ? [...state.history, ...data.rides] : data.rides;
@@ -88,7 +102,7 @@ const authForm = bindAuthForm({ onSubmit: (path, data) => runAction(async () => 
   const result = await client.request(path, { method: 'POST', data });
   state = { ...emptyState(), user: result.user };
   client.reset(); client.setCsrf(result.csrfToken);
-  view.reset(); conversation.reset(); calls.reset(); sharing.reset(); availability.reset(); planner.reset(); authForm.reset();
+  view.reset(); conversation.reset(); calls.reset(); sharing.reset(); availability.reset(); planner.reset(); payments.reset(); authForm.reset();
 }) });
 
 async function refresh() {
@@ -96,7 +110,7 @@ async function refresh() {
   refreshing = (async () => {
     const session = await client.request('/api/session');
     if (state.user?.id !== session.user?.id) {
-      state = emptyState(); client.reset(); view.reset(); conversation.reset(); calls.reset(); sharing.reset(); availability.reset(); planner.reset();
+      state = emptyState(); client.reset(); view.reset(); conversation.reset(); calls.reset(); sharing.reset(); availability.reset(); planner.reset(); payments.reset();
     }
     state.user = session.user;
     calls.setContext(state.user, view.selected());
@@ -119,6 +133,8 @@ async function refresh() {
     }
     $('sync-status').textContent = 'Up to date · refreshes every 3s';
     view.render(state);
+    payments.context(state.user, view.selected());
+    await payments.poll();
     calls.setContext(state.user, view.selected());
     sharing.context(state.user, view.selected());
     availability.context(state.user, state.rides.some((ride) => isActiveRide(ride.status)));
@@ -164,6 +180,7 @@ async function poll() {
 
 $('logout').addEventListener('click', () => runAction(async () => {
   calls.reset();
+  payments.reset();
   await availability.stop(); availability.reset();
   sharing.shutdown(); sharing.reset(); planner.reset();
   await client.request('/api/auth/logout', { method: 'POST' });
@@ -172,6 +189,7 @@ $('logout').addEventListener('click', () => runAction(async () => {
 $('refresh').addEventListener('click', () => runAction(() => refresh()));
 document.addEventListener('visibilitychange', () => { if (document.hidden) availability.shutdown(); else poll(); });
 window.addEventListener('pagehide', () => { calls.shutdown(); sharing.shutdown(); availability.shutdown(); });
+window.addEventListener('afterprint', () => document.body.classList.remove('print-receipt'));
 setInterval(() => { view.tick(); conversationView.tick(); calls.tick(); planner.tick(); sharing.tick(); availability.tick(); }, 1000);
 setInterval(() => { if (!document.hidden || calls.hasMedia()) void calls.poll(); }, 2000);
 setInterval(() => { if (!document.hidden || sharing.sharing()) void sharing.poll(); }, 3000);

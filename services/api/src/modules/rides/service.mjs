@@ -11,7 +11,7 @@ import { requireParticipant, requireVersion, restoreNegotiation, canonical } fro
  * Ride use cases depend on repository operations and explicit ports, not SQLite
  * or HTTP objects. unitOfWork must encompass state, fare, audit and retry writes.
  */
-export function createRidesService({ repository, getAccount, unitOfWork, audit, tokens, clock, onRideClosed = () => {},
+export function createRidesService({ repository, getAccount, unitOfWork, audit, tokens, clock, onRideClosed = () => {}, onTripCompleted = () => {},
   routeForRide = () => null, quoteForRide, bindQuote, availabilityFor = () => null, onClaim = () => {}, allowSimulation = false }) {
   // Expiry commits independently of a command that may fail afterward.
   function sweep() {
@@ -225,6 +225,8 @@ export function createRidesService({ repository, getAccount, unitOfWork, audit, 
       'STALE_VERSION', 'This trip has changed. Refresh and try again.');
     repository.appendActivity(id, user.id, next, now, reason);
     audit.record(user.id, `trip.${next}`, id, now);
+    if (next === 'completed') onTripCompleted({ rideId: id, customerId: ride.customerId,
+      driverId: ride.driverId, amountKobo: ride.trip.fareKobo, completedAt: now });
     if (['completed', 'cancelled'].includes(next)) onRideClosed(id, now);
     return { rideId: id };
   }
@@ -268,5 +270,14 @@ export function createRidesService({ repository, getAccount, unitOfWork, audit, 
     return repository.listFor(user.id).filter((ride) => ride.driverId).map((ride) => ride.id);
   }
 
-  return Object.freeze({ get, list, history, mutate, conversationContext, conversationIds, sweep });
+  function paymentContext(user, id) {
+    const ride = record(id);
+    requireParticipant(ride, user);
+    const route = routeForRide(id) ?? createDemoQuote(ride.pickupId, ride.destinationId);
+    return { rideId: id, customerId: ride.customerId, driverId: ride.driverId,
+      status: ride.trip?.status ?? ride.status, amountKobo: ride.trip?.fareKobo ?? null,
+      completedAt: ride.trip?.completedAt ?? null, pickup: route.pickup.name, destination: route.destination.name };
+  }
+
+  return Object.freeze({ get, list, history, mutate, conversationContext, conversationIds, paymentContext, sweep });
 }

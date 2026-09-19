@@ -29,14 +29,14 @@ switching. Do not discard them to make a checkout succeed. With a clean working
 tree, run:
 
 ```bash
-git switch feat/driver-matching
-git pull --ff-only origin feat/driver-matching
+git switch feat/simulated-payments
+git pull --ff-only origin feat/simulated-payments
 npm run verify
 ```
 
 Git normally creates a tracking branch when the name exists only on `origin`.
 If the switch reports an ambiguous branch name, explicitly use
-`git switch --track origin/feat/driver-matching` for the first checkout.
+`git switch --track origin/feat/simulated-payments` for the first checkout.
 
 ## Save your own changes to GitHub
 
@@ -75,7 +75,7 @@ a Taxi Ai business mailbox.
 
 Existing milestones are stacked: project foundation → web booking demo → accounts
 and rides → modular architecture → private chat → ride lifecycle → voice → locations
-→ private staging → driver matching. Each pull request reviews only its next layer.
+→ private staging → driver matching → simulated payments. Each pull request reviews only its next layer.
 Pushing keeps the code on GitHub; it does not merge the stack into `main`. Review
 the dependencies before merging or retargeting their pull requests.
 
@@ -87,7 +87,7 @@ Read [the architecture](docs/architecture.md) and its
 | Change | Location |
 | --- | --- |
 | Pure fare/money rules | `packages/shared/src/` |
-| Account, driver, ride or chat use case | Its `services/api/src/modules/<feature>/service.mjs` |
+| Account, driver, ride, chat or payment use case | Its `services/api/src/modules/<feature>/service.mjs` |
 | Feature SQL | Its `repository.mjs` |
 | Route mapping | Its `routes.mjs` |
 | HTTP parsing/cookies/error translation | `services/api/src/http/` |
@@ -95,17 +95,18 @@ Read [the architecture](docs/architecture.md) and its
 | Dependency wiring | `services/api/src/application.mjs` |
 | Dashboard presentation | `apps/web/public/dashboard/views.mjs` |
 | Chat coordination and rendering | `apps/web/public/dashboard/conversation-*.mjs` |
+| Payments, receipts and earnings UI | `apps/web/public/dashboard/payments-*.mjs` |
 | Dashboard transport/retry policy | `apps/web/public/dashboard/api-client.mjs` |
 
 Use named exports and static ESM imports. Inject clock, storage and cross-module
 operations; keep SQL and HTTP objects out of services. Use synchronous callbacks
 inside the current SQLite unit of work. Place asynchronous password/provider work
-outside database transactions. Do not call a payment or messaging provider from
+outside database transactions. Do not call an external payment or messaging provider from
 inside a transaction; a later integration needs an explicit delivery/retry design.
 
 Validate inputs at the trust boundary and recheck mutable permissions/state inside
 the write transaction. Derive actor IDs from the session. Use integer kobo for
-money. Preserve offer ID, version, expiry, opposite-person acceptance and retry
+individual amounts and exact decimal kobo strings for aggregate payment totals. Preserve offer ID, version, expiry, opposite-person acceptance and retry
 semantics. Never infer an agreement from suggested prices or chat/call content.
 
 For a new feature, create its module only when implementing a real use case.

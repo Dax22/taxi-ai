@@ -3,7 +3,7 @@
 Taxi Ai uses a **modular monolith**: one backend process and database, with
 separate business modules and explicit dependencies. The current code implements
 accounts, driver review, ride/fare negotiation, trip lifecycle, participant chat
-and audio calling, route quotes, driver location sharing and availability/nearby matching. The structure supports adding Eats and courier workflows
+and audio calling, route quotes, driver location sharing, availability/nearby matching and simulated payments/receipts/earnings. The structure supports adding Eats and courier workflows
 without mixing their rules into ride logic.
 See [ADR 0001](decisions/0001-modular-monolith.md) for the decision and tradeoffs.
 
@@ -18,6 +18,7 @@ See [ADR 0001](decisions/0001-modular-monolith.md) for the decision and tradeoff
 | Calls | Audio invitations, session/window ownership, signaling, expiry and history | `voice_calls`, `voice_participants`, `voice_commands` |
 | Locations | Provider-backed route quotes, fare suggestions, driver sharing and expiry | `location_quotes`, `location_quote_commands`, `location_shares`, `location_share_commands` |
 | Availability | Driver Online/Offline, separate location consent, freshness and lease expiry | `driver_availability`, `availability_commands` |
+| Payments | Completed-trip simulated payments, attempts, receipts and earnings summaries | `payments`, `payment_attempts`, `payment_receipts`, `payment_commands` |
 | Shared domain | Pure fare state machine, lifecycle vocabulary, money, coordinate helpers and sample quotes | No storage or network |
 | Infrastructure | SQLite, migrations, password hashing, random tokens, audit and rate limits | `audit_events`, `rate_limits`, connection lifecycle |
 | HTTP | Route dispatch, request parsing, cookies, CSRF and error/status translation | No business state |
@@ -102,7 +103,7 @@ repository constructor alone is insufficient.
 
 The existing `data/taxi-ai.sqlite` location is preserved. Ordered migrations
 `002_chat.sql`, `003_trip_lifecycle.sql`, `004_voice_calls.sql` and
-`005_locations.sql` and `006_matching.sql` upgrade schemas 1–5 to 6 without resetting
+`005_locations.sql`, `006_matching.sql` and `007_payments.sql` upgrade schemas 1–6 to 7 without resetting
 records or silently booking prior agreements. Older binaries refuse the upgraded
 database. Local data and secrets are excluded from Git and static serving.
 See [API notes](../services/api/README.md) for routes and current security limits.
@@ -154,6 +155,8 @@ At `/app`, `dashboard.mjs` coordinates page/session state and polling:
 | `dashboard/geolocation.mjs` | Browser permission and device location adapter |
 | `dashboard/location-view.mjs` | Route forms, fare details and sharing controls |
 | `dashboard/map-view.mjs` | Visible raster tiles, SVG routes/pins and keyboard map interaction |
+| `dashboard/payments-controller.mjs` | Isolated payment/receipt requests and paged driver/admin records |
+| `dashboard/payments-view.mjs` | Simulation controls, printable receipts and exact totals |
 | `dashboard/dom.mjs` | Small DOM helpers using text content |
 
 Views do not call `fetch`. The client retains the displayed offer ID/version and
@@ -236,7 +239,7 @@ configuration and the remaining provider/browser/device validation.
 | Production communication | Operated TURN infrastructure, cross-network/mobile validation, push notifications and abuse controls |
 | Taxi Ai Eats | Vendors, fixed-price menus, ordering and fulfilment; show delivery fees at checkout |
 | Courier | Parcel details, vehicle eligibility and proof of delivery; confirm its pricing policy separately |
-| Payments | Provider adapters, payment states, verified webhooks and provider idempotency |
+| Live payments | Provider checkout/verification, authenticated webhooks, durable reconciliation, refunds and payouts |
 | AI assistance | Fare/ETA suggestions and authorized assistance through explicit application commands |
 
 Create modules when implementing these workflows, without empty service shells.
@@ -257,7 +260,7 @@ gateway token and tester-key hashes before startup. HTTP enforces the gateway
 and tester boundary before routing; business authorization still uses account
 sessions. Staging cookies use the `__Host-` prefix, Secure, HttpOnly and
 SameSite=Strict, without Domain. Local cookies are never accepted in staging.
-This adds no database migration: the schema remains 5.
+The staging configuration itself adds no schema changes; the current application schema is 7.
 
 `health.mjs` checks database/schema readability and shutdown state. Telemetry
 records only generated request IDs, coarse categories, method, status and timing;
@@ -303,3 +306,18 @@ The current preview scans open requests, filters by fresh availability and dista
 then sorts and caps at 50. Larger deployments need indexed geospatial retrieval.
 No new external geocoding or routing request occurs during candidate matching.
 See [matching](matching.md) for consent, privacy, lifecycle and validation.
+
+## Simulated payments
+
+Rides receives `onTripCompleted` and payments receives a participant-checked
+`paymentContext` through composition. Completion inserts an unpaid record using
+the immutable booking fare in the same transaction; no callback opens a nested
+transaction. A separate payment version protects attempts without changing fares.
+Payment, attempt, receipt, audit and command-key writes commit atomically.
+
+The only provider is a pure synchronous local simulator, with no external I/O.
+Its result is checked against the current reference, amount, currency and mode.
+A future external adapter must perform I/O outside transactions and add durable
+verified reconciliation. No customer-controlled simulation endpoint can become a
+live payment endpoint. Aggregate kobo totals use BigInt internally and decimal
+strings in JSON; individual fares remain safe integers. See [payments](payments.md).
