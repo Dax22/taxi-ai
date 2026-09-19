@@ -14,13 +14,13 @@ export const bootstrapAdmin = (db, email) => createApplication({ db }).accounts.
 // Test fixtures only. No accounts or passwords are seeded into the application.
 export const PASSWORD = 'A long test-only password 123';
 
-export async function harness(t, { persistent = false, callConfig = createCallConfig({}) } = {}) {
+export async function harness(t, { persistent = false, callConfig = createCallConfig({}), mapProvider } = {}) {
   const folder = persistent ? await mkdtemp(join(tmpdir(), 'taxi-ai-test-')) : null;
   const filename = folder ? join(folder, 'test.sqlite') : ':memory:';
   let now = 1_000_000, server, db, base, stopped = true;
   async function start() {
     db = openDatabase(filename);
-    server = createAppServer({ db, clock: () => now, callConfig });
+    server = createAppServer({ db, clock: () => now, callConfig, mapProvider });
     server.listen(0, '127.0.0.1');
     await once(server, 'listening');
     base = `http://127.0.0.1:${server.address().port}`;

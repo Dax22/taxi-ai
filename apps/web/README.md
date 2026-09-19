@@ -26,6 +26,13 @@ controls and remote audio. The call panel spans journeys, so incoming calls appe
 even while another saved journey is selected. Active audio keeps polling when the
 page is hidden, subject to browser timer/background restrictions.
 
+`location-planner.mjs` owns map consent, manual search, selected points and route
+quotes. `location-sharing.mjs` owns explicit driver GPS and session cleanup;
+`geolocation.mjs` is the browser device adapter. `location-view.mjs` binds the
+forms and `map-view.mjs` draws visible raster tiles, road geometry and pins with
+native SVG. No mapping SDK or new npm dependency is needed. Map rendering loads
+only visible tiles after consent; it never prefetches or downloads offline maps.
+
 `npm run verify` checks imports/module boundaries as well as domain, HTTP/static
 serving and client transport behaviour. Client tests cover lost/truncated
 responses, stable retry keys, original offer/version preservation and clearing
@@ -51,10 +58,14 @@ session. Refreshing the browser reloads saved requests from the server.
 
 `server.mjs` serves an explicit file allowlist and `/api` from the same origin. It
 never serves repository configuration or database files. Host/Origin checks permit
-only its loopback addresses. CSP permits same-origin scripts, styles, images and
-API connections, with inline code and embedding disabled. Microphone permission
+only its loopback addresses. CSP permits same-origin scripts, styles and API
+connections, plus images from the configured tile origin. Inline code and
+embedding are disabled. Microphone permission
 is enabled only on `/app` while calling is enabled; acquisition requires a Call
-or Answer click and browser permission. Camera and geolocation remain disabled.
+or Answer click and browser permission. Geolocation is allowed only at `/app`
+and requires Share my location plus browser consent. Camera remains disabled.
+The account page sends an origin-only cross-origin Referer for street tiles;
+other pages use no-referrer. Address search and routing go through the API.
 
 See [the root setup guide](../../README.md) for creating the first administrator
 and using two independent browser sessions. Separate ordinary tabs share cookies;
@@ -91,3 +102,8 @@ local server/file previews; visual and browser interaction review is outstanding
 10. Follow [the voice review steps](../../docs/voice.md#manual-browser-review)
     for microphone consent, two-way audio, mute, interruption recovery and relay
     checks. Actual audio and browser compatibility remain unverified here.
+11. Follow [the location review steps](../../docs/locations.md#manual-review) for
+    maps, address results, keyboard pins, route quotes and permission-based GPS.
+    Live provider connectivity and browser/device GPS are not established by
+    the automated fixtures. This server remains local-only; mobile layout checks
+    do not constitute an installed iOS/Android app or background tracking test.

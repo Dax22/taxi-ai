@@ -5,7 +5,8 @@ Rides, Taxi Ai Eats and courier delivery, starting in Abuja, Nigeria.
 ## What works today
 
 The yellow Taxi Ai website now includes **local customer, driver and administrator
-accounts** at `/app`. Customers request a sample journey; an approved driver can
+accounts** at `/app`. Customers choose an Abuja address or map pin, preview a road
+route and request a test journey; an approved driver can
 take the request, make offers and agree a fare with the customer from a separate
 browser session. The customer can confirm a booking, and the driver can record
 arrival, verify the pickup PIN, start and complete the test trip.
@@ -14,7 +15,8 @@ and server restart. Dashboards refresh every three seconds while visible.
 
 This is a **local development prototype**, not a launched transport service.
 Use test details. Fares are fictional examples and all requests are test requests.
-There is no live dispatch, GPS tracking or payment. Driver
+Drivers can explicitly share their browser-reported location during a confirmed
+test trip. There is no live dispatch or payment. Driver
 approval grants test access; it does not verify identity or vehicle documents.
 
 - Customer/driver registration and password sign-in, with separate dashboards.
@@ -29,10 +31,15 @@ approval grants test access; it does not verify identity or vehicle documents.
   fare cards; reported messages appear in the local administrator dashboard.
 - In-app audio call controls: call, answer, decline, mute, hang up and recent
   call history. Local WebRTC preview with an optional TURN relay adapter.
+- Opt-in Abuja address search, map pins, road distance and estimated driving time.
+- Saved route quotes with an illustrative fare formula; explicit negotiation still
+  determines the final fare. Quotes expire after 15 minutes.
+- Permission-based driver GPS, visible only to assigned participants, with stale
+  indicators and cleanup on stop, session expiry and trip closure.
 - The original in-browser fare demo and terminal example remain available.
 
 **Still planned:** production calling, verified identity and driver
-documents, maps/GPS, actual dispatch, payments/receipts, password
+documents, production mapping/tracking, actual dispatch, payments/receipts, password
 recovery, food/vendor ordering, motorcycle courier delivery, AI estimators and
 native iOS/Android apps. Autonomous taxis remain **Coming soon**, with no launch date.
 
@@ -54,6 +61,14 @@ busy, use `PORT=3001 npm run dev` and open http://localhost:3001/app.
 No `npm install`, paid service or API key is needed. The scripts enable Node's
 built-in SQLite API, including the flag required by Node 22.12. A SQLite
 experimental warning on that version is expected.
+
+Online maps use public Photon search, OSRM routing and OpenStreetMap street tiles
+after you click **Enable online maps**. These services need an internet connection
+and have usage limits and no availability guarantee. They are suitable only for
+this low-volume preview; production needs dedicated provider capacity. Use
+`TAXI_AI_MAPS_MODE=off npm run dev` for the original sample-area demo without online
+maps. See [the location guide](docs/locations.md) for provider configuration,
+privacy, coverage and the manual review checklist.
 
 ## Set up the first administrator when needed
 
@@ -80,14 +95,20 @@ an HTTP endpoint. Additional administrators and account recovery are not built y
 
 ## Try a complete customer/driver journey
 
-1. Register a separate **customer** account. Choose Wuse II → Maitama and click
-   **Request a test ride**.
+1. Register a separate **customer** account. Click **Enable online maps**, search
+   for pickup/destination landmarks or place pins, then **Preview route and
+   suggested fare** and **Request this test ride**. Alternatively use the
+   **Sample-area demo** for Wuse II → Maitama without an external service.
 2. Open a different browser/profile or one private window and sign in as the
    approved driver. Two ordinary tabs share a login; use separate sessions.
 3. The driver selects **Start negotiation** and offers ₦5,000.
 4. The customer counters with ₦4,700. The driver clicks **Accept ₦4,700**.
 5. The customer reviews the driver/fare and clicks **Confirm test booking**.
    Only the customer sees the six-digit pickup PIN.
+   The driver may now click **Share my location** in Journey map and allow browser
+   location access. GPS must be within the Abuja preview area and accurate within
+   200 metres. No location access starts automatically; Stop sharing stops the
+   device watcher immediately. GPS controls work independently of online tiles.
 6. The driver clicks **On my way**, then **I have arrived**, enters the customer’s
    PIN and starts the trip. The driver then clicks **Complete trip**.
 7. Check Trip history in both accounts. Refresh and restart the server; saved
@@ -122,7 +143,7 @@ password hashes and ride history do not.
 Use the same variable for `npm run admin` when using a custom path. Migrations run
 automatically at startup. There is no production backup/retention process yet.
 
-The voice milestone upgrades the database from schema 1, 2 or 3 to 4 without resetting
+The location milestone upgrades the database from schema 1–4 to 5 without resetting
 existing records or automatically booking old agreements. Earlier branches cannot
 open the upgraded database; use a separate test database when comparing versions.
 
@@ -142,6 +163,7 @@ current HTTP cookies and authentication setup are for local development. Read
 | `services/api/src/modules/rides/` | Ride/fare/trip services, domain rules, repository and routes |
 | `services/api/src/modules/chat/` | Participant-only messages, unread cursors, retry keys and reports |
 | `services/api/src/modules/calls/` | Call lifecycle, participant/window ownership and temporary audio signaling |
+| `services/api/src/modules/locations/` | Saved route quotes, fare suggestions and driver location sharing |
 | `services/api/src/http/` | Request parsing, routing, cookies and response mapping |
 | `services/api/src/infrastructure/` | Database, password, token, audit and rate-limit adapters |
 | `services/api/migrations/` | Versioned SQLite schema |
@@ -163,7 +185,7 @@ The terminal example runs with `npm run demo`. Read [the architecture](docs/arch
 
 ## Development and review
 
-The latest development branch for this milestone is `feat/in-app-voice`.
+The latest development branch for this milestone is `feat/abuja-locations`.
 Read [CONTRIBUTING.md](CONTRIBUTING.md) for the GitHub/VS Code workflow and where
 new code belongs. `npm run check` validates syntax and module conventions;
 `npm test` checks behaviour; `npm run verify` runs both. GitHub Actions is configured
@@ -176,3 +198,6 @@ No licence has been selected for this private project.
 
 Browser visual and interaction review is still required: the available cloud
 browser blocks local previews. Follow [the manual review steps](apps/web/README.md).
+Live map-provider connectivity and real browser/device GPS remain unverified.
+Automated tests use provider and device fixtures; driving time excludes live
+traffic and driver arrival, and suggested fares are not AI or market estimates.

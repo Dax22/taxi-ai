@@ -9,7 +9,8 @@ import { requireParticipant, requireVersion, restoreNegotiation, canonical } fro
  * Ride use cases depend on repository operations and explicit ports, not SQLite
  * or HTTP objects. unitOfWork must encompass state, fare, audit and retry writes.
  */
-export function createRidesService({ repository, getAccount, unitOfWork, audit, tokens, clock, onRideClosed = () => {} }) {
+export function createRidesService({ repository, getAccount, unitOfWork, audit, tokens, clock, onRideClosed = () => {},
+  routeForRide = () => null, quoteForRide, bindQuote }) {
   function record(id) {
     const ride = repository.find(id);
     check(ride, 'NOT_FOUND', 'Ride request not found.');
@@ -27,11 +28,12 @@ export function createRidesService({ repository, getAccount, unitOfWork, audit, 
   }
 
   function view(ride, user) {
-    const quote = createDemoQuote(ride.pickupId, ride.destinationId);
+    const route = routeForRide(ride.id);
+    const quote = route ?? createDemoQuote(ride.pickupId, ride.destinationId);
     const trip = ride.trip ?? repository.findTrip(ride.id);
     return { id: ride.id, status: trip?.status ?? ride.status, version: ride.version,
       pickup: quote.pickup, destination: quote.destination, suggestedFareKobo: ride.suggestedFareKobo,
-      currency: 'NGN', isDemo: true, createdAt: ride.createdAt, updatedAt: ride.updatedAt,
+      currency: 'NGN', isDemo: true, route, createdAt: ride.createdAt, updatedAt: ride.updatedAt,
       customer: peer(ride.customerId), driver: peer(ride.driverId, true),
       negotiation: negotiationFor(ride)?.snapshot() ?? null,
       trip: trip ? { status: trip.status, fareKobo: trip.fareKobo, bookedAt: trip.bookedAt,
@@ -50,9 +52,12 @@ export function createRidesService({ repository, getAccount, unitOfWork, audit, 
   function list(user) {
     const available = user.role === 'driver' && user.driver.status === 'approved' ? repository.listAvailable() : [];
     return { rides: repository.listFor(user.id).map((ride) => view(ride, user)), available: available.map((ride) => {
-      const quote = createDemoQuote(ride.pickupId, ride.destinationId);
+      const route = routeForRide(ride.id);
+      const area = (point) => ({ name: `Near ${point.lat.toFixed(2)}, ${point.lng.toFixed(2)} (approximate area)` });
+      const quote = route ? { pickup: area(route.pickup), destination: area(route.destination) }
+        : createDemoQuote(ride.pickupId, ride.destinationId);
       return { id: ride.id, version: ride.version, pickup: quote.pickup, destination: quote.destination,
-        suggestedFareKobo: ride.suggestedFareKobo, currency: 'NGN', isDemo: true, createdAt: ride.createdAt };
+        suggestedFareKobo: ride.suggestedFareKobo, currency: 'NGN', isDemo: true, hasRoute: Boolean(route), createdAt: ride.createdAt };
     }) };
   }
 
@@ -71,14 +76,19 @@ export function createRidesService({ repository, getAccount, unitOfWork, audit, 
 
   function create(user, data, now) {
     requireRole(user, 'customer');
-    fields(data, ['pickupId', 'destinationId']);
+    const routed = Boolean(data && Object.hasOwn(data, 'quoteId'));
+    fields(data, routed ? ['quoteId'] : ['pickupId', 'destinationId']);
     let quote;
-    try { quote = createDemoQuote(data.pickupId, data.destinationId); }
+    if (routed) {
+      check(typeof data.quoteId === 'string' && /^[a-f0-9-]{36}$/.test(data.quoteId), 'INVALID_ROUTE', 'Preview a route before requesting a ride.');
+      quote = quoteForRide(user.id, data.quoteId, now);
+    } else try { quote = createDemoQuote(data.pickupId, data.destinationId); }
     catch (error) { check(false, 'INVALID_ROUTE', error.message); }
     check(!repository.hasOpenRequest(user.id), 'OPEN_REQUEST_EXISTS', 'You already have an open request. Finish or cancel it first.');
     const id = tokens.id();
     repository.insert({ id, customerId: user.id, pickupId: quote.pickup.id,
       destinationId: quote.destination.id, suggestedFareKobo: quote.suggestedFareKobo, now });
+    if (routed) bindQuote(user.id, data.quoteId, id, now);
     audit.record(user.id, 'ride.requested', id, now);
     return id;
   }

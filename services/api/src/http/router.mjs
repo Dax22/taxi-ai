@@ -4,14 +4,15 @@ import { driverRoutes } from '../modules/drivers/routes.mjs';
 import { rideRoutes } from '../modules/rides/routes.mjs';
 import { chatRoutes } from '../modules/chat/routes.mjs';
 import { callRoutes } from '../modules/calls/routes.mjs';
+import { locationRoutes } from '../modules/locations/routes.mjs';
 import { localOrigin, requireSameOrigin, readSessionToken, requireCsrf } from './security.mjs';
 import { readBody } from './body.mjs';
 import { json } from './responses.mjs';
 
 /** HTTP owns parsing, cookies, CSRF and response codes; services own decisions. */
 export function createApiRouter(application) {
-  const { accounts, drivers, rides, chat, calls, rateLimiter, clock } = application;
-  const routes = [...accountRoutes(accounts), ...driverRoutes(drivers), ...rideRoutes(rides), ...chatRoutes(chat), ...callRoutes(calls)];
+  const { accounts, drivers, rides, chat, calls, locations, rateLimiter, clock } = application;
+  const routes = [...accountRoutes(accounts), ...driverRoutes(drivers), ...rideRoutes(rides), ...chatRoutes(chat), ...callRoutes(calls), ...locationRoutes(locations)];
   return async function handleApi({ request, response, pathname }) {
     const origin = localOrigin(request);
     const write = request.method === 'POST';
@@ -35,6 +36,7 @@ export function createApiRouter(application) {
     check(route, 'NOT_FOUND', 'API endpoint not found.');
     const result = await route.handle({ data, token, session, user: session?.user,
       match: pathname.match(route.path), key: request.headers['idempotency-key'], callClient: request.headers['x-call-client'],
+      locationClient: request.headers['x-location-client'],
       query: new URL(request.url, origin).searchParams });
     if (result.cookie) response.setHeader('Set-Cookie', result.cookie);
     json(response, result.status ?? 200, { ...result.body, serverNow: clock() });

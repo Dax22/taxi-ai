@@ -25,7 +25,7 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
     $('fare-expiry').textContent = ride?.status === 'negotiating' && offer
       ? remaining > 0 ? `Offer expires in ${Math.ceil(remaining / 1000)} seconds.` : 'This offer expired. Send a new offer to continue.' : '';
     for (const button of document.querySelectorAll('button')) {
-      if (button.closest('#calls-panel')) continue; // Hang-up stays usable during unrelated ride/chat commands.
+      if (button.closest('#calls-panel, #location-planner, #location-tracking')) continue; // Media/location controllers own their controls, including immediate stop.
       button.disabled = busy || button.dataset.locked === 'true';
     }
     $('request-fields').disabled = busy || state.rides.some((item) => isActiveRide(item.status));
@@ -105,7 +105,7 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
       const row = element('div', undefined, 'request-row');
       const description = element('div');
       description.append(element('strong', `${ride.pickup.name} → ${ride.destination.name}`),
-        element('small', `Sample suggestion ${formatNaira(ride.suggestedFareKobo)}`));
+        element('small', `${ride.hasRoute ? 'Route suggestion' : 'Sample suggestion'} ${formatNaira(ride.suggestedFareKobo)}`));
       const button = element('button', 'Start negotiation ↗', 'button button-primary button-small');
       button.type = 'button';
       button.dataset.locked = String(driverBusy);
@@ -155,7 +155,7 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
     $('detail-status').textContent = statuses[ride.status];
     $('detail-person').textContent = isDriver ? `Customer: ${ride.customer.name}`
       : ride.driver ? `Driver: ${ride.driver.name} · ${ride.driver.vehicle.model} · ${ride.driver.vehicle.plate}` : 'An approved driver can respond to your request.';
-    $('detail-reference').textContent = `Reference ${ride.id.slice(0, 8).toUpperCase()} · Sample suggestion ${formatNaira(ride.suggestedFareKobo)}`;
+    $('detail-reference').textContent = `Reference ${ride.id.slice(0, 8).toUpperCase()} · ${ride.route ? 'Route suggestion' : 'Sample suggestion'} ${formatNaira(ride.suggestedFareKobo)}`;
     $('live-offer-form').hidden = ride.status !== 'negotiating';
     $('accept-fare').hidden = ride.status !== 'negotiating' || !offer;
     $('accept-fare').textContent = offer ? `Accept ${formatNaira(offer.amountKobo)}` : 'Accept offer';
@@ -180,7 +180,7 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
     } else {
       $('fare-label').textContent = ride.status === 'requested' ? 'REQUEST SAVED' : 'YOUR FARE, YOUR SAY';
       $('fare-value').textContent = ride.status === 'requested' ? 'Finding your connection.' : 'Make the first offer.';
-      $('fare-guidance').textContent = ride.status === 'requested' ? 'Waiting for an approved driver in this local preview. You can refresh or return later.' : 'Start with the sample suggestion or choose your price.';
+      $('fare-guidance').textContent = ride.status === 'requested' ? 'Waiting for an approved driver in this local preview. You can refresh or return later.' : 'Start with the suggestion or choose your price.';
     }
     const history = ride.negotiation?.offers ?? [];
     $('live-history').hidden = !history.length;

@@ -3,12 +3,13 @@ export function createApiClient({ fetchImpl = globalThis.fetch, makeKey = () => 
   let csrfToken = null;
   const retryKeys = new Map();
 
-  async function request(path, { method = 'GET', data, key, callClient } = {}) {
+  async function request(path, { method = 'GET', data, key, callClient, locationClient } = {}) {
     if (!path.startsWith('/api/')) throw new Error('Use a same-origin API path.');
     let response, body;
     try {
       response = await fetchImpl(path, { method, credentials: 'same-origin', cache: 'no-store',
         headers: { ...(callClient ? { 'X-Call-Client': callClient } : {}),
+          ...(locationClient ? { 'X-Location-Client': locationClient } : {}),
           ...(method === 'POST' ? { 'Content-Type': 'application/json',
             ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}), ...(key ? { 'Idempotency-Key': key } : {}) } : {}) },
         ...(method === 'POST' ? { body: JSON.stringify(data ?? {}) } : {}), signal: AbortSignal.timeout(12_000) });
@@ -26,12 +27,12 @@ export function createApiClient({ fetchImpl = globalThis.fetch, makeKey = () => 
     return body;
   }
 
-  async function command(path, data, { callClient } = {}) {
-    const fingerprint = `${callClient ?? ''}:${path}:${JSON.stringify(data)}`;
+  async function command(path, data, { callClient, locationClient } = {}) {
+    const fingerprint = `${callClient ?? ''}:${locationClient ?? ''}:${path}:${JSON.stringify(data)}`;
     const key = retryKeys.get(fingerprint) ?? makeKey();
     retryKeys.set(fingerprint, key);
     try {
-      const result = await request(path, { method: 'POST', data, key, callClient });
+      const result = await request(path, { method: 'POST', data, key, callClient, locationClient });
       retryKeys.delete(fingerprint);
       return result;
     } catch (error) {
