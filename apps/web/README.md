@@ -20,6 +20,12 @@ queue. Fare controls retain the existing ride commands and consent rules.
 shared lifecycle vocabulary lives in `packages/shared/src/trip-lifecycle.mjs`.
 Completed/cancelled history loads in cursor-based pages of 20.
 
+`call-controller.mjs` owns call polling, explicit microphone setup and recovery;
+`call-media.mjs` contains the browser WebRTC adapter; `call-view.mjs` renders call
+controls and remote audio. The call panel spans journeys, so incoming calls appear
+even while another saved journey is selected. Active audio keeps polling when the
+page is hidden, subject to browser timer/background restrictions.
+
 `npm run verify` checks imports/module boundaries as well as domain, HTTP/static
 serving and client transport behaviour. Client tests cover lost/truncated
 responses, stable retry keys, original offer/version preservation and clearing
@@ -46,8 +52,9 @@ session. Refreshing the browser reloads saved requests from the server.
 `server.mjs` serves an explicit file allowlist and `/api` from the same origin. It
 never serves repository configuration or database files. Host/Origin checks permit
 only its loopback addresses. CSP permits same-origin scripts, styles, images and
-API connections, with inline code and embedding disabled. Camera, microphone and
-geolocation permissions remain disabled until their features are implemented.
+API connections, with inline code and embedding disabled. Microphone permission
+is enabled only on `/app` while calling is enabled; acquisition requires a Call
+or Answer click and browser permission. Camera and geolocation remain disabled.
 
 See [the root setup guide](../../README.md) for creating the first administrator
 and using two independent browser sessions. Separate ordinary tabs share cookies;
@@ -76,8 +83,11 @@ local server/file previews; visual and browser interaction review is outstanding
 7. Stop the server while a page is open, restart it and use Refresh. Confirm the
    connection status recovers, and retries do not duplicate requests or agreements.
 8. Check the original homepage demo, Eats/Courier labels and autonomous section.
-   Chat belongs to the account preview; calls, payments and live dispatch remain
-   unavailable. Follow [the chat review steps](../../docs/chat.md#manual-review)
+   Chat and audio calling belong to the account preview; payments and live dispatch
+   remain unavailable. Follow [the chat review steps](../../docs/chat.md#manual-review)
    for message history, unread state, retries, reporting and fare cards.
 9. Follow [the trip review steps](../../docs/trips.md#validation-and-manual-review)
    for booking, PIN verification, progress, cancellation and paginated trip history.
+10. Follow [the voice review steps](../../docs/voice.md#manual-browser-review)
+    for microphone consent, two-way audio, mute, interruption recovery and relay
+    checks. Actual audio and browser compatibility remain unverified here.

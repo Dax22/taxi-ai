@@ -131,5 +131,6 @@ previews. In the local VS Code application:
 6. Check keyboard operation and 390px, 768px and 1440px layouts. Switch accounts,
    select older trips, sign out and confirm no pickup PIN remains displayed.
 
-Voice calls, GPS, payments, verified onboarding and safety operations remain
-planned. Eats, motorcycle courier and autonomous services keep their planned labels.
+See [the voice guide](voice.md) for the local audio-call preview. GPS, payments,
+verified onboarding and safety operations remain planned. Eats, motorcycle courier
+and autonomous services keep their planned labels.

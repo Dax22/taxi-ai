@@ -7,7 +7,7 @@ or transport dispatch system.
 
 ## Code boundaries
 
-`src/application.mjs` wires the accounts, drivers, rides and chat modules. Each module
+`src/application.mjs` wires the accounts, drivers, rides, chat and calls modules. Each module
 contains a service, repository and route factory; rides also has pure domain
 helpers. Services receive repositories, clock and cross-module operations as
 explicit dependencies. They do not import HTTP or database adapters. Repositories
@@ -18,7 +18,7 @@ implements SQLite, password/token operations, audit and rate limits. `src/shared
 contains small common errors, validation and authorization policies. See
 [the architecture](../../docs/architecture.md) for ownership and transaction contracts.
 
-Ordered migrations add chat and trip tables, bringing the schema to version 3.
+Ordered migrations add chat, trip and call tables, bringing the schema to version 4.
 The `data/taxi-ai.sqlite` location, existing test accounts, sessions and rides are
 preserved. No reset is required. Earlier code refuses the upgraded file; use a separate database when comparing branches.
 
@@ -126,6 +126,21 @@ Reported messages are visible in a dedicated administrator queue; administrators
 cannot use chat routes to read unreported conversation content. This is a local
 moderation preview, not a staffed safety service or end-to-end encrypted chat.
 See [the chat contract](../../docs/chat.md) for routes, lifecycle and limitations.
+
+## Participant audio calls
+
+`modules/calls/` implements participant-only invitations, accept/decline/end,
+temporary offer/answer signaling, heartbeat leases and recent call metadata.
+Mutations use the existing session/CSRF checks and actor-scoped retry keys. A page
+nonce binds audio setup to the window that starts or answers, in addition to its
+login session. Participants may end their call from another window; they cannot
+take over its microphone or read its connection details there.
+
+The server sweeps deadlines every five seconds and on call requests. Completing
+or cancelling a ride ends its call in the same transaction. Closing clears live
+SDP and ownership hashes, releases both participant locks and preserves a metadata
+history entry. Call actions never alter fares. See [the voice guide](../../docs/voice.md)
+for all endpoints, timeouts, local testing and optional coturn configuration.
 
 ## Before public hosting or a real pilot
 

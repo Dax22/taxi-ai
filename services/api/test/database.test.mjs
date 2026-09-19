@@ -43,7 +43,7 @@ test('ordered migrations preserve a version-one database, including existing acc
   old.close();
   const upgraded = openDatabase(filename);
   try {
-    assert.equal(upgraded.prepare('PRAGMA user_version').get().user_version, 3);
+    assert.equal(upgraded.prepare('PRAGMA user_version').get().user_version, 4);
     for (const [index, table] of ['users', 'sessions', 'rides'].entries()) {
       assert.equal(JSON.stringify(upgraded.prepare(`SELECT * FROM ${table}`).all()), snapshot[index]);
     }
@@ -54,7 +54,7 @@ test('ordered migrations preserve a version-one database, including existing acc
     assert.equal(app.rides.get(session.user, 'existing-ride').suggestedFareKobo, 450000);
   } finally { upgraded.close(); }
   const reopened = openDatabase(filename);
-  assert.equal(reopened.prepare('PRAGMA user_version').get().user_version, 3);
+  assert.equal(reopened.prepare('PRAGMA user_version').get().user_version, 4);
   reopened.close();
 });
 
@@ -97,7 +97,7 @@ test('schema two upgrades without changing fares, chat, read markers, reports, s
   old.close();
   const upgraded = openDatabase(filename);
   try {
-    assert.equal(upgraded.prepare('PRAGMA user_version').get().user_version, 3);
+    assert.equal(upgraded.prepare('PRAGMA user_version').get().user_version, 4);
     for (const table of tables) assert.equal(JSON.stringify(upgraded.prepare(`SELECT * FROM ${table}`).all()), snapshots.get(table), table);
     assert.deepEqual(upgraded.prepare('PRAGMA foreign_key_check').all(), []);
     const app = createApplication({ db: upgraded, clock: () => 2000 });
@@ -112,5 +112,33 @@ test('schema two upgrades without changing fares, chat, read markers, reports, s
     const confirmed = app.rides.mutate({ userId: customerId, key: 'confirm-old-agreement', action: 'confirm', id: rideId, data: { expectedVersion: before.version } });
     assert.equal(confirmed.ride.status, 'booked');
     assert.deepEqual(confirmed.ride.negotiation.agreement, before.negotiation.agreement);
+  } finally { upgraded.close(); }
+});
+
+test('schema three gains calling without rewriting pickup PINs, trip activity or failed-PIN retry records', (t) => {
+  const folder = mkdtempSync(join(tmpdir(), 'taxi-ai-voice-upgrade-'));
+  t.after(() => rmSync(folder, { recursive: true, force: true }));
+  const filename = join(folder, 'existing.sqlite'), old = new DatabaseSync(filename);
+  old.exec('PRAGMA foreign_keys = ON');
+  for (const file of ['001_initial.sql', '002_chat.sql', '003_trip_lifecycle.sql']) old.exec(readFileSync(new URL(`../migrations/${file}`, import.meta.url), 'utf8'));
+  old.exec('PRAGMA user_version = 3');
+  for (const role of ['customer', 'driver']) old.prepare('INSERT INTO users (id, email, name, password_hash, role, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+    .run(role, `${role}@example.test`, role, 'test-only-hash', role, 1000);
+  old.prepare(`INSERT INTO rides (id, customer_id, driver_id, pickup_id, destination_id, suggested_fare_kobo, status, version, created_at, matched_at, updated_at)
+    VALUES ('ride', 'customer', 'driver', 'wuse-ii', 'maitama', 450000, 'agreed', 6, 1000, 1100, 1600)`).run();
+  old.prepare(`INSERT INTO ride_trips (ride_id, customer_id, driver_id, status, fare_kobo, booked_at, departed_at, arrived_at, pickup_pin, pin_failures, pin_blocked_until)
+    VALUES ('ride', 'customer', 'driver', 'arrived', 470000, 1400, 1500, 1600, '001234', 5, 62000)`).run();
+  for (const [type, time] of [['booked', 1400], ['on_way', 1500], ['arrived', 1600]]) old.prepare('INSERT INTO ride_activity (ride_id, actor_id, type, created_at) VALUES (?, ?, ?, ?)')
+    .run('ride', type === 'booked' ? 'customer' : 'driver', type, time);
+  old.prepare(`INSERT INTO idempotency (actor_id, key, fingerprint, ride_id, error_code) VALUES ('driver', 'existing-failed-pin-key', 'test-fingerprint', 'ride', 'INVALID_PICKUP_PIN')`).run();
+  const tables = old.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all().map((row) => row.name);
+  const snapshots = new Map(tables.map((name) => [name, JSON.stringify(old.prepare(`SELECT * FROM ${name}`).all())]));
+  old.close();
+  const upgraded = openDatabase(filename);
+  try {
+    assert.equal(upgraded.prepare('PRAGMA user_version').get().user_version, 4);
+    for (const name of tables) assert.equal(JSON.stringify(upgraded.prepare(`SELECT * FROM ${name}`).all()), snapshots.get(name), name);
+    for (const name of ['voice_calls', 'voice_participants', 'voice_commands']) assert.equal(upgraded.prepare(`SELECT count(*) AS n FROM ${name}`).get().n, 0);
+    assert.deepEqual(upgraded.prepare('PRAGMA foreign_key_check').all(), []);
   } finally { upgraded.close(); }
 });

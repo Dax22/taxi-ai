@@ -65,3 +65,19 @@ test('chat retries reuse the key, while intentionally sending identical text aga
   await client.command(path, data);
   assert.deepEqual(keys, ['key-1', 'key-1', 'key-2']);
 });
+
+test('call retry keys stay tied to the browser window and carry its identity on media requests', async () => {
+  const calls = []; let issued = 0;
+  const client = createApiClient({ makeKey: () => `key-${++issued}`, fetchImpl: async (path, options) => {
+    calls.push(options);
+    if (options.method === 'POST') throw new Error('Lost response');
+    return response(200, {});
+  } });
+  const path = '/api/calls/call-one/signal', data = { type: 'offer', sdp: 'same-sdp' };
+  for (const callClient of ['first-window', 'second-window', 'first-window']) {
+    await assert.rejects(client.command(path, data, { callClient }));
+  }
+  assert.deepEqual(calls.map((r) => r.headers['Idempotency-Key']), ['key-1', 'key-2', 'key-1']);
+  await client.request('/api/calls/call-one/media', { callClient: 'first-window' });
+  assert.equal(calls.at(-1).headers['X-Call-Client'], 'first-window');
+});

@@ -6,6 +6,7 @@ import { createApplication } from '../../services/api/src/application.mjs';
 import { createApiRouter } from '../../services/api/src/http/router.mjs';
 import { sendError } from '../../services/api/src/http/responses.mjs';
 import { localOrigin } from '../../services/api/src/http/security.mjs';
+import { createCallConfig } from '../../services/api/src/infrastructure/call-config.mjs';
 
 // Explicit allowlist: never serve the repository root or arbitrary disk paths.
 const routes = new Map([
@@ -19,6 +20,9 @@ const routes = new Map([
   ['/dashboard/views.mjs', ['public/dashboard/views.mjs', 'text/javascript; charset=utf-8']],
   ['/dashboard/trip-model.mjs', ['public/dashboard/trip-model.mjs', 'text/javascript; charset=utf-8']],
   ['/dashboard/trip-view.mjs', ['public/dashboard/trip-view.mjs', 'text/javascript; charset=utf-8']],
+  ['/dashboard/call-media.mjs', ['public/dashboard/call-media.mjs', 'text/javascript; charset=utf-8']],
+  ['/dashboard/call-controller.mjs', ['public/dashboard/call-controller.mjs', 'text/javascript; charset=utf-8']],
+  ['/dashboard/call-view.mjs', ['public/dashboard/call-view.mjs', 'text/javascript; charset=utf-8']],
   ['/dashboard/conversation-model.mjs', ['public/dashboard/conversation-model.mjs', 'text/javascript; charset=utf-8']],
   ['/dashboard/conversation-controller.mjs', ['public/dashboard/conversation-controller.mjs', 'text/javascript; charset=utf-8']],
   ['/dashboard/conversation-view.mjs', ['public/dashboard/conversation-view.mjs', 'text/javascript; charset=utf-8']],
@@ -32,19 +36,26 @@ const routes = new Map([
   ['/shared/fare-negotiation.mjs', ['../../packages/shared/src/fare-negotiation.mjs', 'text/javascript; charset=utf-8']],
   ['/shared/demo-booking.mjs', ['../../packages/shared/src/demo-booking.mjs', 'text/javascript; charset=utf-8']],
   ['/shared/trip-lifecycle.mjs', ['../../packages/shared/src/trip-lifecycle.mjs', 'text/javascript; charset=utf-8']],
+  ['/shared/call-lifecycle.mjs', ['../../packages/shared/src/call-lifecycle.mjs', 'text/javascript; charset=utf-8']],
 ]);
 
-export function createAppServer({ db = openDatabase(':memory:'), clock = Date.now } = {}) {
-  const handleApi = createApiRouter(createApplication({ db, clock }));
+export function createAppServer({ db = openDatabase(':memory:'), clock = Date.now, callConfig = createCallConfig() } = {}) {
+  const application = createApplication({ db, clock, callConfig });
+  const handleApi = createApiRouter(application);
+  const cleanup = setInterval(() => {
+    try { application.calls.sweep(); }
+    catch { /* Request paths retry cleanup; never log SDP or credentials. */ }
+  }, 5000);
+  cleanup.unref();
   const server = createServer(async (request, response) => {
     response.setHeader('X-Content-Type-Options', 'nosniff');
     response.setHeader('Referrer-Policy', 'no-referrer');
     response.setHeader('Cache-Control', 'no-store');
-    response.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
-    response.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+    response.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; media-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
     let pathname;
     try {
       pathname = new URL(request.url, 'http://localhost').pathname;
+      response.setHeader('Permissions-Policy', `camera=(), microphone=${pathname === '/app' && callConfig.mode !== 'off' ? '(self)' : '()'}, geolocation=()`);
     } catch {
       response.writeHead(400);
       response.end('Bad request');
@@ -82,7 +93,7 @@ export function createAppServer({ db = openDatabase(':memory:'), clock = Date.no
   });
   server.requestTimeout = 15_000;
   server.headersTimeout = 10_000;
-  server.on('close', () => db.close());
+  server.on('close', () => { clearInterval(cleanup); db.close(); });
   return server;
 }
 

@@ -138,3 +138,18 @@
 @layer responsive {
   @media (max-width: 580px) { .trip-panel { padding: 18px; } .trip-panel > .button { white-space: normal; } }
 }
+
+@layer components {
+  .calls-panel { margin-bottom: 24px; border-left: 4px solid var(--brand); }
+  .calls-panel .eyebrow { margin-bottom: 10px; }
+  .call-controls { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+  #call-mode, #call-error:not(:empty) { margin-top: 10px; }
+  #call-end { color: #9d3020; border-color: #e5b5aa; }
+  .call-history-section { border-top: 1px solid var(--line); margin-top: 20px; padding-top: 14px; }
+  .call-history-section summary { cursor: pointer; font-size: 13px; font-weight: 600; }
+  .call-history { padding: 0; list-style: none; display: grid; gap: 12px; font-size: 13px; }
+  .call-history span { display: block; margin-top: 4px; color: var(--muted); font-size: 11px; }
+}
+@layer responsive {
+  @media (max-width: 580px) { .calls-panel .card-topline { flex-wrap: wrap; } .call-controls .button { flex: 1 1 auto; } }
+}

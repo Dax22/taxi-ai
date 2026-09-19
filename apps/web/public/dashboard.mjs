@@ -4,6 +4,9 @@ import { bindAuthForm } from './dashboard/auth-form.mjs';
 import { createDashboardView } from './dashboard/views.mjs';
 import { createConversationView } from './dashboard/conversation-view.mjs';
 import { createConversationController } from './dashboard/conversation-controller.mjs';
+import { createCallMedia } from './dashboard/call-media.mjs';
+import { createCallController } from './dashboard/call-controller.mjs';
+import { createCallView } from './dashboard/call-view.mjs';
 
 // Page controller: owns session/view state and coordinates network work with UI.
 const emptyState = () => ({ user: null, rides: [], available: [], drivers: [], reports: [], chatUnread: {},
@@ -13,6 +16,15 @@ let busy = false;
 let refreshing = null;
 let serverTime = { now: Date.now(), received: performance.now() };
 const client = createApiClient({ onServerTime(now) { serverTime = { now, received: performance.now() }; } });
+const callView = createCallView({ onStart: () => calls.start(), onAnswer: () => calls.answer(),
+  onDecline: () => calls.decline(), onEnd: () => calls.end(), onMute: () => calls.mute(),
+  onOpenRide: (id) => runAction(async () => {
+    const { ride } = await client.request(`/api/rides/${id}`);
+    if (!state.rides.some((item) => item.id === id)) state.rides.unshift(ride);
+    view.select(id);
+  }),
+});
+const calls = createCallController({ client, media: createCallMedia(), view: callView });
 function rideCommand(path, data, message) {
   return runAction(async () => {
     const result = await client.rideCommand(path, data);
@@ -33,7 +45,7 @@ const conversation = createConversationController({ client, view: conversationVi
 const view = createDashboardView({
   serverNow: () => serverTime.now + performance.now() - serverTime.received,
   onCommand: rideCommand,
-  onSelectionChange: (ride) => conversation.show(ride, state.user),
+  onSelectionChange: (ride) => { calls.setContext(state.user, ride); void conversation.show(ride, state.user); },
   onHistory: (before) => runAction(async () => {
     const data = await client.request(`/api/rides/history${before ? `?before=${encodeURIComponent(before)}` : ''}`);
     const entries = before ? [...state.history, ...data.rides] : data.rides;
@@ -51,7 +63,7 @@ const authForm = bindAuthForm({ onSubmit: (path, data) => runAction(async () => 
   const result = await client.request(path, { method: 'POST', data });
   state = { ...emptyState(), user: result.user };
   client.reset(); client.setCsrf(result.csrfToken);
-  view.reset(); conversation.reset(); authForm.reset();
+  view.reset(); conversation.reset(); calls.reset(); authForm.reset();
 }) });
 
 async function refresh() {
@@ -59,9 +71,10 @@ async function refresh() {
   refreshing = (async () => {
     const session = await client.request('/api/session');
     if (state.user?.id !== session.user?.id) {
-      state = emptyState(); client.reset(); view.reset(); conversation.reset();
+      state = emptyState(); client.reset(); view.reset(); conversation.reset(); calls.reset();
     }
     state.user = session.user;
+    calls.setContext(state.user, view.selected());
     client.setCsrf(session.csrfToken);
     if (session.user?.role === 'admin') {
       const [drivers, reports] = await Promise.all([client.request('/api/admin/drivers'), client.request('/api/admin/chat-reports')]);
@@ -79,6 +92,7 @@ async function refresh() {
     }
     $('sync-status').textContent = 'Up to date · refreshes every 3s';
     view.render(state);
+    calls.setContext(state.user, view.selected());
     await conversation.show(view.selected(), state.user);
   })();
   try { await refreshing; }
@@ -117,11 +131,14 @@ async function poll() {
 }
 
 $('logout').addEventListener('click', () => runAction(async () => {
+  calls.reset();
   await client.request('/api/auth/logout', { method: 'POST' });
   state = emptyState(); client.reset(); view.reset(); conversation.reset(); view.render(state);
 }));
 $('refresh').addEventListener('click', () => runAction(() => refresh()));
 document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });
-setInterval(() => { view.tick(); conversationView.tick(); }, 1000);
+window.addEventListener('pagehide', () => calls.shutdown());
+setInterval(() => { view.tick(); conversationView.tick(); calls.tick(); }, 1000);
+setInterval(() => { if (!document.hidden || calls.hasMedia()) void calls.poll(); }, 2000);
 setInterval(poll, 3000);
 poll();

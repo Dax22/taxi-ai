@@ -25,6 +25,7 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
     $('fare-expiry').textContent = ride?.status === 'negotiating' && offer
       ? remaining > 0 ? `Offer expires in ${Math.ceil(remaining / 1000)} seconds.` : 'This offer expired. Send a new offer to continue.' : '';
     for (const button of document.querySelectorAll('button')) {
+      if (button.closest('#calls-panel')) continue; // Hang-up stays usable during unrelated ride/chat commands.
       button.disabled = busy || button.dataset.locked === 'true';
     }
     $('request-fields').disabled = busy || state.rides.some((item) => isActiveRide(item.status));

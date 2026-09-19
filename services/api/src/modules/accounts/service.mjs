@@ -87,5 +87,6 @@ export function createAccountsService({ repository, driverProfiles, passwords, t
     });
   }
 
-  return Object.freeze({ profile, register, login, issueSession, sessionFor, revokeSession, bootstrapAdmin });
+  return Object.freeze({ profile, register, login, issueSession, sessionFor, revokeSession, bootstrapAdmin,
+    sessionOwner: (hash) => repository.findSession(hash, clock())?.userId ?? null });
 }
