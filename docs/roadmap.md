@@ -102,10 +102,23 @@ setup is paused while the account payment issue is resolved.
 Follow [the matching guide](matching.md) to test in VS Code without hosting.
 Real browser, device location and end-to-end voice review remains outstanding.
 
-## 2h — Real ride pilot
+## 2h — Simulated payments and earnings (implemented; browser/printing review pending)
+
+- A completed ride creates an unpaid record using the exact booked fare.
+- Customer-controlled local success/failure simulation, versioned attempts and safe retries.
+- Saved participant receipts, printable with clear simulation notices.
+- Driver all-time gross/simulated-paid/outstanding totals and paginated trip records.
+- Administrator payment metadata, schema-seven preservation and completed-trip backfill.
+- Simulation writes disabled in staging; no provider credentials, real funds or payouts.
+
+Follow [the payments guide](payments.md) for local testing and manual review.
+Paystack test integration follows account setup and a separate provider milestone.
+Alibaba Cloud hosting remains paused.
+
+## 2i — Real ride pilot
 
 Harden authentication and hosting; add verified driver onboarding, production mapping, vehicle
-matching, operational booking state, receipts and payment-provider integration. Implement authenticated
+matching, operational booking state, verified payment-provider integration and live receipts. Implement authenticated
 production messaging operations and validate the voice relay on target networks/devices. Exercise concurrency, permission checks and
 recovery from interrupted requests before enabling real transactions.
 

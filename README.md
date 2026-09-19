@@ -9,7 +9,8 @@ accounts** at `/app`. Customers choose an Abuja address or map pin, preview a ro
 route and request a test journey; an approved online driver near the pickup can
 select the request, make offers and agree a fare with the customer from a separate
 browser session. The customer can confirm a booking, and the driver can record
-arrival, verify the pickup PIN, start and complete the test trip.
+arrival, verify the pickup PIN, start and complete the test trip. Customers can then
+simulate payment and view a saved receipt; drivers can check their earnings preview.
 Accounts, requests, trip history and agreements survive refresh
 and server restart. Dashboards refresh every three seconds while visible.
 
@@ -41,10 +42,12 @@ approval grants test access; it does not verify identity or vehicle documents.
   indicators and cleanup on stop, session expiry and trip closure.
 - Optional private staging mode with an HTTPS gateway, invited tester access,
   secure cookies, operational health/logging and backup/restore commands.
+- Local simulated payments at the exact agreed fare, saved printable receipts,
+  driver gross-fare/paid/outstanding totals and administrator payment records.
 - The original in-browser fare demo and terminal example remain available.
 
 **Still planned:** production calling, verified identity and driver
-documents, production mapping/tracking, actual dispatch, payments/receipts, password
+documents, production mapping/tracking, actual dispatch, real payment-provider integration and payouts, password
 recovery, food/vendor ordering, motorcycle courier delivery, AI estimators and
 native iOS/Android apps. Autonomous taxis remain **Coming soon**, with no launch date.
 
@@ -120,8 +123,14 @@ an HTTP endpoint. Additional administrators and account recovery are not built y
    device watcher immediately. GPS controls work independently of online tiles.
 6. The driver clicks **On my way**, then **I have arrived**, enters the customer’s
    PIN and starts the trip. The driver then clicks **Complete trip**.
-7. Check Trip history in both accounts. Refresh and restart the server; saved
-   fare, trip activity and chat remain. No vehicle is dispatched or payment taken.
+7. In the customer’s completed trip, select **Start test payment**, then
+   **Simulate failure**. Retry with a new attempt and choose **Simulate success**.
+   Check the receipt in both accounts and the driver’s **Your earnings preview**.
+8. Refresh and restart the server; fare, trip activity, chat, payment state and
+   receipts remain. No vehicle is dispatched or real payment taken.
+
+Read [the payments guide](docs/payments.md) for controls, exact amounts, receipts,
+driver totals and manual print/browser review.
 
 Read [the matching guide](docs/matching.md) for local testing, permission, radius,
 timeouts and manual validation. Read [the trip guide](docs/trips.md) for cancellation, pickup verification,
@@ -155,8 +164,10 @@ automatically at startup. `npm run backup -- /absolute/new-backup.sqlite` makes 
 validated copy without changing the source. See [staging and recovery](docs/staging.md)
 for restore, transient-data removal, scheduling and off-host backup requirements.
 
-The matching milestone upgrades the database from schema 1–5 to 6 without resetting
-existing records or automatically booking old agreements. Old unclaimed requests
+The payment milestone upgrades schema 1–6 to 7 without resetting existing records
+or automatically booking old agreements. Completed trips receive unpaid simulation
+records; no successful payment or receipt is invented. Back up with the previous
+release before starting the new release on saved data. Old unclaimed requests
 receive a five-minute deadline and expire on the next sweep if already overdue. Earlier branches cannot
 open the upgraded database; use a separate test database when comparing versions.
 
@@ -181,6 +192,8 @@ review a deployment; the Docker image deliberately refuses an incomplete setup.
 | `services/api/src/modules/chat/` | Participant-only messages, unread cursors, retry keys and reports |
 | `services/api/src/modules/calls/` | Call lifecycle, participant/window ownership and temporary audio signaling |
 | `services/api/src/modules/locations/` | Saved route quotes, fare suggestions and driver location sharing |
+| `services/api/src/modules/availability/` | Driver availability and matching leases |
+| `services/api/src/modules/payments/` | Simulated attempts, receipts, driver totals and payment records |
 | `services/api/src/http/` | Request parsing, routing, cookies and response mapping |
 | `services/api/src/infrastructure/` | Database, password, token, audit and rate-limit adapters |
 | `services/api/migrations/` | Versioned SQLite schema |
@@ -205,7 +218,7 @@ The terminal example runs with `npm run demo`. Read [the architecture](docs/arch
 
 ## Development and review
 
-The latest development branch for this milestone is `feat/driver-matching`.
+The latest development branch for this milestone is `feat/simulated-payments`.
 Read [CONTRIBUTING.md](CONTRIBUTING.md) for the GitHub/VS Code workflow and where
 new code belongs. `npm run check` validates syntax and module conventions;
 `npm test` checks behaviour; `npm run verify` runs both. GitHub Actions is configured

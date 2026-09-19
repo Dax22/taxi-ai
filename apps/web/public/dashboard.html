@@ -70,6 +70,14 @@
           <section class="sidebar-note"><p class="eyebrow">A CLEAR AGREEMENT</p><p>Either person can make an offer. The other person must accept that exact price before the fare is agreed.</p><p class="small-note">Chat and audio calls stay in Taxi Ai. Phone numbers are not exchanged. Discussing a price by voice still needs an accepted offer in the app.</p></section>
         </aside>
         <div class="ride-workspace">
+          <section id="earnings-panel" class="account-card earnings-panel" hidden aria-labelledby="earnings-title">
+            <div class="card-topline"><h2 id="earnings-title">Your earnings preview</h2><span class="status-badge">SIMULATED</span></div>
+            <p class="small-note">Completed trip fares before fees. These are test records: no money has been collected or paid out, and no withdrawal balance is available.</p>
+            <div class="earnings-metrics"><div><span>Gross completed fares</span><strong id="earnings-gross">—</strong></div><div><span>Simulated paid</span><strong id="earnings-paid">—</strong></div><div><span>Awaiting successful simulation</span><strong id="earnings-outstanding">—</strong></div></div>
+            <p id="earnings-count" class="small-note"></p><p id="earnings-error" class="error-text" role="alert"></p>
+            <h3>Completed trips</h3><div id="earnings-list" class="payment-list"></div>
+            <div class="payment-pagination"><button id="earnings-latest" type="button" class="button button-outline button-small" disabled>Newest trips</button><button id="earnings-older" type="button" class="button button-outline button-small" disabled>Older trips</button></div>
+          </section>
           <section id="availability-panel" class="account-card availability-panel" hidden aria-labelledby="availability-title">
             <div class="card-topline"><h2 id="availability-title">Your availability</h2><span id="availability-status" class="status-badge" role="status">Offline</span></div>
             <p id="availability-guidance" class="supporting-copy"></p>
@@ -108,6 +116,20 @@
             <section id="trip-activity" class="history-section" hidden aria-labelledby="trip-activity-title"><h3 id="trip-activity-title">Trip activity</h3><ol id="trip-timeline" class="trip-timeline"></ol></section>
             <div id="live-history" class="history-section" hidden><h3>Fare history</h3><ol id="live-offer-history"></ol></div>
           </section>
+          <section id="payment-panel" class="account-card payment-panel" hidden aria-labelledby="payment-title">
+            <div class="card-topline"><h2 id="payment-title">Trip payment</h2><span id="payment-status" class="status-badge" role="status"></span></div>
+            <p class="payment-simulation-note">SIMULATION ONLY · No money moves. Do not enter card or bank details.</p>
+            <div class="payment-total"><span>Agreed fare</span><strong id="payment-amount">—</strong></div>
+            <p id="payment-guidance" class="supporting-copy"></p><p id="payment-reference" class="small-note"></p>
+            <p id="payment-error" class="error-text" role="alert"></p><p id="payment-notice" class="small-note" role="status"></p>
+            <button id="payment-start" type="button" class="button button-primary" hidden>Start test payment</button>
+            <div id="payment-outcomes" class="payment-actions" hidden><button id="payment-success" type="button" class="button button-primary">Simulate success</button><button id="payment-failure" type="button" class="button button-outline">Simulate failure</button></div>
+            <section id="payment-receipt" class="payment-receipt" hidden aria-labelledby="receipt-title">
+              <p class="eyebrow">TAXI AI / ABUJA</p><h3 id="receipt-title">Simulated trip receipt</h3><p class="payment-simulation-note">SIMULATED RECEIPT — NO MONEY MOVED</p>
+              <dl id="receipt-details" class="receipt-details"></dl><p class="small-note">This test receipt records a simulation. It is not proof of an actual payment.</p>
+              <button id="receipt-print" type="button" class="button button-outline button-small">Print / save as PDF</button>
+            </section>
+          </section>
           <section id="chat-panel" class="account-card chat-panel" hidden aria-labelledby="chat-title">
             <div class="card-topline"><div><p class="eyebrow">YOUR CONVERSATION</p><h2 id="chat-title">Your conversation</h2></div><span id="chat-unread" class="status-badge" role="status"></span></div>
             <p id="chat-waiting" class="supporting-copy">Chat opens when a driver starts your negotiation.</p>
@@ -125,6 +147,12 @@
           <section class="account-card" aria-labelledby="trip-history-title"><div class="card-topline"><h2 id="trip-history-title">Trip history</h2><span id="history-count" class="small-note"></span></div><p class="small-note">Completed, cancelled and expired journeys, newest first.</p><button id="history-refresh" type="button" class="text-link history-refresh">Refresh history</button><div id="history-list" class="request-list"></div><button id="history-more" type="button" class="button button-outline button-full" hidden>Load older trips</button></section>
         </div>
       </div>
+      <section id="payments-admin-panel" class="account-card payments-admin-panel" hidden aria-labelledby="admin-payments-title">
+        <div class="card-topline"><h2 id="admin-payments-title">Payment records</h2><span class="status-badge">SIMULATED</span></div>
+        <p class="small-note">Completed trips and their latest payment attempts. These test records do not represent collected funds or driver payouts.</p>
+        <p id="admin-payments-error" class="error-text" role="alert"></p><div id="admin-payments-list" class="payment-list"></div>
+        <div class="payment-pagination"><button id="admin-payments-latest" type="button" class="button button-outline button-small" disabled>Newest trips</button><button id="admin-payments-older" type="button" class="button button-outline button-small" disabled>Older trips</button></div>
+      </section>
       <section id="admin-dashboard" class="account-card" hidden aria-labelledby="applications-title"><div class="card-topline"><h2 id="applications-title">Driver applications</h2><span class="status-badge">LOCAL TESTING</span></div><p class="supporting-copy">Review the name and car details before granting access to test requests. This approval does not verify identity, licences or vehicle documents.</p><div id="driver-applications" class="request-list"></div></section>
       <section id="chat-reports-panel" class="account-card chat-reports-panel" hidden aria-labelledby="chat-reports-title"><div class="card-topline"><h2 id="chat-reports-title">Reported messages</h2><span class="status-badge">LOCAL REVIEW</span></div><p class="supporting-copy">Review the reported message and reason. Marking a report reviewed does not block an account or resolve a safety incident.</p><div id="chat-reports-list" class="request-list"></div></section>
     </section>

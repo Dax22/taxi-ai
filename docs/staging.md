@@ -253,13 +253,14 @@ testers or marking the consolidation ready to merge:
    tests are not proof of working audio. No native apps/background GPS are included.
 5. Record results and failures in the PR. Keep test rides labelled and restrict
    access to invited testers. Verified onboarding, account recovery, dispatch,
-   production safety operations, payments and delivery workflows remain future work.
+   production safety operations, live payments and delivery workflows remain future work.
 
 ## Availability in the matching release
 
-The matching release upgrades storage to schema 6. Preserve a schema-five backup
-with the previous release before upgrading. Current backup commands require the
-current schema; use the matching release and its restore guide for recovery.
+Matching introduced schema 6; the payments release advances it to schema 7.
+Preserve a backup with the previous release before upgrading. Current backup
+commands require schema 7; use the matching release for a schema-six restore,
+then upgrade a separate copy if needed.
 Availability positions and ownership are removed from snapshots.
 
 Sample-area matching and new sample requests are local-only. Hosted staging
@@ -267,3 +268,13 @@ requires fresh Abuja GPS and provider-backed route requests. With maps disabled,
 users cannot create new routed requests; configure the provider for a hosted ride
 test. Availability GPS does not enable map tiles or trip tracking automatically.
 See [matching](matching.md) for controls, expiry and device review.
+
+## Payments in private staging
+
+Completed hosted test trips receive unpaid simulation records, but both payment
+start and result simulation endpoints return 403 in staging. Existing simulation
+records/receipts remain readable and clearly labelled. No Paystack keys, webhook
+URL, hosted checkout or real payment processing are configured. Payment testing
+for this milestone is local; see [payments](payments.md). Backups retain the
+payment, attempt, receipt and retry records while clearing transient access and
+location state. Future live data must be separated from these preview records.

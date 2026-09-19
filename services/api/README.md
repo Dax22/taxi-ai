@@ -20,7 +20,7 @@ implements SQLite, password/token operations, audit and rate limits. `src/shared
 contains small common errors, validation and authorization policies. See
 [the architecture](../../docs/architecture.md) for ownership and transaction contracts.
 
-Ordered migrations add chat, trip, call, location and availability tables, bringing the schema to version 6.
+Ordered migrations add chat, trip, call, location, availability and payment tables, bringing the schema to version 7.
 The `data/taxi-ai.sqlite` location, existing test accounts, sessions and rides are
 preserved. No reset is required. Earlier code refuses the upgraded file; use a separate database when comparing branches.
 
@@ -68,7 +68,7 @@ it. See [the Node 22.12 documentation](https://nodejs.org/download/release/v22.1
 `requested → negotiating → agreed` remains the fare flow. Customer confirmation
 creates a booked trip, followed by driver departure, arrival, PIN-verified start
 and completion. Cancellation is allowed before starting; an agreed fare remains
-immutable even after cancellation. Actual dispatch and payment remain planned.
+immutable even after cancellation. Actual dispatch and live payment collection remain planned; local simulated payments are implemented.
 See [the trip contract](../../docs/trips.md) for transitions, PIN privacy/limits,
 idempotent failed guesses, cancellation and cursor-based history.
 
@@ -214,3 +214,13 @@ window ownership, GPS freshness, sample-mode isolation, radius expansion and
 request expiry. `GET /api/rides` now lists eligible requests only; approval alone
 does not expose the request pool. The `expired` API status is terminal and appears
 in customer history. Availability coordinates are never returned by the API.
+
+## Payments and earnings
+
+`modules/payments/` owns local-only simulation, one bill per completed ride,
+versioned attempts, immutable successful receipts and paginated driver/admin
+views. Completion creates the unpaid record in the ride transaction. The server
+uses the saved booking fare and verifies the pure simulator’s response; no real
+provider is connected. Staging rejects simulation writes. See the
+[payment contract](../../docs/payments.md) for endpoints, money encoding, retry
+semantics, schema-seven backfill, privacy and future provider requirements.
