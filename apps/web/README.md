@@ -58,7 +58,8 @@ session. Refreshing the browser reloads saved requests from the server.
 
 `server.mjs` serves an explicit file allowlist and `/api` from the same origin. It
 never serves repository configuration or database files. Host/Origin checks permit
-only its loopback addresses. CSP permits same-origin scripts, styles and API
+only loopback addresses by default. Staging mode uses one configured HTTPS
+origin, a gateway token and invited tester access. CSP permits same-origin scripts, styles and API
 connections, plus images from the configured tile origin. Inline code and
 embedding are disabled. Microphone permission
 is enabled only on `/app` while calling is enabled; acquisition requires a Call
@@ -105,5 +106,10 @@ local server/file previews; visual and browser interaction review is outstanding
 11. Follow [the location review steps](../../docs/locations.md#manual-review) for
     maps, address results, keyboard pins, route quotes and permission-based GPS.
     Live provider connectivity and browser/device GPS are not established by
-    the automated fixtures. This server remains local-only; mobile layout checks
+    the automated fixtures. The default server remains local-only; mobile layout checks
     do not constitute an installed iOS/Android app or background tracking test.
+
+The [staging guide](../../docs/staging.md) provides a separate private hosting
+configuration for real device review. It is not deployed automatically by GitHub
+CI. Invited testers pass a browser access prompt, then use ordinary Taxi Ai
+accounts; signing out of an account does not clear the browser's cached tester key.

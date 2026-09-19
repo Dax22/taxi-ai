@@ -13,7 +13,7 @@ arrival, verify the pickup PIN, start and complete the test trip.
 Accounts, requests, trip history and agreements survive refresh
 and server restart. Dashboards refresh every three seconds while visible.
 
-This is a **local development prototype**, not a launched transport service.
+This is a **development prototype**, not a launched transport service.
 Use test details. Fares are fictional examples and all requests are test requests.
 Drivers can explicitly share their browser-reported location during a confirmed
 test trip. There is no live dispatch or payment. Driver
@@ -36,6 +36,8 @@ approval grants test access; it does not verify identity or vehicle documents.
   determines the final fare. Quotes expire after 15 minutes.
 - Permission-based driver GPS, visible only to assigned participants, with stale
   indicators and cleanup on stop, session expiry and trip closure.
+- Optional private staging mode with an HTTPS gateway, invited tester access,
+  secure cookies, operational health/logging and backup/restore commands.
 - The original in-browser fare demo and terminal example remain available.
 
 **Still planned:** production calling, verified identity and driver
@@ -141,15 +143,21 @@ password hashes and ride history do not.
 
 `TAXI_AI_DB=/absolute/path/to/test.sqlite npm run dev` selects another database.
 Use the same variable for `npm run admin` when using a custom path. Migrations run
-automatically at startup. There is no production backup/retention process yet.
+automatically at startup. `npm run backup -- /absolute/new-backup.sqlite` makes a
+validated copy without changing the source. See [staging and recovery](docs/staging.md)
+for restore, transient-data removal, scheduling and off-host backup requirements.
 
 The location milestone upgrades the database from schema 1–4 to 5 without resetting
 existing records or automatically booking old agreements. Earlier branches cannot
 open the upgraded database; use a separate test database when comparing versions.
 
-The server listens on **127.0.0.1 only** and accepts its localhost origins. The
-current HTTP cookies and authentication setup are for local development. Read
-[the backend notes](services/api/README.md) before planning public hosting.
+By default the server listens on **127.0.0.1** and accepts localhost origins.
+The optional `TAXI_AI_MODE=staging` requires a configured HTTPS origin, private
+gateway token, invited tester access file and explicit persistent database path.
+It uses secure host-only cookies. The Docker/Caddy reference setup publishes only
+the HTTPS gateway; the app port remains internal. No host, domain or cloud account
+has been provisioned. Follow [the staging guide](docs/staging.md) to configure and
+review a deployment; the Docker image deliberately refuses an incomplete setup.
 
 ## Project layout
 
@@ -171,6 +179,9 @@ current HTTP cookies and authentication setup are for local development. Read
 | `packages/shared/` | Fare rules, trip lifecycle vocabulary, money helpers and sample-area fixtures |
 | `scripts/create-admin.mjs` | Local first-administrator setup |
 | `scripts/check.mjs` | Syntax, imports and module-boundary checks |
+| `deploy/staging/` | Private Docker Compose/Caddy deployment configuration |
+| `scripts/database-snapshot.mjs` | Checked backups/restores into new files |
+| `scripts/staging-access.mjs` | Add/remove invited tester access keys |
 | `.github/workflows/ci.yml` | Automated verification on Node 22.12.0 and 24 |
 | `apps/customer/`, `apps/driver/` | Native-app planning notes |
 | `docs/` | Requirements, architecture, roadmap and approved brand |
@@ -185,11 +196,13 @@ The terminal example runs with `npm run demo`. Read [the architecture](docs/arch
 
 ## Development and review
 
-The latest development branch for this milestone is `feat/abuja-locations`.
+The latest development branch for this milestone is `feat/private-staging`.
 Read [CONTRIBUTING.md](CONTRIBUTING.md) for the GitHub/VS Code workflow and where
 new code belongs. `npm run check` validates syntax and module conventions;
 `npm test` checks behaviour; `npm run verify` runs both. GitHub Actions is configured
 to run verification on pushes and pull requests.
+An additional container job validates Caddy configuration and tests protected
+access, secure cookies, persistent restart, health and graceful shutdown.
 
 Use a branch and pull request for changes. Saving in VS Code is local; commit and
 push to upload changes to GitHub. Existing milestone branches hold work that has

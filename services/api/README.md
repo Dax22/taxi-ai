@@ -4,6 +4,8 @@
 It uses `node:sqlite` with explicit schema migrations and no third-party runtime
 dependencies. This milestone is a local prototype, not a production auth service
 or transport dispatch system.
+Optional private hosting uses a separate staging mode documented in
+[the deployment guide](../../docs/staging.md). Local behaviour remains the default.
 
 ## Code boundaries
 
@@ -30,8 +32,9 @@ preserved. No reset is required. Earlier code refuses the upgraded file; use a s
   [OWASP password storage guidance](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html).
 - Sessions: random 256-bit tokens, SHA-256 token hashes in the database, 12-hour
   expiry, rotation at login and server-side logout. The browser receives an
-  HttpOnly, SameSite=Strict cookie; no auth tokens go into local storage.
-- CSRF: exact loopback Host/Origin checks, JSON writes and a session-bound CSRF
+  HttpOnly, SameSite=Strict cookie; staging adds Secure and a host-only cookie name.
+  No auth tokens go into local storage.
+- CSRF: exact configured Host/Origin checks, JSON writes and a session-bound CSRF
   header for authenticated mutations. Login/registration also require Origin.
 - Authorization: actors and roles come from the session/database. Only an approved
   driver can claim; only the customer and assigned driver can negotiate or read
@@ -49,6 +52,13 @@ preserved. No reset is required. Earlier code refuses the upgraded file; use a s
 - Persistence: SQLite foreign keys, CHECK/unique constraints, WAL, full synchronous
   durability and short `BEGIN IMMEDIATE` write transactions. Database schema version
   is checked on startup; a newer unsupported schema is rejected.
+- Private staging: all website/API traffic requires an authenticated HTTPS
+  gateway and an invited tester key before account authorization. Only the
+  gateway's single overwritten client address is used for auth rate limiting.
+  Raw forwarded host headers are ignored. Direct app ports must remain private.
+- Operations: internal liveness/readiness checks, bounded graceful shutdown and
+  allowlisted JSON logs with request IDs. Backup/restore snapshots keep persistent
+  business records and clear sessions, call setup, shared GPS and unused quotes.
 
 The SQLite API requires `--experimental-sqlite` on Node 22.12; npm scripts include
 it. See [the Node 22.12 documentation](https://nodejs.org/download/release/v22.12.0/docs/api/sqlite.html).
@@ -162,7 +172,8 @@ retention, privacy and validation limits.
 
 ## Before public hosting or a real pilot
 
-Select a production authentication approach with email/phone verification,
+The staging configuration is for an invited test group. Before a real pilot,
+select a production authentication approach with email/phone verification,
 account recovery and appropriate MFA. Add HTTPS with Secure cookies, reviewed
 host/proxy configuration, distributed abuse protection, session management,
 monitoring, database backup/restore, retention/deletion and operational access

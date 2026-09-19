@@ -29,14 +29,14 @@ switching. Do not discard them to make a checkout succeed. With a clean working
 tree, run:
 
 ```bash
-git switch feat/abuja-locations
-git pull --ff-only origin feat/abuja-locations
+git switch feat/private-staging
+git pull --ff-only origin feat/private-staging
 npm run verify
 ```
 
 Git normally creates a tracking branch when the name exists only on `origin`.
 If the switch reports an ambiguous branch name, explicitly use
-`git switch --track origin/feat/abuja-locations` for the first checkout.
+`git switch --track origin/feat/private-staging` for the first checkout.
 
 ## Save your own changes to GitHub
 

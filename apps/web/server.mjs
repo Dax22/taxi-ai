@@ -4,10 +4,14 @@ import { pathToFileURL } from 'node:url';
 import { openDatabase } from '../../services/api/src/infrastructure/database.mjs';
 import { createApplication } from '../../services/api/src/application.mjs';
 import { createApiRouter } from '../../services/api/src/http/router.mjs';
-import { sendError } from '../../services/api/src/http/responses.mjs';
-import { localOrigin } from '../../services/api/src/http/security.mjs';
+import { sendError, json } from '../../services/api/src/http/responses.mjs';
+import { requestContext, requireStagingAccess, isInternalHealth } from '../../services/api/src/http/security.mjs';
 import { createCallConfig } from '../../services/api/src/infrastructure/call-config.mjs';
 import { createMapProvider } from '../../services/api/src/infrastructure/map-provider.mjs';
+import { createRuntimeConfig } from '../../services/api/src/infrastructure/runtime-config.mjs';
+import { createHealth } from '../../services/api/src/infrastructure/health.mjs';
+import { createTelemetry } from '../../services/api/src/infrastructure/telemetry.mjs';
+import { check } from '../../services/api/src/shared/errors.mjs';
 
 // Explicit allowlist: never serve the repository root or arbitrary disk paths.
 const routes = new Map([
@@ -46,20 +50,28 @@ const routes = new Map([
   ['/shared/locations.mjs', ['../../packages/shared/src/locations.mjs', 'text/javascript; charset=utf-8']],
 ]);
 
-export function createAppServer({ db = openDatabase(':memory:'), clock = Date.now, callConfig = createCallConfig(), mapProvider = createMapProvider() } = {}) {
+export function createAppServer({ runtime = createRuntimeConfig({}), db = openDatabase(runtime.mode === 'staging' ? runtime.database : ':memory:'),
+  clock = Date.now, callConfig = createCallConfig({ ...process.env, TAXI_AI_CALLS_MODE: process.env.TAXI_AI_CALLS_MODE ?? (runtime.mode === 'staging' ? 'off' : 'local') }),
+  mapProvider = createMapProvider({ env: { ...process.env, TAXI_AI_MAPS_MODE: process.env.TAXI_AI_MAPS_MODE ?? (runtime.mode === 'staging' ? 'off' : 'community') } }),
+  telemetry = createTelemetry({ enabled: runtime.mode === 'staging' }) } = {}) {
+  if (runtime.mode === 'staging' && callConfig.mode === 'local') throw new Error('Staging calls require off or a configured relay.');
   const application = createApplication({ db, clock, callConfig, mapProvider });
-  const handleApi = createApiRouter(application);
+  const handleApi = createApiRouter(application, { secure: runtime.mode === 'staging' });
+  const health = createHealth(db);
   const cleanup = setInterval(() => {
     try { application.calls.sweep(); application.locations.sweep(); }
-    catch { /* Request paths retry cleanup; never log SDP or credentials. */ }
+    catch { telemetry.event('maintenance_failed'); }
   }, 5000);
   cleanup.unref();
   const server = createServer(async (request, response) => {
+    let pathname = '';
+    telemetry.observe(request, response, () => pathname);
     response.setHeader('X-Content-Type-Options', 'nosniff');
     response.setHeader('Referrer-Policy', 'no-referrer');
     response.setHeader('Cache-Control', 'no-store');
+    response.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
+    if (runtime.mode === 'staging') response.setHeader('Strict-Transport-Security', 'max-age=86400');
     response.setHeader('Content-Security-Policy', `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'${mapProvider.mode === 'off' ? '' : ` ${mapProvider.tileOrigin}`}; media-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'`);
-    let pathname;
     try {
       pathname = new URL(request.url, 'http://localhost').pathname;
       if (pathname === '/app' && mapProvider.mode !== 'off') response.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
@@ -70,9 +82,21 @@ export function createAppServer({ db = openDatabase(':memory:'), clock = Date.no
       return;
     }
     try {
-      localOrigin(request);
+      let context;
+      if (!isInternalHealth(request, pathname)) {
+        context = requestContext(request, runtime);
+        requireStagingAccess(request, response, runtime);
+      }
+      if (['/health/live', '/health/ready'].includes(pathname)) {
+        check(['GET', 'HEAD'].includes(request.method), 'METHOD_NOT_ALLOWED', 'Use GET or HEAD.');
+        const ok = pathname === '/health/live' || health.ready();
+        if (request.method === 'HEAD') { response.writeHead(ok ? 200 : 503); response.end(); }
+        else json(response, ok ? 200 : 503, { status: ok ? pathname === '/health/live' ? 'alive' : 'ready' : 'unavailable' });
+        return;
+      }
+      check(!health.draining(), 'SERVER_DRAINING', 'Taxi Ai is restarting. Please retry shortly.');
       if (pathname.startsWith('/api/')) {
-        await handleApi({ request, response, pathname });
+        await handleApi({ request, response, pathname, ...context });
         return;
       }
     } catch (error) {
@@ -101,28 +125,39 @@ export function createAppServer({ db = openDatabase(':memory:'), clock = Date.no
   });
   server.requestTimeout = 15_000;
   server.headersTimeout = 10_000;
+  server.beginShutdown = () => { health.beginShutdown(); clearInterval(cleanup); };
   server.on('close', () => { clearInterval(cleanup); db.close(); });
   return server;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const port = Number(process.env.PORT ?? 3000);
-  if (!Number.isInteger(port) || port < 1 || port > 65535) {
-    console.error('PORT must be an integer between 1 and 65535.');
-    process.exitCode = 1;
-  } else {
-    const server = createAppServer({ db: openDatabase() });
+  let db;
+  try {
+    const runtime = createRuntimeConfig();
+    const telemetry = createTelemetry();
+    db = openDatabase(runtime.database);
+    const server = createAppServer({ runtime, db, telemetry });
     server.on('error', (error) => {
-      console.error(error.code === 'EADDRINUSE'
-        ? `Port ${port} is busy. Try: PORT=3001 npm run dev`
-        : `Could not start Taxi Ai: ${error.message}`);
+      telemetry.event('server_failed');
+      console.error(error.code === 'EADDRINUSE' ? 'Taxi Ai port is already in use.' : 'Unable to listen on the configured address.');
+      db.close();
       process.exitCode = 1;
     });
-    server.listen(port, '127.0.0.1', () => {
-      console.log(`Taxi Ai: http://localhost:${port} — accounts and ride requests at /app`);
-      console.log('Local development only. Requests are saved on this computer. No real dispatch or payments.');
-      console.log('Press Ctrl+C to stop.');
+    server.listen(runtime.port, runtime.host, () => {
+      telemetry.event('server_started');
+      if (runtime.mode === 'local') console.log(`Taxi Ai: http://localhost:${runtime.port}/app — development preview. Press Ctrl+C to stop.`);
     });
-    for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => server.close());
+    let stopping = false;
+    for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => {
+      if (stopping) return; stopping = true;
+      telemetry.event('server_stopping'); server.beginShutdown();
+      const deadline = setTimeout(() => { telemetry.event('shutdown_timeout'); server.closeAllConnections(); process.exitCode = 1; }, 20_000);
+      deadline.unref();
+      server.close(() => clearTimeout(deadline));
+    });
+  } catch {
+    db?.close();
+    console.error('Taxi Ai could not start. Check runtime configuration and storage permissions; run npm run config:check for configuration errors.');
+    process.exitCode = 1;
   }
 }

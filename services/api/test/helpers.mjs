@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
+import { request as httpRequest } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -14,13 +15,25 @@ export const bootstrapAdmin = (db, email) => createApplication({ db }).accounts.
 // Test fixtures only. No accounts or passwords are seeded into the application.
 export const PASSWORD = 'A long test-only password 123';
 
-export async function harness(t, { persistent = false, callConfig = createCallConfig({}), mapProvider } = {}) {
+// Node fetch may normalize Host; use the real HTTP header in gateway tests.
+export function httpFetch(url, options = {}) {
+  return new Promise((resolve, reject) => {
+    const request = httpRequest(url, { method: options.method ?? 'GET', headers: options.headers }, (response) => {
+      const chunks = []; response.on('data', (chunk) => chunks.push(chunk)); response.on('error', reject);
+      response.on('end', () => resolve(new Response(Buffer.concat(chunks), { status: response.statusCode,
+        headers: Object.fromEntries(Object.entries(response.headers).map(([key, value]) => [key, Array.isArray(value) ? value.join(', ') : value])) })));
+    });
+    request.on('error', reject); request.end(options.body);
+  });
+}
+
+export async function harness(t, { persistent = false, callConfig = createCallConfig({}), mapProvider, runtime, gatewayHeaders = {}, telemetry } = {}) {
   const folder = persistent ? await mkdtemp(join(tmpdir(), 'taxi-ai-test-')) : null;
   const filename = folder ? join(folder, 'test.sqlite') : ':memory:';
   let now = 1_000_000, server, db, base, stopped = true;
   async function start() {
     db = openDatabase(filename);
-    server = createAppServer({ db, clock: () => now, callConfig, mapProvider });
+    server = createAppServer({ db, clock: () => now, callConfig, mapProvider, runtime, telemetry });
     server.listen(0, '127.0.0.1');
     await once(server, 'listening');
     base = `http://127.0.0.1:${server.address().port}`;
@@ -33,15 +46,16 @@ export async function harness(t, { persistent = false, callConfig = createCallCo
   }
   await start();
   t.after(async () => { await stop(); if (folder) await rm(folder, { recursive: true, force: true }); });
-  return { get db() { return db; }, get base() { return base; },
+  return { get db() { return db; }, get base() { return base; }, get filename() { return filename; },
+    beginShutdown() { server.beginShutdown(); },
     advance(ms) { now += ms; }, async restart() { await stop(); await start(); },
     client() {
       const client = { cookie: '', csrf: '', user: null };
       client.send = async (path, { method = 'GET', data, headers = {}, rawBody } = {}) => {
-        const requestHeaders = { ...(client.cookie ? { Cookie: client.cookie } : {}),
-          ...(method === 'POST' ? { Origin: base, 'Content-Type': 'application/json', 'X-CSRF-Token': client.csrf } : {}), ...headers };
+        const requestHeaders = { ...gatewayHeaders, ...(client.cookie ? { Cookie: client.cookie } : {}),
+          ...(method === 'POST' ? { Origin: runtime?.publicOrigin ?? base, 'Content-Type': 'application/json', 'X-CSRF-Token': client.csrf } : {}), ...headers };
         for (const key of Object.keys(requestHeaders)) if (requestHeaders[key] === null) delete requestHeaders[key];
-        const response = await fetch(base + path, { method, headers: requestHeaders,
+        const response = await (runtime?.mode === 'staging' ? httpFetch : fetch)(base + path, { method, headers: requestHeaders,
           ...(method === 'POST' ? { body: rawBody ?? JSON.stringify(data ?? {}) } : {}) });
         const cookie = response.headers.get('set-cookie');
         if (cookie) client.cookie = cookie.split(';')[0];

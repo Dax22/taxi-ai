@@ -77,7 +77,21 @@ Follow [the location guide](locations.md) for public-provider limits and manual
 checks. No claim of verified live routes, browser GPS or production tracking is
 made by fixture tests. The server still binds to loopback only.
 
-## 2f — Real ride pilot
+## 2f — Private staging preparation (implemented; deployment/device review pending)
+
+- Separate local/staging configuration, canonical HTTPS origin and trusted gateway.
+- Invited tester access plus secure account cookies and existing role/CSRF checks.
+- Persistent container storage, non-overwriting sanitized backup/restore commands.
+- Internal health probes, request IDs, redacted operational fields and shutdown draining.
+- Full HTTP ride-journey regression, Node matrix and isolated container CI checks.
+
+The [staging guide](staging.md) includes deployment, recovery and consolidation
+review steps. A hosting account/domain, provider connectivity and real browser/
+device testing are still required. CI builds/tests containers; it does not publish
+a site or schedule off-host backups. Driver availability/nearby matching remains
+the next functional milestone after the current journey is validated.
+
+## 2g — Real ride pilot
 
 Harden authentication and hosting; add verified driver onboarding, production mapping, vehicle
 matching, operational booking state, receipts and payment-provider integration. Implement authenticated

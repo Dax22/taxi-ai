@@ -219,7 +219,7 @@ access was used after the environment blocked local previews.
    accuracy/age, stale indicators, Stop, sign-out, another window's Stop, trip
    completion/cancellation and loss of connection. Delayed responses must not
    resume a closed watcher or show another account's position.
-7. This local server is unreachable from other devices by design. Real phone/
-   tablet browser testing requires a later reviewed HTTPS test-hosting setup;
-   do not expose the current local auth server or claim mobile/background GPS
-   compatibility from these tests. Repeat review on target devices at that stage.
+7. The default local server is unreachable from other devices by design. Real
+   phone/tablet testing can use the separately configured [private staging
+   setup](staging.md). Do not expose local mode or claim mobile/background GPS
+   compatibility from fixture tests. Repeat review on target devices after hosting.

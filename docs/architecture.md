@@ -130,8 +130,9 @@ existing offer/accept controls after discussing a price.
 ## Web and future mobile clients
 
 The website uses native HTML/CSS/JavaScript. `apps/web/server.mjs` composes the
-application/router and serves an explicit static allowlist. It remains loopback
-only. At `/app`, `dashboard.mjs` coordinates page/session state and polling:
+application/router and serves an explicit static allowlist. It defaults to loopback;
+staging uses an authenticated HTTPS gateway and one configured origin.
+At `/app`, `dashboard.mjs` coordinates page/session state and polling:
 
 | Client module | Responsibility |
 | --- | --- |
@@ -248,6 +249,28 @@ accept fares, authorize charges or change safety permissions.
 
 ## Enforced conventions and deployment limits
 
+`runtime-config.mjs` validates deployment mode, canonical origin, persistent path,
+gateway token and tester-key hashes before startup. HTTP enforces the gateway
+and tester boundary before routing; business authorization still uses account
+sessions. Staging cookies use the `__Host-` prefix, Secure, HttpOnly and
+SameSite=Strict, without Domain. Local cookies are never accepted in staging.
+This adds no database migration: the schema remains 5.
+
+`health.mjs` checks database/schema readability and shutdown state. Telemetry
+records only generated request IDs, coarse categories, method, status and timing;
+it receives no customer bodies or error objects. The server drains requests for
+up to 20 seconds before closing remaining connections. Operations do not live in
+ride/fare services.
+
+`database-snapshot.mjs` is an operator-only infrastructure adapter. It uses a
+consistent SQLite snapshot, clears transient authentication/communication/location
+state in the copy, validates integrity/foreign keys and atomically publishes to
+a new filename. It cannot overwrite a destination. Restoring repeats validation
+and sanitization and requires an explicit database-path switch while the app is
+stopped. The reference deployment uses one non-root app container, one persistent
+local volume and an HTTPS gateway; multi-replica deployment is unsupported.
+See [staging](staging.md) for secret handling, recovery and remaining live checks.
+
 `npm run check` checks syntax, missing imports, dependency direction, cycles and
 our SQL/network placement conventions. It assumes static ESM imports and uses a
 small convention checker, not a complete JavaScript parser or a security sandbox.
@@ -255,8 +278,8 @@ small convention checker, not a complete JavaScript parser or a security sandbox
 runs the same command on Node 22.12.0 and Node 24 for pushes and pull requests.
 
 A modular structure is a maintainability foundation, not production readiness.
-Before real bookings, implement verified onboarding/account recovery, HTTPS and
-production session operations, database backup/restore and retention, deployment
+Before real bookings, implement verified onboarding/account recovery,
+production session operations, operated encrypted off-host backups and retention, deployment
 monitoring and measured concurrency/scale. Actual dispatch, production trip
 safety operations, production mapping and payments are additional product milestones. Current
 administrator approval grants local test access only, not document verification.

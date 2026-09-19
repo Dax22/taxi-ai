@@ -3,7 +3,8 @@ import { FareError } from '../../../../packages/shared/src/fare-negotiation.mjs'
 
 const statuses = new Map([
   ...['UNAUTHENTICATED', 'INVALID_CREDENTIALS'].map((code) => [code, 401]),
-  ...['FORBIDDEN', 'DRIVER_NOT_APPROVED', 'INVALID_HOST', 'INVALID_ORIGIN', 'INVALID_CSRF'].map((code) => [code, 403]),
+  ...['FORBIDDEN', 'DRIVER_NOT_APPROVED', 'INVALID_HOST', 'INVALID_ORIGIN', 'INVALID_CSRF', 'INVALID_PROXY'].map((code) => [code, 403]),
+  ['STAGING_ACCESS_REQUIRED', 401], ['SERVER_DRAINING', 503],
   ['NOT_FOUND', 404], ['METHOD_NOT_ALLOWED', 405], ['JSON_REQUIRED', 415], ['BODY_TOO_LARGE', 413],
   ...['AUTH_BUSY', 'RATE_LIMITED'].map((code) => [code, 429]),
   ['MAPS_BUSY', 429], ['MAPS_UNAVAILABLE', 503],

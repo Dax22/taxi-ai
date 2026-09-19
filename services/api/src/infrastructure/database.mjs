@@ -4,6 +4,8 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const DEFAULT_DATABASE = fileURLToPath(new URL('../../../../data/taxi-ai.sqlite', import.meta.url));
+const migrations = ['001_initial.sql', '002_chat.sql', '003_trip_lifecycle.sql', '004_voice_calls.sql', '005_locations.sql'];
+export const SCHEMA_VERSION = migrations.length;
 
 export function transaction(db, run) {
   if (run.constructor.name === 'AsyncFunction') throw new TypeError('Database transactions require synchronous callbacks.');
@@ -30,7 +32,6 @@ export function openDatabase(path = process.env.TAXI_AI_DB ?? DEFAULT_DATABASE) 
     db.exec('PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000; PRAGMA journal_mode = WAL; PRAGMA synchronous = FULL;');
     transaction(db, () => {
       const version = db.prepare('PRAGMA user_version').get().user_version;
-      const migrations = ['001_initial.sql', '002_chat.sql', '003_trip_lifecycle.sql', '004_voice_calls.sql', '005_locations.sql'];
       if (version > migrations.length) throw new Error('This database requires a newer version of Taxi Ai.');
       for (let index = version; index < migrations.length; index++) {
         db.exec(readFileSync(new URL(`../../migrations/${migrations[index]}`, import.meta.url), 'utf8'));

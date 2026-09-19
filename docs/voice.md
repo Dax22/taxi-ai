@@ -25,8 +25,9 @@ Audio is not recorded or transcribed; there is no voice AI or automatic agreemen
 The default `TAXI_AI_CALLS_MODE=local` supplies no STUN/TURN servers. It is intended
 for a same-computer preview. Local mode permits direct peer connections and must
 not be described as hiding a peer's IP address. Changing this setting does not
-enable remote hosting: the application still binds to loopback and enforces local
-Host/Origin checks. An HTTPS/mobile deployment is separate work.
+enable remote hosting: local mode still binds to loopback and enforces local
+Host/Origin checks. The [private staging setup](staging.md) is separately
+configured; hosted calling requires relay mode and actual device/network validation.
 
 `TAXI_AI_CALLS_MODE=off npm run dev` disables new calls and removes microphone
 permission from the account page. Changing the configured mode closes existing

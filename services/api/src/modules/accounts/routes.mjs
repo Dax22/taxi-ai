@@ -1,6 +1,6 @@
 import { sessionCookie } from '../../http/security.mjs';
 
-export function accountRoutes(accounts) {
+export function accountRoutes(accounts, cookie = sessionCookie) {
   return [
     ...['register', 'login'].map((action) => ({
       method: 'POST', path: new RegExp(`^/api/auth/${action}$`), access: 'auth',
@@ -8,7 +8,7 @@ export function accountRoutes(accounts) {
         const user = await accounts[action](data);
         const session = accounts.issueSession(user.id, token);
         return { status: action === 'register' ? 201 : 200,
-          cookie: sessionCookie(session.token, session.maxAgeSeconds), body: { user, csrfToken: session.csrfToken } };
+          cookie: cookie(session.token, session.maxAgeSeconds), body: { user, csrfToken: session.csrfToken } };
       },
     })),
     { method: 'GET', path: /^\/api\/session$/, access: 'public',
@@ -16,7 +16,7 @@ export function accountRoutes(accounts) {
     { method: 'POST', path: /^\/api\/auth\/logout$/, access: 'write',
       handle({ token }) {
         accounts.revokeSession(token);
-        return { cookie: sessionCookie('', 0), body: { ok: true } };
+        return { cookie: cookie('', 0), body: { ok: true } };
       } },
   ];
 }

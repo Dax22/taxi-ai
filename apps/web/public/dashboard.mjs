@@ -54,7 +54,7 @@ const conversationView = createConversationView({
   serverNow: () => serverTime.now + performance.now() - serverTime.received,
   onAccept: rideCommand,
   onSend: (data) => runAction(() => conversation.send(data)),
-  onReport: (data) => runAction(() => conversation.report(data), 'Report saved for local administrator review.'),
+  onReport: (data) => runAction(() => conversation.report(data), 'Report saved for test administrator review.'),
   onRead: () => conversation.markRead(),
 });
 const conversation = createConversationController({ client, view: conversationView,

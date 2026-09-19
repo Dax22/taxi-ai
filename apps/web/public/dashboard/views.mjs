@@ -45,7 +45,7 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
     const admin = user.role === 'admin';
     $('dashboard-role').textContent = `TAXI AI / ${user.role.toUpperCase()}`;
     $('dashboard-title').textContent = admin ? 'Keep the city moving.' : driver ? 'Your next connection.' : 'Where will today take you?';
-    $('dashboard-description').textContent = admin ? 'Review driver applications for the local preview.'
+    $('dashboard-description').textContent = admin ? 'Review driver applications for the development preview.'
       : driver ? 'Choose an open request and agree a fare with the customer.' : 'Request a journey and agree a fare with your driver.';
     $('customer-panel').hidden = !customer;
     $('driver-panel').hidden = !driver;
@@ -59,7 +59,7 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
       $('driver-vehicle').textContent = `${user.driver.vehicle.model} · ${user.driver.vehicle.plate}`;
       $('driver-guidance').textContent = user.driver.status === 'pending'
         ? 'Your application is waiting for administrator approval. This page will update when it is reviewed.'
-        : user.driver.status === 'rejected' ? 'Your application was not approved. Contact the local administrator.'
+        : user.driver.status === 'rejected' ? 'Your application was not approved. Contact the test administrator.'
           : 'You can respond to test requests. Finish your current negotiation or booked trip before taking another.';
     }
     if (!selectedRide()) {
@@ -180,7 +180,7 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
     } else {
       $('fare-label').textContent = ride.status === 'requested' ? 'REQUEST SAVED' : 'YOUR FARE, YOUR SAY';
       $('fare-value').textContent = ride.status === 'requested' ? 'Finding your connection.' : 'Make the first offer.';
-      $('fare-guidance').textContent = ride.status === 'requested' ? 'Waiting for an approved driver in this local preview. You can refresh or return later.' : 'Start with the suggestion or choose your price.';
+      $('fare-guidance').textContent = ride.status === 'requested' ? 'Waiting for an approved driver in this development preview. You can refresh or return later.' : 'Start with the suggestion or choose your price.';
     }
     const history = ride.negotiation?.offers ?? [];
     $('live-history').hidden = !history.length;

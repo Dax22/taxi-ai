@@ -11,8 +11,8 @@ if (process.argv.length !== 3) {
   try {
     db = openDatabase();
     const user = createApplication({ db }).accounts.bootstrapAdmin(process.argv[2]);
-    console.log(`Administrator enabled for ${user.email}. Sign in again at http://localhost:${process.env.PORT ?? 3000}/app.`);
-    console.log('Driver approval here enables local testing only; identity and vehicle verification are not implemented.');
+    console.log(`Administrator enabled for ${user.email}. Sign in again through the configured Taxi Ai account page.`);
+    console.log('Driver approval here enables testing only; identity and vehicle verification are not implemented.');
   } catch (error) {
     console.error(error instanceof ApplicationError ? error.message : 'Unable to open or update the local database. Check its path and permissions.');
     process.exitCode = 1;

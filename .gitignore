@@ -18,3 +18,7 @@ data/
 *.db
 *.db-shm
 *.db-wal
+secrets/
+backups/
+*.sqlite-journal
+.taxi-ai-snapshot-*/
