@@ -32,6 +32,9 @@ test('a live WAL snapshot preserves rides and chat, clears transient data only i
     h.db.prepare('INSERT INTO location_quote_commands (actor_id, key, fingerprint, quote_id) VALUES (?, ?, ?, ?)')
       .run(customer.user.id, id + '-command', 'fixture', id);
   }
+  const spare = h.client(); await spare.register('spare-driver', 'driver');
+  h.db.prepare("UPDATE drivers SET status = 'approved' WHERE user_id = ?").run(spare.user.id);
+  const available = await spare.online({ mode: 'gps', lat: 9.087654, lng: 7.412345 });
   const tables = h.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all().map((r) => r.name);
   const sourceRows = new Map(tables.map((name) => [name, JSON.stringify(h.db.prepare(`SELECT * FROM ${name}`).all())]));
   const path = join(dir, 'backup.sqlite'); saveSnapshot(h.filename, path, { now: 12345 });
@@ -45,6 +48,9 @@ test('a live WAL snapshot preserves rides and chat, clears transient data only i
     for (const name of ['sessions', 'voice_participants']) assert.equal(copy.prepare(`SELECT count(*) AS n FROM ${name}`).get().n, 0);
     const call = copy.prepare('SELECT * FROM voice_calls').get();
     assert.equal(call.status, 'ended'); assert.equal(call.reason, 'snapshot_reset'); assert.equal(call.offer_sdp, null); assert.equal(call.caller_session, '');
+    const availability = copy.prepare('SELECT * FROM driver_availability WHERE id = ?').get(available.id);
+    assert.equal(availability.active, 0); assert.equal(availability.reason, 'snapshot_reset');
+    for (const key of ['position_json', 'session_hash', 'client_hash', 'area_id']) assert.equal(availability[key], null);
     const share = copy.prepare('SELECT * FROM location_shares').get();
     assert.equal(share.active, 0); assert.equal(share.position_json, null); assert.equal(share.client_hash, null);
     assert.deepEqual(copy.prepare('SELECT id FROM location_quotes').all().map((r) => r.id), ['used-quote']);
@@ -52,6 +58,7 @@ test('a live WAL snapshot preserves rides and chat, clears transient data only i
     assert.deepEqual(copy.prepare('PRAGMA foreign_key_check').all(), []);
   } finally { copy.close(); }
   assert.ok(!readFileSync(path).includes(Buffer.from('sdp-sensitive')));
+  assert.ok(!readFileSync(path).includes(Buffer.from('9.087654')));
   const restoredPath = join(dir, 'restored.sqlite'); saveSnapshot(path, restoredPath);
   const restored = openDatabase(restoredPath);
   try {

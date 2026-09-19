@@ -75,7 +75,7 @@ No relay service is provisioned and no working-audio claim is made by automated 
 
 Follow [the location guide](locations.md) for public-provider limits and manual
 checks. No claim of verified live routes, browser GPS or production tracking is
-made by fixture tests. The server still binds to loopback only.
+made by fixture tests. Local mode binds to loopback; private staging uses the configured HTTPS gateway.
 
 ## 2f — Private staging preparation (implemented; deployment/device review pending)
 
@@ -88,10 +88,21 @@ made by fixture tests. The server still binds to loopback only.
 The [staging guide](staging.md) includes deployment, recovery and consolidation
 review steps. A hosting account/domain, provider connectivity and real browser/
 device testing are still required. CI builds/tests containers; it does not publish
-a site or schedule off-host backups. Driver availability/nearby matching remains
-the next functional milestone after the current journey is validated.
+a site or schedule off-host backups. Alibaba Cloud was selected for future hosting;
+setup is paused while the account payment issue is resolved.
 
-## 2g — Real ride pilot
+## 2g — Driver availability and nearby matching (implemented; browser/device review pending)
+
+- Explicit Online/Offline availability with separate GPS consent and session/window ownership.
+- Fresh nearby request matching: 5 km, then 10 km after one minute; unclaimed requests expire after five minutes.
+- Atomic claim and availability cleanup; original fare, chat, booking and pickup-PIN flow preserved.
+- Local sample-area matching for tests outside Abuja, disabled in hosted staging.
+- Schema-six preservation, backup sanitization and transaction/lifecycle regression coverage.
+
+Follow [the matching guide](matching.md) to test in VS Code without hosting.
+Real browser, device location and end-to-end voice review remains outstanding.
+
+## 2h — Real ride pilot
 
 Harden authentication and hosting; add verified driver onboarding, production mapping, vehicle
 matching, operational booking state, receipts and payment-provider integration. Implement authenticated

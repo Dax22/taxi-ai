@@ -32,6 +32,8 @@ const routes = new Map([
   ['/dashboard/location-planner.mjs', ['public/dashboard/location-planner.mjs', 'text/javascript; charset=utf-8']],
   ['/dashboard/location-view.mjs', ['public/dashboard/location-view.mjs', 'text/javascript; charset=utf-8']],
   ['/dashboard/location-sharing.mjs', ['public/dashboard/location-sharing.mjs', 'text/javascript; charset=utf-8']],
+  ['/dashboard/availability-controller.mjs', ['public/dashboard/availability-controller.mjs', 'text/javascript; charset=utf-8']],
+  ['/dashboard/availability-view.mjs', ['public/dashboard/availability-view.mjs', 'text/javascript; charset=utf-8']],
   ['/dashboard/geolocation.mjs', ['public/dashboard/geolocation.mjs', 'text/javascript; charset=utf-8']],
   ['/dashboard/conversation-model.mjs', ['public/dashboard/conversation-model.mjs', 'text/javascript; charset=utf-8']],
   ['/dashboard/conversation-controller.mjs', ['public/dashboard/conversation-controller.mjs', 'text/javascript; charset=utf-8']],
@@ -47,6 +49,7 @@ const routes = new Map([
   ['/shared/demo-booking.mjs', ['../../packages/shared/src/demo-booking.mjs', 'text/javascript; charset=utf-8']],
   ['/shared/trip-lifecycle.mjs', ['../../packages/shared/src/trip-lifecycle.mjs', 'text/javascript; charset=utf-8']],
   ['/shared/call-lifecycle.mjs', ['../../packages/shared/src/call-lifecycle.mjs', 'text/javascript; charset=utf-8']],
+  ['/shared/matching.mjs', ['../../packages/shared/src/matching.mjs', 'text/javascript; charset=utf-8']],
   ['/shared/locations.mjs', ['../../packages/shared/src/locations.mjs', 'text/javascript; charset=utf-8']],
 ]);
 
@@ -55,11 +58,11 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
   mapProvider = createMapProvider({ env: { ...process.env, TAXI_AI_MAPS_MODE: process.env.TAXI_AI_MAPS_MODE ?? (runtime.mode === 'staging' ? 'off' : 'community') } }),
   telemetry = createTelemetry({ enabled: runtime.mode === 'staging' }) } = {}) {
   if (runtime.mode === 'staging' && callConfig.mode === 'local') throw new Error('Staging calls require off or a configured relay.');
-  const application = createApplication({ db, clock, callConfig, mapProvider });
+  const application = createApplication({ db, clock, callConfig, mapProvider, allowSimulation: runtime.mode === 'local' });
   const handleApi = createApiRouter(application, { secure: runtime.mode === 'staging' });
   const health = createHealth(db);
   const cleanup = setInterval(() => {
-    try { application.calls.sweep(); application.locations.sweep(); }
+    try { application.rides.sweep(); application.availability.sweep(); application.calls.sweep(); application.locations.sweep(); }
     catch { telemetry.event('maintenance_failed'); }
   }, 5000);
   cleanup.unref();

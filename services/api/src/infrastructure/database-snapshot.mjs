@@ -23,6 +23,8 @@ function clearTransientState(db, now) {
       caller_client = '', callee_client = NULL`).run(now);
     db.prepare(`UPDATE location_shares SET active = 0, position_json = NULL, session_hash = NULL,
       client_hash = NULL, stopped_at = COALESCE(stopped_at, ?)`).run(now);
+    db.prepare(`UPDATE driver_availability SET active = 0, area_id = NULL, position_json = NULL,
+      session_hash = NULL, client_hash = NULL, stopped_at = COALESCE(stopped_at, ?), reason = COALESCE(reason, 'snapshot_reset')`).run(now);
     db.exec('DELETE FROM location_quotes WHERE ride_id IS NULL;');
   });
 }

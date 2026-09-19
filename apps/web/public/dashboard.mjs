@@ -10,12 +10,14 @@ import { createCallView } from './dashboard/call-view.mjs';
 import { createLocationView } from './dashboard/location-view.mjs';
 import { createLocationPlanner } from './dashboard/location-planner.mjs';
 import { createLocationSharing } from './dashboard/location-sharing.mjs';
+import { createAvailabilityController } from './dashboard/availability-controller.mjs';
+import { createAvailabilityView } from './dashboard/availability-view.mjs';
 import { createGeolocation } from './dashboard/geolocation.mjs';
 import { isActiveRide } from '/shared/trip-lifecycle.mjs';
 
 // Page controller: owns session/view state and coordinates network work with UI.
 const emptyState = () => ({ user: null, rides: [], available: [], drivers: [], reports: [], chatUnread: {},
-  history: [], historyCursor: null, historyLoaded: false });
+  history: [], historyCursor: null, historyLoaded: false, availabilityOnline: false, sampleMatchingEnabled: false });
 let state = emptyState();
 let busy = false;
 let refreshing = null;
@@ -43,11 +45,16 @@ const planner = createLocationPlanner({ client, view: locationView,
 });
 const sharing = createLocationSharing({ client, device: createGeolocation(), view: locationView,
   serverNow: () => serverTime.now + performance.now() - serverTime.received });
+const availabilityView = createAvailabilityView({ onOnline: (mode, areaId) => availability.start(mode, areaId), onOffline: () => availability.stop() });
+const availability = createAvailabilityController({ client, device: createGeolocation(), view: availabilityView,
+  serverNow: () => serverTime.now + performance.now() - serverTime.received,
+  onStatus(online) { if (state.availabilityOnline !== online) { state.availabilityOnline = online; view.render(state); } },
+});
 function rideCommand(path, data, message) {
   return runAction(async () => {
     const result = await client.rideCommand(path, data);
     view.select(result.ride.id);
-    if (['completed', 'cancelled'].includes(result.ride.status)) state.historyLoaded = false;
+    if (['completed', 'cancelled', 'expired'].includes(result.ride.status)) state.historyLoaded = false;
   }, message);
 }
 const conversationView = createConversationView({
@@ -81,7 +88,7 @@ const authForm = bindAuthForm({ onSubmit: (path, data) => runAction(async () => 
   const result = await client.request(path, { method: 'POST', data });
   state = { ...emptyState(), user: result.user };
   client.reset(); client.setCsrf(result.csrfToken);
-  view.reset(); conversation.reset(); calls.reset(); sharing.reset(); planner.reset(); authForm.reset();
+  view.reset(); conversation.reset(); calls.reset(); sharing.reset(); availability.reset(); planner.reset(); authForm.reset();
 }) });
 
 async function refresh() {
@@ -89,7 +96,7 @@ async function refresh() {
   refreshing = (async () => {
     const session = await client.request('/api/session');
     if (state.user?.id !== session.user?.id) {
-      state = emptyState(); client.reset(); view.reset(); conversation.reset(); calls.reset(); sharing.reset(); planner.reset();
+      state = emptyState(); client.reset(); view.reset(); conversation.reset(); calls.reset(); sharing.reset(); availability.reset(); planner.reset();
     }
     state.user = session.user;
     calls.setContext(state.user, view.selected());
@@ -101,18 +108,21 @@ async function refresh() {
     } else if (session.user) {
       const [data, chat] = await Promise.all([client.request('/api/rides'), client.request('/api/chat')]);
       state.chatUnread = Object.fromEntries(chat.conversations.map((item) => [item.rideId, item.unread]));
-      if (!state.historyLoaded || data.rides.some((ride) => ['completed', 'cancelled'].includes(ride.status)
+      if (!state.historyLoaded || data.rides.some((ride) => ['completed', 'cancelled', 'expired'].includes(ride.status)
         && !state.rides.some((old) => old.id === ride.id && old.version === ride.version))) {
         const history = await client.request('/api/rides/history');
         state.history = history.rides; state.historyCursor = history.nextBefore; state.historyLoaded = true;
       }
       state.rides = data.rides;
       state.available = data.available;
+      state.sampleMatchingEnabled = data.matchingSettings.allowSimulation;
     }
     $('sync-status').textContent = 'Up to date · refreshes every 3s';
     view.render(state);
     calls.setContext(state.user, view.selected());
     sharing.context(state.user, view.selected());
+    availability.context(state.user, state.rides.some((ride) => isActiveRide(ride.status)));
+    await availability.poll();
     void planner.setContext(state.user, state.rides.some((ride) => isActiveRide(ride.status)));
     await conversation.show(view.selected(), state.user);
   })();
@@ -154,14 +164,15 @@ async function poll() {
 
 $('logout').addEventListener('click', () => runAction(async () => {
   calls.reset();
+  await availability.stop(); availability.reset();
   sharing.shutdown(); sharing.reset(); planner.reset();
   await client.request('/api/auth/logout', { method: 'POST' });
   state = emptyState(); client.reset(); view.reset(); conversation.reset(); view.render(state);
 }));
 $('refresh').addEventListener('click', () => runAction(() => refresh()));
-document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });
-window.addEventListener('pagehide', () => { calls.shutdown(); sharing.shutdown(); });
-setInterval(() => { view.tick(); conversationView.tick(); calls.tick(); planner.tick(); sharing.tick(); }, 1000);
+document.addEventListener('visibilitychange', () => { if (document.hidden) availability.shutdown(); else poll(); });
+window.addEventListener('pagehide', () => { calls.shutdown(); sharing.shutdown(); availability.shutdown(); });
+setInterval(() => { view.tick(); conversationView.tick(); calls.tick(); planner.tick(); sharing.tick(); availability.tick(); }, 1000);
 setInterval(() => { if (!document.hidden || calls.hasMedia()) void calls.poll(); }, 2000);
 setInterval(() => { if (!document.hidden || sharing.sharing()) void sharing.poll(); }, 3000);
 setInterval(poll, 3000);

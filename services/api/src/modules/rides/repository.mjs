@@ -1,7 +1,8 @@
 const columns = `id, customer_id AS customerId, driver_id AS driverId,
   pickup_id AS pickupId, destination_id AS destinationId,
   suggested_fare_kobo AS suggestedFareKobo, status, version,
-  created_at AS createdAt, matched_at AS matchedAt, updated_at AS updatedAt`;
+  created_at AS createdAt, matched_at AS matchedAt, updated_at AS updatedAt,
+  request_expires_at AS requestExpiresAt, closed_reason AS closedReason`;
 
 const tripColumns = `ride_id AS rideId, customer_id AS customerId, driver_id AS driverId, status,
   fare_kobo AS fareKobo, booked_at AS bookedAt, departed_at AS departedAt, arrived_at AS arrivedAt,
@@ -15,15 +16,20 @@ export function createRidesRepository(db) {
     find: (id) => db.prepare(`SELECT ${columns} FROM rides WHERE id = ?`).get(id) ?? null,
     listFor: (id) => db.prepare(`SELECT ${columns} FROM rides WHERE customer_id = ? OR driver_id = ?
       ORDER BY (status IN ('requested', 'negotiating') OR EXISTS (${activeTrip})) DESC, created_at DESC, id DESC LIMIT 50`).all(id, id),
-    listAvailable: () => db.prepare(`SELECT ${columns} FROM rides WHERE status = 'requested' ORDER BY created_at, id LIMIT 50`).all(),
+    listAvailable: () => db.prepare(`SELECT ${columns} FROM rides WHERE status = 'requested' ORDER BY created_at, id`).all(),
+    expiring: (now) => db.prepare(`SELECT ${columns} FROM rides WHERE status = 'requested' AND request_expires_at <= ?`).all(now),
+    expire(id, now) {
+      db.prepare(`UPDATE rides SET status = 'cancelled', closed_reason = 'request_expired', version = version + 1, updated_at = ?
+        WHERE id = ? AND status = 'requested' AND request_expires_at <= ?`).run(now, id, now);
+    },
     hasHistory: (id) => Boolean(db.prepare('SELECT id FROM rides WHERE customer_id = ?').get(id)),
     hasOpenRequest: (id) => Boolean(db.prepare(`SELECT id FROM rides WHERE customer_id = ?
       AND (status IN ('requested', 'negotiating') OR EXISTS (${activeTrip}))`).get(id)),
     hasNegotiation: (id) => Boolean(db.prepare(`SELECT id FROM rides WHERE driver_id = ?
       AND (status = 'negotiating' OR EXISTS (${activeTrip}))`).get(id)),
-    insert({ id, customerId, pickupId, destinationId, suggestedFareKobo, now }) {
-      db.prepare(`INSERT INTO rides (id, customer_id, pickup_id, destination_id, suggested_fare_kobo, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)`).run(id, customerId, pickupId, destinationId, suggestedFareKobo, now, now);
+    insert({ id, customerId, pickupId, destinationId, suggestedFareKobo, now, expiresAt }) {
+      db.prepare(`INSERT INTO rides (id, customer_id, pickup_id, destination_id, suggested_fare_kobo, created_at, updated_at, request_expires_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(id, customerId, pickupId, destinationId, suggestedFareKobo, now, now, expiresAt);
     },
     claim({ id, driverId, expectedVersion, now }) {
       return db.prepare(`UPDATE rides SET driver_id = ?, matched_at = ?, updated_at = ?, status = 'negotiating',

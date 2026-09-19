@@ -2,6 +2,7 @@ import { DEMO_AREAS, createDemoQuote, formatNaira, nairaToKobo } from '/shared/d
 import { $, element } from './dom.mjs';
 import { renderChatReports } from './chat-reports-view.mjs';
 import { RIDE_STATUS_LABELS as statuses, isActiveRide } from '/shared/trip-lifecycle.mjs';
+import { searchRadius } from '/shared/matching.mjs';
 import { createTripView } from './trip-view.mjs';
 
 
@@ -24,8 +25,15 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
     $('accept-fare').dataset.locked = String(!canAccept);
     $('fare-expiry').textContent = ride?.status === 'negotiating' && offer
       ? remaining > 0 ? `Offer expires in ${Math.ceil(remaining / 1000)} seconds.` : 'This offer expired. Send a new offer to continue.' : '';
+    $('matching-status').textContent = ride?.status === 'requested' && ride.matching
+      ? serverNow() >= ride.matching.expiresAt ? 'Search window ended. Refreshing the request status…'
+        : `${ride.matching.mode === 'gps' ? `Searching within ${searchRadius(ride.createdAt, serverNow()) / 1000} km of pickup` : 'Searching for drivers in the same sample area'} · ${Math.ceil((ride.matching.expiresAt - serverNow()) / 1000)} seconds remaining.` : '';
+    for (const button of document.querySelectorAll('[data-request-expires]')) {
+      button.dataset.locked = String(!state.availabilityOnline || Number(button.dataset.requestExpires) <= serverNow()
+        || state.rides.some((item) => isActiveRide(item.status)));
+    }
     for (const button of document.querySelectorAll('button')) {
-      if (button.closest('#calls-panel, #location-planner, #location-tracking')) continue; // Media/location controllers own their controls, including immediate stop.
+      if (button.closest('#calls-panel, #location-planner, #location-tracking, #availability-panel')) continue; // Media/location controllers own their controls, including immediate stop.
       button.disabled = busy || button.dataset.locked === 'true';
     }
     $('request-fields').disabled = busy || state.rides.some((item) => isActiveRide(item.status));
@@ -46,8 +54,10 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
     $('dashboard-role').textContent = `TAXI AI / ${user.role.toUpperCase()}`;
     $('dashboard-title').textContent = admin ? 'Keep the city moving.' : driver ? 'Your next connection.' : 'Where will today take you?';
     $('dashboard-description').textContent = admin ? 'Review driver applications for the development preview.'
-      : driver ? 'Choose an open request and agree a fare with the customer.' : 'Request a journey and agree a fare with your driver.';
+      : driver ? 'Go online to find nearby requests and agree a fare with the customer.' : 'Request a journey and agree a fare with your driver.';
     $('customer-panel').hidden = !customer;
+    $('request-form').hidden = !state.sampleMatchingEnabled;
+    $('sample-disabled-note').hidden = Boolean(state.sampleMatchingEnabled);
     $('driver-panel').hidden = !driver;
     $('ride-dashboard').hidden = admin;
     $('admin-dashboard').hidden = !admin;
@@ -60,7 +70,7 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
       $('driver-guidance').textContent = user.driver.status === 'pending'
         ? 'Your application is waiting for administrator approval. This page will update when it is reviewed.'
         : user.driver.status === 'rejected' ? 'Your application was not approved. Contact the test administrator.'
-          : 'You can respond to test requests. Finish your current negotiation or booked trip before taking another.';
+          : 'Choose Go online below when you are ready for a request. Finish your current negotiation or trip before taking another.';
     }
     if (!selectedRide()) {
       selectedId = state.rides.find((ride) => isActiveRide(ride.status))?.id ?? state.rides[0]?.id ?? null;
@@ -77,12 +87,12 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
   }
 
   function renderLists() {
-    const currentRides = state.rides.filter((ride) => !['completed', 'cancelled'].includes(ride.status));
+    const currentRides = state.rides.filter((ride) => !['completed', 'cancelled', 'expired'].includes(ride.status));
     $('ride-count').textContent = `${currentRides.length} current`;
     $('ride-list').replaceChildren();
     $('history-list').replaceChildren();
     if (!currentRides.length) $('ride-list').append(element('p', 'No current requests. Start with a test request.', 'empty-state'));
-    if (!state.history?.length) $('history-list').append(element('p', 'Completed and cancelled trips will appear here.', 'empty-state'));
+    if (!state.history?.length) $('history-list').append(element('p', 'Completed, cancelled and expired trips will appear here.', 'empty-state'));
     $('history-more').hidden = !state.historyCursor;
     $('history-count').textContent = `${state.history?.length ?? 0} loaded`;
     for (const ride of [...currentRides, ...(state.history ?? [])]) {
@@ -96,19 +106,21 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
       if (unread) description.append(element('small', `${unread} unread message${unread === 1 ? '' : 's'}`, 'chat-unread-count'));
       button.append(description, element('span', statuses[ride.status], 'status-badge'));
       button.addEventListener('click', () => { selectedId = ride.id; render(); onSelectionChange(selectedRide()); });
-      $(['completed', 'cancelled'].includes(ride.status) ? 'history-list' : 'ride-list').append(button);
+      $(['completed', 'cancelled', 'expired'].includes(ride.status) ? 'history-list' : 'ride-list').append(button);
     }
     $('available-list').replaceChildren();
-    if (!state.available.length) $('available-list').append(element('p', 'No open requests right now. New ones appear automatically.', 'empty-state'));
+    if (!state.available.length) $('available-list').append(element('p', 'Nearby requests appear while you are online. Local sample mode matches requests from your selected sample area.', 'empty-state'));
     const driverBusy = state.rides.some((ride) => isActiveRide(ride.status));
     for (const ride of state.available) {
       const row = element('div', undefined, 'request-row');
       const description = element('div');
       description.append(element('strong', `${ride.pickup.name} → ${ride.destination.name}`),
         element('small', `${ride.hasRoute ? 'Route suggestion' : 'Sample suggestion'} ${formatNaira(ride.suggestedFareKobo)}`));
+      description.append(element('small', ride.hasRoute ? `Within about ${Math.max(1, ride.approximateDistanceKm)} km in a straight line · driving time varies` : 'Local sample-area match'));
       const button = element('button', 'Start negotiation ↗', 'button button-primary button-small');
       button.type = 'button';
-      button.dataset.locked = String(driverBusy);
+      button.dataset.locked = String(driverBusy || !state.availabilityOnline || ride.expiresAt <= serverNow());
+      button.dataset.requestExpires = String(ride.expiresAt);
       button.addEventListener('click', () => onCommand(`/api/rides/${ride.id}/claim`, { expectedVersion: ride.version }, 'Request selected. You or the customer can make the first offer.'));
       row.append(description, button);
       $('available-list').append(row);
@@ -154,7 +166,7 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
     $('detail-title').textContent = `${ride.pickup.name} → ${ride.destination.name}`;
     $('detail-status').textContent = statuses[ride.status];
     $('detail-person').textContent = isDriver ? `Customer: ${ride.customer.name}`
-      : ride.driver ? `Driver: ${ride.driver.name} · ${ride.driver.vehicle.model} · ${ride.driver.vehicle.plate}` : 'An approved driver can respond to your request.';
+      : ride.driver ? `Driver: ${ride.driver.name} · ${ride.driver.vehicle.model} · ${ride.driver.vehicle.plate}` : ride.status === 'expired' ? 'No driver selected this request before it expired.' : 'Looking for an available driver near your pickup.';
     $('detail-reference').textContent = `Reference ${ride.id.slice(0, 8).toUpperCase()} · ${ride.route ? 'Route suggestion' : 'Sample suggestion'} ${formatNaira(ride.suggestedFareKobo)}`;
     $('live-offer-form').hidden = ride.status !== 'negotiating';
     $('accept-fare').hidden = ride.status !== 'negotiating' || !offer;
@@ -168,10 +180,10 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
       $('fare-label').textContent = 'YOUR AGREED FARE';
       $('fare-value').textContent = formatNaira(agreement.amountKobo);
       $('fare-guidance').textContent = 'The offer and acceptance record both participants’ agreement to this exact fare.';
-    } else if (ride.status === 'cancelled') {
+    } else if (['cancelled', 'expired'].includes(ride.status)) {
       $('fare-label').textContent = 'REQUEST CLOSED';
-      $('fare-value').textContent = 'Cancelled.';
-      $('fare-guidance').textContent = 'No fare was agreed. You can start again with a new request.';
+      $('fare-value').textContent = ride.status === 'expired' ? 'No driver found.' : 'Cancelled.';
+      $('fare-guidance').textContent = ride.status === 'expired' ? 'The five-minute search has ended. Submit a new request above when you are ready.' : 'No fare was agreed. You can start again with a new request.';
     } else if (offer) {
       const own = offer.proposedBy === state.user.id;
       $('fare-label').textContent = own ? 'YOUR CURRENT OFFER' : `${isDriver ? 'CUSTOMER' : 'DRIVER'}’S CURRENT OFFER`;
@@ -180,7 +192,7 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
     } else {
       $('fare-label').textContent = ride.status === 'requested' ? 'REQUEST SAVED' : 'YOUR FARE, YOUR SAY';
       $('fare-value').textContent = ride.status === 'requested' ? 'Finding your connection.' : 'Make the first offer.';
-      $('fare-guidance').textContent = ride.status === 'requested' ? 'Waiting for an approved driver in this development preview. You can refresh or return later.' : 'Start with the suggestion or choose your price.';
+      $('fare-guidance').textContent = ride.status === 'requested' ? 'We are looking for an online driver. Unclaimed requests close after five minutes.' : 'Start with the suggestion or choose your price.';
     }
     const history = ride.negotiation?.offers ?? [];
     $('live-history').hidden = !history.length;
@@ -213,7 +225,7 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
   $('request-form').addEventListener('submit', (event) => {
     event.preventDefault();
     const data = { pickupId: $('request-pickup').value, destinationId: $('request-destination').value };
-    onCommand('/api/rides', data, 'Your test request is saved and available to approved drivers.');
+    onCommand('/api/rides', data, 'Your test request is saved. Looking for online drivers in the same sample area.');
   });
   $('live-offer-form').addEventListener('submit', (event) => {
     event.preventDefault();

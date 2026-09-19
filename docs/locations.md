@@ -223,3 +223,11 @@ access was used after the environment blocked local previews.
    phone/tablet testing can use the separately configured [private staging
    setup](staging.md). Do not expose local mode or claim mobile/background GPS
    compatibility from fixture tests. Repeat review on target devices after hosting.
+
+## Availability before booking
+
+The [matching milestone](matching.md) adds a separate driver Online/Offline GPS
+lease to find nearby requests. It does not reuse trip-sharing consent. Claiming a
+request clears availability location; post-booking tracking still starts only when
+the assigned driver chooses Share my location. Local sample-area matching uses no
+GPS and cannot claim routed requests.

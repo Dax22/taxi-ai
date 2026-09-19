@@ -1,5 +1,7 @@
 import { createDemoQuote } from '../../../../../packages/shared/src/demo-booking.mjs';
 import { TRIP_TRANSITIONS, CANCELLATION_REASONS, canCancelRide } from '../../../../../packages/shared/src/trip-lifecycle.mjs';
+import { distanceMeters } from '../../../../../packages/shared/src/locations.mjs';
+import { REQUEST_MS, EXPAND_MS, searchRadius } from '../../../../../packages/shared/src/matching.mjs';
 import { check } from '../../shared/errors.mjs';
 import { fields } from '../../shared/validation.mjs';
 import { requireRole } from '../../shared/policies.mjs';
@@ -10,7 +12,17 @@ import { requireParticipant, requireVersion, restoreNegotiation, canonical } fro
  * or HTTP objects. unitOfWork must encompass state, fare, audit and retry writes.
  */
 export function createRidesService({ repository, getAccount, unitOfWork, audit, tokens, clock, onRideClosed = () => {},
-  routeForRide = () => null, quoteForRide, bindQuote }) {
+  routeForRide = () => null, quoteForRide, bindQuote, availabilityFor = () => null, onClaim = () => {}, allowSimulation = false }) {
+  // Expiry commits independently of a command that may fail afterward.
+  function sweep() {
+    unitOfWork(() => {
+      const now = clock();
+      for (const ride of repository.expiring(now)) {
+        repository.expire(ride.id, now);
+        audit.record(ride.customerId, 'ride.request_expired', ride.id, now);
+      }
+    });
+  }
   function record(id) {
     const ride = repository.find(id);
     check(ride, 'NOT_FOUND', 'Ride request not found.');
@@ -31,11 +43,14 @@ export function createRidesService({ repository, getAccount, unitOfWork, audit, 
     const route = routeForRide(ride.id);
     const quote = route ?? createDemoQuote(ride.pickupId, ride.destinationId);
     const trip = ride.trip ?? repository.findTrip(ride.id);
-    return { id: ride.id, status: trip?.status ?? ride.status, version: ride.version,
+    return { id: ride.id, status: trip?.status ?? (ride.closedReason === 'request_expired' ? 'expired' : ride.status), version: ride.version,
       pickup: quote.pickup, destination: quote.destination, suggestedFareKobo: ride.suggestedFareKobo,
       currency: 'NGN', isDemo: true, route, createdAt: ride.createdAt, updatedAt: ride.updatedAt,
       customer: peer(ride.customerId), driver: peer(ride.driverId, true),
       negotiation: negotiationFor(ride)?.snapshot() ?? null,
+      matching: ride.requestExpiresAt ? { expiresAt: ride.requestExpiresAt, expandedAt: ride.createdAt + EXPAND_MS,
+        radiusMeters: route ? searchRadius(ride.createdAt, ride.matchedAt ?? (ride.closedReason ? ride.updatedAt : clock())) : null,
+        mode: route ? 'gps' : 'sample', reason: ride.closedReason } : null,
       trip: trip ? { status: trip.status, fareKobo: trip.fareKobo, bookedAt: trip.bookedAt,
         departedAt: trip.departedAt, arrivedAt: trip.arrivedAt, startedAt: trip.startedAt, completedAt: trip.completedAt,
         pinBlockedUntil: trip.pinBlockedUntil,
@@ -44,30 +59,45 @@ export function createRidesService({ repository, getAccount, unitOfWork, audit, 
   }
 
   function get(user, id) {
+    sweep();
     const ride = record(id);
     requireParticipant(ride, user);
     return view(ride, user);
   }
 
   function list(user) {
-    const available = user.role === 'driver' && user.driver.status === 'approved' ? repository.listAvailable() : [];
-    return { rides: repository.listFor(user.id).map((ride) => view(ride, user)), available: available.map((ride) => {
+    sweep();
+    const position = user.role === 'driver' && user.driver.status === 'approved' ? availabilityFor(user.id, clock()) : null;
+    const available = position ? repository.listAvailable().map((ride) => ({ ride, metres: matchDistance(ride, position, clock()) }))
+      .filter((item) => item.metres !== null).sort((a, b) => a.metres - b.metres || a.ride.createdAt - b.ride.createdAt || a.ride.id.localeCompare(b.ride.id)).slice(0, 50) : [];
+    return { matchingSettings: { allowSimulation }, rides: repository.listFor(user.id).map((ride) => view(ride, user)), available: available.map(({ ride, metres }) => {
       const route = routeForRide(ride.id);
       const area = (point) => ({ name: `Near ${point.lat.toFixed(2)}, ${point.lng.toFixed(2)} (approximate area)` });
       const quote = route ? { pickup: area(route.pickup), destination: area(route.destination) }
         : createDemoQuote(ride.pickupId, ride.destinationId);
       return { id: ride.id, version: ride.version, pickup: quote.pickup, destination: quote.destination,
-        suggestedFareKobo: ride.suggestedFareKobo, currency: 'NGN', isDemo: true, hasRoute: Boolean(route), createdAt: ride.createdAt };
+        suggestedFareKobo: ride.suggestedFareKobo, currency: 'NGN', isDemo: true, hasRoute: Boolean(route), createdAt: ride.createdAt,
+        expiresAt: ride.requestExpiresAt, approximateDistanceKm: route ? Math.ceil(metres / 1000) : null };
     }) };
   }
 
+  function matchDistance(ride, availability, now) {
+    if (ride.status !== 'requested' || now >= ride.requestExpiresAt) return null;
+    const route = routeForRide(ride.id);
+    if (!route) return availability.mode === 'sample' && availability.areaId === ride.pickupId ? 0 : null;
+    if (availability.mode !== 'gps') return null;
+    const metres = distanceMeters(availability.position, route.pickup);
+    return metres <= searchRadius(ride.createdAt, now) ? metres : null;
+  }
+
   function history(user, beforeId = null) {
+    sweep();
     let before = null;
     if (beforeId !== null) {
       check(typeof beforeId === 'string' && /^[a-f0-9-]{36}$/.test(beforeId), 'INVALID_CURSOR', 'Invalid history cursor.');
       before = record(beforeId);
       requireParticipant(before, user);
-      check(before.status === 'cancelled' || before.trip?.status === 'completed', 'INVALID_CURSOR', 'Use a completed or cancelled trip as the cursor.');
+      check(before.status === 'cancelled' || before.trip?.status === 'completed', 'INVALID_CURSOR', 'Use a completed, cancelled or expired journey as the cursor.');
     }
     const rows = repository.history(user.id, before, 21);
     const page = rows.slice(0, 20);
@@ -82,12 +112,15 @@ export function createRidesService({ repository, getAccount, unitOfWork, audit, 
     if (routed) {
       check(typeof data.quoteId === 'string' && /^[a-f0-9-]{36}$/.test(data.quoteId), 'INVALID_ROUTE', 'Preview a route before requesting a ride.');
       quote = quoteForRide(user.id, data.quoteId, now);
-    } else try { quote = createDemoQuote(data.pickupId, data.destinationId); }
-    catch (error) { check(false, 'INVALID_ROUTE', error.message); }
+    } else {
+      check(allowSimulation, 'FORBIDDEN', 'Sample requests are available only in local development. Use a route preview for hosted testing.');
+      try { quote = createDemoQuote(data.pickupId, data.destinationId); }
+      catch (error) { check(false, 'INVALID_ROUTE', error.message); }
+    }
     check(!repository.hasOpenRequest(user.id), 'OPEN_REQUEST_EXISTS', 'You already have an open request. Finish or cancel it first.');
     const id = tokens.id();
     repository.insert({ id, customerId: user.id, pickupId: quote.pickup.id,
-      destinationId: quote.destination.id, suggestedFareKobo: quote.suggestedFareKobo, now });
+      destinationId: quote.destination.id, suggestedFareKobo: quote.suggestedFareKobo, now, expiresAt: now + REQUEST_MS });
     if (routed) bindQuote(user.id, data.quoteId, id, now);
     audit.record(user.id, 'ride.requested', id, now);
     return id;
@@ -100,9 +133,13 @@ export function createRidesService({ repository, getAccount, unitOfWork, audit, 
     check(ride.status === 'requested', 'REQUEST_UNAVAILABLE', 'Another driver took this request, or it is no longer open.');
     requireVersion(ride, data.expectedVersion);
     check(!repository.hasNegotiation(user.id), 'DRIVER_BUSY', 'Finish your current negotiation or trip first.');
+    const availability = availabilityFor(user.id, now);
+    check(availability, 'DRIVER_OFFLINE', 'Go online with a fresh location before selecting a request.');
+    check(matchDistance(ride, availability, now) !== null, 'OUTSIDE_MATCH_AREA', 'This request is outside your current matching area. Refresh nearby requests.');
     check(repository.claim({ id, driverId: user.id, expectedVersion: ride.version, now }),
       'STALE_VERSION', 'This request has changed. Refresh and try again.');
     audit.record(user.id, 'ride.claimed', id, now);
+    onClaim(user.id, now);
     return id;
   }
 
@@ -196,6 +233,7 @@ export function createRidesService({ repository, getAccount, unitOfWork, audit, 
     check(typeof key === 'string' && /^[A-Za-z0-9_-]{16,128}$/.test(key),
       'INVALID_IDEMPOTENCY_KEY', 'A unique request key is required.');
     const fingerprint = tokens.digest(canonical({ action, id, data }));
+    sweep();
     const result = unitOfWork(() => {
       const user = getAccount(userId);
       check(user, 'UNAUTHENTICATED', 'Sign in to continue.');
@@ -205,7 +243,7 @@ export function createRidesService({ repository, getAccount, unitOfWork, audit, 
         requireParticipant(record(previous.rideId), user);
         if (user.role === 'driver') requireRole(user, 'driver');
         return previous.errorCode ? { errorCode: previous.errorCode }
-          : { ride: get(user, previous.rideId), replayed: true };
+          : { ride: view(record(previous.rideId), user), replayed: true };
       }
       const now = clock();
       const tripAction = ['confirm', 'depart', 'arrive', 'start', 'complete', 'cancel'].includes(action);
@@ -213,7 +251,7 @@ export function createRidesService({ repository, getAccount, unitOfWork, audit, 
         action === 'create' ? create(user, data, now) : action === 'claim' ? claim(user, id, data, now)
           : changeFare(user, id, action, data, now) };
       repository.saveCommand(userId, key, fingerprint, outcome.rideId, outcome.errorCode);
-      return outcome.errorCode ? outcome : { ride: get(user, outcome.rideId), replayed: false };
+      return outcome.errorCode ? outcome : { ride: view(record(outcome.rideId), user), replayed: false };
     });
     check(!result.errorCode, result.errorCode, 'The pickup PIN is incorrect. Ask the customer to check it. After five incorrect attempts, verification pauses for five minutes.');
     return result;
@@ -230,5 +268,5 @@ export function createRidesService({ repository, getAccount, unitOfWork, audit, 
     return repository.listFor(user.id).filter((ride) => ride.driverId).map((ride) => ride.id);
   }
 
-  return Object.freeze({ get, list, history, mutate, conversationContext, conversationIds });
+  return Object.freeze({ get, list, history, mutate, conversationContext, conversationIds, sweep });
 }

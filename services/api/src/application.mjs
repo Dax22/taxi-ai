@@ -17,9 +17,11 @@ import { createCallConfig } from './infrastructure/call-config.mjs';
 import { createMapProvider } from './infrastructure/map-provider.mjs';
 import { createLocationsRepository } from './modules/locations/repository.mjs';
 import { createLocationsService } from './modules/locations/service.mjs';
+import { createAvailabilityRepository } from './modules/availability/repository.mjs';
+import { createAvailabilityService } from './modules/availability/service.mjs';
 
 /** Composition root: the only place that wires business modules to adapters. */
-export function createApplication({ db, clock = Date.now, callConfig = createCallConfig(), mapProvider = createMapProvider() }) {
+export function createApplication({ db, clock = Date.now, callConfig = createCallConfig(), mapProvider = createMapProvider(), allowSimulation = false }) {
   const unitOfWork = (run) => transaction(db, run);
   const audit = createAudit(db);
   const accountRepository = createAccountsRepository(db);
@@ -31,11 +33,15 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
   const drivers = createDriversService({ repository: driverRepository,
     getAccount: accounts.profile, unitOfWork, audit, clock });
   let calls, locations;
+  const availability = createAvailabilityService({ repository: createAvailabilityRepository(db),
+    getAccount: accounts.profile, sessionOwner: accounts.sessionOwner, isBusy: rideRepository.hasNegotiation,
+    unitOfWork, tokens, audit, clock, allowSimulation });
   const rides = createRidesService({ repository: rideRepository,
     getAccount: accounts.profile, unitOfWork, audit, tokens, clock,
     routeForRide: (id) => locations.routeForRide(id),
     quoteForRide: (userId, id, now) => locations.quoteForRide(userId, id, now),
     bindQuote: (userId, id, rideId, now) => locations.bindQuote(userId, id, rideId, now),
+    availabilityFor: availability.positionFor, onClaim: availability.onClaim, allowSimulation,
     onRideClosed: (id, now) => { calls.closeRide(id, now); locations.closeRide(id, now); } });
   const chat = createChatService({ repository: createChatRepository(db), getAccount: accounts.profile,
     getRideContext: rides.conversationContext, listConversationIds: rides.conversationIds, unitOfWork, audit, tokens, clock });
@@ -44,5 +50,5 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
     sessionOwner: accounts.sessionOwner, getRideContext: rides.conversationContext, unitOfWork, audit, tokens, clock, config: callConfig });
   locations = createLocationsService({ repository: createLocationsRepository(db), provider: mapProvider,
     getAccount: accounts.profile, sessionOwner: accounts.sessionOwner, getRideContext: rides.conversationContext, unitOfWork, tokens, audit, clock });
-  return Object.freeze({ accounts, drivers, rides, chat, calls, locations, rateLimiter, clock });
+  return Object.freeze({ accounts, drivers, rides, chat, calls, locations, availability, rateLimiter, clock });
 }

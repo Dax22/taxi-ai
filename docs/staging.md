@@ -89,7 +89,8 @@ shared network filesystem. Docker [service networking](https://docs.docker.com/c
 keeps internal service connections separate from published host ports.
 
 Deployment requires a selected server/account, DNS name pointing to it and
-permission to publish there. No provider or paid plan is selected by this PR.
+permission to publish there. Alibaba Cloud is selected for future hosting; account payment setup is paused.
+No server or paid plan has been provisioned.
 On that host, with Docker Compose available:
 
 1. Check out the reviewed release and run `npm run verify`.
@@ -253,3 +254,16 @@ testers or marking the consolidation ready to merge:
 5. Record results and failures in the PR. Keep test rides labelled and restrict
    access to invited testers. Verified onboarding, account recovery, dispatch,
    production safety operations, payments and delivery workflows remain future work.
+
+## Availability in the matching release
+
+The matching release upgrades storage to schema 6. Preserve a schema-five backup
+with the previous release before upgrading. Current backup commands require the
+current schema; use the matching release and its restore guide for recovery.
+Availability positions and ownership are removed from snapshots.
+
+Sample-area matching and new sample requests are local-only. Hosted staging
+requires fresh Abuja GPS and provider-backed route requests. With maps disabled,
+users cannot create new routed requests; configure the provider for a hosted ride
+test. Availability GPS does not enable map tiles or trip tracking automatically.
+See [matching](matching.md) for controls, expiry and device review.

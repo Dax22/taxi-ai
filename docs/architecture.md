@@ -3,7 +3,7 @@
 Taxi Ai uses a **modular monolith**: one backend process and database, with
 separate business modules and explicit dependencies. The current code implements
 accounts, driver review, ride/fare negotiation, trip lifecycle, participant chat
-and audio calling, route quotes and driver location sharing. The structure supports adding Eats and courier workflows
+and audio calling, route quotes, driver location sharing and availability/nearby matching. The structure supports adding Eats and courier workflows
 without mixing their rules into ride logic.
 See [ADR 0001](decisions/0001-modular-monolith.md) for the decision and tradeoffs.
 
@@ -17,6 +17,7 @@ See [ADR 0001](decisions/0001-modular-monolith.md) for the decision and tradeoff
 | Chat | Participant messages, read markers, retries and reports | `chat_messages`, `chat_reads`, `chat_commands`, `chat_reports` |
 | Calls | Audio invitations, session/window ownership, signaling, expiry and history | `voice_calls`, `voice_participants`, `voice_commands` |
 | Locations | Provider-backed route quotes, fare suggestions, driver sharing and expiry | `location_quotes`, `location_quote_commands`, `location_shares`, `location_share_commands` |
+| Availability | Driver Online/Offline, separate location consent, freshness and lease expiry | `driver_availability`, `availability_commands` |
 | Shared domain | Pure fare state machine, lifecycle vocabulary, money, coordinate helpers and sample quotes | No storage or network |
 | Infrastructure | SQLite, migrations, password hashing, random tokens, audit and rate limits | `audit_events`, `rate_limits`, connection lifecycle |
 | HTTP | Route dispatch, request parsing, cookies, CSRF and error/status translation | No business state |
@@ -101,7 +102,7 @@ repository constructor alone is insufficient.
 
 The existing `data/taxi-ai.sqlite` location is preserved. Ordered migrations
 `002_chat.sql`, `003_trip_lifecycle.sql`, `004_voice_calls.sql` and
-`005_locations.sql` upgrade schemas 1–4 to 5 without resetting
+`005_locations.sql` and `006_matching.sql` upgrade schemas 1–5 to 6 without resetting
 records or silently booking prior agreements. Older binaries refuse the upgraded
 database. Local data and secrets are excluded from Git and static serving.
 See [API notes](../services/api/README.md) for routes and current security limits.
@@ -148,6 +149,8 @@ At `/app`, `dashboard.mjs` coordinates page/session state and polling:
 | `dashboard/call-view.mjs` | Call controls, audio playback and recent call history |
 | `dashboard/location-planner.mjs` | Explicit online consent, manual search, selected points and saved route quotes |
 | `dashboard/location-sharing.mjs` | Driver GPS lifecycle, session/window isolation and bounded updates |
+| `dashboard/availability-controller.mjs` | Separate availability consent, GPS/sample updates and lifecycle |
+| `dashboard/availability-view.mjs` | Online/Offline and local sample-area controls |
 | `dashboard/geolocation.mjs` | Browser permission and device location adapter |
 | `dashboard/location-view.mjs` | Route forms, fare details and sharing controls |
 | `dashboard/map-view.mjs` | Visible raster tiles, SVG routes/pins and keyboard map interaction |
@@ -283,3 +286,20 @@ production session operations, operated encrypted off-host backups and retention
 monitoring and measured concurrency/scale. Actual dispatch, production trip
 safety operations, production mapping and payments are additional product milestones. Current
 administrator approval grants local test access only, not document verification.
+
+## Driver availability and request matching
+
+Availability owns its location leases and retry keys. Rides receives a narrow
+`positionFor` port for eligibility and `onClaim` for atomic availability cleanup.
+Availability receives account/session lookup and a workload port. Neither module
+imports the other's implementation. These callbacks join the caller's transaction.
+
+Rides owns request deadlines and radius expansion. Unclaimed expiry is a distinct
+API projection over a cancelled storage record, with an explicit closure reason.
+It is committed before a rejected late command; successful claims instead commit
+the request, availability closure, audit and retry key together.
+
+The current preview scans open requests, filters by fresh availability and distance,
+then sorts and caps at 50. Larger deployments need indexed geospatial retrieval.
+No new external geocoding or routing request occurs during candidate matching.
+See [matching](matching.md) for consent, privacy, lifecycle and validation.

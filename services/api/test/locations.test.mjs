@@ -11,7 +11,9 @@ function maps() {
     route: async (a, b) => ({ distanceMeters: 7000, durationSeconds: 1200, coordinates: [[a.lng, a.lat], [7.42, 9.08], [b.lng, b.lat]] }),
   };
 }
-async function setup(t, options = {}) { const provider = maps(); const h = await harness(t, { ...options, mapProvider: provider }); return { h, provider, ...await participants(h) }; }
+async function setup(t, options = {}) { const provider = maps(); const h = await harness(t, { ...options, mapProvider: provider }); const people = await participants(h);
+  await people.driver.online({ mode: 'gps', lat: points.pickup.lat, lng: points.pickup.lng });
+  return { h, provider, ...people }; }
 async function quote(customer, commandKey) {
   const result = await customer.post('/api/locations/quotes', points, commandKey);
   assert.ok([200, 201].includes(result.status), JSON.stringify(result.body)); return result.body.quote;
