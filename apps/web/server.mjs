@@ -7,6 +7,7 @@ import { createApiRouter } from '../../services/api/src/http/router.mjs';
 import { sendError } from '../../services/api/src/http/responses.mjs';
 import { localOrigin } from '../../services/api/src/http/security.mjs';
 import { createCallConfig } from '../../services/api/src/infrastructure/call-config.mjs';
+import { createMapProvider } from '../../services/api/src/infrastructure/map-provider.mjs';
 
 // Explicit allowlist: never serve the repository root or arbitrary disk paths.
 const routes = new Map([
@@ -23,6 +24,11 @@ const routes = new Map([
   ['/dashboard/call-media.mjs', ['public/dashboard/call-media.mjs', 'text/javascript; charset=utf-8']],
   ['/dashboard/call-controller.mjs', ['public/dashboard/call-controller.mjs', 'text/javascript; charset=utf-8']],
   ['/dashboard/call-view.mjs', ['public/dashboard/call-view.mjs', 'text/javascript; charset=utf-8']],
+  ['/dashboard/map-view.mjs', ['public/dashboard/map-view.mjs', 'text/javascript; charset=utf-8']],
+  ['/dashboard/location-planner.mjs', ['public/dashboard/location-planner.mjs', 'text/javascript; charset=utf-8']],
+  ['/dashboard/location-view.mjs', ['public/dashboard/location-view.mjs', 'text/javascript; charset=utf-8']],
+  ['/dashboard/location-sharing.mjs', ['public/dashboard/location-sharing.mjs', 'text/javascript; charset=utf-8']],
+  ['/dashboard/geolocation.mjs', ['public/dashboard/geolocation.mjs', 'text/javascript; charset=utf-8']],
   ['/dashboard/conversation-model.mjs', ['public/dashboard/conversation-model.mjs', 'text/javascript; charset=utf-8']],
   ['/dashboard/conversation-controller.mjs', ['public/dashboard/conversation-controller.mjs', 'text/javascript; charset=utf-8']],
   ['/dashboard/conversation-view.mjs', ['public/dashboard/conversation-view.mjs', 'text/javascript; charset=utf-8']],
@@ -37,13 +43,14 @@ const routes = new Map([
   ['/shared/demo-booking.mjs', ['../../packages/shared/src/demo-booking.mjs', 'text/javascript; charset=utf-8']],
   ['/shared/trip-lifecycle.mjs', ['../../packages/shared/src/trip-lifecycle.mjs', 'text/javascript; charset=utf-8']],
   ['/shared/call-lifecycle.mjs', ['../../packages/shared/src/call-lifecycle.mjs', 'text/javascript; charset=utf-8']],
+  ['/shared/locations.mjs', ['../../packages/shared/src/locations.mjs', 'text/javascript; charset=utf-8']],
 ]);
 
-export function createAppServer({ db = openDatabase(':memory:'), clock = Date.now, callConfig = createCallConfig() } = {}) {
-  const application = createApplication({ db, clock, callConfig });
+export function createAppServer({ db = openDatabase(':memory:'), clock = Date.now, callConfig = createCallConfig(), mapProvider = createMapProvider() } = {}) {
+  const application = createApplication({ db, clock, callConfig, mapProvider });
   const handleApi = createApiRouter(application);
   const cleanup = setInterval(() => {
-    try { application.calls.sweep(); }
+    try { application.calls.sweep(); application.locations.sweep(); }
     catch { /* Request paths retry cleanup; never log SDP or credentials. */ }
   }, 5000);
   cleanup.unref();
@@ -51,11 +58,12 @@ export function createAppServer({ db = openDatabase(':memory:'), clock = Date.no
     response.setHeader('X-Content-Type-Options', 'nosniff');
     response.setHeader('Referrer-Policy', 'no-referrer');
     response.setHeader('Cache-Control', 'no-store');
-    response.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; media-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
+    response.setHeader('Content-Security-Policy', `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'${mapProvider.mode === 'off' ? '' : ` ${mapProvider.tileOrigin}`}; media-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'`);
     let pathname;
     try {
       pathname = new URL(request.url, 'http://localhost').pathname;
-      response.setHeader('Permissions-Policy', `camera=(), microphone=${pathname === '/app' && callConfig.mode !== 'off' ? '(self)' : '()'}, geolocation=()`);
+      if (pathname === '/app' && mapProvider.mode !== 'off') response.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+      response.setHeader('Permissions-Policy', `camera=(), microphone=${pathname === '/app' && callConfig.mode !== 'off' ? '(self)' : '()'}, geolocation=${pathname === '/app' ? '(self)' : '()'}`);
     } catch {
       response.writeHead(400);
       response.end('Bad request');

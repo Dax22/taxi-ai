@@ -3,9 +3,10 @@ import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import { createAppServer } from '../server.mjs';
 import { createCallConfig } from '../../../services/api/src/infrastructure/call-config.mjs';
+import { createMapProvider } from '../../../services/api/src/infrastructure/map-provider.mjs';
 
-async function withServer(run, mode = 'local') {
-  const server = createAppServer({ callConfig: createCallConfig({ TAXI_AI_CALLS_MODE: mode }) });
+async function withServer(run, mode = 'local', maps = 'community') {
+  const server = createAppServer({ callConfig: createCallConfig({ TAXI_AI_CALLS_MODE: mode }), mapProvider: createMapProvider({ env: { TAXI_AI_MAPS_MODE: maps } }) });
   server.listen(0, '127.0.0.1');
   await once(server, 'listening');
   try { await run(`http://127.0.0.1:${server.address().port}`); }
@@ -22,6 +23,8 @@ test('the local site serves HTML, modules and artwork with correct content types
       ['/shared/trip-lifecycle.mjs', 'text/javascript'],
       ['/dashboard/call-controller.mjs', 'text/javascript'], ['/dashboard/call-media.mjs', 'text/javascript'],
       ['/dashboard/call-view.mjs', 'text/javascript'], ['/shared/call-lifecycle.mjs', 'text/javascript'],
+      ...['map-view', 'location-planner', 'location-view', 'location-sharing', 'geolocation'].map((name) => [`/dashboard/${name}.mjs`, 'text/javascript']),
+      ['/shared/locations.mjs', 'text/javascript'],
       ['/dashboard/conversation-model.mjs', 'text/javascript'],
       ['/dashboard/conversation-controller.mjs', 'text/javascript'],
       ['/dashboard/conversation-view.mjs', 'text/javascript'],
@@ -38,16 +41,26 @@ test('the local site serves HTML, modules and artwork with correct content types
   });
 });
 
-test('microphone permission is scoped to the enabled account page, with camera and geolocation still disabled', async () => {
+test('microphone and geolocation permissions are scoped to the account page; only configured tiles can load externally', async () => {
   for (const mode of ['local', 'off']) await withServer(async (base) => {
     for (const path of ['/', '/app', '/app?preview=1', '/api/session']) {
       const result = await fetch(base + path);
       const policy = result.headers.get('permissions-policy');
-      assert.equal(policy, `camera=(), microphone=${path.startsWith('/app') && mode !== 'off' ? '(self)' : '()'}, geolocation=()`);
+      assert.equal(policy, `camera=(), microphone=${path.startsWith('/app') && mode !== 'off' ? '(self)' : '()'}, geolocation=${path.startsWith('/app') ? '(self)' : '()'}`);
       assert.match(result.headers.get('content-security-policy'), /media-src 'self' blob:/);
+      assert.match(result.headers.get('content-security-policy'), /img-src 'self' https:\/\/tile.openstreetmap.org/);
+      assert.match(result.headers.get('content-security-policy'), /connect-src 'self'/);
+      assert.equal(result.headers.get('referrer-policy'), path.startsWith('/app') ? 'strict-origin-when-cross-origin' : 'no-referrer');
       await result.text();
     }
   }, mode);
+  await withServer(async (base) => {
+    const result = await fetch(base + '/app');
+    assert.ok(!result.headers.get('content-security-policy').includes('tile.openstreetmap.org'));
+    assert.equal(result.headers.get('referrer-policy'), 'no-referrer');
+    assert.match(result.headers.get('permissions-policy'), /geolocation=\(self\)/);
+    await result.text();
+  }, 'off', 'off');
 });
 
 test('the static routes never expose repository files or accept writes', async () => {

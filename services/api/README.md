@@ -7,7 +7,7 @@ or transport dispatch system.
 
 ## Code boundaries
 
-`src/application.mjs` wires the accounts, drivers, rides, chat and calls modules. Each module
+`src/application.mjs` wires the accounts, drivers, rides, chat, calls and locations modules. Each module
 contains a service, repository and route factory; rides also has pure domain
 helpers. Services receive repositories, clock and cross-module operations as
 explicit dependencies. They do not import HTTP or database adapters. Repositories
@@ -18,7 +18,7 @@ implements SQLite, password/token operations, audit and rate limits. `src/shared
 contains small common errors, validation and authorization policies. See
 [the architecture](../../docs/architecture.md) for ownership and transaction contracts.
 
-Ordered migrations add chat, trip and call tables, bringing the schema to version 4.
+Ordered migrations add chat, trip, call and location tables, bringing the schema to version 5.
 The `data/taxi-ai.sqlite` location, existing test accounts, sessions and rides are
 preserved. No reset is required. Earlier code refuses the upgraded file; use a separate database when comparing branches.
 
@@ -36,7 +36,9 @@ preserved. No reset is required. Earlier code refuses the upgraded file; use a s
 - Authorization: actors and roles come from the session/database. Only an approved
   driver can claim; only the customer and assigned driver can negotiate or read
   a request. Unknown and unrelated request IDs both return 404.
-- Privacy: available requests show sample areas and a fare suggestion only.
+- Privacy: available requests show sample areas or approximate two-decimal
+  coordinates and a fare suggestion. Exact route points, labels and geometry are
+  limited to the customer and assigned driver after claiming.
   Assigned peers see name and, for the driver, car/plate details. Peer payloads
   contain no email, phone number, password or session information.
 - Limits: 16 KiB JSON bodies; 30 authentication attempts per source IP per ten
@@ -92,7 +94,7 @@ the client refreshes without automatically accepting a replacement price.
 | `GET /api/session` | Own profile + CSRF token, or null when signed out |
 | `POST /api/auth/logout` | Session + CSRF; revokes the current session |
 | `GET /api/rides` | Own requests; approved drivers also see open requests |
-| `POST /api/rides` | Customer; `{ pickupId, destinationId }` |
+| `POST /api/rides` | Customer; `{ quoteId }` for a saved route, or `{ pickupId, destinationId }` for the sample demo |
 | `GET /api/rides/:id` | Assigned participants only |
 | `POST /api/rides/:id/claim` | Approved driver; `{ expectedVersion }` |
 | `POST /api/rides/:id/offers` | Participant; `{ expectedVersion, amountKobo }` |
@@ -142,6 +144,22 @@ SDP and ownership hashes, releases both participant locks and preserves a metada
 history entry. Call actions never alter fares. See [the voice guide](../../docs/voice.md)
 for all endpoints, timeouts, local testing and optional coturn configuration.
 
+## Abuja locations
+
+`modules/locations/` owns route quotes and explicit driver sharing. Its injected
+map adapter supplies Photon address results and OSRM road routes; all pricing is
+computed server-side with a clearly labelled illustrative policy. Provider I/O
+runs outside database transactions and rechecks authorization before saving.
+The ride service binds a nonexpired quote inside the ride-creation transaction.
+
+Sharing starts only after booking and only for its assigned approved driver.
+Updates are bound to a session and browser-window nonce, with monotonic sequences,
+bounded coordinates, accuracy and age. The assigned participants alone can read
+the latest position. Completion/cancellation clears it in the trip transaction;
+five-second cleanup and request checks expire abandoned or revoked shares.
+See [the location guide](../../docs/locations.md) for API routes, provider setup,
+retention, privacy and validation limits.
+
 ## Before public hosting or a real pilot
 
 Select a production authentication approach with email/phone verification,
@@ -155,9 +173,10 @@ validate cross-process transactions and scale before moving beyond local testing
 SQLite's synchronous API is intentionally bounded here; it is not a commitment to
 the eventual multi-instance deployment architecture.
 
-Add verified driver/vehicle onboarding, maps, matching/reassignment, operational
+Add verified driver/vehicle onboarding, production mapping capacity, matching/reassignment, operational
 trip recovery/safety operations, communication and payment-provider integrations before
-accepting live bookings. No provider keys or live integrations are present.
+accepting live bookings. Public demo mapping endpoints are configured; no dedicated
+provider account, production contract or operational dispatch integration is present.
 
 ## Validation
 

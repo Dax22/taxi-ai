@@ -6,11 +6,13 @@ const statuses = new Map([
   ...['FORBIDDEN', 'DRIVER_NOT_APPROVED', 'INVALID_HOST', 'INVALID_ORIGIN', 'INVALID_CSRF'].map((code) => [code, 403]),
   ['NOT_FOUND', 404], ['METHOD_NOT_ALLOWED', 405], ['JSON_REQUIRED', 415], ['BODY_TOO_LARGE', 413],
   ...['AUTH_BUSY', 'RATE_LIMITED'].map((code) => [code, 429]),
+  ['MAPS_BUSY', 429], ['MAPS_UNAVAILABLE', 503],
   ...['EMAIL_IN_USE', 'ADMIN_EXISTS', 'ACCOUNT_HAS_RIDES', 'KEY_REUSED', 'OPEN_REQUEST_EXISTS',
     'REQUEST_UNAVAILABLE', 'DRIVER_BUSY', 'REQUEST_CLOSED', 'NO_DRIVER', 'OFFER_LIMIT', 'ALREADY_REVIEWED',
     'STALE_VERSION', 'STALE_OFFER', 'NO_OFFER', 'SELF_ACCEPTANCE', 'OFFER_EXPIRED', 'NEGOTIATION_CLOSED',
     'CHAT_NOT_READY', 'CHAT_CLOSED', 'MESSAGE_LIMIT', 'INVALID_TRIP_STATE', 'PICKUP_PIN_LOCKED',
-    'CALL_UNAVAILABLE', 'CALL_CLOSED', 'CALL_BUSY', 'CALL_WINDOW', 'CALL_SIGNAL_EXISTS']
+    'CALL_UNAVAILABLE', 'CALL_CLOSED', 'CALL_BUSY', 'CALL_WINDOW', 'CALL_SIGNAL_EXISTS',
+    'QUOTE_USED', 'QUOTE_EXPIRED', 'LOCATION_CLOSED', 'LOCATION_BUSY', 'LOCATION_WINDOW', 'STALE_LOCATION']
     .map((code) => [code, 409]),
 ]);
 
@@ -31,6 +33,6 @@ export function sendError(response, error) {
   if (response.destroyed) return;
   const result = errorResponse(error);
   if (result.status === 405) response.setHeader('Allow', 'GET, POST');
-  if (result.status === 429) response.setHeader('Retry-After', '60');
+  if (result.status === 429) response.setHeader('Retry-After', error.code === 'MAPS_BUSY' ? '2' : '60');
   json(response, result.status, result.body);
 }

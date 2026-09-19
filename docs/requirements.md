@@ -76,7 +76,8 @@ enabled silently.
 ## Decisions still needed
 
 - First Abuja coverage zones and onboarding process.
-- Payments, maps and internet-calling providers.
+- Production payment, mapping and internet-calling providers. The local map
+  preview uses public Photon/OSRM/OSM services; this is not a production selection.
 - Fare estimator inputs, business limits, platform commission and cancellation rules.
 - Delivery rates, courier item/vehicle limits and vendor commercial arrangements.
 - Support operations, safety response, retention and access policies.

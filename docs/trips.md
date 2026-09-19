@@ -2,7 +2,9 @@
 
 The account dashboard supports a complete **test** trip after fare agreement.
 Progress is entered by the participants. It does not dispatch a real vehicle,
-track GPS, verify physical arrival or collect payment.
+verify physical arrival or collect payment. Optional browser-reported driver
+GPS is now available through [the location module](locations.md); it does not
+automatically advance trip status or prove arrival.
 
 ## Booking and transitions
 
@@ -131,6 +133,7 @@ previews. In the local VS Code application:
 6. Check keyboard operation and 390px, 768px and 1440px layouts. Switch accounts,
    select older trips, sign out and confirm no pickup PIN remains displayed.
 
-See [the voice guide](voice.md) for the local audio-call preview. GPS, payments,
+See [the voice guide](voice.md) for the local audio-call preview and
+[the location guide](locations.md) for maps and optional driver GPS. Payments,
 verified onboarding and safety operations remain planned. Eats, motorcycle courier
 and autonomous services keep their planned labels.

@@ -64,9 +64,22 @@ Audio calling is implemented in the following milestone.
 Follow [the voice guide](voice.md) for manual browser and cross-network validation.
 No relay service is provisioned and no working-audio claim is made by automated tests.
 
-## 2e — Real ride pilot
+## 2e — Abuja locations (implemented; provider/browser/GPS review pending)
 
-Harden authentication and hosting; add verified driver onboarding, maps, vehicle
+- Explicit online-map consent, manual address search and keyboard/click map pins.
+- Server-owned road-route quotes with distance, estimated driving time and an
+  illustrative fare formula, followed by the existing negotiation flow.
+- Driver-controlled GPS on confirmed trips, participant-only visibility and
+  session/window ownership, stale indicators and automatic expiry/cleanup.
+- Configurable Photon/OSRM/tile adapters and schema-five data preservation.
+
+Follow [the location guide](locations.md) for public-provider limits and manual
+checks. No claim of verified live routes, browser GPS or production tracking is
+made by fixture tests. The server still binds to loopback only.
+
+## 2f — Real ride pilot
+
+Harden authentication and hosting; add verified driver onboarding, production mapping, vehicle
 matching, operational booking state, receipts and payment-provider integration. Implement authenticated
 production messaging operations and validate the voice relay on target networks/devices. Exercise concurrency, permission checks and
 recovery from interrupted requests before enabling real transactions.

@@ -43,7 +43,7 @@ test('ordered migrations preserve a version-one database, including existing acc
   old.close();
   const upgraded = openDatabase(filename);
   try {
-    assert.equal(upgraded.prepare('PRAGMA user_version').get().user_version, 4);
+    assert.equal(upgraded.prepare('PRAGMA user_version').get().user_version, 5);
     for (const [index, table] of ['users', 'sessions', 'rides'].entries()) {
       assert.equal(JSON.stringify(upgraded.prepare(`SELECT * FROM ${table}`).all()), snapshot[index]);
     }
@@ -54,7 +54,7 @@ test('ordered migrations preserve a version-one database, including existing acc
     assert.equal(app.rides.get(session.user, 'existing-ride').suggestedFareKobo, 450000);
   } finally { upgraded.close(); }
   const reopened = openDatabase(filename);
-  assert.equal(reopened.prepare('PRAGMA user_version').get().user_version, 4);
+  assert.equal(reopened.prepare('PRAGMA user_version').get().user_version, 5);
   reopened.close();
 });
 
@@ -97,7 +97,7 @@ test('schema two upgrades without changing fares, chat, read markers, reports, s
   old.close();
   const upgraded = openDatabase(filename);
   try {
-    assert.equal(upgraded.prepare('PRAGMA user_version').get().user_version, 4);
+    assert.equal(upgraded.prepare('PRAGMA user_version').get().user_version, 5);
     for (const table of tables) assert.equal(JSON.stringify(upgraded.prepare(`SELECT * FROM ${table}`).all()), snapshots.get(table), table);
     assert.deepEqual(upgraded.prepare('PRAGMA foreign_key_check').all(), []);
     const app = createApplication({ db: upgraded, clock: () => 2000 });
@@ -136,9 +136,46 @@ test('schema three gains calling without rewriting pickup PINs, trip activity or
   old.close();
   const upgraded = openDatabase(filename);
   try {
-    assert.equal(upgraded.prepare('PRAGMA user_version').get().user_version, 4);
+    assert.equal(upgraded.prepare('PRAGMA user_version').get().user_version, 5);
     for (const name of tables) assert.equal(JSON.stringify(upgraded.prepare(`SELECT * FROM ${name}`).all()), snapshots.get(name), name);
     for (const name of ['voice_calls', 'voice_participants', 'voice_commands']) assert.equal(upgraded.prepare(`SELECT count(*) AS n FROM ${name}`).get().n, 0);
+    assert.deepEqual(upgraded.prepare('PRAGMA foreign_key_check').all(), []);
+  } finally { upgraded.close(); }
+});
+
+test('schema four gains locations without altering active calls, ownership, signaling or saved commands', (t) => {
+  const folder = mkdtempSync(join(tmpdir(), 'taxi-ai-location-upgrade-'));
+  t.after(() => rmSync(folder, { recursive: true, force: true }));
+  const filename = join(folder, 'existing.sqlite'), old = new DatabaseSync(filename);
+  old.exec('PRAGMA foreign_keys = ON');
+  for (const file of ['001_initial.sql', '002_chat.sql', '003_trip_lifecycle.sql', '004_voice_calls.sql']) {
+    old.exec(readFileSync(new URL(`../migrations/${file}`, import.meta.url), 'utf8'));
+  }
+  old.exec('PRAGMA user_version = 4');
+  for (const role of ['customer', 'driver']) {
+    old.prepare('INSERT INTO users (id, email, name, password_hash, role, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(role, `${role}@example.test`, role, 'test-only-hash', role, 1000);
+    old.prepare('INSERT INTO sessions (token_hash, user_id, csrf_token, expires_at) VALUES (?, ?, ?, ?)')
+      .run(tokens.digest(role), role, `csrf-${role}`, 9999999);
+  }
+  old.prepare(`INSERT INTO rides (id, customer_id, driver_id, pickup_id, destination_id, suggested_fare_kobo, status, version, created_at, matched_at, updated_at)
+    VALUES ('ride', 'customer', 'driver', 'wuse-ii', 'maitama', 450000, 'negotiating', 1, 1000, 1100, 1100)`).run();
+  old.prepare(`INSERT INTO voice_calls (id, ride_id, caller_id, callee_id, status, mode, version, created_at, answered_at, connected_at,
+    caller_session, callee_session, caller_client, callee_client, caller_seen_at, callee_seen_at, caller_connected, callee_connected, offer_sdp, answer_sdp)
+    VALUES ('call', 'ride', 'customer', 'driver', 'connected', 'local', 3, 1200, 1300, 1400, ?, ?, 'window-one', 'window-two', 1500, 1500, 1, 1, 'test-offer', 'test-answer')`)
+    .run(tokens.digest('customer'), tokens.digest('driver'));
+  for (const role of ['customer', 'driver']) old.prepare("INSERT INTO voice_participants (user_id, call_id) VALUES (?, 'call')").run(role);
+  old.prepare("INSERT INTO voice_commands (actor_id, key, fingerprint, call_id) VALUES ('customer', 'saved-call-command', 'test-fingerprint', 'call')").run();
+  const tables = old.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all().map((row) => row.name);
+  const snapshots = new Map(tables.map((name) => [name, JSON.stringify(old.prepare(`SELECT * FROM ${name}`).all())]));
+  old.close();
+  const upgraded = openDatabase(filename);
+  try {
+    assert.equal(upgraded.prepare('PRAGMA user_version').get().user_version, 5);
+    for (const name of tables) assert.equal(JSON.stringify(upgraded.prepare(`SELECT * FROM ${name}`).all()), snapshots.get(name), name);
+    for (const name of ['location_quotes', 'location_quote_commands', 'location_shares', 'location_share_commands']) {
+      assert.equal(upgraded.prepare(`SELECT count(*) AS n FROM ${name}`).get().n, 0);
+    }
     assert.deepEqual(upgraded.prepare('PRAGMA foreign_key_check').all(), []);
   } finally { upgraded.close(); }
 });

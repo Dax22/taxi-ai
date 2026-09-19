@@ -7,6 +7,11 @@ import { createConversationController } from './dashboard/conversation-controlle
 import { createCallMedia } from './dashboard/call-media.mjs';
 import { createCallController } from './dashboard/call-controller.mjs';
 import { createCallView } from './dashboard/call-view.mjs';
+import { createLocationView } from './dashboard/location-view.mjs';
+import { createLocationPlanner } from './dashboard/location-planner.mjs';
+import { createLocationSharing } from './dashboard/location-sharing.mjs';
+import { createGeolocation } from './dashboard/geolocation.mjs';
+import { isActiveRide } from '/shared/trip-lifecycle.mjs';
 
 // Page controller: owns session/view state and coordinates network work with UI.
 const emptyState = () => ({ user: null, rides: [], available: [], drivers: [], reports: [], chatUnread: {},
@@ -25,6 +30,19 @@ const callView = createCallView({ onStart: () => calls.start(), onAnswer: () => 
   }),
 });
 const calls = createCallController({ client, media: createCallMedia(), view: callView });
+const locationView = createLocationView({ onEnable: () => planner.enable(), onSearch: (side, query) => planner.search(side, query),
+  onClear: (side) => planner.clear(side), onSelect: (side, value) => planner.select(side, value), onPick: (value) => planner.pick(value),
+  onTarget: (value) => planner.setTarget(value), onPreview: () => planner.preview(), onBook: () => planner.book(),
+  onStart: () => sharing.start(), onStop: () => sharing.stop() });
+const planner = createLocationPlanner({ client, view: locationView,
+  serverNow: () => serverTime.now + performance.now() - serverTime.received,
+  onOnline: (enabled, settings) => locationView.setOnline(enabled, settings),
+  onBook: (quoteId) => runAction(async () => {
+    const result = await client.command('/api/rides', { quoteId }); view.select(result.ride.id); return result;
+  }, 'Your route and suggested fare are saved. An approved driver can start negotiation.'),
+});
+const sharing = createLocationSharing({ client, device: createGeolocation(), view: locationView,
+  serverNow: () => serverTime.now + performance.now() - serverTime.received });
 function rideCommand(path, data, message) {
   return runAction(async () => {
     const result = await client.rideCommand(path, data);
@@ -45,7 +63,7 @@ const conversation = createConversationController({ client, view: conversationVi
 const view = createDashboardView({
   serverNow: () => serverTime.now + performance.now() - serverTime.received,
   onCommand: rideCommand,
-  onSelectionChange: (ride) => { calls.setContext(state.user, ride); void conversation.show(ride, state.user); },
+  onSelectionChange: (ride) => { calls.setContext(state.user, ride); sharing.context(state.user, ride); void conversation.show(ride, state.user); },
   onHistory: (before) => runAction(async () => {
     const data = await client.request(`/api/rides/history${before ? `?before=${encodeURIComponent(before)}` : ''}`);
     const entries = before ? [...state.history, ...data.rides] : data.rides;
@@ -63,7 +81,7 @@ const authForm = bindAuthForm({ onSubmit: (path, data) => runAction(async () => 
   const result = await client.request(path, { method: 'POST', data });
   state = { ...emptyState(), user: result.user };
   client.reset(); client.setCsrf(result.csrfToken);
-  view.reset(); conversation.reset(); calls.reset(); authForm.reset();
+  view.reset(); conversation.reset(); calls.reset(); sharing.reset(); planner.reset(); authForm.reset();
 }) });
 
 async function refresh() {
@@ -71,10 +89,11 @@ async function refresh() {
   refreshing = (async () => {
     const session = await client.request('/api/session');
     if (state.user?.id !== session.user?.id) {
-      state = emptyState(); client.reset(); view.reset(); conversation.reset(); calls.reset();
+      state = emptyState(); client.reset(); view.reset(); conversation.reset(); calls.reset(); sharing.reset(); planner.reset();
     }
     state.user = session.user;
     calls.setContext(state.user, view.selected());
+    sharing.context(state.user, view.selected());
     client.setCsrf(session.csrfToken);
     if (session.user?.role === 'admin') {
       const [drivers, reports] = await Promise.all([client.request('/api/admin/drivers'), client.request('/api/admin/chat-reports')]);
@@ -93,6 +112,8 @@ async function refresh() {
     $('sync-status').textContent = 'Up to date · refreshes every 3s';
     view.render(state);
     calls.setContext(state.user, view.selected());
+    sharing.context(state.user, view.selected());
+    void planner.setContext(state.user, state.rides.some((ride) => isActiveRide(ride.status)));
     await conversation.show(view.selected(), state.user);
   })();
   try { await refreshing; }
@@ -106,10 +127,11 @@ async function runAction(action, message) {
   $('page-notice').textContent = '';
   try {
     if (refreshing) await refreshing.catch(() => {});
-    await action();
+    const result = await action();
     if (message) $('page-notice').textContent = message;
     try { await refresh(); }
     catch { $('page-error').textContent = 'Your action was saved, but the latest view could not load. Click Refresh.'; }
+    return result;
   } catch (error) {
     $('page-error').textContent = error.message;
     if ([401, 403, 409].includes(error.status) || error.code === 'INVALID_PICKUP_PIN') {
@@ -132,13 +154,15 @@ async function poll() {
 
 $('logout').addEventListener('click', () => runAction(async () => {
   calls.reset();
+  sharing.shutdown(); sharing.reset(); planner.reset();
   await client.request('/api/auth/logout', { method: 'POST' });
   state = emptyState(); client.reset(); view.reset(); conversation.reset(); view.render(state);
 }));
 $('refresh').addEventListener('click', () => runAction(() => refresh()));
 document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });
-window.addEventListener('pagehide', () => calls.shutdown());
-setInterval(() => { view.tick(); conversationView.tick(); calls.tick(); }, 1000);
+window.addEventListener('pagehide', () => { calls.shutdown(); sharing.shutdown(); });
+setInterval(() => { view.tick(); conversationView.tick(); calls.tick(); planner.tick(); sharing.tick(); }, 1000);
 setInterval(() => { if (!document.hidden || calls.hasMedia()) void calls.poll(); }, 2000);
+setInterval(() => { if (!document.hidden || sharing.sharing()) void sharing.poll(); }, 3000);
 setInterval(poll, 3000);
 poll();
