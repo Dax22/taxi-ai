@@ -121,6 +121,9 @@ test('a complete routed ride, chat, call signaling and GPS survive staging isola
   const { h } = await setup(t, { persistent: true, mapProvider,
     callConfig: createCallConfig({ TAXI_AI_CALLS_MODE: 'relay', TAXI_AI_TURN_URLS: 'turns:relay.example.test:5349', TAXI_AI_TURN_SECRET: 'test-only-relay-secret-32-characters' }) });
   const { customer, driver } = await participants(h);
+  assert.equal((await driver.availability('/api/availability/online', { mode: 'sample', areaId: 'wuse-ii' })).status, 403);
+  assert.equal((await customer.post('/api/rides', { pickupId: 'wuse-ii', destinationId: 'maitama' })).status, 403);
+  assert.equal((await customer.send('/api/rides')).body.matchingSettings.allowSimulation, false);
   const quote = (await customer.post('/api/locations/quotes', { pickup, destination })).body.quote;
   let ride = (await customer.post('/api/rides', { quoteId: quote.id })).body.ride;
   const mutate = async (actor, action, extra = {}) => {

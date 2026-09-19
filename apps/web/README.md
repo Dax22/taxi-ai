@@ -18,7 +18,7 @@ cards using `conversation-model.mjs`; `chat-reports-view.mjs` renders the admin
 queue. Fare controls retain the existing ride commands and consent rules.
 `trip-view.mjs` and `trip-model.mjs` handle booking, pickup, progress and cancellation;
 shared lifecycle vocabulary lives in `packages/shared/src/trip-lifecycle.mjs`.
-Completed/cancelled history loads in cursor-based pages of 20.
+Completed/cancelled/expired history loads in cursor-based pages of 20.
 
 `call-controller.mjs` owns call polling, explicit microphone setup and recovery;
 `call-media.mjs` contains the browser WebRTC adapter; `call-view.mjs` renders call
@@ -32,6 +32,11 @@ quotes. `location-sharing.mjs` owns explicit driver GPS and session cleanup;
 forms and `map-view.mjs` draws visible raster tiles, road geometry and pins with
 native SVG. No mapping SDK or new npm dependency is needed. Map rendering loads
 only visible tiles after consent; it never prefetches or downloads offline maps.
+
+`availability-controller.mjs` manages separate Online/Offline consent, sample-area
+simulation and live availability updates. `availability-view.mjs` owns its controls.
+It stops on a hidden page, claim, offline, stale GPS or lost session, and never
+starts trip GPS. See [matching](../../docs/matching.md) for the local sample flow.
 
 `npm run verify` checks imports/module boundaries as well as domain, HTTP/static
 serving and client transport behaviour. Client tests cover lost/truncated
@@ -64,7 +69,7 @@ connections, plus images from the configured tile origin. Inline code and
 embedding are disabled. Microphone permission
 is enabled only on `/app` while calling is enabled; acquisition requires a Call
 or Answer click and browser permission. Geolocation is allowed only at `/app`
-and requires Share my location plus browser consent. Camera remains disabled.
+and requires an explicit location-sharing action plus browser consent. Camera remains disabled.
 The account page sends an origin-only cross-origin Referer for street tiles;
 other pages use no-referrer. Address search and routing go through the API.
 
@@ -84,7 +89,8 @@ local server/file previews; visual and browser interaction review is outstanding
    form and fare controls. Check labels, focus visibility and error announcements.
 3. Create customer, driver and separate operator accounts. Promote the operator
    using the documented command, sign in again and approve the pending driver.
-4. Submit a customer request. In a second session, select it as the driver. Offer
+4. Submit a customer sample request. In a second visible session, go online as the
+   driver in the same sample area, then select it. Offer
    ₦5,000; counter as the customer with ₦4,700; accept as the driver. Check both
    screens, refresh, and restart the server. The agreement should remain.
 5. Check that the offer author cannot accept their own price. Let an offer expire
@@ -108,6 +114,9 @@ local server/file previews; visual and browser interaction review is outstanding
     Live provider connectivity and browser/device GPS are not established by
     the automated fixtures. The default server remains local-only; mobile layout checks
     do not constitute an installed iOS/Android app or background tracking test.
+
+12. Follow [the matching review steps](../../docs/matching.md#migration-and-validation)
+    for Online/Offline, separate GPS consent, local simulation, expiry and competing drivers.
 
 The [staging guide](../../docs/staging.md) provides a separate private hosting
 configuration for real device review. It is not deployed automatically by GitHub

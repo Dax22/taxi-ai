@@ -82,6 +82,8 @@ test('only the local first-admin command creates an admin and only admins can re
   assert.equal((await admin.post(`/api/admin/drivers/${driver.user.id}/review`, { decision: 'approved' })).status, 200);
   assert.equal((await admin.post(`/api/admin/drivers/${driver.user.id}/review`, { decision: 'rejected' })).status, 409);
   assert.equal((await driver.send('/api/session')).body.user.driver.status, 'approved');
+  assert.equal((await driver.send('/api/rides')).body.available.length, 0, 'approval alone does not make a driver online');
+  await driver.online();
   assert.equal((await driver.send('/api/rides')).body.available.length, 1);
   await claimRide(driver, ride);
 });

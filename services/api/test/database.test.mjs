@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { openDatabase, transaction } from '../src/infrastructure/database.mjs';
+import { openDatabase, transaction, SCHEMA_VERSION } from '../src/infrastructure/database.mjs';
 import { DatabaseSync } from 'node:sqlite';
 import { readFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -8,6 +8,45 @@ import { join } from 'node:path';
 import { createApplication } from '../src/application.mjs';
 import { tokens } from '../src/infrastructure/tokens.mjs';
 import { canonical } from '../src/modules/rides/domain.mjs';
+
+// Compare every pre-existing column while allowing the schema-six additions.
+function legacyRows(db, table) {
+  return db.prepare(`SELECT * FROM ${table}`).all().map((row) => {
+    if (table === 'rides') { delete row.request_expires_at; delete row.closed_reason; }
+    return row;
+  });
+}
+
+test('schema five gains availability and deadlines while preserving saved route, fare and session data', (t) => {
+  const folder = mkdtempSync(join(tmpdir(), 'taxi-matching-upgrade-'));
+  t.after(() => rmSync(folder, { recursive: true, force: true }));
+  const filename = join(folder, 'existing.sqlite'), old = new DatabaseSync(filename);
+  old.exec('PRAGMA foreign_keys = ON');
+  for (const file of ['001_initial.sql', '002_chat.sql', '003_trip_lifecycle.sql', '004_voice_calls.sql', '005_locations.sql']) {
+    old.exec(readFileSync(new URL(`../migrations/${file}`, import.meta.url), 'utf8'));
+  }
+  old.exec('PRAGMA user_version = 5');
+  old.prepare(`INSERT INTO users (id, email, name, password_hash, role, created_at) VALUES ('customer', 'old@example.test', 'Old customer', 'fixture-hash', 'customer', 1000)`).run();
+  old.prepare(`INSERT INTO rides (id, customer_id, pickup_id, destination_id, suggested_fare_kobo, created_at, updated_at)
+    VALUES ('pending', 'customer', 'wuse-ii', 'maitama', 450000, 1000, 1000)`).run();
+  old.prepare(`INSERT INTO location_quotes (id, customer_id, created_at, expires_at, route_json, ride_id)
+    VALUES ('route', 'customer', 1000, 901000, '{"fixture":"existing-saved-route"}', 'pending')`).run();
+  const names = old.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all().map((row) => row.name);
+  const before = new Map(names.map((name) => [name, JSON.stringify(old.prepare(`SELECT * FROM ${name}`).all())]));
+  old.close();
+  const db = openDatabase(filename);
+  try {
+    assert.equal(db.prepare('PRAGMA user_version').get().user_version, 6);
+    for (const name of names) assert.equal(JSON.stringify(legacyRows(db, name)), before.get(name), name);
+    assert.equal(db.prepare('SELECT request_expires_at FROM rides').get().request_expires_at, 301000);
+    assert.equal(db.prepare('SELECT count(*) AS n FROM driver_availability').get().n, 0, 'migration never makes drivers online');
+    assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(), []);
+    createApplication({ db, clock: () => 301000 }).rides.sweep();
+    assert.equal(db.prepare('SELECT closed_reason FROM rides').get().closed_reason, 'request_expired');
+    assert.equal(db.prepare('SELECT count(*) AS n FROM fare_events').get().n, 0);
+    assert.equal(db.prepare('SELECT route_json FROM location_quotes').get().route_json, '{"fixture":"existing-saved-route"}');
+  } finally { db.close(); }
+});
 
 test('synchronous transactions reject async callbacks and roll back promise-returning work', (t) => {
   const db = openDatabase(':memory:');
@@ -43,9 +82,9 @@ test('ordered migrations preserve a version-one database, including existing acc
   old.close();
   const upgraded = openDatabase(filename);
   try {
-    assert.equal(upgraded.prepare('PRAGMA user_version').get().user_version, 5);
+    assert.equal(upgraded.prepare('PRAGMA user_version').get().user_version, SCHEMA_VERSION);
     for (const [index, table] of ['users', 'sessions', 'rides'].entries()) {
-      assert.equal(JSON.stringify(upgraded.prepare(`SELECT * FROM ${table}`).all()), snapshot[index]);
+      assert.equal(JSON.stringify(legacyRows(upgraded, table)), snapshot[index]);
     }
     assert.equal(upgraded.prepare('SELECT count(*) AS count FROM chat_messages').get().count, 0);
     const app = createApplication({ db: upgraded, clock: () => 2000 });
@@ -54,7 +93,7 @@ test('ordered migrations preserve a version-one database, including existing acc
     assert.equal(app.rides.get(session.user, 'existing-ride').suggestedFareKobo, 450000);
   } finally { upgraded.close(); }
   const reopened = openDatabase(filename);
-  assert.equal(reopened.prepare('PRAGMA user_version').get().user_version, 5);
+  assert.equal(reopened.prepare('PRAGMA user_version').get().user_version, SCHEMA_VERSION);
   reopened.close();
 });
 
@@ -97,8 +136,8 @@ test('schema two upgrades without changing fares, chat, read markers, reports, s
   old.close();
   const upgraded = openDatabase(filename);
   try {
-    assert.equal(upgraded.prepare('PRAGMA user_version').get().user_version, 5);
-    for (const table of tables) assert.equal(JSON.stringify(upgraded.prepare(`SELECT * FROM ${table}`).all()), snapshots.get(table), table);
+    assert.equal(upgraded.prepare('PRAGMA user_version').get().user_version, SCHEMA_VERSION);
+    for (const table of tables) assert.equal(JSON.stringify(legacyRows(upgraded, table)), snapshots.get(table), table);
     assert.deepEqual(upgraded.prepare('PRAGMA foreign_key_check').all(), []);
     const app = createApplication({ db: upgraded, clock: () => 2000 });
     const user = app.accounts.sessionFor('old-session').user;
@@ -136,8 +175,8 @@ test('schema three gains calling without rewriting pickup PINs, trip activity or
   old.close();
   const upgraded = openDatabase(filename);
   try {
-    assert.equal(upgraded.prepare('PRAGMA user_version').get().user_version, 5);
-    for (const name of tables) assert.equal(JSON.stringify(upgraded.prepare(`SELECT * FROM ${name}`).all()), snapshots.get(name), name);
+    assert.equal(upgraded.prepare('PRAGMA user_version').get().user_version, SCHEMA_VERSION);
+    for (const name of tables) assert.equal(JSON.stringify(legacyRows(upgraded, name)), snapshots.get(name), name);
     for (const name of ['voice_calls', 'voice_participants', 'voice_commands']) assert.equal(upgraded.prepare(`SELECT count(*) AS n FROM ${name}`).get().n, 0);
     assert.deepEqual(upgraded.prepare('PRAGMA foreign_key_check').all(), []);
   } finally { upgraded.close(); }
@@ -171,8 +210,8 @@ test('schema four gains locations without altering active calls, ownership, sign
   old.close();
   const upgraded = openDatabase(filename);
   try {
-    assert.equal(upgraded.prepare('PRAGMA user_version').get().user_version, 5);
-    for (const name of tables) assert.equal(JSON.stringify(upgraded.prepare(`SELECT * FROM ${name}`).all()), snapshots.get(name), name);
+    assert.equal(upgraded.prepare('PRAGMA user_version').get().user_version, SCHEMA_VERSION);
+    for (const name of tables) assert.equal(JSON.stringify(legacyRows(upgraded, name)), snapshots.get(name), name);
     for (const name of ['location_quotes', 'location_quote_commands', 'location_shares', 'location_share_commands']) {
       assert.equal(upgraded.prepare(`SELECT count(*) AS n FROM ${name}`).get().n, 0);
     }

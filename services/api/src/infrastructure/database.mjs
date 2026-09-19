@@ -4,7 +4,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const DEFAULT_DATABASE = fileURLToPath(new URL('../../../../data/taxi-ai.sqlite', import.meta.url));
-const migrations = ['001_initial.sql', '002_chat.sql', '003_trip_lifecycle.sql', '004_voice_calls.sql', '005_locations.sql'];
+const migrations = ['001_initial.sql', '002_chat.sql', '003_trip_lifecycle.sql', '004_voice_calls.sql', '005_locations.sql', '006_matching.sql'];
 export const SCHEMA_VERSION = migrations.length;
 
 export function transaction(db, run) {

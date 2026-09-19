@@ -29,14 +29,14 @@ switching. Do not discard them to make a checkout succeed. With a clean working
 tree, run:
 
 ```bash
-git switch feat/private-staging
-git pull --ff-only origin feat/private-staging
+git switch feat/driver-matching
+git pull --ff-only origin feat/driver-matching
 npm run verify
 ```
 
 Git normally creates a tracking branch when the name exists only on `origin`.
 If the switch reports an ambiguous branch name, explicitly use
-`git switch --track origin/feat/private-staging` for the first checkout.
+`git switch --track origin/feat/driver-matching` for the first checkout.
 
 ## Save your own changes to GitHub
 
@@ -74,7 +74,8 @@ account, including its private noreply address if preferred. This does not requi
 a Taxi Ai business mailbox.
 
 Existing milestones are stacked: project foundation → web booking demo → accounts
-and rides → modular architecture → private chat → ride lifecycle. Each pull request reviews only its next layer.
+and rides → modular architecture → private chat → ride lifecycle → voice → locations
+→ private staging → driver matching. Each pull request reviews only its next layer.
 Pushing keeps the code on GitHub; it does not merge the stack into `main`. Review
 the dependencies before merging or retargeting their pull requests.
 

@@ -51,6 +51,7 @@ export async function harness(t, { persistent = false, callConfig = createCallCo
     advance(ms) { now += ms; }, async restart() { await stop(); await start(); },
     client() {
       const client = { cookie: '', csrf: '', user: null };
+      const availabilityClient = randomUUID();
       client.send = async (path, { method = 'GET', data, headers = {}, rawBody } = {}) => {
         const requestHeaders = { ...gatewayHeaders, ...(client.cookie ? { Cookie: client.cookie } : {}),
           ...(method === 'POST' ? { Origin: runtime?.publicOrigin ?? base, 'Content-Type': 'application/json', 'X-CSRF-Token': client.csrf } : {}), ...headers };
@@ -65,6 +66,23 @@ export async function harness(t, { persistent = false, callConfig = createCallCo
         return { status: response.status, body, headers: response.headers };
       };
       client.post = (path, data, key = randomUUID()) => client.send(path, { method: 'POST', data, headers: { 'Idempotency-Key': key } });
+      client.availability = (path, data = {}, key = randomUUID()) => client.send(path, { method: 'POST', data,
+        headers: { 'X-Availability-Client': availabilityClient, 'Idempotency-Key': key } });
+      // Explicit setup for legacy ride tests; availability tests use the raw API.
+      client.online = async (choice = null) => {
+        const status = await client.send('/api/availability', { headers: { 'X-Availability-Client': availabilityClient } });
+        assert.equal(status.status, 200, JSON.stringify(status.body));
+        const mode = choice?.mode ?? (status.body.settings.allowSimulation ? 'sample' : 'gps');
+        if (status.body.availability?.online) {
+          const stopped = await client.availability(`/api/availability/${status.body.availability.id}/offline`);
+          assert.equal(stopped.status, 200, JSON.stringify(stopped.body));
+        }
+        const data = mode === 'sample' ? { mode, areaId: choice?.areaId ?? 'wuse-ii' }
+          : { mode, position: { lat: choice?.lat ?? 9.08, lng: choice?.lng ?? 7.4, accuracy: 10, capturedAt: now } };
+        const result = await client.availability('/api/availability/online', data);
+        assert.equal(result.status, 200, JSON.stringify(result.body));
+        return result.body.availability;
+      };
       client.register = async (name, role = 'customer') => {
         const result = await client.post('/api/auth/register', { name, email: `${name}@example.test`, password: PASSWORD, role,
           ...(role === 'driver' ? { vehicle: { model: 'Toyota Corolla', plate: `TEST-${name.slice(0, 5)}` } } : {}) });
@@ -75,7 +93,7 @@ export async function harness(t, { persistent = false, callConfig = createCallCo
     } };
 }
 
-export async function participants(h, driverCount = 1) {
+export async function participants(h, driverCount = 1, { online = true } = {}) {
   const customer = h.client(); await customer.register('customer');
   const admin = h.client(); await admin.register('operator');
   bootstrapAdmin(h.db, admin.user.email);
@@ -86,6 +104,7 @@ export async function participants(h, driverCount = 1) {
     const driver = h.client(); await driver.register(`driver${i}`, 'driver');
     const result = await admin.post(`/api/admin/drivers/${driver.user.id}/review`, { decision: 'approved' });
     assert.equal(result.status, 200);
+    if (online) await driver.online();
     drivers.push(driver);
   }
   return { customer, admin, drivers, driver: drivers[0] };
@@ -98,6 +117,7 @@ export async function requestRide(customer) {
 }
 
 export async function claimRide(driver, ride) {
+  await driver.online(ride.route ? { mode: 'gps', lat: ride.pickup.lat, lng: ride.pickup.lng } : { mode: 'sample', areaId: ride.pickup.id });
   const result = await driver.post(`/api/rides/${ride.id}/claim`, { expectedVersion: ride.version });
   assert.equal(result.status, 200, JSON.stringify(result.body));
   return result.body.ride;

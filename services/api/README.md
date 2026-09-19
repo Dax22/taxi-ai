@@ -9,7 +9,7 @@ Optional private hosting uses a separate staging mode documented in
 
 ## Code boundaries
 
-`src/application.mjs` wires the accounts, drivers, rides, chat, calls and locations modules. Each module
+`src/application.mjs` wires the accounts, drivers, rides, chat, calls, locations and availability modules. Each module
 contains a service, repository and route factory; rides also has pure domain
 helpers. Services receive repositories, clock and cross-module operations as
 explicit dependencies. They do not import HTTP or database adapters. Repositories
@@ -20,7 +20,7 @@ implements SQLite, password/token operations, audit and rate limits. `src/shared
 contains small common errors, validation and authorization policies. See
 [the architecture](../../docs/architecture.md) for ownership and transaction contracts.
 
-Ordered migrations add chat, trip, call and location tables, bringing the schema to version 5.
+Ordered migrations add chat, trip, call, location and availability tables, bringing the schema to version 6.
 The `data/taxi-ai.sqlite` location, existing test accounts, sessions and rides are
 preserved. No reset is required. Earlier code refuses the upgraded file; use a separate database when comparing branches.
 
@@ -37,7 +37,7 @@ preserved. No reset is required. Earlier code refuses the upgraded file; use a s
 - CSRF: exact configured Host/Origin checks, JSON writes and a session-bound CSRF
   header for authenticated mutations. Login/registration also require Origin.
 - Authorization: actors and roles come from the session/database. Only an approved
-  driver can claim; only the customer and assigned driver can negotiate or read
+  online driver within the matching area can claim; only the customer and assigned driver can negotiate or read
   a request. Unknown and unrelated request IDs both return 404.
 - Privacy: available requests show sample areas or approximate two-decimal
   coordinates and a fare suggestion. Exact route points, labels and geometry are
@@ -47,7 +47,7 @@ preserved. No reset is required. Earlier code refuses the upgraded file; use a s
 - Limits: 16 KiB JSON bodies; 30 authentication attempts per source IP per ten
   minutes; 60 authenticated writes per user per minute. Counters survive restart.
   One open customer request, one driver negotiation and at most 100 fare offers
-  per request. Lists show the latest 50 own rides, first 50 available requests
+  per request. Lists show the latest 50 own rides, nearest 50 eligible requests
   and up to 100 driver applications. This is not a production anti-abuse system.
 - Persistence: SQLite foreign keys, CHECK/unique constraints, WAL, full synchronous
   durability and short `BEGIN IMMEDIATE` write transactions. Database schema version
@@ -58,7 +58,7 @@ preserved. No reset is required. Earlier code refuses the upgraded file; use a s
   Raw forwarded host headers are ignored. Direct app ports must remain private.
 - Operations: internal liveness/readiness checks, bounded graceful shutdown and
   allowlisted JSON logs with request IDs. Backup/restore snapshots keep persistent
-  business records and clear sessions, call setup, shared GPS and unused quotes.
+  business records and clear sessions, call setup, shared GPS, availability positions and unused quotes.
 
 The SQLite API requires `--experimental-sqlite` on Node 22.12; npm scripts include
 it. See [the Node 22.12 documentation](https://nodejs.org/download/release/v22.12.0/docs/api/sqlite.html).
@@ -206,3 +206,11 @@ pagination, unread cursors, report access/review, restart persistence and the
 version-one database upgrade. Controller tests check stale responses across rides
 and accounts, hidden/unread behaviour, drafts after failed sends and interrupted
 pagination. Full browser interaction remains a manual review requirement.
+
+## Driver availability and matching
+
+See [the matching contract](../../docs/matching.md) for Online/Offline endpoints,
+window ownership, GPS freshness, sample-mode isolation, radius expansion and
+request expiry. `GET /api/rides` now lists eligible requests only; approval alone
+does not expose the request pool. The `expired` API status is terminal and appears
+in customer history. Availability coordinates are never returned by the API.

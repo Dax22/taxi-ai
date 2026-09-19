@@ -6,8 +6,8 @@ Rides, Taxi Ai Eats and courier delivery, starting in Abuja, Nigeria.
 
 The yellow Taxi Ai website now includes **local customer, driver and administrator
 accounts** at `/app`. Customers choose an Abuja address or map pin, preview a road
-route and request a test journey; an approved driver can
-take the request, make offers and agree a fare with the customer from a separate
+route and request a test journey; an approved online driver near the pickup can
+select the request, make offers and agree a fare with the customer from a separate
 browser session. The customer can confirm a booking, and the driver can record
 arrival, verify the pickup PIN, start and complete the test trip.
 Accounts, requests, trip history and agreements survive refresh
@@ -21,10 +21,13 @@ approval grants test access; it does not verify identity or vehicle documents.
 
 - Customer/driver registration and password sign-in, with separate dashboards.
 - Pending driver applications, vehicle details and administrator approval.
+- Explicit Online/Offline availability, nearby matching and five-minute request expiry.
+- GPS search expands from 5 km to 10 km after one minute; local sample-area matching
+  supports testing outside Abuja without using device location.
 - Persistent SQLite data, password hashes and revocable sessions.
 - One open request/active trip per customer and one negotiation/active trip per driver.
 - Explicit booking confirmation, driver progress, pickup PIN verification and completion.
-- Cancellation reasons, saved trip activity and paginated completed/cancelled history.
+- Cancellation reasons, saved trip activity and paginated completed/cancelled/expired history.
 - Server-checked offers, counteroffers, two-minute expiry and explicit acceptance.
 - Atomic writes, version checks, retry protection and an internal audit log.
 - Private customer/assigned-driver chat with saved messages, unread counts and
@@ -103,7 +106,11 @@ an HTTP endpoint. Additional administrators and account recovery are not built y
    **Sample-area demo** for Wuse II → Maitama without an external service.
 2. Open a different browser/profile or one private window and sign in as the
    approved driver. Two ordinary tabs share a login; use separate sessions.
-3. The driver selects **Start negotiation** and offers ₦5,000.
+3. In **Your availability**, choose **Share location and go online** for a routed
+   request, using an Abuja device near the pickup. For a local sample request,
+   select the same sample pickup area and click **Go online in sample area**.
+   Keep this driver page visible. Then select **Start negotiation** and offer ₦5,000.
+   Claiming stops availability; trip location sharing remains a separate choice.
 4. The customer counters with ₦4,700. The driver clicks **Accept ₦4,700**.
 5. The customer reviews the driver/fare and clicks **Confirm test booking**.
    Only the customer sees the six-digit pickup PIN.
@@ -116,7 +123,8 @@ an HTTP endpoint. Additional administrators and account recovery are not built y
 7. Check Trip history in both accounts. Refresh and restart the server; saved
    fare, trip activity and chat remain. No vehicle is dispatched or payment taken.
 
-Read [the trip guide](docs/trips.md) for cancellation, pickup verification,
+Read [the matching guide](docs/matching.md) for local testing, permission, radius,
+timeouts and manual validation. Read [the trip guide](docs/trips.md) for cancellation, pickup verification,
 history, database migration and the manual review checklist.
 
 Once a driver claims the request, its **Your conversation** panel opens. Send a
@@ -147,8 +155,9 @@ automatically at startup. `npm run backup -- /absolute/new-backup.sqlite` makes 
 validated copy without changing the source. See [staging and recovery](docs/staging.md)
 for restore, transient-data removal, scheduling and off-host backup requirements.
 
-The location milestone upgrades the database from schema 1–4 to 5 without resetting
-existing records or automatically booking old agreements. Earlier branches cannot
+The matching milestone upgrades the database from schema 1–5 to 6 without resetting
+existing records or automatically booking old agreements. Old unclaimed requests
+receive a five-minute deadline and expire on the next sweep if already overdue. Earlier branches cannot
 open the upgraded database; use a separate test database when comparing versions.
 
 By default the server listens on **127.0.0.1** and accepts localhost origins.
@@ -196,7 +205,7 @@ The terminal example runs with `npm run demo`. Read [the architecture](docs/arch
 
 ## Development and review
 
-The latest development branch for this milestone is `feat/private-staging`.
+The latest development branch for this milestone is `feat/driver-matching`.
 Read [CONTRIBUTING.md](CONTRIBUTING.md) for the GitHub/VS Code workflow and where
 new code belongs. `npm run check` validates syntax and module conventions;
 `npm test` checks behaviour; `npm run verify` runs both. GitHub Actions is configured
