@@ -19,17 +19,28 @@ says a feature is implemented, it remains planned.
 
 ## People and interfaces
 
-| Role | Planned capabilities |
+| Profile or membership | Planned capabilities |
 | --- | --- |
 | Customer | Request a ride, negotiate fares, order food, send parcels and track progress |
 | Driver / delivery rider | Complete onboarding, receive requests, negotiate eligible fares and carry out trips or deliveries |
 | Food vendor | Manage menus, availability, orders, preparation and handover |
 | Administrator / support | Manage service operations, onboarding, disputes and safety cases with audited access |
 
-Build a responsive web booking experience. Plan customer and driver applications
-for iOS and Android with layouts suitable for phones and tablets. Vendor and
-administrator web portals will be separate role-based areas. Their detailed flows
-will be designed in a later milestone.
+Deliver one Taxi Ai mobile application for iOS and Android and one responsive
+website, with layouts suitable for phones and tablets. Both use the same account,
+backend and saved activities. One person may hold several approved service
+capabilities and vendor/store memberships; do not require a separate login for
+each role. Customer, Drive & deliver and My store are the three navigation modes.
+Vendor tools are available within both clients when implemented. Administrator
+operations remain a restricted staff area outside the public mode selector.
+
+A mode switch never grants permission, cancels active work or accepts a fare.
+The backend checks membership, eligibility and resource ownership for each action.
+Prevent self-assignment and conflicting work across services/devices. Preserve
+active-activity navigation and clear private client state on context changes.
+See [the unified platform plan](unified-platform.md) for navigation, migration,
+reliability requirements, platform differences and delivery order. This is the
+target design; the current prototype still has one role per account.
 
 ## Fare agreement
 
@@ -56,10 +67,12 @@ delivery fee are confirmed at checkout; paid food orders are not renegotiated.
 
 ## Design direction
 
-The website reference is the user's [Wix template](https://www.wix.com/website-template/view/html/wh-1058).
-Use it as inspiration for a modern, spacious autonomous-mobility theme with
-original Taxi Ai branding and assets. Prioritize booking clarity, legible controls,
-accessible contrast and touch layouts on smaller screens.
+Retain the user's yellow Taxi Ai branding and current light 3D city/autonomous
+homepage theme. The original [Wix reference](https://www.wix.com/website-template/view/html/wh-1058)
+remains background inspiration. Use consistent labels and design tokens across
+web and mobile; prioritize task clarity, readable status, accessible controls
+and touch layouts. Show only the selected mode's working navigation, with a
+clear switcher for other approved modes and a return path to active work.
 
 ## AI and safety
 
@@ -84,4 +97,6 @@ enabled silently.
 - Fare estimator inputs, business limits, platform commission and cancellation rules.
 - Delivery rates, courier item/vehicle limits and vendor commercial arrangements.
 - Support operations, safety response, retention and access policies.
-- Web/mobile frameworks and hosting choices when implementation begins.
+- Exact mobile SDK/dependency versions and native authentication design. React
+  Native + Expo + TypeScript is the proposed stack for one mobile app; retain the
+  current web client. Alibaba Cloud is the selected host, with setup paused.

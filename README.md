@@ -2,6 +2,11 @@
 
 Rides, Taxi Ai Eats and courier delivery, starting in Abuja, Nigeria.
 
+Target product: **one Taxi Ai mobile app and one website**, with the same account
+and Customer, Drive & deliver and My store modes. A person can have multiple
+approved capabilities. This direction is documented in the
+[unified platform plan](docs/unified-platform.md); it is not yet implemented.
+
 ## What works today
 
 The yellow Taxi Ai website now includes **local customer, driver and administrator
@@ -239,7 +244,7 @@ review a deployment; the Docker image deliberately refuses an incomplete setup.
 | `scripts/database-snapshot.mjs` | Checked backups/restores into new files |
 | `scripts/staging-access.mjs` | Add/remove invited tester access keys |
 | `.github/workflows/ci.yml` | Automated verification on Node 22.12.0 and 24 |
-| `apps/customer/`, `apps/driver/` | Native-app planning notes |
+| `apps/mobile/` | Unified iOS/Android app planning notes; not yet runnable |
 | `docs/` | Requirements, architecture, roadmap and approved brand |
 
 The backend is a **modular monolith**: business modules share one process/database
@@ -252,9 +257,10 @@ The terminal example runs with `npm run demo`. Read [the architecture](docs/arch
 
 ## Development and review
 
-The latest development branch is `feat/autonomous-concept`, which includes Trip
-Safety, the white 3D city-map homepage and a matching yellow robotaxi concept
-with a passenger using the app. Autonomous rides remain a future service.
+The latest development branch is `docs/unified-platform-plan`, which includes
+the existing Trip Safety and light 3D homepage work plus the accepted unified
+app/account direction. This latest change is documentation only: the native app,
+multi-capability accounts and vendor/delivery workflows remain planned.
 Read [CONTRIBUTING.md](CONTRIBUTING.md) for the GitHub/VS Code workflow and where
 new code belongs. `npm run check` validates syntax and module conventions;
 `npm test` checks behaviour; `npm run verify` runs both. GitHub Actions is configured
