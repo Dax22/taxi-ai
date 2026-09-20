@@ -134,11 +134,13 @@ existing offer/accept controls after discussing a price.
 The website uses native HTML/CSS/JavaScript. `apps/web/server.mjs` composes the
 application/router and serves an explicit static allowlist. It defaults to loopback;
 staging uses an authenticated HTTPS gateway and one configured origin.
-At `/app`, `dashboard.mjs` coordinates page/session state and polling:
+At `/app`, `dashboard.mjs` wires DOM and feature adapters. The injected page
+controller coordinates session state, dashboard reads and actions:
 
 | Client module | Responsibility |
 | --- | --- |
 | `dashboard/api-client.mjs` | Same-origin requests, CSRF, timeout and stable retry keys |
+| `dashboard/page-controller.mjs` | Account/session boundaries, coherent dashboard refreshes and queued-action guards |
 | `dashboard/auth-form.mjs` | Login/registration form state and input collection |
 | `dashboard/views.mjs` | Role-specific rendering and user action callbacks |
 | `dashboard/conversation-controller.mjs` | Chat pagination, selected-account isolation and read acknowledgement |
@@ -163,6 +165,12 @@ Views do not call `fetch`. The client retains the displayed offer ID/version and
 refreshes on a conflict; it never automatically accepts a new price. Dashboards
 poll every three seconds while visible. Browser rendering/accessibility checks
 remain a separate manual review, documented in the web README.
+
+Account, role or session-token changes synchronously reset private views and
+feature controllers before later reads. Parallel dashboard data is published only
+after a second session check. Queued actions cannot run under a replacement
+session; responses from an earlier API-client generation cannot update the clock
+or erase current retry keys. See [journey verification](pilot-readiness.md).
 
 Native iOS/Android apps and tablet layouts remain planned. They should use the
 same server use cases through reviewed API contracts. The current browser-cookie

@@ -29,14 +29,14 @@ switching. Do not discard them to make a checkout succeed. With a clean working
 tree, run:
 
 ```bash
-git switch feat/simulated-payments
-git pull --ff-only origin feat/simulated-payments
+git switch feat/journey-verification
+git pull --ff-only origin feat/journey-verification
 npm run verify
 ```
 
 Git normally creates a tracking branch when the name exists only on `origin`.
 If the switch reports an ambiguous branch name, explicitly use
-`git switch --track origin/feat/simulated-payments` for the first checkout.
+`git switch --track origin/feat/journey-verification` for the first checkout.
 
 ## Save your own changes to GitHub
 
@@ -75,7 +75,7 @@ a Taxi Ai business mailbox.
 
 Existing milestones are stacked: project foundation → web booking demo → accounts
 and rides → modular architecture → private chat → ride lifecycle → voice → locations
-→ private staging → driver matching → simulated payments. Each pull request reviews only its next layer.
+→ private staging → driver matching → simulated payments → journey verification. Each pull request reviews only its next layer.
 Pushing keeps the code on GitHub; it does not merge the stack into `main`. Review
 the dependencies before merging or retargeting their pull requests.
 
@@ -93,6 +93,7 @@ Read [the architecture](docs/architecture.md) and its
 | HTTP parsing/cookies/error translation | `services/api/src/http/` |
 | Database/password/token/audit adapters | `services/api/src/infrastructure/` |
 | Dependency wiring | `services/api/src/application.mjs` |
+| Page sessions, refresh and action coordination | `apps/web/public/dashboard/page-controller.mjs` |
 | Dashboard presentation | `apps/web/public/dashboard/views.mjs` |
 | Chat coordination and rendering | `apps/web/public/dashboard/conversation-*.mjs` |
 | Payments, receipts and earnings UI | `apps/web/public/dashboard/payments-*.mjs` |
@@ -121,6 +122,10 @@ another module's internals or introducing generic abstractions without a use.
 behaviour. `npm run verify` runs both. The GitHub workflow runs the same command
 on Node 22.12.0 and Node 24 for pushes and pull requests. Hosted Actions must be
 enabled for the repository; passing local checks is not a claim that CI ran.
+
+`npm run test:journey` runs the focused full HTTP journey and dashboard/session
+regressions using a disposable database, without modifying saved developer data.
+See [pilot preparation](docs/pilot-readiness.md) for scope and results.
 
 Browser layout and interaction review is separate; follow
 [the manual review guide](apps/web/README.md#manual-browser-review).
