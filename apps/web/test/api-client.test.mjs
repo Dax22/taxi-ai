@@ -81,3 +81,25 @@ test('call retry keys stay tied to the browser window and carry its identity on 
   await client.request('/api/calls/call-one/media', { callClient: 'first-window' });
   assert.equal(calls.at(-1).headers['X-Call-Client'], 'first-window');
 });
+
+test('late responses from a reset session cannot update the clock or delete a newer command retry key', async () => {
+  let finishOld, finishNew, issued = 0;
+  const calls = [], times = [];
+  const client = createApiClient({ makeKey: () => `key-${++issued}`, onServerTime: (now) => times.push(now),
+    fetchImpl: async (path, options) => {
+      calls.push(options.headers['Idempotency-Key']);
+      if (calls.length === 1) return new Promise((resolve) => { finishOld = resolve; });
+      if (calls.length === 2) return new Promise((resolve) => { finishNew = resolve; });
+      return response(201, { serverNow: 2000, ride: { id: 'new' } });
+    } });
+  const data = { pickupId: 'wuse-ii', destinationId: 'maitama' };
+  const old = client.command('/api/rides', data);
+  const rejected = assert.rejects(old, { code: 'SESSION_CHANGED' });
+  client.reset();
+  const next = client.command('/api/rides', data);
+  const interrupted = assert.rejects(next, /Connection interrupted/);
+  finishOld(response(201, { serverNow: 1000, ride: { id: 'old' } })); await rejected;
+  finishNew({ ok: true, json: async () => { throw new Error('Truncated'); } }); await interrupted;
+  await client.command('/api/rides', data);
+  assert.deepEqual(calls, ['key-1', 'key-2', 'key-2']); assert.deepEqual(times, [2000]);
+});

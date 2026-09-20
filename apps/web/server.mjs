@@ -20,6 +20,7 @@ const routes = new Map([
   ['/dashboard.css', ['public/dashboard.css', 'text/css; charset=utf-8']],
   ['/dashboard.mjs', ['public/dashboard.mjs', 'text/javascript; charset=utf-8']],
   ['/dashboard/api-client.mjs', ['public/dashboard/api-client.mjs', 'text/javascript; charset=utf-8']],
+  ['/dashboard/page-controller.mjs', ['public/dashboard/page-controller.mjs', 'text/javascript; charset=utf-8']],
   ['/dashboard/auth-form.mjs', ['public/dashboard/auth-form.mjs', 'text/javascript; charset=utf-8']],
   ['/dashboard/dom.mjs', ['public/dashboard/dom.mjs', 'text/javascript; charset=utf-8']],
   ['/dashboard/views.mjs', ['public/dashboard/views.mjs', 'text/javascript; charset=utf-8']],

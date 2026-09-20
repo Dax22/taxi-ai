@@ -6,7 +6,10 @@ installation or provider credentials are required.
 
 ## Client structure
 
-`public/dashboard.mjs` coordinates state, refresh and actions. Its modules in
+`public/dashboard.mjs` wires browser events and feature adapters. The injected
+`public/dashboard/page-controller.mjs` coordinates state, refresh and actions,
+clears account data before subsequent reads, rechecks the session before publishing
+parallel results, and cancels queued actions after a session change. Other modules in
 `public/dashboard/` separate API transport/retry keys (`api-client.mjs`), login and
 registration forms (`auth-form.mjs`), role-specific rendering (`views.mjs`) and
 small DOM helpers (`dom.mjs`). Views receive callbacks and never call the network.
@@ -47,6 +50,9 @@ is included. See [payments](../../docs/payments.md) for the full test flow.
 serving and client transport behaviour. Client tests cover lost/truncated
 responses, stable retry keys, original offer/version preservation and clearing
 credentials on session reset. These tests do not replace browser interaction review.
+`npm run test:journey` runs the focused customer/driver/administrator HTTP journey
+plus dashboard/session regressions with disposable data. See
+[pilot preparation](../../docs/pilot-readiness.md) for scope and manual results.
 
 The website retains the approved yellow motion emblem, amber/graphite palette,
 pale backgrounds and original concept artwork. See [the brand guide](../../docs/brand.md).
@@ -124,6 +130,9 @@ local server/file previews; visual and browser interaction review is outstanding
     for Online/Offline, separate GPS consent, local simulation, expiry and competing drivers.
 13. Follow [the payment review steps](../../docs/payments.md#validation-and-manual-review)
     for failed retries, saved receipts, earnings, stale sessions and print/PDF output.
+14. Follow [the pilot acceptance session](../../docs/pilot-readiness.md#manual-acceptance-session)
+    for switching accounts in shared-cookie tabs, interrupted dashboard reads and
+    ensuring no old trip, plate, fare, PIN or receipt returns.
 
 The [staging guide](../../docs/staging.md) provides a separate private hosting
 configuration for real device review. It is not deployed automatically by GitHub

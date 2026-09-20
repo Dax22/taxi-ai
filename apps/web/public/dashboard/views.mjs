@@ -248,7 +248,13 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
     select(id) { selectedId = id; },
     selected: selectedRide,
     reset() {
+      state = { user: null, rides: [], available: [], drivers: [], reports: [], history: [] };
       selectedId = null; detailId = null; renderedLists = ''; renderedDetail = '';
+      $('ride-detail').hidden = true;
+      for (const id of ['detail-title', 'detail-person', 'detail-reference', 'detail-status', 'fare-value', 'fare-label',
+        'fare-guidance', 'fare-expiry', 'driver-vehicle', 'driver-status', 'driver-guidance', 'account-identity', 'matching-status']) $(id).textContent = '';
+      $('live-offer-amount').value = ''; $('accept-fare').onclick = null;
+      $('live-offer-history').replaceChildren(); $('available-list').replaceChildren(); $('driver-applications').replaceChildren();
       $('chat-reports-list').replaceChildren();
       $('ride-list').replaceChildren(); $('history-list').replaceChildren(); tripView.reset();
     },

@@ -44,6 +44,8 @@ approval grants test access; it does not verify identity or vehicle documents.
   secure cookies, operational health/logging and backup/restore commands.
 - Local simulated payments at the exact agreed fare, saved printable receipts,
   driver gross-fare/paid/outstanding totals and administrator payment records.
+- A repeatable full HTTP journey check, with session-isolated dashboard refreshes
+  and protection against delayed responses/actions after an account change.
 - The original in-browser fare demo and terminal example remain available.
 
 **Still planned:** production calling, verified identity and driver
@@ -69,6 +71,12 @@ busy, use `PORT=3001 npm run dev` and open http://localhost:3001/app.
 No `npm install`, paid service or API key is needed. The scripts enable Node's
 built-in SQLite API, including the flag required by Node 22.12. A SQLite
 experimental warning on that version is expected.
+
+To check the complete customer/driver/administrator journey using disposable
+test accounts and storage, run `npm run test:journey`. This includes simulated
+payments, lost-response retries and restart recovery; it does not alter your
+normal database or use real providers. See [pilot preparation](docs/pilot-readiness.md)
+for the verified scope and remaining browser/device checks.
 
 Online maps use public Photon search, OSRM routing and OpenStreetMap street tiles
 after you click **Enable online maps**. These services need an internet connection
@@ -218,7 +226,7 @@ The terminal example runs with `npm run demo`. Read [the architecture](docs/arch
 
 ## Development and review
 
-The latest development branch for this milestone is `feat/simulated-payments`.
+The latest development branch for this milestone is `feat/journey-verification`.
 Read [CONTRIBUTING.md](CONTRIBUTING.md) for the GitHub/VS Code workflow and where
 new code belongs. `npm run check` validates syntax and module conventions;
 `npm test` checks behaviour; `npm run verify` runs both. GitHub Actions is configured

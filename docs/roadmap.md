@@ -115,12 +115,28 @@ Follow [the payments guide](payments.md) for local testing and manual review.
 Paystack test integration follows account setup and a separate provider milestone.
 Alibaba Cloud hosting remains paused.
 
-## 2i — Real ride pilot
+## 2i — Journey verification (implemented; real browser/device review pending)
+
+- One `npm run test:journey` command covering registration, operator setup, driver
+  approval, matching, private chat, fare agreement, PIN, restart and simulated payment.
+- Cross-module checks for lost payment responses, exact receipts/earnings,
+  cancellation without billing, outsider rejection and sign-in recovery.
+- A separate page controller that clears account data before follow-up requests,
+  rechecks sessions around dashboard reads and prevents queued actions crossing accounts.
+- Delayed-response/retry isolation and strict-ID DOM fixtures; no schema change.
+
+Follow [pilot preparation](pilot-readiness.md) for the focused check and the pending
+manual acceptance session. This milestone does not enable actual transport,
+identity verification, real payments or emergency messaging.
+
+## 2j — Real ride pilot
 
 Harden authentication and hosting; add verified driver onboarding, production mapping, vehicle
 matching, operational booking state, verified payment-provider integration and live receipts. Implement authenticated
 production messaging operations and validate the voice relay on target networks/devices. Exercise concurrency, permission checks and
 recovery from interrupted requests before enabling real transactions.
+Complete SOS, trusted-contact notification and staffed incident handling with an
+agreed emergency-response channel before inviting real passengers.
 
 ## 3 — Delivery and operations
 

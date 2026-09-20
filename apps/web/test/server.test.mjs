@@ -18,6 +18,7 @@ test('the local site serves HTML, modules and artwork with correct content types
     for (const [path, type] of [['/', 'text/html'], ['/app', 'text/html'],
       ['/dashboard.css', 'text/css'], ['/dashboard.mjs', 'text/javascript'], ['/styles.css', 'text/css'],
       ['/dashboard/api-client.mjs', 'text/javascript'], ['/dashboard/auth-form.mjs', 'text/javascript'],
+      ['/dashboard/page-controller.mjs', 'text/javascript'],
       ['/dashboard/dom.mjs', 'text/javascript'], ['/dashboard/views.mjs', 'text/javascript'],
       ['/dashboard/trip-model.mjs', 'text/javascript'], ['/dashboard/trip-view.mjs', 'text/javascript'],
       ['/shared/trip-lifecycle.mjs', 'text/javascript'],
