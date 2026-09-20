@@ -12,6 +12,7 @@ import { createMapProvider } from '../../services/api/src/infrastructure/map-pro
 import { createRuntimeConfig } from '../../services/api/src/infrastructure/runtime-config.mjs';
 import { createHealth } from '../../services/api/src/infrastructure/health.mjs';
 import { createTelemetry } from '../../services/api/src/infrastructure/telemetry.mjs';
+import { VEHICLE_COLOURS } from '../../packages/shared/src/vehicle-profile.mjs';
 import { check } from '../../services/api/src/shared/errors.mjs';
 
 // Explicit allowlist: never serve the repository root or arbitrary disk paths.
@@ -29,6 +30,12 @@ const routes = new Map([
   ['/dashboard/safety-format.mjs', ['public/dashboard/safety-format.mjs', 'text/javascript; charset=utf-8']],
   ['/dashboard/trip-share-controller.mjs', ['public/dashboard/trip-share-controller.mjs', 'text/javascript; charset=utf-8']],
   ['/shared/safety.mjs', ['../../packages/shared/src/safety.mjs', 'text/javascript; charset=utf-8']],
+  ['/vehicle.css', ['public/vehicle.css', 'text/css; charset=utf-8']],
+  ['/dashboard/vehicle-card.mjs', ['public/dashboard/vehicle-card.mjs', 'text/javascript; charset=utf-8']],
+  ['/shared/vehicle-profile.mjs', ['../../packages/shared/src/vehicle-profile.mjs', 'text/javascript; charset=utf-8']],
+  ['/shared/vehicle-registration.mjs', ['../../packages/shared/src/vehicle-registration.mjs', 'text/javascript; charset=utf-8']],
+  ['/dashboard/vehicle-fields.mjs', ['public/dashboard/vehicle-fields.mjs', 'text/javascript; charset=utf-8']],
+  ...[...VEHICLE_COLOURS.map((c) => c.id), 'neutral'].map((id) => [`/assets/vehicles/sedan-${id}.png`, [`public/assets/vehicles/sedan-${id}.png`, 'image/png']]),
   ['/dashboard.css', ['public/dashboard.css', 'text/css; charset=utf-8']],
   ['/dashboard/account-mode-view.mjs', ['public/dashboard/account-mode-view.mjs', 'text/javascript; charset=utf-8']],
   ['/shared/account-modes.mjs', ['../../packages/shared/src/account-modes.mjs', 'text/javascript; charset=utf-8']],

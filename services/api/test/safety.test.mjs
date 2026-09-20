@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { harness, participants, requestRide, claimRide, PASSWORD } from './helpers.mjs';
+import { TEST_NOW, harness, participants, requestRide, claimRide, PASSWORD } from './helpers.mjs';
 import { createApplication } from '../src/application.mjs';
 import { createTelemetry } from '../src/infrastructure/telemetry.mjs';
 import { mkdtempSync, rmSync, readFileSync } from 'node:fs';
@@ -39,7 +39,7 @@ async function gps(h, driver, ride) {
   const start = await driver.send(`/api/rides/${ride.id}/location/start`, { method: 'POST', data: {}, headers });
   assert.equal(start.status, 200, JSON.stringify(start.body));
   const update = await driver.send(`/api/location-shares/${start.body.share.id}/position`, { method: 'POST', headers, data: {
-    sequence: 1, lat: 9.087654, lng: 7.412345, accuracy: 12, capturedAt: 1_000_000,
+    sequence: 1, lat: 9.087654, lng: 7.412345, accuracy: 12, capturedAt: TEST_NOW,
   } }); assert.equal(update.status, 200, JSON.stringify(update.body)); return start.body.share.id;
 }
 
@@ -76,7 +76,7 @@ test('test SOS stores the driver/plate and timestamped last shared location whil
   const incident = result.body.incident;
   assert.equal(incident.snapshot.driver.id, driver.user.id); assert.equal(incident.snapshot.driver.vehicle.plate, 'TEST-DRIVER');
   assert.equal(incident.snapshot.location.lat, 9.087654); assert.equal(incident.snapshot.location.source, 'driver_shared');
-  assert.equal(incident.snapshot.location.capturedAt, 1_000_000); assert.equal(incident.snapshot.location.stale, false);
+  assert.equal(incident.snapshot.location.capturedAt, TEST_NOW); assert.equal(incident.snapshot.location.stale, false);
   assert.equal(incident.notifications[0].status, 'queued'); assert.equal(incident.notifications[0].mode, 'simulation');
   assert.equal(incident.notifications[0].recipientPhone.includes(friend.phone), false);
   assert.equal((await report(customer, ride, [friend.id], key)).body.replayed, true);
@@ -215,7 +215,7 @@ test('link replacement, revocation, exact expiry, sign-out and trip completion a
 test('stale or unavailable GPS is labelled accurately and incident snapshots remain fixed after location sharing stops', async (t) => {
   const { h, customer, driver, ride } = await booked(t), id = await gps(h, driver, ride);
   h.advance(30_000); const incident = (await report(customer, ride)).body.incident;
-  assert.equal(incident.snapshot.location.stale, true); assert.equal(incident.snapshot.location.capturedAt, 1_000_000);
+  assert.equal(incident.snapshot.location.stale, true); assert.equal(incident.snapshot.location.capturedAt, TEST_NOW);
   const result = await link(customer, ride); assert.equal((await viewLink(h, result.body.token)).body.trip.location.stale, true);
   const stop = await driver.send(`/api/location-shares/${id}/stop`, { method: 'POST', data: {}, headers: { 'X-Location-Client': randomUUID(), 'Idempotency-Key': randomUUID() } });
   assert.equal(stop.status, 200, JSON.stringify(stop.body));
@@ -226,7 +226,7 @@ test('stale or unavailable GPS is labelled accurately and incident snapshots rem
 test('hosted mode exposes no simulator writes, retries are bounded, and shared-link reads are rate limited', async (t) => {
   const { h, customer, admin, ride } = await booked(t), friend = await contact(customer);
   let incident = (await report(customer, ride, [friend.id])).body.incident, notice = incident.notifications[0];
-  const hosted = createApplication({ db: h.db, allowSimulation: false, clock: () => 1_000_000 });
+  const hosted = createApplication({ db: h.db, allowSimulation: false, clock: () => TEST_NOW });
   assert.equal(hosted.safety.get(admin.user.id, incident.id).settings.canSimulate, false);
   assert.throws(() => hosted.safety.command({ userId: admin.user.id, action: 'notification.simulate', id: notice.id, key: randomUUID(), data: { expectedVersion: notice.version, outcome: 'sent' } }), { code: 'FORBIDDEN' });
   const simulationKey = randomUUID(), simulationData = { expectedVersion: notice.version, outcome: 'failed' };
@@ -244,7 +244,7 @@ test('hosted mode exposes no simulator writes, retries are bounded, and shared-l
 
 test('administrator pagination handles tied timestamps, filters and reporter limits without exposing private details in the queue', async (t) => {
   const { h, customer, driver, admin, ride } = await booked(t);
-  const app = createApplication({ db: h.db, allowSimulation: true, clock: () => 1_000_000 });
+  const app = createApplication({ db: h.db, allowSimulation: true, clock: () => TEST_NOW });
   const ids = [];
   for (let n = 0; n < 21; n++) {
     let record = app.safety.command({ userId: n < 20 ? customer.user.id : driver.user.id, action: 'incident.create', id: ride.id,
@@ -273,11 +273,11 @@ test('backup and restore retain private incident evidence and contacts but canno
   const shared = (await link(customer, ride)).body;
   const folder = mkdtempSync(join(tmpdir(), 'taxi-safety-copy-')); t.after(() => rmSync(folder, { recursive: true, force: true }));
   const backupPath = join(folder, 'backup.sqlite'), restoredPath = join(folder, 'restored.sqlite');
-  saveSnapshot(h.filename, backupPath, { now: 1_000_100 }); saveSnapshot(backupPath, restoredPath, { now: 1_000_200 });
+  saveSnapshot(h.filename, backupPath, { now: (TEST_NOW + 100) }); saveSnapshot(backupPath, restoredPath, { now: (TEST_NOW + 200) });
   assert.equal((await viewLink(h, shared.token)).status, 200, 'the live source is unchanged');
   const restored = openDatabase(restoredPath);
   try {
-    const app = createApplication({ db: restored, clock: () => 1_000_200 });
+    const app = createApplication({ db: restored, clock: () => (TEST_NOW + 200) });
     assert.deepEqual(JSON.parse(JSON.stringify(app.safety.get(customer.user.id, record.id).incident)), record);
     assert.equal(app.safety.contacts(customer.user.id).contacts[0].phone, friend.phone);
     assert.throws(() => app.safety.sharedTrip({ token: shared.token }), { code: 'NOT_FOUND' });

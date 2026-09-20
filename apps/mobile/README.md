@@ -9,10 +9,17 @@ keyboard, accessibility and tablet QA remain pending.
 ## Included
 
 - Existing-account sign-in, secure session restore and per-device sign-out.
-- Customer, Work, Activity and Account tabs; driver application screen.
+- Home, Activity, Work and Account tabs; driver application screen.
 - Separate customer/work activity with current and paginated past journeys.
-- Start a driver profile with the existing account; view application/document
-  status. Continue document uploads/review on the website.
+- Complete driver applications: guided make/year/model/colour dropdowns, years from
+  2000 through the current year, Other fields for unlisted values,
+  number plate, private PNG/JPEG uploads, expiry dates, review, corrections and resubmission.
+- Resume the car chosen during website **Apply to drive**, including its year and
+  colour, before completing personal details. Native enrollment saves the same
+  structured fields so interrupted applications can continue on either interface.
+- Shared rounded 3D-style vehicle icons in ten colours in Work and journey details.
+  Illustrations are labelled; exact-model 3D assets are not included.
+- The same manual approval workflow as the web. Administrators review on the web.
 - Native device list and remote sign-out; web recovery at `/devices`.
 - Clear planned-service labels for Eats, courier and vendor work.
 
@@ -92,12 +99,16 @@ root to npm workspaces or hoisting dependencies.
 | `app/` | Protected routes, tabs and screens |
 | `src/session/` | Account lifecycle and native SecureStore adapter |
 | `src/api/client.ts` | HTTPS, bearer transport, one refresh at a time, stale-response rejection |
+| `src/onboarding/` | Guided application, form conversion and user-selected file adapters |
 | `src/ui/` | Shared visual components and focus-scoped loading |
+| `src/assets/vehicles/` | Bundled colour variants; identical to the web icons |
+| `packages/shared/src/vehicle-registration.*` | Registration year policy and choice normalisation |
 | `packages/shared/src/mobile-contracts.*` | Versioned wire types and runtime readers |
 | `services/api/src/modules/device-sessions/` | Device token lifecycle and ownership |
 | `services/api/src/http/mobile-router.mjs` | Narrow native API surface |
 
-Read [the mobile contract](../../docs/mobile-foundation.md) and
+Read [vehicle identity and acceptance](../../docs/vehicle-identity.md),
+[the mobile contract](../../docs/mobile-foundation.md) and
 [the separate admin plan](../../docs/admin-dashboard.md) before adding workflows.
 
 ## Device review before the next milestone
@@ -112,7 +123,12 @@ Read [the mobile contract](../../docs/mobile-foundation.md) and
 4. Test small phones and iPad/Android tablets in both orientations, large text,
    screen readers, keyboard avoidance and reachable touch targets. Verify the
    background privacy screen on actual devices.
-5. Check that there are no unexpected GPS/microphone/camera prompts, credentials
+5. Open the system document picker, cancel, select a PNG/JPEG, rotate and background
+   the app. The privacy cover should conceal the application without unmounting the
+   navigation stack; returning from the picker must retain the selected file and form.
+   Verify cache cleanup, expired/replaced images, offline upload retry, stale edits
+   from web, approval and reopening during assigned work.
+6. Check that there are no unexpected GPS/microphone/camera prompts, credentials
    in logs or success messages after failed network/storage operations.
 
 Before public downloads: finish native ride workflows/account recovery, test signed

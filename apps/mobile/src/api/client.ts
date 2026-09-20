@@ -1,5 +1,5 @@
-import { envelope, parseAccount, parseSignIn, parseActivity, parseDevices, parseApplication } from '../../../../packages/shared/src/mobile-contracts.mjs';
-import type { Account, Credentials, Mode, SignIn } from '../../../../packages/shared/src/mobile-contracts.mjs';
+import { envelope, parseAccount, parseSignIn, parseActivity, parseDevices, parseOnboarding } from '../../../../packages/shared/src/mobile-contracts.mjs';
+import type { Account, Credentials, DriverCommands, DriverDetails, Mode, SignIn } from '../../../../packages/shared/src/mobile-contracts.mjs';
 
 export interface Vault { read(): Promise<string | null>; write(value: string): Promise<void>; clear(): Promise<void> }
 export interface SavedSession { origin: string; refreshToken: string; sessionId: string; previewAccess: string }
@@ -50,7 +50,7 @@ export class MobileClient {
   }
   private async send(path: string, { data, token, preview = this.saved?.previewAccess ?? '', key }: { data?: unknown; token?: string; preview?: string; key?: string } = {}) {
     if (!/^\/[a-z0-9/?=&_-]+$/i.test(path)) throw new Error('Invalid mobile API path.');
-    const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), 12_000);
+    const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), path === '/driver/application/upload' ? 45_000 : 12_000);
     try {
       const response = await this.fetchImpl(`${this.origin}/api/mobile/v1${path}`, { method: data === undefined ? 'GET' : 'POST',
         credentials: 'omit', redirect: 'error', signal: controller.signal,
@@ -138,10 +138,18 @@ export class MobileClient {
   }
   async session() { const epoch = this.epoch, body = await this.request('/session'); if (epoch !== this.epoch) throw changed(); const user = parseAccount(body.user); this.publish(user); return user; }
   async activity(mode: Mode, before?: string | null) { return parseActivity(await this.request(`/activity?mode=${mode}${before ? `&before=${encodeURIComponent(before)}` : ''}`)); }
-  async application() { return parseApplication(await this.request('/driver/application')); }
+  private ownApplication(body: unknown) {
+    const application = parseOnboarding(body);
+    if (application.driverId !== this.user?.id) throw changed();
+    return application;
+  }
+  async application() { return this.ownApplication(await this.request('/driver/onboarding')); }
+  async applicationCommand<A extends keyof DriverCommands>(action: A, data: DriverCommands[A], key: string) {
+    return this.ownApplication(await this.request(`/driver/application/${action}`, data, key));
+  }
   async devices() { return parseDevices(await this.request('/devices')); }
   async revoke(id: string) { return this.request(`/devices/${id}/revoke`, {}); }
-  async addDriver(vehicle: { model: string; plate: string }, key: string) {
+  async addDriver(vehicle: DriverDetails['vehicle'], key: string) {
     const epoch = this.epoch, body = await this.request('/account/driver-profile', { vehicle }, key); if (epoch !== this.epoch) throw changed(); const user = parseAccount(body.user); this.publish(user); return user;
   }
   async logout(): Promise<string | null> {

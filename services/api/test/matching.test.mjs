@@ -1,13 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { harness, participants, requestRide, PASSWORD } from './helpers.mjs';
+import { TEST_NOW, harness, participants, requestRide, PASSWORD } from './helpers.mjs';
 
 const pickup = { lat: 9.081234, lng: 7.401234, name: 'Private test pickup' };
 const destination = { lat: 9.1, lng: 7.45, name: 'Private test destination' };
 const mapProvider = { mode: 'off', describe: () => ({ enabled: false }),
   route: async (a, b) => ({ distanceMeters: 7000, durationSeconds: 1200, coordinates: [[a.lng, a.lat], [b.lng, b.lat]] }) };
-const gps = (now = 1000000, extra = {}) => ({ lat: pickup.lat, lng: pickup.lng, accuracy: 10, capturedAt: now, ...extra });
+const gps = (now = TEST_NOW, extra = {}) => ({ lat: pickup.lat, lng: pickup.lng, accuracy: 10, capturedAt: now, ...extra });
 async function setup(t, options = {}, count = 1) {
   const h = await harness(t, { mapProvider, ...options });
   return { h, ...await participants(h, count, { online: false }) };
@@ -117,25 +117,25 @@ test('availability binds updates to the initiating session/window; any window of
   const replay = await driver.availability('/api/availability/online', data, key);
   assert.equal(replay.status, 200, 'an old completed command can be replayed even after its fix ages out');
   assert.equal(replay.body.availability.online, false, 'replay never reactivates a stopped lease');
-  assert.equal((await driver.availability(`/api/availability/${id}/position`, { sequence: 2, position: gps(1030000) })).body.error.code, 'AVAILABILITY_CLOSED');
+  assert.equal((await driver.availability(`/api/availability/${id}/position`, { sequence: 2, position: gps((TEST_NOW + 30_000)) })).body.error.code, 'AVAILABILITY_CLOSED');
   const stored = h.db.prepare('SELECT * FROM driver_availability WHERE id = ?').get(id);
   for (const field of ['session_hash', 'client_hash', 'position_json', 'area_id']) assert.equal(stored[field], null);
 });
 
 test('GPS accuracy, bounds, clocks, monotonic fixes and retries cannot keep stale availability online', async (t) => {
   const { h, driver } = await setup(t);
-  for (const extra of [{ lat: '9.08' }, { lat: 0 }, { accuracy: 201 }, { capturedAt: 970000 }, { capturedAt: 1005001 }]) {
-    assert.equal((await driver.availability('/api/availability/online', { mode: 'gps', position: gps(1000000, extra) })).status, 400);
+  for (const extra of [{ lat: '9.08' }, { lat: 0 }, { accuracy: 201 }, { capturedAt: (TEST_NOW - 30_000) }, { capturedAt: (TEST_NOW + 5_001) }]) {
+    assert.equal((await driver.availability('/api/availability/online', { mode: 'gps', position: gps(TEST_NOW, extra) })).status, 400);
   }
   const online = await driver.online({ mode: 'gps' }), path = `/api/availability/${online.id}/position`;
   h.advance(10000);
-  const data = { sequence: 2, position: gps(1010000) };
+  const data = { sequence: 2, position: gps((TEST_NOW + 10_000)) };
   assert.equal((await driver.availability(path, data)).status, 200);
-  assert.equal((await driver.availability(path, { ...data, position: gps(1010000, { lng: 7.41 }) })).body.error.code, 'STALE_LOCATION');
-  assert.equal((await driver.availability(path, { sequence: 3, position: gps(1009999) })).body.error.code, 'STALE_LOCATION');
+  assert.equal((await driver.availability(path, { ...data, position: gps((TEST_NOW + 10_000), { lng: 7.41 }) })).body.error.code, 'STALE_LOCATION');
+  assert.equal((await driver.availability(path, { sequence: 3, position: gps((TEST_NOW + 9_999)) })).body.error.code, 'STALE_LOCATION');
   h.advance(10000);
   const retry = await driver.availability(path, data); assert.equal(retry.body.replayed, true);
-  assert.equal(retry.body.availability.updatedAt, 1010000, 'retry does not renew the lease');
+  assert.equal(retry.body.availability.updatedAt, (TEST_NOW + 10_000), 'retry does not renew the lease');
   h.advance(20000);
   assert.equal((await driver.send('/api/availability')).body.availability, null, 'fix expires at the exact 30-second deadline');
   assert.equal(h.db.prepare('SELECT position_json FROM driver_availability WHERE id = ?').get(online.id).position_json, null);
@@ -162,7 +162,7 @@ test('unclaimed requests expire at five minutes, free the customer, and keep ret
   const { h, customer, driver } = await setup(t, { persistent: true });
   const key = randomUUID(), data = { pickupId: 'wuse-ii', destinationId: 'maitama' };
   const ride = (await customer.post('/api/rides', data, key)).body.ride;
-  assert.equal(ride.matching.expiresAt, 1300000);
+  assert.equal(ride.matching.expiresAt, TEST_NOW + 300_000);
   h.advance(299999); await driver.online(); assert.equal((await list(driver)).length, 1);
   await h.restart(); h.advance(1);
   assert.equal((await claim(driver, ride)).body.error.code, 'REQUEST_UNAVAILABLE');
@@ -207,11 +207,11 @@ test('candidate filtering precedes the result limit and orders eligible pickups 
   const make = (index, lat) => {
     const userId = randomUUID(), id = randomUUID(), quoteId = randomUUID();
     h.db.prepare('INSERT INTO users (id,email,name,password_hash,role,created_at) VALUES (?,?,?,?,?,?)')
-      .run(userId, `fixture-${index}@example.test`, 'Fixture customer', 'unused-test-hash', 'customer', 999000 + index);
+      .run(userId, `fixture-${index}@example.test`, 'Fixture customer', 'unused-test-hash', 'customer', TEST_NOW - 1000 + index);
     h.db.prepare(`INSERT INTO rides (id,customer_id,pickup_id,destination_id,suggested_fare_kobo,created_at,updated_at,request_expires_at)
-      VALUES (?,?,?,?,?,?,?,?)`).run(id, userId, `point:${index}`, 'destination', 450000, 999000 + index, 999000 + index, 1299000 + index);
+      VALUES (?,?,?,?,?,?,?,?)`).run(id, userId, `point:${index}`, 'destination', 450000, TEST_NOW - 1000 + index, TEST_NOW - 1000 + index, TEST_NOW + 299000 + index);
     h.db.prepare('INSERT INTO location_quotes (id,customer_id,created_at,expires_at,route_json,ride_id) VALUES (?,?,?,?,?,?)')
-      .run(quoteId, userId, 999000 + index, 1899000 + index, JSON.stringify({ pickup: { lat, lng: pickup.lng, name: 'Private place' }, destination }), id);
+      .run(quoteId, userId, TEST_NOW - 1000 + index, TEST_NOW + 899000 + index, JSON.stringify({ pickup: { lat, lng: pickup.lng, name: 'Private place' }, destination }), id);
     return id;
   };
   for (let i = 0; i < 51; i++) make(i, 9.22);

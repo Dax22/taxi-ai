@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
-import { harness, participants, requestRide, claimRide } from './helpers.mjs';
+import { TEST_NOW, harness, participants, requestRide, claimRide } from './helpers.mjs';
 import { createApplication } from '../src/application.mjs';
 import { createPaymentsService } from '../src/modules/payments/service.mjs';
 import { createPaymentsRepository } from '../src/modules/payments/repository.mjs';
@@ -230,7 +230,7 @@ test('server verifies simulator identity, reference, amount, currency and status
   const ride = await complete(customer, driver), current = await start(customer, await payment(customer, ride));
   const app = createApplication({ db: h.db });
   const options = { repository: createPaymentsRepository(h.db), getAccount: app.accounts.profile, tripForPayment: app.rides.paymentContext,
-    unitOfWork: (fn) => transaction(h.db, fn), tokens, audit: createAudit(h.db), clock: () => 1001000, allowSimulation: true };
+    unitOfWork: (fn) => transaction(h.db, fn), tokens, audit: createAudit(h.db), clock: () => (TEST_NOW + 1_000), allowSimulation: true };
   const input = { userId: customer.user.id, rideId: ride.id, attemptId: current.attempt.id, action: 'simulate', key: randomUUID(),
     data: { expectedVersion: current.version, outcome: 'success' } };
   for (const override of [{ reference: 'unknown' }, { amountKobo: 1 }, { amountKobo: '470001' }, { currency: 'USD' },

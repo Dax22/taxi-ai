@@ -5,7 +5,9 @@ const text = (v) => typeof v === 'string';
 const integer = (v) => Number.isSafeInteger(v) && v >= 0;
 const texts = (v) => Array.isArray(v) && v.every(text);
 const nullableText = (v) => v === null || text(v);
-const vehicle = (v) => record(v) && text(v.model) && text(v.plate);
+const vehicle = (v) => record(v) && text(v.model) && text(v.plate)
+  && ['make','modelName','colour'].every((key) => v[key] === undefined || text(v[key]))
+  && (v.year === undefined || (integer(v.year) && v.year >= 1980 && v.year <= 2100));
 const eligibility = (v) => record(v) && typeof v.eligible === 'boolean' && texts(v.missing) && texts(v.expired);
 function expect(ok) { if (!ok) throw new Error('Taxi Ai returned an incompatible response. Update the app or try again later.'); }
 export function envelope(value) {
@@ -30,7 +32,8 @@ export function parseSignIn(value) {
 export function parseActivity(value) {
   envelope(value);
   const ride = (r) => record(r) && text(r.id) && text(r.status) && text(r.pickup) && text(r.destination)
-    && (r.fareKobo === null || integer(r.fareKobo)) && integer(r.suggestedFareKobo) && integer(r.createdAt) && typeof r.isDemo === 'boolean';
+    && (r.fareKobo === null || integer(r.fareKobo)) && integer(r.suggestedFareKobo) && integer(r.createdAt) && typeof r.isDemo === 'boolean'
+    && (r.driver === undefined || r.driver === null || (record(r.driver) && text(r.driver.id) && text(r.driver.name) && vehicle(r.driver.vehicle)));
   expect(Array.isArray(value.current) && value.current.every(ride) && Array.isArray(value.history) && value.history.every(ride)
     && nullableText(value.nextBefore) && Array.isArray(value.activeElsewhere)
     && value.activeElsewhere.every((r) => record(r) && text(r.id) && text(r.status) && ['customer','work'].includes(r.mode)));
@@ -45,5 +48,19 @@ export function parseDevices(value) {
 export function parseApplication(value) {
   envelope(value); const a = value.application;
   expect(record(a) && text(a.status) && eligibility(a.eligibility) && integer(a.documentCount) && vehicle(a.vehicle));
+  return a;
+}
+export function parseOnboarding(value) {
+  envelope(value); const a = value.application;
+  const details = (d) => record(d) && text(d.legalName) && text(d.phone) && text(d.licenceNumber)
+    && vehicle(d.vehicle) && text(d.vehicle.make) && text(d.vehicle.colour) && integer(d.vehicle.year);
+  const kinds = ['profile_photo','driving_licence','vehicle_registration','insurance','vehicle_photo'];
+  expect(record(a) && text(a.driverId) && ['draft','submitted','changes_requested','rejected','approved'].includes(a.status)
+    && integer(a.version) && typeof a.busy === 'boolean' && eligibility(a.eligibility) && nullableText(a.reviewReason)
+    && (a.details === null || details(a.details)) && vehicle(a.vehicle) && Array.isArray(a.documents) && a.documents.length <= kinds.length
+    && a.documents.every((d) => record(d) && text(d.id) && kinds.includes(d.kind) && text(d.name)
+      && ['image/png','image/jpeg'].includes(d.mimeType) && integer(d.sizeBytes) && d.sizeBytes > 0 && d.sizeBytes <= 2 * 1024 * 1024
+      && (kinds.indexOf(d.kind) === 0 || d.kind === 'vehicle_photo' ? d.expiresOn === null : text(d.expiresOn) && /^\d{4}-\d{2}-\d{2}$/.test(d.expiresOn)))
+    && new Set(a.documents.map((d) => d.kind)).size === a.documents.length);
   return a;
 }

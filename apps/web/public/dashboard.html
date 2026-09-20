@@ -9,6 +9,7 @@
   <link rel="icon" href="/favicon.svg?v=amber" type="image/svg+xml">
   <link rel="stylesheet" href="/styles.css">
   <link rel="stylesheet" href="/dashboard.css">
+  <link rel="stylesheet" href="/vehicle.css">
   <script type="module" src="/dashboard.mjs"></script>
 </head>
 <body class="account-page">
@@ -48,7 +49,25 @@
         <p class="small-note">Switching clears unsaved forms in this window. Saved journeys, calls and active trip location sharing continue.</p>
         <div id="mode-confirm" class="mode-confirm" hidden role="group" aria-labelledby="mode-confirm-title"><h3 id="mode-confirm-title">Go offline before switching?</h3><p>Your Work availability is online. Going offline stops matching for this account.</p><div class="review-actions"><button id="mode-offline-confirm" type="button" class="button button-primary button-small">Go offline and switch</button><button id="mode-cancel" type="button" class="button button-outline button-small">Stay in Work</button></div></div>
         <div id="mode-active" class="mode-active" hidden><h3>You have a journey in another mode</h3><p class="small-note">Open it to continue, chat or use Trip safety. Finish or cancel it before starting a conflicting journey.</p><ul id="mode-active-list"></ul></div>
-        <form id="driver-enrollment" class="stack-form driver-enrollment" hidden><fieldset id="driver-enrollment-fields"><legend>Add a driver profile</legend><p class="small-note">Keep your current login and Customer access. Complete the document review in Work before you can accept rides. Use fictional details in this preview.</p><div class="onboarding-grid"><div><label for="driver-profile-model">Car make and model</label><input id="driver-profile-model" placeholder="e.g. Toyota Corolla" minlength="2" maxlength="80" required></div><div><label for="driver-profile-plate">Number plate</label><input id="driver-profile-plate" placeholder="Use a test plate" minlength="2" maxlength="15" required></div></div><div class="review-actions"><button type="submit" class="button button-primary button-small">Add driver profile</button><button id="driver-enrollment-cancel" type="button" class="button button-outline button-small">Cancel</button></div></fieldset></form>
+        <form id="driver-enrollment" class="stack-form driver-enrollment" hidden>
+          <fieldset id="driver-enrollment-fields"><legend>Choose your car</legend>
+            <p class="supporting-copy">Choose your make, year, model and colour, then add your number plate. We’ll save these details for your driver application.</p>
+            <p class="small-note">Keep your current login and Customer access. Document review is required before you can accept rides. Use fictional details in this preview.</p>
+            <div class="onboarding-grid">
+              <div><label for="driver-profile-make">Vehicle make</label><select id="driver-profile-make" required><option value="">Select make</option></select></div>
+              <div id="driver-profile-make-other-row" hidden><label for="driver-profile-make-other">Enter vehicle make</label><input id="driver-profile-make-other" minlength="2" maxlength="40" disabled></div>
+              <div><label for="driver-profile-year">Vehicle year</label><select id="driver-profile-year" aria-describedby="driver-profile-year-hint" required><option value="">Select year</option></select><p id="driver-profile-year-hint" class="small-note">Choose a year from 2000 onwards.</p></div>
+              <div><label for="driver-profile-model">Vehicle model</label><select id="driver-profile-model" required disabled><option value="">Select make first</option></select></div>
+              <div id="driver-profile-model-other-row" hidden><label for="driver-profile-model-other">Enter vehicle model</label><input id="driver-profile-model-other" minlength="2" maxlength="80" disabled></div>
+              <div><label for="driver-profile-colour">Colour</label><select id="driver-profile-colour" required><option value="">Select colour</option></select></div>
+              <div id="driver-profile-colour-other-row" hidden><label for="driver-profile-colour-other">Describe the colour or two-tone paint</label><input id="driver-profile-colour-other" minlength="2" maxlength="30" disabled></div>
+              <div><label for="driver-profile-plate">Number plate</label><input id="driver-profile-plate" placeholder="Use a test plate" minlength="2" maxlength="15" pattern="[A-Za-z0-9 \-]+" required></div>
+            </div>
+            <p class="small-note">Can’t find your vehicle? Choose Other / not listed and enter the details shown on your documents.</p>
+            <div id="driver-profile-preview" hidden></div>
+            <div class="review-actions"><button type="submit" class="button button-primary button-small">Continue to driver application</button><button id="driver-enrollment-cancel" type="button" class="button button-outline button-small">Cancel</button></div>
+          </fieldset>
+        </form>
         <p class="mode-coming small-note">Coming later: Taxi Ai Eats, courier delivery by car or motorbike, and My store. These services are not open for orders yet.</p>
       </section>
       <section id="onboarding-panel" class="account-card onboarding-panel" hidden aria-labelledby="onboarding-title">
@@ -57,28 +76,34 @@
         <p id="onboarding-error" class="error-text" role="alert"></p><p id="onboarding-loading" role="status">Loading your application…</p>
         <div id="onboarding-content" hidden>
           <p id="onboarding-eligibility" class="supporting-copy" role="status"></p><p id="onboarding-reason-note" class="small-note"></p>
+          <nav id="onboarding-progress" class="onboarding-progress" aria-label="Application steps"><a href="#onboarding-details-form">1 · Details</a><a href="#onboarding-documents-heading">2 · Documents</a><a href="#onboarding-final-review">3 · Review</a></nav>
+          <div id="onboarding-vehicle-preview"></div>
           <dl id="onboarding-summary" class="onboarding-summary"></dl>
           <form id="onboarding-details-form" class="stack-form" autocomplete="off"><fieldset id="onboarding-details-fields"><legend>1. Driver and vehicle details</legend>
+            <p class="small-note">Choose the details on your vehicle documents. Select Other if a make, model or colour is missing from the list.</p>
             <div class="onboarding-grid">
               <div><label for="onboarding-legalName">Full legal name</label><input id="onboarding-legalName" minlength="2" maxlength="100" required></div>
               <div><label for="onboarding-phone">Contact number (private)</label><input id="onboarding-phone" type="tel" placeholder="+234…" pattern="\+[1-9][0-9]{7,14}" maxlength="16" required></div>
               <div><label for="onboarding-licenceNumber">Driving licence number</label><input id="onboarding-licenceNumber" minlength="3" maxlength="40" required></div>
-              <div><label for="onboarding-make">Vehicle make</label><input id="onboarding-make" placeholder="Toyota" minlength="2" maxlength="40" required></div>
-              <div><label for="onboarding-model">Vehicle model</label><input id="onboarding-model" placeholder="Corolla" minlength="2" maxlength="80" required></div>
-              <div><label for="onboarding-year">Vehicle year</label><input id="onboarding-year" type="number" min="1980" max="2100" step="1" required></div>
-              <div><label for="onboarding-colour">Colour</label><input id="onboarding-colour" minlength="2" maxlength="30" required></div>
+              <div><label for="onboarding-make">Vehicle make</label><select id="onboarding-make" required><option value="">Select make</option></select></div>
+              <div id="onboarding-make-other-row" hidden><label for="onboarding-make-other">Enter vehicle make</label><input id="onboarding-make-other" minlength="2" maxlength="40" disabled></div>
+              <div><label for="onboarding-year">Vehicle year</label><select id="onboarding-year" aria-describedby="onboarding-year-hint" required><option value="">Select year</option></select><p id="onboarding-year-hint" class="small-note">Choose a year from 2000 onwards.</p></div>
+              <div><label for="onboarding-model">Vehicle model</label><select id="onboarding-model" required disabled><option value="">Select make first</option></select></div>
+              <div id="onboarding-model-other-row" hidden><label for="onboarding-model-other">Enter vehicle model</label><input id="onboarding-model-other" minlength="2" maxlength="80" disabled></div>
+              <div><label for="onboarding-colour">Colour</label><select id="onboarding-colour" required><option value="">Select colour</option></select></div>
+              <div id="onboarding-colour-other-row" hidden><label for="onboarding-colour-other">Describe the colour or two-tone paint</label><input id="onboarding-colour-other" minlength="2" maxlength="30" disabled></div>
               <div><label for="onboarding-plate">Number plate</label><input id="onboarding-plate" minlength="2" maxlength="15" required></div>
             </div><button type="submit" class="button button-primary button-small">Save details</button>
           </fieldset></form>
           <p id="onboarding-stale" class="error-text" hidden>Your saved application changed while you were editing. Copy any unsaved changes, then load the saved details before continuing. <button id="onboarding-reload" type="button" class="button button-outline button-small">Load saved details</button></p>
-          <h3>2. Required documents</h3><p class="small-note">PNG or JPEG, up to 2 MiB each. Replacing or removing a document deletes its current stored file. Expiry dates end at midnight in Abuja.</p>
+          <h3 id="onboarding-documents-heading">2. Required documents</h3><p class="small-note">PNG or JPEG, up to 2 MiB each. Replacing or removing a document deletes its current stored file. Expiry dates end at midnight in Abuja.</p>
           <ul id="onboarding-documents" class="onboarding-documents"></ul>
           <form id="onboarding-upload-form" class="stack-form"><fieldset id="onboarding-upload-fields"><legend>Upload or replace a document</legend><div class="onboarding-grid">
             <div><label for="onboarding-kind">Document category</label><select id="onboarding-kind" required></select></div>
             <div id="onboarding-expiry-row"><label for="onboarding-expiresOn">Expiry date</label><input id="onboarding-expiresOn" type="date"></div>
             <div><label for="onboarding-file">Choose image</label><input id="onboarding-file" type="file" accept="image/png,image/jpeg" required></div>
           </div><p class="small-note">Save any changes to your details before uploading or submitting.</p><button type="submit" class="button button-outline button-small">Upload document</button></fieldset></form>
-          <div class="onboarding-actions"><button id="onboarding-submit" type="button" class="button button-primary">Submit for review</button><button id="onboarding-reopen" type="button" class="button button-outline">Reopen for changes · pause new rides</button><button id="onboarding-close" type="button" class="button button-outline">Close application</button></div>
+          <div id="onboarding-final-review" class="onboarding-actions"><button id="onboarding-submit" type="button" class="button button-primary">Submit for review</button><button id="onboarding-reopen" type="button" class="button button-outline">Reopen for changes · pause new rides</button><button id="onboarding-close" type="button" class="button button-outline">Close application</button></div>
           <form id="onboarding-review-form" class="stack-form"><fieldset id="onboarding-review-fields"><legend>3. Record your review</legend>
             <p class="small-note">Download and inspect all five current documents. Approval requires all four checks and a reference to the manual verification performed. A download alone is not a completed check.</p>
             <div id="onboarding-checks"></div><label for="onboarding-reference">Manual verification reference (required for approval)</label><input id="onboarding-reference" minlength="5" maxlength="200" autocomplete="off">
@@ -126,7 +151,7 @@
             <p id="contact-privacy" class="small-note">Removing a contact cancels unsent test alerts. Details already attached to a saved incident stay in its private records.</p>
           </section>
           <section class="account-card" id="customer-panel" hidden aria-labelledby="request-title"><p class="eyebrow">YOUR NEXT JOURNEY</p><h2 id="request-title">Sample-area demo.</h2><p id="sample-disabled-note" class="small-note" hidden>For hosted testing, use a route preview above. Sample-area requests are available in local development.</p><form id="request-form" class="stack-form"><fieldset id="request-fields"><legend class="visually-hidden">Choose your journey</legend><label for="request-pickup">Pickup area</label><select id="request-pickup" required></select><label for="request-destination">Destination</label><select id="request-destination" required></select><div class="quote-preview"><span>Suggested fare</span><strong id="request-quote"></strong><p class="small-note">Sample price, not a live quote or AI estimate. You and the driver agree the final fare.</p></div><button class="button button-primary button-full" type="submit">Request a test ride <span aria-hidden="true">↗</span></button></fieldset></form><p id="open-request-note" class="small-note" hidden>Finish or cancel your open request before creating another.</p></section>
-          <section id="driver-panel" class="account-card" hidden aria-labelledby="driver-title"><p class="eyebrow">DRIVE WITH TAXI AI</p><h2 id="driver-title">Your driver profile.</h2><p id="driver-status" class="status-badge"></p><p id="driver-vehicle"></p><p id="driver-guidance" class="supporting-copy"></p></section>
+          <section id="driver-panel" class="account-card" hidden aria-labelledby="driver-title"><p class="eyebrow">DRIVE WITH TAXI AI</p><h2 id="driver-title">Your driver profile.</h2><p id="driver-status" class="status-badge"></p><p id="driver-vehicle"></p><div id="driver-vehicle-card"></div><p id="driver-guidance" class="supporting-copy"></p></section>
           <section class="sidebar-note"><p class="eyebrow">A CLEAR AGREEMENT</p><p>Either person can make an offer. The other person must accept that exact price before the fare is agreed.</p><p class="small-note">Chat and audio calls stay in Taxi Ai. Phone numbers are not exchanged. Discussing a price by voice still needs an accepted offer in the app.</p></section>
         </aside>
         <div class="ride-workspace">
@@ -158,7 +183,7 @@
             <div class="review-actions"><button id="tracking-start" type="button" class="button button-primary button-small" hidden>Share my location</button><button id="tracking-stop" type="button" class="button button-outline button-small" hidden>Stop sharing</button></div>
           </section>
           <section id="ride-detail" class="account-card detail-card" hidden aria-labelledby="detail-title">
-            <div class="card-topline"><p class="eyebrow">JOURNEY DETAILS</p><span id="detail-status" class="status-badge"></span></div><h2 id="detail-title"></h2><p id="detail-person" class="supporting-copy"></p><p id="detail-reference" class="small-note"></p>
+            <div class="card-topline"><p class="eyebrow">JOURNEY DETAILS</p><span id="detail-status" class="status-badge"></span></div><h2 id="detail-title"></h2><div id="detail-vehicle-card"></div><p id="detail-person" class="supporting-copy"></p><p id="detail-reference" class="small-note"></p>
             <div class="fare-display" aria-live="polite" aria-atomic="true"><p id="fare-label" class="eyebrow"></p><strong id="fare-value"></strong><p id="fare-guidance"></p></div>
             <p id="matching-status" class="small-note"></p>
             <p id="fare-expiry" class="small-note"></p>

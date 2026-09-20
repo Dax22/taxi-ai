@@ -1,8 +1,10 @@
 const documentColumns = `id, driver_id AS driverId, kind, name, mime_type AS mimeType,
   size_bytes AS sizeBytes, sha256, expires_on AS expiresOn, created_at AS createdAt`;
 function profile(row) {
+  const approved = row?.status === 'approved' && row.approved_details ? JSON.parse(row.approved_details).vehicle : null;
   return row ? { id: row.user_id, status: row.status,
-    vehicle: { model: row.vehicle_model, plate: row.vehicle_plate } } : null;
+    vehicle: { model: row.vehicle_model, plate: row.vehicle_plate,
+      ...(approved ? { make: approved.make, modelName: approved.model, year: approved.year, colour: approved.colour } : {}) } } : null;
 }
 function application(row) {
   return row ? { driverId: row.driver_id, status: row.status, version: row.version,
@@ -14,12 +16,19 @@ function application(row) {
 /** All application, document and retry writes join the caller's transaction. */
 export function createDriversRepository(db) {
   return Object.freeze({
-    find: (id) => profile(db.prepare('SELECT * FROM drivers WHERE user_id = ?').get(id)),
-    list: () => db.prepare(`SELECT d.* FROM drivers d JOIN driver_applications a ON a.driver_id=d.user_id
+    find: (id) => profile(db.prepare(`SELECT d.*, CASE WHEN a.status='approved' THEN a.details_json END AS approved_details
+      FROM drivers d LEFT JOIN driver_applications a ON a.driver_id=d.user_id WHERE d.user_id = ?`).get(id)),
+    list: () => db.prepare(`SELECT d.*, CASE WHEN a.status='approved' THEN a.details_json END AS approved_details
+      FROM drivers d JOIN driver_applications a ON a.driver_id=d.user_id
       ORDER BY (a.status='submitted') DESC, a.updated_at DESC, d.user_id LIMIT 100`).all().map(profile),
     insert(id, vehicle, now) {
       db.prepare('INSERT INTO drivers (user_id, vehicle_model, vehicle_plate) VALUES (?, ?, ?)').run(id, vehicle.model, vehicle.plate);
       db.prepare('INSERT INTO driver_applications(driver_id,updated_at) VALUES (?,?)').run(id, now);
+      if (vehicle.selection) db.prepare('INSERT INTO driver_vehicle_selections(driver_id,vehicle_json) VALUES (?,?)').run(id, JSON.stringify(vehicle.selection));
+    },
+    selection(id) {
+      const row = db.prepare('SELECT vehicle_json FROM driver_vehicle_selections WHERE driver_id=?').get(id);
+      return row ? JSON.parse(row.vehicle_json) : null;
     },
     application: (id) => application(db.prepare('SELECT * FROM driver_applications WHERE driver_id=?').get(id)),
     documents: (id) => db.prepare(`SELECT ${documentColumns} FROM driver_documents WHERE driver_id=? ORDER BY kind`).all(id),
@@ -38,6 +47,7 @@ export function createDriversRepository(db) {
     readIds: (driverId, reviewerId) => db.prepare(`SELECT r.document_id AS id FROM driver_document_reads r
       JOIN driver_documents d ON d.id=r.document_id WHERE d.driver_id=? AND r.reviewer_id=?`).all(driverId, reviewerId).map((row) => row.id),
     save(app) {
+      if (app.details) db.prepare('DELETE FROM driver_vehicle_selections WHERE driver_id=?').run(app.driverId);
       db.prepare(`UPDATE driver_applications SET status=?,version=?,details_json=?,submitted_at=?,updated_at=?,
         reviewed_at=?,reviewed_by=?,review_reason=?,verification_json=? WHERE driver_id=?`).run(app.status, app.version,
         app.details ? JSON.stringify(app.details) : null, app.submittedAt, app.updatedAt, app.reviewedAt,

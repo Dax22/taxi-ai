@@ -1,6 +1,6 @@
 {
   "name": "taxi-ai",
-  "version": "0.15.0",
+  "version": "0.17.0",
   "private": true,
   "description": "Taxi Ai project foundation for Abuja rides, food and courier delivery",
   "type": "module",

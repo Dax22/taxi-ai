@@ -166,12 +166,16 @@ export function createPageController({ client, activityClient = client, view, mo
   }
   return Object.freeze({ refresh, poll, runAction, selection, rideCommand, switchMode, snapshot: () => structuredClone(state),
     cancelSwitch() { state.modePrompt = false; render(); },
-    addDriver: (vehicle) => runAction(async () => {
-      const result = await client.command('/api/account/driver-profile', { vehicle });
-      state.account = result.user; resetWorkspace('work'); modeView?.reset();
-      feedback.notice('Your driver profile is ready. Complete the application in Work; approval is required before accepting rides.');
+    async addDriver(vehicle) {
+      const result = await runAction(async () => {
+        const result = await client.command('/api/account/driver-profile', { vehicle });
+        state.account = result.user; resetWorkspace('work'); modeView?.reset();
+        feedback.notice('Your car details are saved. Complete your driver application below; approval is required before accepting rides.');
+        return result;
+      });
+      if (result) onboarding?.focus();
       return result;
-    }),
+    },
     availabilityChanged(online) {
       if (state.availabilityOnline !== online) { state.availabilityOnline = online; render(); }
     },

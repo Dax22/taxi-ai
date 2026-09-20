@@ -1,11 +1,14 @@
 import { $, element } from './dom.mjs';
 import { DRIVER_DOCUMENTS, DRIVER_REVIEW_CHECKS, DRIVER_APPLICATION_LABELS } from '/shared/driver-onboarding.mjs';
+import { renderVehicleCard } from './vehicle-card.mjs';
+import { createVehicleFields } from './vehicle-fields.mjs';
 
 const detailFields = ['legalName', 'phone', 'licenceNumber', 'make', 'model', 'year', 'colour', 'plate'];
 const editable = (app) => ['draft', 'changes_requested', 'rejected'].includes(app?.status);
 export function createOnboardingView({ onAction, onDownload, onClose }) {
   let current = null, user = null, formVersion = null, dirty = false, renderedVersion = null, lastState = null;
   const input = (name) => $(`onboarding-${name}`);
+  const vehicleFields = createVehicleFields({ onChange() { dirty = true; if (lastState) render(lastState); } });
   for (const [kind, spec] of Object.entries(DRIVER_DOCUMENTS)) {
     const option = element('option', spec.label); option.value = kind; input('kind').append(option);
   }
@@ -23,7 +26,7 @@ export function createOnboardingView({ onAction, onDownload, onClose }) {
   $('onboarding-details-form').addEventListener('input', () => { dirty = true; if (lastState) render(lastState); });
   $('onboarding-details-form').addEventListener('submit', (event) => {
     event.preventDefault(); if (!current) return;
-    const values = Object.fromEntries(detailFields.map((name) => [name, input(name).value]));
+    const values = { ...Object.fromEntries(detailFields.map((name) => [name, input(name).value])), ...vehicleFields.values() };
     onAction('save', { expectedVersion: formVersion, details: { legalName: values.legalName, phone: values.phone, licenceNumber: values.licenceNumber,
       vehicle: { make: values.make, model: values.model, year: Number(values.year), colour: values.colour, plate: values.plate } } });
   });
@@ -45,9 +48,11 @@ export function createOnboardingView({ onAction, onDownload, onClose }) {
   function reset() {
     current = user = lastState = null; formVersion = renderedVersion = null; dirty = false;
     for (const id of ['details', 'upload', 'review']) $(`onboarding-${id}-form`).reset();
+    vehicleFields.load();
     for (const id of ['documents', 'history', 'summary']) $(`onboarding-${id}`).replaceChildren();
     input('title').textContent = 'Your driver application'; input('eligibility').textContent = ''; input('stale').hidden = true;
     input('status').textContent = ''; input('reason-note').textContent = ''; input('error').textContent = '';
+    renderVehicleCard(input('vehicle-preview'), null);
     $('onboarding-panel').hidden = true; expiry();
   }
   function render({ user: account, application: app, pending, error }) {
@@ -58,11 +63,13 @@ export function createOnboardingView({ onAction, onDownload, onClose }) {
     input('loading').hidden = Boolean(app); input('content').hidden = !app;
     if (!app) return;
     const owner = user.role === 'driver', canEdit = owner && editable(app) && !app.busy;
+    input('progress').hidden = !owner;
     const changed = renderedVersion !== app.version;
     if (changed) {
       if (!dirty) {
-        const details = app.details ?? {}, vehicle = details.vehicle ?? {};
-        for (const name of detailFields) input(name).value = details[name] ?? vehicle[name] ?? '';
+        const details = app.details ?? {}, vehicle = details.vehicle ?? app.vehicle ?? {};
+        for (const name of ['legalName', 'phone', 'licenceNumber', 'plate']) input(name).value = details[name] ?? vehicle[name] ?? '';
+        vehicleFields.load(vehicle);
         formVersion = app.version;
       }
       // Checkboxes always belong to the exact version reviewed on screen.
@@ -78,6 +85,10 @@ export function createOnboardingView({ onAction, onDownload, onClose }) {
             : 'Complete your details and all five documents, then submit for review.';
     input('stale').hidden = !dirty || formVersion === app.version;
     input('reload').disabled = pending;
+    vehicleFields.setDisabled(!canEdit || pending);
+    const preview = owner ? { ...vehicleFields.values(), year: undefined, plate: input('plate').value } : app.details?.vehicle;
+    if (preview && owner && /^\d{4}$/.test(input('year').value)) preview.year = Number(input('year').value);
+    renderVehicleCard(input('vehicle-preview'), preview, { label: owner ? dirty ? 'UNSAVED VEHICLE PREVIEW' : 'YOUR VEHICLE PREVIEW' : 'VEHICLE SUBMITTED FOR REVIEW' });
     input('summary').replaceChildren();
     if (!owner && app.details) {
       for (const [term, value] of [['Legal name', app.details.legalName], ['Contact', app.details.phone], ['Licence', app.details.licenceNumber],

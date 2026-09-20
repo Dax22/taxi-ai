@@ -8,7 +8,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { saveSnapshot } from '../src/infrastructure/database-snapshot.mjs';
 import { openDatabase } from '../src/infrastructure/database.mjs';
 import { createApplication } from '../src/application.mjs';
-import { harness, participants, requestRide, claimRide, PASSWORD } from './helpers.mjs';
+import { TEST_NOW, harness, participants, requestRide, claimRide, PASSWORD } from './helpers.mjs';
 
 function folder(t) { const path = mkdtempSync(join(tmpdir(), 'taxi-snapshot-')); t.after(() => rmSync(path, { recursive: true, force: true })); return path; }
 
@@ -68,7 +68,7 @@ test('a live WAL snapshot preserves rides and chat, clears transient data only i
   try {
     assert.equal(restored.prepare('SELECT body FROM chat_messages').get().body, 'Keep this saved message.');
     assert.equal(restored.prepare('SELECT count(*) AS n FROM sessions').get().n, 0);
-    const app = createApplication({ db: restored, clock: () => 1000000 });
+    const app = createApplication({ db: restored, clock: () => TEST_NOW });
     assert.equal(app.accounts.sessionFor(customer.cookie.split('=')[1]), null);
     const account = await app.accounts.login({ email: customer.user.email, password: PASSWORD });
     const saved = app.rides.get(account, ride.id);

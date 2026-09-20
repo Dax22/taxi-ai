@@ -66,19 +66,27 @@ validate success envelopes and consumed fields.
 | GET `/session` | Bearer access | current user and sessionId |
 | GET `/activity?mode=customer` or `work` | optional `before` history cursor | current/history summaries, nextBefore, own activeElsewhere references |
 | GET `/driver/application` | Bearer access | own status, eligibility, vehicle and document count |
+| GET `/driver/onboarding` | Bearer access | own editable application, safe document metadata, version and review reason |
+| POST `/driver/application/{save,upload,remove,submit,reopen}` | exact expectedVersion, Idempotency-Key, action payload | same application and manual review controls as web |
 | POST `/account/driver-profile` | vehicle `{model,plate}`, Idempotency-Key | pending driver profile; cannot self-approve |
 | GET `/devices` | Bearer access | own active device labels/times, current-device marker |
 | POST `/devices/:id/revoke` | empty JSON object | own device only; next access/refresh fails |
 
 Web recovery uses cookie/CSRF-protected `/api/account/devices` and
 `/api/account/devices/:id/revoke`. Unknown native paths do not fall through to web
-routes. No native admin, payment, trip mutation, media, location, safety or document
-download endpoint ships in this version.
+routes. Release 0.16 adds native onboarding writes, retaining the older summary route for
+0.1 clients. Uploads alone accept bodies up to 2,800,000 bytes; other native commands
+remain at 4,096 bytes. Device authorization is checked again after body parsing.
+No native admin, payment, trip mutation, calling, location, safety or document
+download endpoint is exposed. See [vehicle identity](vehicle-identity.md).
 
 Runtime contracts and TypeScript declarations live in
 `packages/shared/src/mobile-contracts.mjs` and `.d.mts`. Summaries omit contacts,
 pickup PINs, private documents, detailed coordinates and safety records. Fares use
-integer kobo; null means no agreed fare. `isDemo` remains visible. History uses
+integer kobo; null means no agreed fare. Journey summaries now include the assigned
+driver’s public name/ID and snapshotted vehicle fields; private onboarding details
+remain owner-only. Approved vehicle fields preserve legacy display model/plate
+while adding make, modelName, year and colour. `isDemo` remains visible. History uses
 existing 20-row bounded pagination and participant/mode-scoped cursors. Additive
 fields are tolerated; breaking semantics require another API version and a client
 migration/support policy.

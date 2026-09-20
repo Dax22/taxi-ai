@@ -15,7 +15,8 @@ export function createDriversService({ repository, getAccount, hasDriverWork, co
   function view(user, id) {
     const app = access(user, id), read = user.role === 'admin' ? repository.readIds(id, user.id) : [];
     const documents = repository.documents(id).map((doc) => ({ ...doc, readByReviewer: read.includes(doc.id) }));
-    return { ...app, name: getAccount(id).name, documents, eligibility: eligibility(app, documents, clock()),
+    return { ...app, vehicle: app.details?.vehicle ?? repository.selection(id) ?? repository.find(id).vehicle,
+      name: getAccount(id).name, documents, eligibility: eligibility(app, documents, clock()),
       busy: hasDriverWork(id), events: repository.events(id) };
   }
   function list(user) {
@@ -29,6 +30,8 @@ export function createDriversService({ repository, getAccount, hasDriverWork, co
   function ready(app, documents, now) {
     const state = eligibility(app, documents, now);
     check(app.details && !state.missing.length && !state.expired.length, 'APPLICATION_INCOMPLETE', 'Complete the details and upload all five current documents before submitting or approving.');
+    // Recheck old drafts/submissions against today's policy without rewriting approved history.
+    applicationDetails(app.details, now);
   }
   function command(user, id, action, data, key) {
     access(user, id);
@@ -52,7 +55,7 @@ export function createDriversService({ repository, getAccount, hasDriverWork, co
       const now = clock(); let event = {};
       if (['save', 'upload', 'remove'].includes(action)) {
         editable(app);
-        if (action === 'save') app.details = applicationDetails(data.details);
+        if (action === 'save') app.details = applicationDetails(data.details, now);
         if (action === 'upload') {
           const expiresOn = documentExpiry(data.kind, data.expiresOn), file = codec.decode(data);
           const old = repository.documents(id).find((doc) => doc.kind === data.kind);

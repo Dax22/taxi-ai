@@ -15,8 +15,10 @@ async function moduleUrl(name, dependencies = {}) {
 }
 const tripModel = await moduleUrl('trip-model.mjs');
 const tripView = await moduleUrl('trip-view.mjs', { './trip-model.mjs': tripModel });
-const { createDashboardView } = await import(await moduleUrl('views.mjs', { './trip-view.mjs': tripView }));
-const { createAccountModeView, modePreferences } = await import(await moduleUrl('account-mode-view.mjs'));
+const { createDashboardView } = await import(await moduleUrl('views.mjs', { './trip-view.mjs': tripView, './vehicle-card.mjs': await moduleUrl('vehicle-card.mjs') }));
+const { createAccountModeView, modePreferences } = await import(await moduleUrl('account-mode-view.mjs', {
+  './vehicle-fields.mjs': await moduleUrl('vehicle-fields.mjs'), './vehicle-card.mjs': await moduleUrl('vehicle-card.mjs'),
+}));
 const html = await readFile(new URL('../public/dashboard.html', import.meta.url), 'utf8');
 
 // Strict IDs come from the shipped HTML; the small fixture does not test layout or a browser.
@@ -25,6 +27,7 @@ class ElementFixture {
   append(...nodes) { this.children.push(...nodes); }
   replaceChildren(...nodes) { this.children = nodes; }
   setAttribute(name, value) { this[name] = value; }
+  setCustomValidity(value) { this.validationMessage = value; }
   addEventListener(type, fn) { this.handlers[type] = fn; }
   closest() { return null; }
   focus() { this.focused = true; }
@@ -91,10 +94,33 @@ test('mode controls use actual HTML, keep enrollment separate from approval and 
   assert.equal(h.node('mode-customer')['aria-pressed'], 'true');
   assert.equal(h.node('mode-work').textContent, 'Apply to drive');
   h.node('mode-work').handlers.click(); assert.equal(h.node('driver-enrollment').hidden, false);
-  assert.equal(h.node('driver-profile-model').focused, true);
-  h.node('driver-profile-model').value = 'Toyota'; h.node('driver-profile-plate').value = 'TEST-001';
+  assert.equal(h.node('driver-profile-make').focused, true);
+  assert.equal(h.node('driver-profile-model').disabled, true);
+  for (const name of ['make', 'model', 'year', 'colour']) assert.equal(h.node('driver-profile-' + name).tag, 'select');
+  const values = (name) => h.node('driver-profile-' + name).children.map((option) => option.value);
+  assert.ok(values('year').includes('2000')); assert.ok(!values('year').includes('1999'));
+  assert.equal(values('year')[1], String(new Date().getUTCFullYear()));
+  h.node('driver-profile-make').value = 'Toyota'; h.node('driver-profile-make').handlers.change();
+  assert.equal(h.node('driver-profile-model').disabled, false);
+  assert.ok(values('model').includes('Corolla')); assert.ok(!values('model').includes('Civic'));
+  h.node('driver-profile-model').value = 'Corolla'; h.node('driver-profile-year').value = '2020';
+  h.node('driver-profile-colour').value = 'Blue'; h.node('driver-profile-colour').handlers.change();
+  h.node('driver-profile-plate').value = 'TEST-001'; h.node('driver-profile-plate').handlers.input();
+  assert.equal(h.node('driver-profile-preview').children[0].children[0].children[0].src, '/assets/vehicles/sedan-blue.png');
+  assert.equal(h.node('onboarding-make').value, '', 'initial and full application selectors have independent state');
+  mode.render(value, true);
+  h.node('driver-enrollment').handlers.submit({ preventDefault() {} }); assert.equal(applications.length, 0);
+  assert.equal(h.node('driver-profile-colour').disabled, true);
+  mode.render(value);
+  assert.equal(h.node('driver-profile-model').value, 'Corolla', 'polling keeps the chosen model');
+  assert.equal(h.node('driver-profile-colour').value, 'Blue');
   h.node('driver-enrollment').handlers.submit({ preventDefault() {} });
-  assert.deepEqual(applications, [{ model: 'Toyota', plate: 'TEST-001' }]);
+  assert.deepEqual(applications, [{ make: 'Toyota', model: 'Corolla', year: 2020, colour: 'Blue', plate: 'TEST-001' }]);
+  h.node('driver-profile-make').value = 'Honda'; h.node('driver-profile-make').handlers.change();
+  assert.equal(h.node('driver-profile-model').value, ''); assert.ok(values('model').includes('Civic'));
+  h.node('driver-enrollment-cancel').handlers.click();
+  for (const name of ['make', 'model', 'year', 'colour', 'plate']) assert.equal(h.node('driver-profile-' + name).value, '');
+  assert.equal(h.node('driver-profile-preview').children.length, 0);
   value = { ...value, account: { ...customerAccount, capabilities: ['customer', 'driver'], driver: { status: 'pending' } },
     mode: 'work', modePrompt: true, activeElsewhere: [{ id: 'passenger-journey', mode: 'customer', status: 'booked' }] };
   mode.render(value); assert.equal(h.node('driver-enrollment').hidden, true);
@@ -114,4 +140,13 @@ test('mode preferences are per-account and optional browser storage failure does
   assert.equal(preference.get('two'), 'customer');
   const unavailable = modePreferences(); assert.equal(unavailable.get('one'), null);
   assert.doesNotThrow(() => { unavailable.set('one', 'work'); unavailable.clear('one'); });
+});
+
+test('journey cards use the selected trip snapshot and clear the vehicle when no trip or account is selected', (t) => {
+  const h = setup(t), original = { ...ride,driver:{ ...ride.driver,vehicle:{ model:'Honda Accord',plate:'OLD-123',colour:'Red',year:2018 } } };
+  h.view.render({ ...state(driver,[original]),user:{ ...driver,driver:{ ...driver.driver,vehicle:{ model:'Toyota Corolla',plate:'NEW-456',colour:'Blue' } } } });
+  const details = h.node('detail-vehicle-card').children[0].children[1];
+  assert.equal(details.children[1].textContent,'Honda Accord'); assert.equal(details.children[3].textContent,'OLD-123');
+  h.view.render(state(customer,[])); assert.equal(h.node('detail-vehicle-card').hidden,true); assert.deepEqual(h.node('detail-vehicle-card').children,[]);
+  h.view.reset(); assert.deepEqual(h.node('driver-vehicle-card').children,[]);
 });

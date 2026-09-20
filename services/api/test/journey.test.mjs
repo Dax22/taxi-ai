@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { harness, PASSWORD } from './helpers.mjs';
+import { TEST_NOW, harness, PASSWORD } from './helpers.mjs';
 import { createApiClient } from '../../../apps/web/public/dashboard/api-client.mjs';
 
 // Real loopback HTTP + SQLite + the shipped browser transport, with isolated cookie jars.
@@ -55,7 +55,7 @@ test('full customer/driver/admin journey: approval, matching, chat, fare, PIN, r
   await admin.login(); await driver.register('journey-driver', 'driver'); await outsider.register('journey-outsider');
   const availabilityClient = randomUUID(), locationClient = randomUUID();
   const available = (path, data = {}) => driver.api.command(path, data, { availabilityClient });
-  const position = { lat: pickup.lat, lng: pickup.lng, accuracy: 10, capturedAt: 1_000_000 };
+  const position = { lat: pickup.lat, lng: pickup.lng, accuracy: 10, capturedAt: TEST_NOW };
   assert.equal(driver.user.driver.status, 'pending');
   await assert.rejects(available('/api/availability/online', { mode: 'gps', position }), { status: 403 });
   await assert.rejects(customer.api.request('/api/admin/drivers'), { status: 403 });

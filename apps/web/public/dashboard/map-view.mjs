@@ -1,5 +1,6 @@
 import { ABUJA_CENTER, ABUJA_BOUNDS, project, unproject } from '/shared/locations.mjs';
 import { element } from './dom.mjs';
+import { vehiclePresentation } from '/shared/vehicle-profile.mjs';
 
 /** Small raster map: visible tiles only, native browser caching, no SDK or telemetry. */
 export function createMapView(root, { onPick } = {}) {
@@ -58,6 +59,12 @@ export function createMapView(root, { onPick } = {}) {
       if (!point) continue;
       const p = screen(point), marker = svg('g', { transform: `translate(${p.x} ${p.y})`, class: `map-marker map-marker-${type}` });
       marker.append(svg('circle', { r: 14 }), svg('text', { 'text-anchor': 'middle', dy: '5' }, label), svg('title', {}, `${label}: ${point.name ?? 'Driver-reported location'}`));
+      if (label === 'V' && state.vehicle) {
+        const vehicle = vehiclePresentation(state.vehicle);
+        marker.append(svg('image', { href: vehicle.assetPath, x: -44, y: -58, width: 88, height: 52,
+          preserveAspectRatio: 'xMidYMid slice', opacity: state.stale ? '.55' : '1', 'aria-hidden': 'true' }));
+        marker.append(svg('title', {}, `${state.stale ? 'Last known location. ' : ''}${vehicle.title} · ${vehicle.description} · ${vehicle.plate}. Illustrative icon.`));
+      }
       overlay.append(marker);
     }
     if (onPick) overlay.append(svg('path', { d: `M390 200h20M400 190v20`, class: 'map-crosshair' }));

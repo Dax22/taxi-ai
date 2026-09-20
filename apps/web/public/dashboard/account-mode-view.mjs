@@ -1,9 +1,21 @@
 import { $, element } from './dom.mjs';
 import { RIDE_STATUS_LABELS } from '/shared/trip-lifecycle.mjs';
+import { createVehicleFields } from './vehicle-fields.mjs';
+import { renderVehicleCard } from './vehicle-card.mjs';
 
 /** Controls are local to this window; selecting a mode grants no permissions. */
 export function createAccountModeView({ onSwitch, onCancel, onAddDriver, onOpenRide }) {
   let state = null, busy = false, activeKey = '';
+  const vehicleFields = createVehicleFields({ prefix: 'driver-profile', onChange: preview });
+  function preview() {
+    const values = vehicleFields.values();
+    renderVehicleCard($('driver-profile-preview'), { ...values, year: values.year ? Number(values.year) : undefined,
+      plate: $('driver-profile-plate').value }, { label: 'YOUR VEHICLE PREVIEW' });
+  }
+  function resetEnrollment() {
+    $('driver-enrollment').hidden = true; $('driver-enrollment').reset(); vehicleFields.load();
+    $('driver-profile-plate').value = ''; renderVehicleCard($('driver-profile-preview'), null);
+  }
   function render(next, working = false) {
     state = next; busy = working;
     const account = state.account, personal = account && account.role !== 'admin';
@@ -19,6 +31,7 @@ export function createAccountModeView({ onSwitch, onCancel, onAddDriver, onOpenR
     $('mode-confirm').hidden = !state.modePrompt;
     $('driver-enrollment').hidden ||= work;
     $('driver-enrollment-fields').disabled = busy || work;
+    vehicleFields.setDisabled(busy || work);
     for (const id of ['mode-customer', 'mode-work', 'mode-offline-confirm', 'mode-cancel', 'driver-enrollment-cancel']) $(id).disabled = busy;
     const key = JSON.stringify(state.activeElsewhere);
     if (key !== activeKey) {
@@ -35,19 +48,24 @@ export function createAccountModeView({ onSwitch, onCancel, onAddDriver, onOpenR
   }
   $('mode-customer').addEventListener('click', () => onSwitch('customer'));
   $('mode-work').addEventListener('click', () => {
+    if (busy) return;
     if (state?.account?.capabilities.includes('driver')) return onSwitch('work');
-    $('driver-enrollment').hidden = false; $('driver-profile-model').focus();
+    $('driver-enrollment').hidden = false; preview(); $('driver-profile-make').focus();
   });
   $('mode-offline-confirm').addEventListener('click', () => onSwitch('customer', true));
   $('mode-cancel').addEventListener('click', onCancel);
-  $('driver-enrollment-cancel').addEventListener('click', () => { $('driver-enrollment').hidden = true; $('driver-enrollment').reset(); });
+  $('driver-enrollment-cancel').addEventListener('click', resetEnrollment);
+  $('driver-profile-plate').addEventListener('input', preview);
   $('driver-enrollment').addEventListener('submit', (event) => {
     event.preventDefault();
-    if (!busy) onAddDriver({ model: $('driver-profile-model').value, plate: $('driver-profile-plate').value });
+    if (!busy && !state?.account?.capabilities.includes('driver')) {
+      const values = vehicleFields.values();
+      onAddDriver({ ...values, year: Number(values.year), plate: $('driver-profile-plate').value });
+    }
   });
   return Object.freeze({ render, focus() { $('dashboard-title').focus(); }, reset() {
     state = null; activeKey = ''; $('account-modes').hidden = true; $('driver-enrollment').hidden = true;
-    $('driver-enrollment').reset(); $('mode-active-list').replaceChildren();
+    resetEnrollment(); $('mode-active-list').replaceChildren();
   } });
 }
 

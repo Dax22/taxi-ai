@@ -6,6 +6,7 @@ import { ABUJA_CENTER } from '../../../packages/shared/src/locations.mjs';
 const uri = (source) => `data:text/javascript,${encodeURIComponent(source)}`;
 function imports(source) {
   return source.replaceAll("'/shared/locations.mjs'", `'${new URL('../../../packages/shared/src/locations.mjs', import.meta.url)}'`)
+    .replaceAll("'/shared/vehicle-profile.mjs'", `'${new URL('../../../packages/shared/src/vehicle-profile.mjs', import.meta.url)}'`)
     .replaceAll("'/shared/demo-booking.mjs'", `'${new URL('../../../packages/shared/src/demo-booking.mjs', import.meta.url)}'`)
     .replaceAll("'./dom.mjs'", `'${new URL('../public/dashboard/dom.mjs', import.meta.url)}'`);
 }
@@ -110,4 +111,16 @@ test('tracking distinguishes last-known GPS and exposes a stop control during pe
   assert.equal(node('tracking-start').hidden, true); assert.equal(node('tracking-stop').hidden, true);
   view.resetTracking(); assert.equal(node('location-tracking').hidden, true);
   assert.equal(descendants(node('tracking-map')).filter((n) => n.tag === 'image').length, 0);
+});
+
+test('the driver marker uses the trip vehicle colour only with a reported position, keeps stale state and clears on opt-out', (t) => {
+  setup(t); const root = new NodeFixture(), map = createMapView(root);
+  const vehicle = { model:'Toyota Corolla',plate:'TEST-123',colour:'Blue' };
+  const cars = () => descendants(root).filter((n) => n.tag === 'image' && n.attributes.href.startsWith('/assets/vehicles/'));
+  map.render({ enabled:true,tiles,vehicle }); assert.equal(cars().length,0);
+  map.render({ enabled:true,tiles,vehicle,driver:ABUJA_CENTER,stale:true });
+  assert.equal(cars().length,1); assert.equal(cars()[0].attributes.href,'/assets/vehicles/sedan-blue.png');
+  assert.equal(cars()[0].attributes.opacity,'.55');
+  assert.ok(descendants(root).some((n) => n.tag === 'g' && n.attributes.class === 'map-marker map-marker-stale'));
+  map.render({ enabled:false,tiles,vehicle,driver:ABUJA_CENTER }); assert.equal(cars().length,0);
 });

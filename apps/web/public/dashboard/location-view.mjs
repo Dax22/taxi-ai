@@ -79,7 +79,8 @@ export function createLocationView({ onEnable, onSearch, onClear, onSelect, onPi
       : 'Sample-area journey; no saved road route.');
     $('tracking-provider-note').textContent = settings?.enabled ? `Online maps load the visible area via ${settings.tileHost}. GPS updates are shared through Taxi Ai; they are not sent to the route or search service.` : 'Online street maps are currently unavailable.';
     trackingMap.render({ enabled: online && Boolean(settings?.tiles), tiles: settings?.tiles,
-      pickup: route?.pickup, destination: route?.destination, route: route?.coordinates, driver: position, stale, focusKey: state.ride.id });
+      pickup: route?.pickup, destination: route?.destination, route: route?.coordinates, driver: position,
+      vehicle: state.ride.driver?.vehicle, stale, focusKey: state.ride.id });
   }
   for (const side of ['pickup', 'destination']) {
     $(`location-${side}-form`).addEventListener('submit', (event) => { event.preventDefault(); onSearch(side, $(`location-${side}-query`).value); });

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { harness, participants, claimRide } from './helpers.mjs';
+import { TEST_NOW, harness, participants, claimRide } from './helpers.mjs';
 
 const points = { pickup: { lat: 9.0765, lng: 7.3986, name: 'Pickup test landmark' }, destination: { lat: 9.09, lng: 7.45, name: 'Destination test landmark' } };
 function maps() {
@@ -39,7 +39,7 @@ function windowFor(client) {
     post: (url, data = {}, key = randomUUID()) => client.send(url, { method: 'POST', data,
       headers: { 'X-Location-Client': clientId, 'Idempotency-Key': key } }) };
 }
-const fix = (extra = {}) => ({ sequence: 1, lat: 9.0765, lng: 7.3986, accuracy: 12, capturedAt: 1_000_000, ...extra });
+const fix = (extra = {}) => ({ sequence: 1, lat: 9.0765, lng: 7.3986, accuracy: 12, capturedAt: TEST_NOW, ...extra });
 
 test('address search is authenticated and bounded; route pricing and exact locations remain server-owned and participant-scoped', async (t) => {
   const { h, customer, driver, admin } = await setup(t);
@@ -133,7 +133,7 @@ test('out-of-order GPS cannot overwrite newer fixes; freshness and lease deadlin
   const { h, customer, driver } = await setup(t, { persistent: true });
   const ride = await booked(customer, driver), owner = windowFor(driver), rider = windowFor(customer);
   const share = (await owner.post(`/api/rides/${ride.id}/location/start`)).body.share;
-  for (const invalid of [{ accuracy: 500 }, { capturedAt: 970000 }, { capturedAt: 1_005_001 }, { lat: 41 }, { sequence: 0 }, { sequence: '1' }]) {
+  for (const invalid of [{ accuracy: 500 }, { capturedAt: (TEST_NOW - 30_000) }, { capturedAt: (TEST_NOW + 5_001) }, { lat: 41 }, { sequence: 0 }, { sequence: '1' }]) {
     assert.equal((await owner.post(`/api/location-shares/${share.id}/position`, fix(invalid))).status, 400);
   }
   await owner.post(`/api/location-shares/${share.id}/position`, fix({ sequence: 2 }));

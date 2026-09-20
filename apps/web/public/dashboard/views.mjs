@@ -5,6 +5,7 @@ import { renderChatReports } from './chat-reports-view.mjs';
 import { RIDE_STATUS_LABELS as statuses, isActiveRide } from '/shared/trip-lifecycle.mjs';
 import { searchRadius } from '/shared/matching.mjs';
 import { createTripView } from './trip-view.mjs';
+import { renderVehicleCard } from './vehicle-card.mjs';
 
 
 /** DOM rendering and UI events. No network, session storage or backend imports. */
@@ -65,6 +66,7 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
     $('chat-reports-panel').hidden = !admin;
     $('available-section').hidden = !driver || !user.driver.eligibility?.eligible || user.driver.status !== 'approved';
     $('open-request-note').hidden = !(state.activeElsewhere?.length > 0 || state.rides.some((ride) => isActiveRide(ride.status)));
+    renderVehicleCard($('driver-vehicle-card'), driver ? user.driver.vehicle : null, { label: 'REGISTERED VEHICLE', compact: true });
     if (driver) {
       $('driver-status').textContent = DRIVER_APPLICATION_LABELS[user.driver.eligibility?.reviewStatus] ?? user.driver.status.toUpperCase();
       $('driver-vehicle').textContent = `${user.driver.vehicle.model} · ${user.driver.vehicle.plate}`;
@@ -144,6 +146,7 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
     const ride = selectedRide();
     tripView.render(ride, state.user);
     $('ride-detail').hidden = !ride;
+    renderVehicleCard($('detail-vehicle-card'), ride?.driver?.vehicle, { label: 'YOUR JOURNEY’S VEHICLE' });
     if (!ride) { detailId = null; renderedDetail = ''; return; }
     const key = `${ride.id}:${ride.version}:${state.user.id}`;
     if (key === renderedDetail) return;
@@ -250,6 +253,7 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
       $('live-offer-history').replaceChildren(); $('available-list').replaceChildren(); $('driver-applications').replaceChildren();
       $('chat-reports-list').replaceChildren();
       $('ride-list').replaceChildren(); $('history-list').replaceChildren(); tripView.reset();
+      renderVehicleCard($('driver-vehicle-card'), null); renderVehicleCard($('detail-vehicle-card'), null);
     },
   });
 }
