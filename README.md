@@ -6,8 +6,10 @@ Target product: **one Taxi Ai mobile app and one website**, with the same accoun
 and Customer, Drive & deliver and My store modes. A person can have multiple
 approved capabilities. This direction is documented in the
 [unified platform plan](docs/unified-platform.md). The first milestone is implemented:
-one website account with Customer and Work modes for rides. Mobile, Eats, courier
-and My store remain planned. See [unified accounts](docs/unified-accounts.md).
+one website account with Customer and Work modes for rides. The first iOS/Android
+foundation now shares sign-in, profiles and saved activity; native booking, Eats,
+courier and My store remain planned. See [unified accounts](docs/unified-accounts.md)
+and [mobile setup](apps/mobile/README.md).
 
 ## What works today
 
@@ -31,7 +33,10 @@ private documents and recorded manual checks; external identity/licence verifica
 is not connected. Use fictional details and documents.
 
 - One personal login, Customer/Work mode switching and optional driver enrollment.
-- Additive schema-10 migration preserves existing accounts, sessions and trip history.
+- Native sign-in, Customer/Work tabs, activity, driver enrollment and device revocation.
+- Website Download app section stays Coming soon until real store URLs are added.
+- Separate staff dashboard planned in [the admin design](docs/admin-dashboard.md).
+- Additive schema-11 migration preserves existing accounts, sessions and trip history.
 - Server-checked trip roles, self-claim prevention and conflicting-work protection.
 - Private driver applications, contact/licence/vehicle details and bounded image uploads.
 - Administrator approval, rejection and corrections with recorded manual checks and review history.

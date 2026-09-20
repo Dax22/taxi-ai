@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 const category = (path) => path.startsWith('/health/') ? 'health'
-  : /^\/api\/(auth|session)(\/|$)/.test(path) ? 'account'
+  : path.startsWith('/api/mobile/v1/') ? 'mobile' : /^\/api\/(auth|session)(\/|$)/.test(path) ? 'account'
     : /^\/api\/(rides|calls|locations|location-shares|availability|chat|admin|payments|driver|safety|trip-share)(\/|$)/.test(path) ? 'application'
       : path.startsWith('/api/') ? 'unknown_api' : 'web';
 

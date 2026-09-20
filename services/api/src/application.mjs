@@ -1,3 +1,5 @@
+import { createDeviceSessionsRepository } from './modules/device-sessions/repository.mjs';
+import { createDeviceSessionsService } from './modules/device-sessions/service.mjs';
 import { createSafetyRepository } from './modules/safety/repository.mjs';
 import { createSafetyService } from './modules/safety/service.mjs';
 import { MAX_DRIVER_FILE_BYTES } from '../../../packages/shared/src/driver-onboarding.mjs';
@@ -34,13 +36,15 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
   const accountRepository = createAccountsRepository(db);
   const driverRepository = createDriversRepository(db);
   const rideRepository = createRidesRepository(db);
-  let drivers;
+  let drivers, devices;
   const accounts = createAccountsService({ repository: accountRepository,
     driverProfiles: { insert: driverRepository.insert, find: (id) => {
       const driver = driverRepository.find(id);
       return driver ? { ...driver, eligibility: drivers.eligibilityFor(id) } : null;
     } },
-    passwords, tokens, unitOfWork, audit, hasRideHistory: rideRepository.hasHistory, clock });
+    passwords, tokens, unitOfWork, audit, revokeDevices: (id) => devices.revokeUser(id), hasRideHistory: rideRepository.hasHistory, clock });
+  devices = createDeviceSessionsService({ repository: createDeviceSessionsRepository(db),
+    authenticate: accounts.login, getAccount: accounts.profile, tokens, unitOfWork, audit, clock });
   drivers = createDriversService({ repository: driverRepository,
     getAccount: accounts.profile, hasDriverWork: rideRepository.hasDriverWork, codec: createDriverDocumentCodec(MAX_DRIVER_FILE_BYTES),
     tokens, unitOfWork, audit, clock });
@@ -67,5 +71,5 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
     tripForPayment: rides.paymentContext, simulate: simulatePayment, unitOfWork, tokens, audit, clock, allowSimulation });
   safety = createSafetyService({ repository: createSafetyRepository(db), getAccount: accounts.profile, getTrip: rides.safetyContext,
     locationForTrip: locations.safetyPosition, sessionOwner: accounts.sessionOwner, unitOfWork, tokens, audit, clock, allowSimulation });
-  return Object.freeze({ accounts, drivers, rides, chat, calls, locations, availability, payments, safety, rateLimiter, clock });
+  return Object.freeze({ accounts, devices, drivers, rides, chat, calls, locations, availability, payments, safety, rateLimiter, clock });
 }

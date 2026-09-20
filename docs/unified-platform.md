@@ -315,3 +315,12 @@ Open business decisions include courier rates, commissions/refunds, launch zones
 vehicle/parcel limits, vendor fulfilment capacity, store staffing, provider
 selection and operating targets. They do not prevent the account/navigation
 foundation, but their dependent workflows must stay disabled until defined.
+
+## Implementation update — mobile foundation
+
+The initial account and native foundations are implemented. Native sign-in,
+Customer/Work navigation, own saved activity and driver enrollment/status share
+existing accounts with web. Native booking, location/media, Eats, courier and
+vendor operations remain later work. See [the native contract](mobile-foundation.md).
+A separate [staff dashboard](admin-dashboard.md) is planned alongside native
+ride workflows, before the live pilot; it is outside the public app mode switcher.

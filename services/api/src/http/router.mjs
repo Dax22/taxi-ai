@@ -1,3 +1,4 @@
+import { deviceSessionRoutes } from '../modules/device-sessions/routes.mjs';
 import { check } from '../shared/errors.mjs';
 import { hasCapability } from '../shared/policies.mjs';
 import { accountRoutes } from '../modules/accounts/routes.mjs';
@@ -15,8 +16,8 @@ import { json } from './responses.mjs';
 
 /** HTTP owns parsing, cookies, CSRF and response codes; services own decisions. */
 export function createApiRouter(application, { secure = false } = {}) {
-  const { accounts, drivers, rides, chat, calls, locations, availability, payments, safety, rateLimiter, clock } = application;
-  const routes = [...accountRoutes(accounts, (token, age) => sessionCookie(token, age, secure)), ...driverRoutes(drivers), ...rideRoutes(rides), ...chatRoutes(chat), ...callRoutes(calls), ...locationRoutes(locations), ...availabilityRoutes(availability), ...paymentRoutes(payments), ...safetyRoutes(safety)];
+  const { accounts, devices, drivers, rides, chat, calls, locations, availability, payments, safety, rateLimiter, clock } = application;
+  const routes = [...deviceSessionRoutes(devices), ...accountRoutes(accounts, (token, age) => sessionCookie(token, age, secure)), ...driverRoutes(drivers), ...rideRoutes(rides), ...chatRoutes(chat), ...callRoutes(calls), ...locationRoutes(locations), ...availabilityRoutes(availability), ...paymentRoutes(payments), ...safetyRoutes(safety)];
   return async function handleApi({ request, response, pathname, origin, clientAddress }) {
     const write = request.method === 'POST';
     check(['GET', 'POST'].includes(request.method), 'METHOD_NOT_ALLOWED', 'Use GET or POST.');

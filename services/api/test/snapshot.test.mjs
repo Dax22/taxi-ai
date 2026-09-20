@@ -33,6 +33,8 @@ test('a live WAL snapshot preserves rides and chat, clears transient data only i
     h.db.prepare('INSERT INTO location_quote_commands (actor_id, key, fingerprint, quote_id) VALUES (?, ?, ?, ?)')
       .run(customer.user.id, id + '-command', 'fixture', id);
   }
+  const native = await fetch(h.base + '/api/mobile/v1/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: customer.user.email, password: PASSWORD, deviceName: 'Snapshot phone' }) });
+  assert.equal(native.status, 200); await native.json();
   const spare = h.client(); await spare.register('spare-driver', 'driver');
   await submitApplication(fixtureApi(spare));
   await approveApplication(fixtureApi(admin), spare.user.id);
@@ -47,7 +49,7 @@ test('a live WAL snapshot preserves rides and chat, clears transient data only i
     for (const name of ['users', 'drivers', 'rides', 'ride_trips', 'ride_activity', 'fare_events', 'chat_messages', 'idempotency', 'audit_events', 'driver_applications', 'driver_documents', 'driver_document_reads', 'driver_application_events', 'driver_application_commands']) {
       assert.equal(JSON.stringify(copy.prepare(`SELECT * FROM ${name}`).all()), sourceRows.get(name), name);
     }
-    for (const name of ['sessions', 'voice_participants']) assert.equal(copy.prepare(`SELECT count(*) AS n FROM ${name}`).get().n, 0);
+    for (const name of ['sessions', 'device_sessions', 'device_refresh_tokens', 'voice_participants']) assert.equal(copy.prepare(`SELECT count(*) AS n FROM ${name}`).get().n, 0);
     const call = copy.prepare('SELECT * FROM voice_calls').get();
     assert.equal(call.status, 'ended'); assert.equal(call.reason, 'snapshot_reset'); assert.equal(call.offer_sdp, null); assert.equal(call.caller_session, '');
     const availability = copy.prepare('SELECT * FROM driver_availability WHERE id = ?').get(available.id);

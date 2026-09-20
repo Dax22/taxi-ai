@@ -298,3 +298,12 @@ The invited-tester gateway remains required on `/trip-share` and its bearer-read
 API. A recipient needs their own preview access as well as the private link.
 No route bypasses the staging gate. Emergency operations, provider delivery,
 verified contacts and response arrangements must be implemented separately.
+
+## Native preview clients
+
+Native v1 routes preserve the proxy/HTTPS boundary. Because Authorization carries
+a device bearer token, invited-tester Basic access uses `X-Taxi-Ai-Preview-Access`
+on `/api/mobile/v1/*` only. The existing Caddy reverse proxy passes this header;
+no public bypass or extra backend port is introduced. Enter the tester credential
+in the native sign-in screen, never in an Expo public environment variable. The
+proxy token is never a client setting. See [the native contract](mobile-foundation.md).

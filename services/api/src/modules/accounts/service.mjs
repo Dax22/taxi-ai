@@ -9,7 +9,7 @@ export const SESSION_MS = 12 * 60 * 60 * 1000;
  * repository, driverProfiles {find, insert}, passwords {hash, verify}, tokens
  * {id, generate, digest}, unitOfWork, audit, hasRideHistory and clock.
  */
-export function createAccountsService({ repository, driverProfiles, passwords, tokens, unitOfWork, audit, hasRideHistory, clock }) {
+export function createAccountsService({ repository, driverProfiles, passwords, tokens, unitOfWork, audit, hasRideHistory, clock, revokeDevices = () => {} }) {
   function profile(id) {
     const user = repository.findById(id);
     if (!user) return null;
@@ -116,6 +116,7 @@ export function createAccountsService({ repository, driverProfiles, passwords, t
       repository.promoteToAdmin(user.id);
       repository.clearCapabilities(user.id);
       repository.deleteUserSessions(user.id);
+      revokeDevices(user.id);
       audit.record(user.id, 'admin.bootstrapped_locally', user.id, clock());
       return profile(user.id);
     });

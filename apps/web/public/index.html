@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="/styles.css">
   <link rel="stylesheet" href="/homepage.css">
   <script type="module" src="/app.mjs"></script>
+  <script type="module" src="/download.mjs"></script>
 </head>
 <body class="landing-page">
   <a class="skip-link" href="#book">Skip to booking demo</a>
@@ -21,7 +22,7 @@
       <a href="#book" data-service="courier">Courier</a>
       <a href="#future">The future <span class="tiny-dot" aria-hidden="true"></span></a>
     </nav>
-    <div class="header-end"><span class="location"><span aria-hidden="true">◎</span> Abuja, NG</span><a class="button button-primary button-small" href="/app">Your account <span aria-hidden="true">↗</span></a></div>
+    <div class="header-end"><a class="text-link download-nav" href="#download-app">Download app ↓</a><span class="location"><span aria-hidden="true">◎</span> Abuja, NG</span><a class="button button-primary button-small" href="/app">Your account <span aria-hidden="true">↗</span></a></div>
   </header>
 
   <main id="top">
@@ -109,7 +110,12 @@
       </div>
     </section>
 
-    <section class="connected-section shell" aria-labelledby="connected-title"><p class="eyebrow">YOUR WORLD, CONNECTED</p><h2 id="connected-title">Built around people.<br>Designed for what’s next.</h2><div class="connected-grid"><article><span aria-hidden="true">◎</span><h3>Private by design.</h3><p>The account preview includes chat and local audio call controls. Neither requires sharing your phone number with the other person.</p></article><article><span aria-hidden="true">↔</span><h3>Every screen. One journey.</h3><p>Try the web preview on your phone, tablet or desktop. Native iOS and Android apps are planned.</p></article><article><span aria-hidden="true">✳</span><h3>Intelligence with intention.</h3><p>Future AI features will assist with fares, arrival estimates and support. You stay in control of agreement.</p></article></div></section>
+    <section class="download-section shell" id="download-app" aria-labelledby="download-title">
+      <div><p class="eyebrow">ONE ACCOUNT. EVERY JOURNEY.</p><h2 id="download-title">Your city.<br>In your pocket.</h2><p>Taxi Ai is taking shape for iPhone, iPad and Android phones and tablets. Your customer and work profiles, together in one app.</p><p class="small-note">The mobile preview is in development. Public store downloads are not available yet.</p></div>
+      <div class="download-card"><span class="status-pill">MOBILE APP · COMING SOON</span><h3>Take Taxi Ai with you.</h3><div class="download-actions"><div id="download-ios"><button class="button button-outline" type="button" disabled>App Store · Coming soon</button></div><div id="download-android"><button class="button button-outline" type="button" disabled>Google Play · Coming soon</button></div></div><p>Rides first. Taxi Ai Eats and courier delivery will follow.</p><a class="text-link" href="/app">Use the web preview ↗</a></div>
+    </section>
+
+    <section class="connected-section shell" aria-labelledby="connected-title"><p class="eyebrow">YOUR WORLD, CONNECTED</p><h2 id="connected-title">Built around people.<br>Designed for what’s next.</h2><div class="connected-grid"><article><span aria-hidden="true">◎</span><h3>Private by design.</h3><p>The account preview includes chat and local audio call controls. Neither requires sharing your phone number with the other person.</p></article><article><span aria-hidden="true">↔</span><h3>Every screen. One journey.</h3><p>Try the web preview on your phone, tablet or desktop. Our iOS and Android app preview is in development.</p></article><article><span aria-hidden="true">✳</span><h3>Intelligence with intention.</h3><p>Future AI features will assist with fares, arrival estimates and support. You stay in control of agreement.</p></article></div></section>
   </main>
   <footer class="site-footer shell"><a class="brand" href="#top" aria-label="Taxi Ai home"><img class="brand-mark" src="/assets/taxi-ai-mark.svg" width="48" height="36" alt=""><span>Taxi Ai</span></a><p>Starting with Abuja.<br>Built for the possibilities ahead.</p><div><a href="#book" data-service="ride">Try the ride demo ↗</a><p>Taxi Ai · Product preview</p></div></footer>
   <noscript><p class="noscript-note">Enable JavaScript to try fare negotiation. This site is a product preview and cannot book real rides.</p></noscript>

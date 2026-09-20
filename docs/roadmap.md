@@ -224,3 +224,17 @@ application actions. Manual flows must remain usable when AI is unavailable.
 
 Keep robotaxi bookings unavailable until suitable operating partners, vehicles,
 service readiness and applicable approvals are established. No date is committed.
+
+## Mobile foundation — implemented; device QA pending
+
+One Expo/React Native/TypeScript app now connects to the existing backend with
+secure device sessions, Customer/Work navigation, saved activity, driver
+enrollment/status and device revocation. Both platform bundles are compiled;
+actual simulator/device and signed native build testing are pending. Website
+download links remain Coming soon until real listings exist.
+
+Next: native ride booking/negotiation through trip completion, then native
+communication/location/safety integrations. In parallel, implement the separate
+[staff dashboard](admin-dashboard.md), starting with MFA, permissions and audited
+read APIs. Real providers and staffed operations remain gates before a live pilot.
+See [mobile setup](../apps/mobile/README.md) and [the v1 contract](mobile-foundation.md).

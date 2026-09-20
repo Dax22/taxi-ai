@@ -9,6 +9,7 @@ const portable = (path) => path.split(sep).join('/');
 async function collect(folder) {
   const entries = await readdir(folder, { withFileTypes: true });
   const files = await Promise.all(entries.map((entry) => {
+    if (['node_modules', 'dist', 'build', '.expo', '.git'].includes(entry.name)) return [];
     const path = resolve(folder, entry.name);
     return entry.isDirectory() ? collect(path) : entry.name.endsWith('.mjs') ? [path] : [];
   }));
