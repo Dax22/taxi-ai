@@ -99,7 +99,9 @@ local server/file previews; visual and browser interaction review is outstanding
 2. Use the keyboard through sign-in, registration, vehicle fields, the request
    form and fare controls. Check labels, focus visibility and error announcements.
 3. Create customer, driver and separate operator accounts. Promote the operator
-   using the documented command, sign in again and approve the pending driver.
+   using the documented command and sign in again. Complete the driver application,
+   upload fictional documents, submit, then record the administrator review as
+   described in [driver onboarding](../../docs/driver-onboarding.md).
 4. Submit a customer sample request. In a second visible session, go online as the
    driver in the same sample area, then select it. Offer
    ₦5,000; counter as the customer with ₦4,700; accept as the driver. Check both
@@ -138,3 +140,12 @@ The [staging guide](../../docs/staging.md) provides a separate private hosting
 configuration for real device review. It is not deployed automatically by GitHub
 CI. Invited testers pass a browser access prompt, then use ordinary Taxi Ai
 accounts; signing out of an account does not clear the browser's cached tester key.
+
+
+The private application panel is implemented by `onboarding-controller.mjs`,
+`onboarding-view.mjs` and `driver-files.mjs`. It supports contact/licence/vehicle
+details, file categories and expiry, corrections, review attestations and recent
+history. Its state clears with account/session changes; form drafts keep their
+original version when a concurrent update arrives. Browser file-picker/download,
+keyboard and phone/tablet layout acceptance is still pending. Follow the
+[onboarding acceptance guide](../../docs/driver-onboarding.md#upgrade-and-verification).

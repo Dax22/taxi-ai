@@ -1,3 +1,5 @@
+import { MAX_DRIVER_FILE_BYTES } from '../../../packages/shared/src/driver-onboarding.mjs';
+import { createDriverDocumentCodec } from './infrastructure/driver-document-codec.mjs';
 import { transaction } from './infrastructure/database.mjs';
 import { passwords } from './infrastructure/passwords.mjs';
 import { tokens } from './infrastructure/tokens.mjs';
@@ -30,11 +32,16 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
   const accountRepository = createAccountsRepository(db);
   const driverRepository = createDriversRepository(db);
   const rideRepository = createRidesRepository(db);
+  let drivers;
   const accounts = createAccountsService({ repository: accountRepository,
-    driverProfiles: { find: driverRepository.find, insert: driverRepository.insert },
+    driverProfiles: { insert: driverRepository.insert, find: (id) => {
+      const driver = driverRepository.find(id);
+      return driver ? { ...driver, eligibility: drivers.eligibilityFor(id) } : null;
+    } },
     passwords, tokens, unitOfWork, audit, hasRideHistory: rideRepository.hasHistory, clock });
-  const drivers = createDriversService({ repository: driverRepository,
-    getAccount: accounts.profile, unitOfWork, audit, clock });
+  drivers = createDriversService({ repository: driverRepository,
+    getAccount: accounts.profile, hasDriverWork: rideRepository.hasDriverWork, codec: createDriverDocumentCodec(MAX_DRIVER_FILE_BYTES),
+    tokens, unitOfWork, audit, clock });
   let calls, locations, payments;
   const availability = createAvailabilityService({ repository: createAvailabilityRepository(db),
     getAccount: accounts.profile, sessionOwner: accounts.sessionOwner, isBusy: rideRepository.hasNegotiation,

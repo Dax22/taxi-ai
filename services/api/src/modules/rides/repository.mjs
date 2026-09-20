@@ -2,7 +2,7 @@ const columns = `id, customer_id AS customerId, driver_id AS driverId,
   pickup_id AS pickupId, destination_id AS destinationId,
   suggested_fare_kobo AS suggestedFareKobo, status, version,
   created_at AS createdAt, matched_at AS matchedAt, updated_at AS updatedAt,
-  request_expires_at AS requestExpiresAt, closed_reason AS closedReason`;
+  driver_snapshot_json AS driverSnapshotJson, request_expires_at AS requestExpiresAt, closed_reason AS closedReason`;
 
 const tripColumns = `ride_id AS rideId, customer_id AS customerId, driver_id AS driverId, status,
   fare_kobo AS fareKobo, booked_at AS bookedAt, departed_at AS departedAt, arrived_at AS arrivedAt,
@@ -27,14 +27,17 @@ export function createRidesRepository(db) {
       AND (status IN ('requested', 'negotiating') OR EXISTS (${activeTrip}))`).get(id)),
     hasNegotiation: (id) => Boolean(db.prepare(`SELECT id FROM rides WHERE driver_id = ?
       AND (status = 'negotiating' OR EXISTS (${activeTrip}))`).get(id)),
+    hasDriverWork: (id) => Boolean(db.prepare(`SELECT id FROM rides WHERE driver_id=? AND
+      (status='negotiating' OR (status='agreed' AND (NOT EXISTS (SELECT 1 FROM ride_trips t WHERE t.ride_id=rides.id)
+        OR EXISTS (${activeTrip}))))`).get(id)),
     insert({ id, customerId, pickupId, destinationId, suggestedFareKobo, now, expiresAt }) {
       db.prepare(`INSERT INTO rides (id, customer_id, pickup_id, destination_id, suggested_fare_kobo, created_at, updated_at, request_expires_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(id, customerId, pickupId, destinationId, suggestedFareKobo, now, now, expiresAt);
     },
-    claim({ id, driverId, expectedVersion, now }) {
-      return db.prepare(`UPDATE rides SET driver_id = ?, matched_at = ?, updated_at = ?, status = 'negotiating',
+    claim({ id, driverId, driverSnapshot, expectedVersion, now }) {
+      return db.prepare(`UPDATE rides SET driver_id = ?, driver_snapshot_json = ?, matched_at = ?, updated_at = ?, status = 'negotiating',
         version = version + 1 WHERE id = ? AND version = ? AND status = 'requested'`)
-        .run(driverId, now, now, id, expectedVersion).changes === 1;
+        .run(driverId, JSON.stringify(driverSnapshot), now, now, id, expectedVersion).changes === 1;
     },
     updateState({ id, status, expectedVersion, now }) {
       return db.prepare('UPDATE rides SET status = ?, version = version + 1, updated_at = ? WHERE id = ? AND version = ?')

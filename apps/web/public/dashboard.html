@@ -40,6 +40,43 @@
 
     <section id="dashboard" hidden aria-labelledby="dashboard-title">
       <div class="dashboard-heading"><div><p class="eyebrow" id="dashboard-role"></p><h1 id="dashboard-title">Let’s get moving.</h1><p class="supporting-copy" id="dashboard-description"></p></div><div class="refresh-controls"><span id="sync-status" role="status">Connecting…</span><button id="refresh" class="button button-outline button-small" type="button">Refresh</button></div></div>
+      <section id="onboarding-panel" class="account-card onboarding-panel" hidden aria-labelledby="onboarding-title">
+        <div class="card-topline"><div><p class="eyebrow">DRIVE WITH TAXI AI</p><h2 id="onboarding-title">Your driver application</h2></div><span id="onboarding-status" class="status-badge" role="status"></span></div>
+        <p class="small-note">Development preview: use fictional details and documents. Uploads are private to the applicant and administrators. This preview records manual checks; it does not contact identity or licence databases.</p>
+        <p id="onboarding-error" class="error-text" role="alert"></p><p id="onboarding-loading" role="status">Loading your application…</p>
+        <div id="onboarding-content" hidden>
+          <p id="onboarding-eligibility" class="supporting-copy" role="status"></p><p id="onboarding-reason-note" class="small-note"></p>
+          <dl id="onboarding-summary" class="onboarding-summary"></dl>
+          <form id="onboarding-details-form" class="stack-form" autocomplete="off"><fieldset id="onboarding-details-fields"><legend>1. Driver and vehicle details</legend>
+            <div class="onboarding-grid">
+              <div><label for="onboarding-legalName">Full legal name</label><input id="onboarding-legalName" minlength="2" maxlength="100" required></div>
+              <div><label for="onboarding-phone">Contact number (private)</label><input id="onboarding-phone" type="tel" placeholder="+234…" pattern="\+[1-9][0-9]{7,14}" maxlength="16" required></div>
+              <div><label for="onboarding-licenceNumber">Driving licence number</label><input id="onboarding-licenceNumber" minlength="3" maxlength="40" required></div>
+              <div><label for="onboarding-make">Vehicle make</label><input id="onboarding-make" placeholder="Toyota" minlength="2" maxlength="40" required></div>
+              <div><label for="onboarding-model">Vehicle model</label><input id="onboarding-model" placeholder="Corolla" minlength="2" maxlength="80" required></div>
+              <div><label for="onboarding-year">Vehicle year</label><input id="onboarding-year" type="number" min="1980" max="2100" step="1" required></div>
+              <div><label for="onboarding-colour">Colour</label><input id="onboarding-colour" minlength="2" maxlength="30" required></div>
+              <div><label for="onboarding-plate">Number plate</label><input id="onboarding-plate" minlength="2" maxlength="15" required></div>
+            </div><button type="submit" class="button button-primary button-small">Save details</button>
+          </fieldset></form>
+          <p id="onboarding-stale" class="error-text" hidden>Your saved application changed while you were editing. Copy any unsaved changes, then load the saved details before continuing. <button id="onboarding-reload" type="button" class="button button-outline button-small">Load saved details</button></p>
+          <h3>2. Required documents</h3><p class="small-note">PNG or JPEG, up to 2 MiB each. Replacing or removing a document deletes its current stored file. Expiry dates end at midnight in Abuja.</p>
+          <ul id="onboarding-documents" class="onboarding-documents"></ul>
+          <form id="onboarding-upload-form" class="stack-form"><fieldset id="onboarding-upload-fields"><legend>Upload or replace a document</legend><div class="onboarding-grid">
+            <div><label for="onboarding-kind">Document category</label><select id="onboarding-kind" required></select></div>
+            <div id="onboarding-expiry-row"><label for="onboarding-expiresOn">Expiry date</label><input id="onboarding-expiresOn" type="date"></div>
+            <div><label for="onboarding-file">Choose image</label><input id="onboarding-file" type="file" accept="image/png,image/jpeg" required></div>
+          </div><p class="small-note">Save any changes to your details before uploading or submitting.</p><button type="submit" class="button button-outline button-small">Upload document</button></fieldset></form>
+          <div class="onboarding-actions"><button id="onboarding-submit" type="button" class="button button-primary">Submit for review</button><button id="onboarding-reopen" type="button" class="button button-outline">Reopen for changes · pause new rides</button><button id="onboarding-close" type="button" class="button button-outline">Close application</button></div>
+          <form id="onboarding-review-form" class="stack-form"><fieldset id="onboarding-review-fields"><legend>3. Record your review</legend>
+            <p class="small-note">Download and inspect all five current documents. Approval requires all four checks and a reference to the manual verification performed. A download alone is not a completed check.</p>
+            <div id="onboarding-checks"></div><label for="onboarding-reference">Manual verification reference (required for approval)</label><input id="onboarding-reference" minlength="5" maxlength="200" autocomplete="off">
+            <label for="onboarding-reason">Reason or corrections needed (visible to the driver)</label><textarea id="onboarding-reason" rows="3" minlength="10" maxlength="1000" required></textarea>
+            <div class="onboarding-actions"><button type="submit" value="approved" class="button button-primary">Record approval</button><button type="submit" value="changes_requested" class="button button-outline">Request corrections</button><button type="submit" value="rejected" class="button button-outline">Reject application</button></div>
+          </fieldset></form>
+          <details class="onboarding-audit"><summary>Application history · latest 100 events</summary><ol id="onboarding-history"></ol></details>
+        </div>
+      </section>
       <section id="calls-panel" class="account-card calls-panel" hidden aria-labelledby="call-title">
         <div class="card-topline"><div><p class="eyebrow">IN-APP AUDIO</p><h2 id="call-title">Talk in Taxi Ai</h2></div><span id="call-status" class="status-badge" role="status"></span></div>
         <p id="call-guidance" class="supporting-copy"></p><p id="call-mode" class="small-note"></p><p id="call-error" class="error-text" role="alert"></p>
@@ -153,7 +190,7 @@
         <p id="admin-payments-error" class="error-text" role="alert"></p><div id="admin-payments-list" class="payment-list"></div>
         <div class="payment-pagination"><button id="admin-payments-latest" type="button" class="button button-outline button-small" disabled>Newest trips</button><button id="admin-payments-older" type="button" class="button button-outline button-small" disabled>Older trips</button></div>
       </section>
-      <section id="admin-dashboard" class="account-card" hidden aria-labelledby="applications-title"><div class="card-topline"><h2 id="applications-title">Driver applications</h2><span class="status-badge">LOCAL TESTING</span></div><p class="supporting-copy">Review the name and car details before granting access to test requests. This approval does not verify identity, licences or vehicle documents.</p><div id="driver-applications" class="request-list"></div></section>
+      <section id="admin-dashboard" class="account-card" hidden aria-labelledby="applications-title"><div class="card-topline"><h2 id="applications-title">Driver applications</h2><span class="status-badge">LOCAL TESTING</span></div><p class="supporting-copy">Open an application to inspect its private documents, request corrections and record manual checks. New rides require an approved application with current documents.</p><div id="driver-applications" class="request-list"></div></section>
       <section id="chat-reports-panel" class="account-card chat-reports-panel" hidden aria-labelledby="chat-reports-title"><div class="card-topline"><h2 id="chat-reports-title">Reported messages</h2><span class="status-badge">LOCAL REVIEW</span></div><p class="supporting-copy">Review the reported message and reason. Marking a report reviewed does not block an account or resolve a safety incident.</p><div id="chat-reports-list" class="request-list"></div></section>
     </section>
     <noscript><p class="account-card">Enable JavaScript to sign in and use Taxi Ai accounts.</p></noscript>

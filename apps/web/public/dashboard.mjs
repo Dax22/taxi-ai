@@ -1,3 +1,6 @@
+import { createOnboardingController } from './dashboard/onboarding-controller.mjs';
+import { createOnboardingView } from './dashboard/onboarding-view.mjs';
+import { driverFiles } from './dashboard/driver-files.mjs';
 import { $ } from './dashboard/dom.mjs';
 import { createApiClient } from './dashboard/api-client.mjs';
 import { bindAuthForm } from './dashboard/auth-form.mjs';
@@ -58,21 +61,22 @@ const conversationView = createConversationView({
 const conversation = createConversationController({ client, view: conversationView,
   onRead: (rideId, unread) => page.read(rideId, unread),
 });
+const onboardingView = createOnboardingView({ onAction: (...args) => onboarding.run(...args),
+  onDownload: (id) => onboarding.download(id), onClose: () => onboarding.close() });
+const onboarding = createOnboardingController({ client, view: onboardingView, files: driverFiles });
 const view = createDashboardView({
   serverNow: () => serverTime.now + performance.now() - serverTime.received,
   onCommand: (...args) => page.rideCommand(...args),
   onSelectionChange: (ride) => page.selection(ride),
   onHistory: (before) => page.history(before),
-  onReview: (id, decision, message) => page.runAction(() => client.request(`/api/admin/drivers/${id}/review`, {
-    method: 'POST', data: { decision },
-  }), message),
+  onReview: (id) => onboarding.open(id),
   onReportReview: (id) => page.runAction(() => client.request(`/api/admin/chat-reports/${id}/review`, {
     method: 'POST', data: {},
   }), 'Report marked reviewed.'),
 });
 const authForm = bindAuthForm({ onSubmit: (path, data) => page.authenticate(path, data) });
 const page = createPageController({ client, view, conversation, conversationView, calls, sharing, availability,
-  planner, payments, authForm, feedback: {
+  planner, payments, onboarding, authForm, feedback: {
     clear() { $('page-error').textContent = ''; $('page-notice').textContent = ''; },
     error(message) { $('page-error').textContent = message; },
     notice(message) { $('page-notice').textContent = message; },

@@ -1,3 +1,4 @@
+import { submitApplication, approveApplication, fixtureApi } from './driver-fixtures.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
@@ -13,7 +14,7 @@ function folder(t) { const path = mkdtempSync(join(tmpdir(), 'taxi-snapshot-'));
 
 test('a live WAL snapshot preserves rides and chat, clears transient data only in the copy and restores into a new database', async (t) => {
   const dir = folder(t), h = await harness(t, { persistent: true });
-  const { customer, driver } = await participants(h);
+  const { customer, driver, admin } = await participants(h);
   let ride = await claimRide(driver, await requestRide(customer));
   ride = (await driver.post(`/api/rides/${ride.id}/offers`, { expectedVersion: ride.version, amountKobo: 470000 })).body.ride;
   ride = (await customer.post(`/api/rides/${ride.id}/accept`, { expectedVersion: ride.version, offerId: ride.negotiation.currentOffer.id })).body.ride;
@@ -33,7 +34,8 @@ test('a live WAL snapshot preserves rides and chat, clears transient data only i
       .run(customer.user.id, id + '-command', 'fixture', id);
   }
   const spare = h.client(); await spare.register('spare-driver', 'driver');
-  h.db.prepare("UPDATE drivers SET status = 'approved' WHERE user_id = ?").run(spare.user.id);
+  await submitApplication(fixtureApi(spare));
+  await approveApplication(fixtureApi(admin), spare.user.id);
   const available = await spare.online({ mode: 'gps', lat: 9.087654, lng: 7.412345 });
   const tables = h.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all().map((r) => r.name);
   const sourceRows = new Map(tables.map((name) => [name, JSON.stringify(h.db.prepare(`SELECT * FROM ${name}`).all())]));
@@ -42,7 +44,7 @@ test('a live WAL snapshot preserves rides and chat, clears transient data only i
   for (const name of tables) assert.equal(JSON.stringify(h.db.prepare(`SELECT * FROM ${name}`).all()), sourceRows.get(name), `source ${name}`);
   const copy = new DatabaseSync(path, { readOnly: true });
   try {
-    for (const name of ['users', 'drivers', 'rides', 'ride_trips', 'ride_activity', 'fare_events', 'chat_messages', 'idempotency', 'audit_events']) {
+    for (const name of ['users', 'drivers', 'rides', 'ride_trips', 'ride_activity', 'fare_events', 'chat_messages', 'idempotency', 'audit_events', 'driver_applications', 'driver_documents', 'driver_document_reads', 'driver_application_events', 'driver_application_commands']) {
       assert.equal(JSON.stringify(copy.prepare(`SELECT * FROM ${name}`).all()), sourceRows.get(name), name);
     }
     for (const name of ['sessions', 'voice_participants']) assert.equal(copy.prepare(`SELECT count(*) AS n FROM ${name}`).get().n, 0);

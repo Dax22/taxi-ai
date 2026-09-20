@@ -17,11 +17,14 @@ and server restart. Dashboards refresh every three seconds while visible.
 This is a **development prototype**, not a launched transport service.
 Use test details. Fares are fictional examples and all requests are test requests.
 Drivers can explicitly share their browser-reported location during a confirmed
-test trip. There is no live dispatch or payment. Driver
-approval grants test access; it does not verify identity or vehicle documents.
+test trip. There is no live dispatch or payment. Driver applications now store
+private documents and recorded manual checks; external identity/licence verification
+is not connected. Use fictional details and documents.
 
 - Customer/driver registration and password sign-in, with separate dashboards.
-- Pending driver applications, vehicle details and administrator approval.
+- Private driver applications, contact/licence/vehicle details and bounded image uploads.
+- Administrator approval, rejection and corrections with recorded manual checks and review history.
+- Current-document eligibility for new work, and stable driver/vehicle snapshots in trip history.
 - Explicit Online/Offline availability, nearby matching and five-minute request expiry.
 - GPS search expands from 5 km to 10 km after one minute; local sample-area matching
   supports testing outside Abuja without using device location.
@@ -103,8 +106,11 @@ test driver approval and a full customer/driver negotiation.
 
 3. Sign in again. That account now has the driver-approval dashboard. The command
    revokes its old sessions and works only when no administrator exists yet.
-4. Register a driver account in another browser session. In the administrator
-   dashboard, review the application and click **Approve**.
+4. Register a driver in another browser session. Complete **Your driver application**,
+   upload the five fictional documents and click **Submit for review**.
+5. In the administrator dashboard, open **Review application**, download and inspect
+   every file, record the manual checks/reference/reason, then choose **Record approval**.
+   See [the onboarding guide](docs/driver-onboarding.md) for corrections and renewals.
 
 The administrator role cannot be selected during registration or granted through
 an HTTP endpoint. Additional administrators and account recovery are not built yet.
@@ -226,7 +232,7 @@ The terminal example runs with `npm run demo`. Read [the architecture](docs/arch
 
 ## Development and review
 
-The latest development branch for this milestone is `feat/journey-verification`.
+The latest development branch for this milestone is `feat/driver-onboarding`.
 Read [CONTRIBUTING.md](CONTRIBUTING.md) for the GitHub/VS Code workflow and where
 new code belongs. `npm run check` validates syntax and module conventions;
 `npm test` checks behaviour; `npm run verify` runs both. GitHub Actions is configured

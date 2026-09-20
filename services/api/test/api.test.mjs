@@ -1,3 +1,4 @@
+import { submitApplication, approveApplication, fixtureApi } from './driver-fixtures.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { get as httpGet } from 'node:http';
@@ -79,8 +80,9 @@ test('only the local first-admin command creates an admin and only admins can re
   assert.equal((await admin.send('/api/rides')).status, 401, 'promotion revokes existing sessions');
   assert.throws(() => bootstrapAdmin(h.db, customer.user.email), { code: 'ADMIN_EXISTS' });
   await admin.post('/api/auth/login', { email: admin.user.email, password: PASSWORD });
-  assert.equal((await admin.post(`/api/admin/drivers/${driver.user.id}/review`, { decision: 'approved' })).status, 200);
-  assert.equal((await admin.post(`/api/admin/drivers/${driver.user.id}/review`, { decision: 'rejected' })).status, 409);
+  await submitApplication(fixtureApi(driver));
+  const approved = await approveApplication(fixtureApi(admin), driver.user.id);
+  assert.equal((await admin.post(`/api/admin/drivers/${driver.user.id}/review`, { decision: 'rejected', expectedVersion: approved.version, reason: 'Cannot review the same version twice.' })).status, 409);
   assert.equal((await driver.send('/api/session')).body.user.driver.status, 'approved');
   assert.equal((await driver.send('/api/rides')).body.available.length, 0, 'approval alone does not make a driver online');
   await driver.online();

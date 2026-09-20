@@ -13,7 +13,7 @@ const { createAvailabilityController } = await browser('availability-controller'
 const { createAvailabilityView } = await browser('availability-view');
 const wait = () => new Promise((resolve) => setImmediate(resolve));
 const deferred = () => { let resolve, reject; const promise = new Promise((a, b) => { resolve = a; reject = b; }); return { resolve, reject, promise }; };
-const driver = { id: 'driver', role: 'driver', driver: { status: 'approved' } };
+const driver = { id: 'driver', role: 'driver', driver: { status: 'approved', eligibility: { eligible: true, reviewStatus: 'approved' } } };
 
 async function setup(account = driver) {
   const f = { time: 1000000, availability: null, locates: 0, watches: 0, clears: 0, requests: [], commands: [], allowSimulation: true };

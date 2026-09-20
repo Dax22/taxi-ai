@@ -25,7 +25,7 @@ export function createAvailabilityController({ client, device, view, onStatus = 
       if (previous?.online && previous.owned) void command(`/api/availability/${previous.id}/offline`, {}).catch(() => {});
     }
     user = account; busy = occupied;
-    if ((busy || user?.driver?.status !== 'approved') && (running || pending)) void stop();
+    if ((busy || (user?.driver?.status !== 'approved' || !user?.driver?.eligibility?.eligible)) && (running || pending)) void stop();
     render();
   }
   function fix(value) {
@@ -41,7 +41,7 @@ export function createAvailabilityController({ client, device, view, onStatus = 
     : cause.code === 2 ? 'Your device could not determine its location.'
       : cause.code === 3 ? 'Location lookup timed out. Try again.' : cause.message ?? 'Availability could not be updated.';
   async function start(mode = 'gps', areaId = null) {
-    if (user?.role !== 'driver' || user.driver?.status !== 'approved' || busy || pending || ending || availability?.online || !settings) return;
+    if (user?.role !== 'driver' || (user.driver?.status !== 'approved' || !user.driver?.eligibility?.eligible) || busy || pending || ending || availability?.online || !settings) return;
     if ((mode === 'sample' && !settings.allowSimulation) || (mode === 'gps' && !device.supported())) return;
     const epoch = ++generation; pending = true; pendingAt = now(); error = ''; render();
     try {

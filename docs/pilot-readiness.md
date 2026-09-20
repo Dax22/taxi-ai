@@ -25,7 +25,7 @@ The generated test accounts are not available in your normal `/app`.
 The command checks:
 
 1. Registration, administrator setup, revoked bootstrap session, pending-driver
-   restrictions and approval with vehicle details.
+   restrictions, private document submission and recorded manual review before approval.
 2. Explicit availability, nearby matching, exclusive assignment, private chat,
    read acknowledgement and limited administrator message-report review.
 3. Offers and counteroffers, rejection of a stale acceptance, exact agreed kobo,
@@ -45,7 +45,8 @@ They are not browser automation or visual/device tests.
 
 Run `npm run verify` before uploading changes. The focused tests are also included
 in the normal full suite and the existing Node 22.12/24 CI matrix. No database
-migration is added by this release; the current schema remains version 7.
+migration was added by the journey-verification release. The subsequent
+[driver-onboarding release](driver-onboarding.md) advances the current schema to 8.
 
 ## Fixes in this milestone
 

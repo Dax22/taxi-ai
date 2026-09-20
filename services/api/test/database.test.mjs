@@ -12,7 +12,7 @@ import { canonical } from '../src/modules/rides/domain.mjs';
 // Compare every pre-existing column while allowing the schema-six additions.
 function legacyRows(db, table) {
   return db.prepare(`SELECT * FROM ${table}`).all().map((row) => {
-    if (table === 'rides') { delete row.request_expires_at; delete row.closed_reason; }
+    if (table === 'rides') { delete row.request_expires_at; delete row.closed_reason; delete row.driver_snapshot_json; }
     return row;
   });
 }
@@ -148,9 +148,8 @@ test('schema two upgrades without changing fares, chat, read markers, reports, s
     assert.equal(app.chat.thread(customerId, rideId).messages[0].body, 'Existing message');
     assert.equal(app.chat.thread(customerId, rideId).unread, 0);
     assert.equal(app.chat.send({ userId: driverId, rideId, key: 'existing-chat-key', data: { body: 'Existing message' } }).replayed, true);
-    const confirmed = app.rides.mutate({ userId: customerId, key: 'confirm-old-agreement', action: 'confirm', id: rideId, data: { expectedVersion: before.version } });
-    assert.equal(confirmed.ride.status, 'booked');
-    assert.deepEqual(confirmed.ride.negotiation.agreement, before.negotiation.agreement);
+    assert.throws(() => app.rides.mutate({ userId: customerId, key: 'confirm-old-agreement', action: 'confirm', id: rideId, data: { expectedVersion: before.version } }), { code: 'DRIVER_NOT_ELIGIBLE' });
+    assert.equal(app.rides.get(user, rideId).status, 'agreed', 'legacy test approval is not identity verification');
   } finally { upgraded.close(); }
 });
 

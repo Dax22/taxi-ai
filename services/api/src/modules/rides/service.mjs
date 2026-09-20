@@ -4,7 +4,7 @@ import { distanceMeters } from '../../../../../packages/shared/src/locations.mjs
 import { REQUEST_MS, EXPAND_MS, searchRadius } from '../../../../../packages/shared/src/matching.mjs';
 import { check } from '../../shared/errors.mjs';
 import { fields } from '../../shared/validation.mjs';
-import { requireRole } from '../../shared/policies.mjs';
+import { requireRole, requireEligibleDriver } from '../../shared/policies.mjs';
 import { requireParticipant, requireVersion, restoreNegotiation, canonical } from './domain.mjs';
 
 /**
@@ -46,7 +46,7 @@ export function createRidesService({ repository, getAccount, unitOfWork, audit, 
     return { id: ride.id, status: trip?.status ?? (ride.closedReason === 'request_expired' ? 'expired' : ride.status), version: ride.version,
       pickup: quote.pickup, destination: quote.destination, suggestedFareKobo: ride.suggestedFareKobo,
       currency: 'NGN', isDemo: true, route, createdAt: ride.createdAt, updatedAt: ride.updatedAt,
-      customer: peer(ride.customerId), driver: peer(ride.driverId, true),
+      customer: peer(ride.customerId), driver: ride.driverSnapshotJson ? JSON.parse(ride.driverSnapshotJson) : peer(ride.driverId, true),
       negotiation: negotiationFor(ride)?.snapshot() ?? null,
       matching: ride.requestExpiresAt ? { expiresAt: ride.requestExpiresAt, expandedAt: ride.createdAt + EXPAND_MS,
         radiusMeters: route ? searchRadius(ride.createdAt, ride.matchedAt ?? (ride.closedReason ? ride.updatedAt : clock())) : null,
@@ -127,7 +127,7 @@ export function createRidesService({ repository, getAccount, unitOfWork, audit, 
   }
 
   function claim(user, id, data, now) {
-    requireRole(user, 'driver');
+    requireEligibleDriver(user);
     fields(data, ['expectedVersion']);
     const ride = record(id);
     check(ride.status === 'requested', 'REQUEST_UNAVAILABLE', 'Another driver took this request, or it is no longer open.');
@@ -136,7 +136,7 @@ export function createRidesService({ repository, getAccount, unitOfWork, audit, 
     const availability = availabilityFor(user.id, now);
     check(availability, 'DRIVER_OFFLINE', 'Go online with a fresh location before selecting a request.');
     check(matchDistance(ride, availability, now) !== null, 'OUTSIDE_MATCH_AREA', 'This request is outside your current matching area. Refresh nearby requests.');
-    check(repository.claim({ id, driverId: user.id, expectedVersion: ride.version, now }),
+    check(repository.claim({ id, driverId: user.id, driverSnapshot: peer(user.id, true), expectedVersion: ride.version, now }),
       'STALE_VERSION', 'This request has changed. Refresh and try again.');
     audit.record(user.id, 'ride.claimed', id, now);
     onClaim(user.id, now);
@@ -183,7 +183,7 @@ export function createRidesService({ repository, getAccount, unitOfWork, audit, 
     if (action === 'confirm') {
       requireRole(user, 'customer');
       check(ride.status === 'agreed' && !ride.trip, 'INVALID_TRIP_STATE', 'An agreed fare is required before confirming this booking.');
-      requireRole(getAccount(ride.driverId), 'driver');
+      requireEligibleDriver(getAccount(ride.driverId));
       check(!repository.hasOpenRequest(user.id), 'OPEN_REQUEST_EXISTS', 'Finish or cancel your other request or trip before confirming.');
       check(!repository.hasNegotiation(ride.driverId), 'DRIVER_BUSY', 'This driver has another negotiation or trip. Ask them to finish it before confirming.');
       const agreement = negotiationFor(ride).snapshot().agreement;
@@ -207,6 +207,7 @@ export function createRidesService({ repository, getAccount, unitOfWork, audit, 
       const transition = TRIP_TRANSITIONS[action];
       check(transition && status === transition.from, 'INVALID_TRIP_STATE', 'This trip action is not available at the current stage.');
       if (action === 'start') {
+        requireEligibleDriver(user);
         check(typeof data.pickupPin === 'string' && /^\d{6}$/.test(data.pickupPin), 'INVALID_PIN_FORMAT', 'Enter the customer’s six-digit pickup PIN.');
         const trip = ride.trip;
         check(!trip.pinBlockedUntil || trip.pinBlockedUntil <= now, 'PICKUP_PIN_LOCKED', 'Too many incorrect PINs. Wait five minutes from the last failed attempt before trying again.');
