@@ -10,6 +10,7 @@ import { locationRoutes } from '../modules/locations/routes.mjs';
 import { availabilityRoutes } from '../modules/availability/routes.mjs';
 import { safetyRoutes } from '../modules/safety/routes.mjs';
 import { paymentRoutes } from '../modules/payments/routes.mjs';
+import { adminConsoleRoutes } from '../modules/admin-console/routes.mjs';
 import { requireSameOrigin, readSessionToken, sessionCookie, requireCsrf } from './security.mjs';
 import { readBody } from './body.mjs';
 import { json } from './responses.mjs';
@@ -17,7 +18,8 @@ import { json } from './responses.mjs';
 /** HTTP owns parsing, cookies, CSRF and response codes; services own decisions. */
 export function createApiRouter(application, { secure = false } = {}) {
   const { accounts, devices, drivers, rides, chat, calls, locations, availability, payments, safety, rateLimiter, clock } = application;
-  const routes = [...deviceSessionRoutes(devices), ...accountRoutes(accounts, (token, age) => sessionCookie(token, age, secure)), ...driverRoutes(drivers), ...rideRoutes(rides), ...chatRoutes(chat), ...callRoutes(calls), ...locationRoutes(locations), ...availabilityRoutes(availability), ...paymentRoutes(payments), ...safetyRoutes(safety)];
+  const cookie = (token, age) => sessionCookie(token, age, secure);
+  const routes = [...adminConsoleRoutes(application.adminConsole, accounts, cookie), ...deviceSessionRoutes(devices), ...accountRoutes(accounts, cookie), ...driverRoutes(drivers), ...rideRoutes(rides), ...chatRoutes(chat), ...callRoutes(calls), ...locationRoutes(locations), ...availabilityRoutes(availability), ...paymentRoutes(payments), ...safetyRoutes(safety)];
   return async function handleApi({ request, response, pathname, origin, clientAddress }) {
     const write = request.method === 'POST';
     check(['GET', 'POST'].includes(request.method), 'METHOD_NOT_ALLOWED', 'Use GET or POST.');

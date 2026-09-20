@@ -45,6 +45,10 @@ try {
   await ready();
   docker(['exec', '-i', name, 'node', '--input-type=module'], requestScript + `
     assert.equal((await send('/app', 'GET', undefined, { Authorization: 'Basic invalid' })).status, 401);
+    for (const path of ['/admin', '/admin/accounts', '/admin/trips', '/admin/analytics', '/admin/app.mjs', '/admin/styles.css']) {
+      assert.equal((await send(path)).status, 200, path);
+    }
+    assert.equal((await send('/api/admin/console/accounts')).status, 401);
     const response = await send('/api/auth/register', 'POST', { name: 'Container fixture', email: 'container@example.test', role: 'customer',
       password: 'Disposable container password 123' }, { Origin: 'https://taxi.example.test', 'Content-Type': 'application/json' });
     assert.equal(response.status, 201);

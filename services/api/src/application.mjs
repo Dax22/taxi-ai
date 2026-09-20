@@ -29,6 +29,8 @@ import { createAvailabilityService } from './modules/availability/service.mjs';
 import { createPaymentsRepository } from './modules/payments/repository.mjs';
 import { createPaymentsService } from './modules/payments/service.mjs';
 import { simulatePayment } from './infrastructure/simulated-payment-provider.mjs';
+import { createAdminConsoleRepository } from './modules/admin-console/repository.mjs';
+import { createAdminConsoleService } from './modules/admin-console/service.mjs';
 
 /** Composition root: the only place that wires business modules to adapters. */
 export function createApplication({ db, clock = Date.now, callConfig = createCallConfig(), mapProvider = createMapProvider(), allowSimulation = false }) {
@@ -72,5 +74,6 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
     tripForPayment: rides.paymentContext, simulate: simulatePayment, unitOfWork, tokens, audit, clock, allowSimulation });
   safety = createSafetyService({ repository: createSafetyRepository(db), getAccount: accounts.profile, getTrip: rides.safetyContext,
     locationForTrip: locations.safetyPosition, sessionOwner: accounts.sessionOwner, unitOfWork, tokens, audit, clock, allowSimulation });
-  return Object.freeze({ accounts, devices, drivers, rides, chat, calls, locations, availability, payments, safety, rateLimiter, clock });
+  const adminConsole = createAdminConsoleService({ repository: createAdminConsoleRepository(db), audit, clock, unitOfWork });
+  return Object.freeze({ accounts, devices, drivers, rides, chat, calls, locations, availability, payments, safety, adminConsole, rateLimiter, clock });
 }

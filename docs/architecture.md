@@ -414,4 +414,20 @@ independently, with their own lockfile and CI job.
 
 Schema 11 adds device families and hashed token history. Snapshots clear both.
 See [native auth/API](mobile-foundation.md) and [the separate staff dashboard
-design](admin-dashboard.md). `apps/admin` is reserved, not a deployed dashboard.
+design](admin-dashboard.md).
+
+## Operations reporting application
+
+Release 0.18 implements `apps/admin/public` with its own transport, session/page
+controller, route model, components and charts. Static routes are allowlisted in
+the existing server and packaged in the staging image. `modules/admin-console`
+owns a read projection over explicit account, trip, vehicle and payment fields;
+the composition root injects its repository, audit adapter, transaction and clock.
+No frontend imports database code and no reporting service mutates business state.
+Schema 13 adds reporting indexes without data backfill or record changes.
+
+Staff role checks are applied both at HTTP and service boundaries. Audited detail
+views, bounded filters, stable pagination and exact kobo sums are shared across
+the pages. The application presently uses existing web administrator cookies on
+the same origin; dedicated staff sessions/origin, MFA and granular permissions
+remain production requirements. See [setup and module map](../apps/admin/README.md).

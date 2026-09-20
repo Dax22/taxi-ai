@@ -234,7 +234,8 @@ actual simulator/device and signed native build testing are pending. Website
 download links remain Coming soon until real listings exist.
 
 Next: native ride booking/negotiation through trip completion, then native
-communication/location/safety integrations. In parallel, implement the separate
-[staff dashboard](admin-dashboard.md), starting with MFA, permissions and audited
-read APIs. Real providers and staffed operations remain gates before a live pilot.
+communication/location/safety integrations. The separate [staff dashboard](admin-dashboard.md)
+now has audited account/trip views and analytics. Extend it with dedicated staff
+sessions, MFA and granular permissions. Real providers and staffed operations
+remain gates before a live pilot.
 See [mobile setup](../apps/mobile/README.md) and [the v1 contract](mobile-foundation.md).

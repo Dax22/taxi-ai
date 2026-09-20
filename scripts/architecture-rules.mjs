@@ -2,10 +2,18 @@
 const api = 'services/api/src/';
 const shared = 'packages/shared/src/';
 const browser = 'apps/web/public/';
+const adminBrowser = 'apps/admin/public/';
+const isBrowser = (path) => path.startsWith(browser) || path.startsWith(adminBrowser);
+
+// Recognise declarations, not ordinary strings such as date-filter key 'from'.
+export function importSpecifiers(source) {
+  return [...source.matchAll(/(?:^|\n)\s*(?:import\s*(?:[\w*$\s{},]+?\s+from\s*)?|export\s+[\w*$\s{},]+?\s+from\s*)['"]([^'"]+)['"]/g)].map((match) => match[1]);
+}
 
 export function boundaryError(source, target) {
   if (source.startsWith(shared) && !target.startsWith(shared)) return 'Shared domain code must remain independent of apps and API adapters.';
   if (source.startsWith(browser) && !target.startsWith(browser) && !target.startsWith(shared)) return 'Browser code may import only public client modules and shared domain code.';
+  if (source.startsWith(adminBrowser) && !target.startsWith(adminBrowser) && !target.startsWith(shared)) return 'Staff browser code may import only staff client modules and shared domain code.';
   if (!source.startsWith(api)) return null;
   const relative = source.slice(api.length);
   if (relative === 'application.mjs') return null;
@@ -29,12 +37,12 @@ export function boundaryError(source, target) {
 
 export function sourceErrors(path, source) {
   const errors = [];
-  const isProduction = path.startsWith(api) || path.startsWith(shared) || path.startsWith(browser);
+  const isProduction = path.startsWith(api) || path.startsWith(shared) || isBrowser(path);
   if (!isProduction) return errors;
   if (/\bimport\s*\(/.test(source) || /\brequire\s*\(/.test(source)) errors.push('Use static ESM imports so module boundaries remain checkable.');
   if (path.startsWith(api) && /\.(?:prepare|exec)\s*\(/.test(source)
     && !path.includes('/infrastructure/') && !path.endsWith('/repository.mjs')) errors.push('SQL access belongs to a repository or infrastructure adapter.');
-  if (path.startsWith(browser) && /\bfetch\s*\(/.test(source) && !path.endsWith('/dashboard/api-client.mjs')) errors.push('Dashboard network access belongs to its API client.');
+  if (isBrowser(path) && /\bfetch\s*\(/.test(source) && ![browser + 'dashboard/api-client.mjs', adminBrowser + 'api-client.mjs'].includes(path)) errors.push('Dashboard network access belongs to its API client.');
   return errors;
 }
 

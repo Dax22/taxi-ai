@@ -45,8 +45,9 @@ is not connected. Use fictional details and documents.
   Exact-model 3D renders remain a separate catalogue milestone.
   See [vehicle identity](docs/vehicle-identity.md).
 - Website Download app section stays Coming soon until real store URLs are added.
-- Separate staff dashboard planned in [the admin design](docs/admin-dashboard.md).
-- Additive schema-12 migration preserves existing accounts, sessions and trip history.
+- Separate [operations dashboard](apps/admin/README.md) at `/admin`: searchable accounts,
+  individual profiles, complete paginated trip history, exact fare/payment totals and analytics.
+- Additive schema-13 reporting indexes preserve existing accounts, sessions and trip history.
 - Server-checked trip roles, self-claim prevention and conflicting-work protection.
 - Private driver applications, contact/licence/vehicle details and bounded image uploads.
 - Administrator approval, rejection and corrections with recorded manual checks and review history.
@@ -218,10 +219,11 @@ automatically at startup. `npm run backup -- /absolute/new-backup.sqlite` makes 
 validated copy without changing the source. See [staging and recovery](docs/staging.md)
 for restore, transient-data removal, scheduling and off-host backup requirements.
 
-The current schema is **12**: Trip Safety added schema 9, unified accounts added
+The current schema is **13**: Trip Safety added schema 9, unified accounts added
 schema 10, native device sessions added schema 11 and initial vehicle selections
 add schema 12 in 0.17. This new table preserves the car chosen before full driver
-details are complete without changing existing applications or approvals. Backups
+details are complete without changing existing applications or approvals. Release
+0.18 adds reporting indexes in schema 13 without rewriting records. Backups
 retain private contact/incident data while revoking trip links.
 
 The earlier payment milestone upgrades schema 1–6 to 7 without resetting existing records

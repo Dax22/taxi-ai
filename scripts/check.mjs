@@ -2,7 +2,7 @@ import { readdir, readFile, stat } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import { dirname, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { boundaryError, sourceErrors, findCycle } from './architecture-rules.mjs';
+import { boundaryError, sourceErrors, findCycle, importSpecifiers } from './architecture-rules.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const portable = (path) => path.split(sep).join('/');
@@ -26,10 +26,9 @@ for (const path of files) {
   failures.push(...sourceErrors(name, source).map((message) => `${name}: ${message}`));
   const dependencies = [];
   // Static imports/re-exports under the enforced conventions above.
-  for (const match of source.matchAll(/\b(?:from|import)\s*['"]([^'"]+)['"]/g)) {
-    const specifier = match[1];
+  for (const specifier of importSpecifiers(source)) {
     if (specifier.startsWith('node:')) {
-      if (/^services\/api\/src\/(modules|shared)\//.test(name) || name.startsWith('packages/shared/src/') || name.startsWith('apps/web/public/')) {
+      if (/^services\/api\/src\/(modules|shared)\//.test(name) || name.startsWith('packages/shared/src/') || /^apps\/(web|admin)\/public\//.test(name)) {
         failures.push(`${name}: Node adapters must be injected, not imported (${specifier}).`);
       }
       continue;

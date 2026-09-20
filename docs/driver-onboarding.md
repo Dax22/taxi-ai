@@ -133,7 +133,7 @@ fares, messages, payments and receipts, and backfills driver/vehicle snapshots.
 All existing drivers receive a **draft** application with no invented evidence.
 Their old test approval does not permit new work. Unstarted legacy work must be
 cancelled before they can apply; already-started trips can finish. Nothing resets
-or deletes saved journeys. Current backup/restore commands require schema 12 (see [vehicle identity](vehicle-identity.md));
+or deletes saved journeys. Current backup/restore commands require schema 13 (see [admin reporting](admin-dashboard.md));
 restore an older backup with its matching release, then upgrade a separate copy.
 
 `npm run verify` includes HTTP workflow/privacy tests, expiry boundaries, session
