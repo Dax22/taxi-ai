@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { boundaryError, sourceErrors, findCycle, importSpecifiers } from './architecture-rules.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
+const declaredDependencies = JSON.parse(await readFile(resolve(root, 'package.json'), 'utf8')).dependencies ?? {};
 const portable = (path) => path.split(sep).join('/');
 async function collect(folder) {
   const entries = await readdir(folder, { withFileTypes: true });
@@ -35,7 +36,10 @@ for (const path of files) {
     }
     const target = specifier.startsWith('/shared/') ? resolve(root, 'packages/shared/src', specifier.slice(8))
       : specifier.startsWith('.') ? resolve(dirname(path), specifier) : null;
-    if (!target) { failures.push(`${name}: unsupported or undeclared import ${specifier}`); continue; }
+    if (!target) {
+      if (Object.hasOwn(declaredDependencies, specifier) && (name.startsWith('services/api/src/infrastructure/') || name.includes('/test/'))) continue;
+      failures.push(`${name}: unsupported, undeclared or non-adapter import ${specifier}`); continue;
+    }
     const targetName = portable(relative(root, target));
     if (targetName.startsWith('../')) { failures.push(`${name}: import leaves the repository`); continue; }
     try { if (!(await stat(target)).isFile()) throw new Error(); }

@@ -31,9 +31,14 @@ import { createPaymentsService } from './modules/payments/service.mjs';
 import { simulatePayment } from './infrastructure/simulated-payment-provider.mjs';
 import { createAdminConsoleRepository } from './modules/admin-console/repository.mjs';
 import { createAdminConsoleService } from './modules/admin-console/service.mjs';
+import { createGoogleAuthRepository } from './modules/google-auth/repository.mjs';
+import { createGoogleAuthService } from './modules/google-auth/service.mjs';
+import { createGoogleProvider } from './infrastructure/google-provider.mjs';
+import { createGoogleConfig } from './infrastructure/google-config.mjs';
 
 /** Composition root: the only place that wires business modules to adapters. */
-export function createApplication({ db, clock = Date.now, callConfig = createCallConfig(), mapProvider = createMapProvider(), allowSimulation = false }) {
+export function createApplication({ db, clock = Date.now, callConfig = createCallConfig(), mapProvider = createMapProvider(), allowSimulation = false,
+  googleProvider = createGoogleProvider({ config: createGoogleConfig({}), clock }) }) {
   const unitOfWork = (run) => transaction(db, run);
   const audit = createAudit(db);
   const accountRepository = createAccountsRepository(db);
@@ -75,5 +80,7 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
   safety = createSafetyService({ repository: createSafetyRepository(db), getAccount: accounts.profile, getTrip: rides.safetyContext,
     locationForTrip: locations.safetyPosition, sessionOwner: accounts.sessionOwner, unitOfWork, tokens, audit, clock, allowSimulation });
   const adminConsole = createAdminConsoleService({ repository: createAdminConsoleRepository(db), audit, clock, unitOfWork });
-  return Object.freeze({ accounts, devices, drivers, rides, chat, calls, locations, availability, payments, safety, adminConsole, rateLimiter, clock });
+  const googleAuth = createGoogleAuthService({ repository: createGoogleAuthRepository(db), provider: googleProvider,
+    accounts, devices, tokens, unitOfWork, clock });
+  return Object.freeze({ accounts, devices, drivers, rides, chat, calls, locations, availability, payments, safety, adminConsole, googleAuth, rateLimiter, clock });
 }

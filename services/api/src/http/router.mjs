@@ -11,6 +11,7 @@ import { availabilityRoutes } from '../modules/availability/routes.mjs';
 import { safetyRoutes } from '../modules/safety/routes.mjs';
 import { paymentRoutes } from '../modules/payments/routes.mjs';
 import { adminConsoleRoutes } from '../modules/admin-console/routes.mjs';
+import { googleAuthRoutes } from '../modules/google-auth/routes.mjs';
 import { requireSameOrigin, readSessionToken, sessionCookie, requireCsrf } from './security.mjs';
 import { readBody } from './body.mjs';
 import { json } from './responses.mjs';
@@ -19,7 +20,7 @@ import { json } from './responses.mjs';
 export function createApiRouter(application, { secure = false } = {}) {
   const { accounts, devices, drivers, rides, chat, calls, locations, availability, payments, safety, rateLimiter, clock } = application;
   const cookie = (token, age) => sessionCookie(token, age, secure);
-  const routes = [...adminConsoleRoutes(application.adminConsole, accounts, cookie), ...deviceSessionRoutes(devices), ...accountRoutes(accounts, cookie), ...driverRoutes(drivers), ...rideRoutes(rides), ...chatRoutes(chat), ...callRoutes(calls), ...locationRoutes(locations), ...availabilityRoutes(availability), ...paymentRoutes(payments), ...safetyRoutes(safety)];
+  const routes = [...googleAuthRoutes(application.googleAuth, accounts, secure), ...adminConsoleRoutes(application.adminConsole, accounts, cookie), ...deviceSessionRoutes(devices), ...accountRoutes(accounts, cookie), ...driverRoutes(drivers), ...rideRoutes(rides), ...chatRoutes(chat), ...callRoutes(calls), ...locationRoutes(locations), ...availabilityRoutes(availability), ...paymentRoutes(payments), ...safetyRoutes(safety)];
   return async function handleApi({ request, response, pathname, origin, clientAddress }) {
     const write = request.method === 'POST';
     check(['GET', 'POST'].includes(request.method), 'METHOD_NOT_ALLOWED', 'Use GET or POST.');
@@ -49,7 +50,7 @@ export function createApiRouter(application, { secure = false } = {}) {
       }
     }
     check(route, 'NOT_FOUND', 'API endpoint not found.');
-    const result = await route.handle({ data, token, session, user: session?.user,
+    const result = await route.handle({ data, token, session, user: session?.user, origin, cookieHeader: request.headers.cookie,
       match: pathname.match(route.path), key: request.headers['idempotency-key'], callClient: request.headers['x-call-client'],
       locationClient: request.headers['x-location-client'],
       availabilityClient: request.headers['x-availability-client'],

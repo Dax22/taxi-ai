@@ -34,6 +34,9 @@ is not connected. Use fictional details and documents.
 
 - One personal login, Customer/Work mode switching and optional driver enrollment.
 - Native sign-in, Home/Activity/Work/Account navigation and device revocation.
+- Optional Google sign-up/sign-in for web and native development builds, with
+  explicit password-confirmed linking for existing accounts. Configure your own
+  OAuth clients using [Google setup](docs/google-sign-in.md); it stays off until configured.
 - Web/mobile vehicle registration with make/year/model/colour dropdowns, years from
   2000 onwards, dependent models and custom entries for unlisted vehicles.
 - Dropdowns start at **Apply to drive** on web. The chosen car and colour preview
@@ -97,6 +100,7 @@ repository folder, then use **Terminal → New Terminal**:
 
 ```bash
 node --version
+npm ci
 npm run verify
 npm run dev
 ```
@@ -105,8 +109,10 @@ Open **http://localhost:3000/app** for accounts or **http://localhost:3000** for
 website. Keep the terminal running. Press **Ctrl+C** to stop it. If port 3000 is
 busy, use `PORT=3001 npm run dev` and open http://localhost:3001/app.
 
-No `npm install`, paid service or API key is needed. The scripts enable Node's
-built-in SQLite API, including the flag required by Node 22.12. A SQLite
+Install the locked server dependencies once with `npm ci` and after dependency
+updates. Email/password preview needs no paid service or API key; optional Google
+login needs your own OAuth credentials. The scripts enable Node's built-in SQLite
+API, including the flag required by Node 22.12. A SQLite
 experimental warning on that version is expected.
 
 To check the complete customer/driver/administrator journey using disposable
@@ -219,12 +225,14 @@ automatically at startup. `npm run backup -- /absolute/new-backup.sqlite` makes 
 validated copy without changing the source. See [staging and recovery](docs/staging.md)
 for restore, transient-data removal, scheduling and off-host backup requirements.
 
-The current schema is **13**: Trip Safety added schema 9, unified accounts added
+The current schema is **14**: Trip Safety added schema 9, unified accounts added
 schema 10, native device sessions added schema 11 and initial vehicle selections
 add schema 12 in 0.17. This new table preserves the car chosen before full driver
 details are complete without changing existing applications or approvals. Release
-0.18 adds reporting indexes in schema 13 without rewriting records. Backups
-retain private contact/incident data while revoking trip links.
+0.18 adds reporting indexes in schema 13 without rewriting records. Release 0.19
+adds Google identity mappings, password eligibility and expiring login attempts
+in schema 14. Backups retain private contact/incident data and identity mappings
+while revoking trip links, sessions and pending Google attempts.
 
 The earlier payment milestone upgrades schema 1–6 to 7 without resetting existing records
 or automatically booking old agreements. Completed trips receive unpaid simulation

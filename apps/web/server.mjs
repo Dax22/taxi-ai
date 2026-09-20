@@ -14,6 +14,9 @@ import { createHealth } from '../../services/api/src/infrastructure/health.mjs';
 import { createTelemetry } from '../../services/api/src/infrastructure/telemetry.mjs';
 import { VEHICLE_COLOURS } from '../../packages/shared/src/vehicle-profile.mjs';
 import { check } from '../../services/api/src/shared/errors.mjs';
+import { createGoogleConfig } from '../../services/api/src/infrastructure/google-config.mjs';
+import { createGoogleProvider } from '../../services/api/src/infrastructure/google-provider.mjs';
+import { createGoogleCallback } from '../../services/api/src/modules/google-auth/routes.mjs';
 
 // Explicit allowlist: never serve the repository root or arbitrary disk paths.
 const routes = new Map([
@@ -26,6 +29,10 @@ const routes = new Map([
   ['/download.mjs', ['public/download.mjs', 'text/javascript; charset=utf-8']],
   ['/app-release.mjs', ['public/app-release.mjs', 'text/javascript; charset=utf-8']],
   ['/app', ['public/dashboard.html', 'text/html; charset=utf-8']],
+  ['/account-access', ['public/account-access.html', 'text/html; charset=utf-8']],
+  ['/account-access.mjs', ['public/account-access.mjs', 'text/javascript; charset=utf-8']],
+  ['/dashboard/google-auth.mjs', ['public/dashboard/google-auth.mjs', 'text/javascript; charset=utf-8']],
+  ['/dashboard/sign-in-methods.mjs', ['public/dashboard/sign-in-methods.mjs', 'text/javascript; charset=utf-8']],
   ['/trip-share', ['public/trip-share.html', 'text/html; charset=utf-8']],
   ['/trip-share.mjs', ['public/trip-share.mjs', 'text/javascript; charset=utf-8']],
   ['/dashboard/safety-controller.mjs', ['public/dashboard/safety-controller.mjs', 'text/javascript; charset=utf-8']],
@@ -74,6 +81,7 @@ const routes = new Map([
   ['/app.mjs', ['public/app.mjs', 'text/javascript; charset=utf-8']],
   ['/favicon.svg', ['public/favicon.svg', 'image/svg+xml']],
   ['/assets/taxi-ai-mark.svg', ['public/assets/taxi-ai-mark.svg', 'image/svg+xml']],
+  ['/assets/google-sign-in.png', ['public/assets/google-sign-in.png', 'image/png']],
   ['/assets/city-route-hero.webp', ['public/assets/city-route-hero.webp', 'image/webp']],
   ['/assets/city-route-hero-small.webp', ['public/assets/city-route-hero-small.webp', 'image/webp']],
   ['/assets/autonomous-concept.webp', ['public/assets/autonomous-concept.webp', 'image/webp']],
@@ -91,14 +99,16 @@ const routes = new Map([
 export function createAppServer({ runtime = createRuntimeConfig({}), db = openDatabase(runtime.mode === 'staging' ? runtime.database : ':memory:'),
   clock = Date.now, callConfig = createCallConfig({ ...process.env, TAXI_AI_CALLS_MODE: process.env.TAXI_AI_CALLS_MODE ?? (runtime.mode === 'staging' ? 'off' : 'local') }),
   mapProvider = createMapProvider({ env: { ...process.env, TAXI_AI_MAPS_MODE: process.env.TAXI_AI_MAPS_MODE ?? (runtime.mode === 'staging' ? 'off' : 'community') } }),
-  telemetry = createTelemetry({ enabled: runtime.mode === 'staging' }) } = {}) {
+  telemetry = createTelemetry({ enabled: runtime.mode === 'staging' }),
+  googleProvider = createGoogleProvider({ config: createGoogleConfig(process.env, runtime), clock }) } = {}) {
   if (runtime.mode === 'staging' && callConfig.mode === 'local') throw new Error('Staging calls require off or a configured relay.');
-  const application = createApplication({ db, clock, callConfig, mapProvider, allowSimulation: runtime.mode === 'local' });
+  const application = createApplication({ db, clock, callConfig, mapProvider, googleProvider, allowSimulation: runtime.mode === 'local' });
   const handleApi = createApiRouter(application, { secure: runtime.mode === 'staging' });
   const handleMobile = createMobileRouter(application);
+  const handleGoogleCallback = createGoogleCallback(application, runtime.mode === 'staging');
   const health = createHealth(db);
   const cleanup = setInterval(() => {
-    try { application.rides.sweep(); application.availability.sweep(); application.calls.sweep(); application.locations.sweep(); application.safety.sweep(); application.devices.sweep(); }
+    try { application.rides.sweep(); application.availability.sweep(); application.calls.sweep(); application.locations.sweep(); application.safety.sweep(); application.devices.sweep(); application.googleAuth.sweep(); }
     catch { telemetry.event('maintenance_failed'); }
   }, 5000);
   cleanup.unref();
@@ -134,6 +144,9 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
         return;
       }
       check(!health.draining(), 'SERVER_DRAINING', 'Taxi Ai is restarting. Please retry shortly.');
+      if (pathname === '/auth/google/callback') {
+        await handleGoogleCallback({ request, response, ...context }); return;
+      }
       if (pathname.startsWith('/api/')) {
         await (pathname.startsWith('/api/mobile/v1/') ? handleMobile : handleApi)({ request, response, pathname, ...context });
         return;

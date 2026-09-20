@@ -33,6 +33,34 @@ test('native credentials use the secure vault without persisting access tokens, 
   assert.equal(new Headers(requests[0].headers).get('X-Taxi-Ai-Preview-Access'), preview);
   assert.equal(new Headers(requests[0].headers).get('Authorization'), null);
 });
+test('native Google signup passes a fresh server challenge and stores only Taxi Ai refresh credentials', async () => {
+  const calls: Array<{ url: string; options: RequestInit }> = [];
+  const challenge = { challenge: 'a'.repeat(64), nonce: 'b'.repeat(64), webClientId: 'fixture.apps.googleusercontent.com' };
+  const { app, storage } = client(async (url, options) => {
+    calls.push({ url, options });
+    if (url.endsWith('/auth/google/challenge')) return ok(challenge);
+    return response(auth());
+  });
+  assert.equal(await app.googleLogin('My phone', async (value) => {
+    assert.deepEqual(value, { nonce: challenge.nonce, webClientId: challenge.webClientId }); return 'private-google-id-token';
+  }), true);
+  assert.equal(app.account()?.id, user.id);
+  const sent = JSON.parse(String(calls[1].options.body)); assert.equal(sent.challenge, challenge.challenge); assert.equal(sent.idToken, 'private-google-id-token');
+  assert.ok(!storage.value!.includes('private-google')); assert.ok(!storage.value!.includes(challenge.nonce));
+  assert.equal(JSON.parse(storage.value!).refreshToken, auth().credentials.refreshToken);
+});
+test('cancelling Google or signing out while its native prompt is open cannot sign a user in', async () => {
+  const challenge = { challenge: 'a'.repeat(64), nonce: 'b'.repeat(64), webClientId: 'fixture.apps.googleusercontent.com' };
+  let loginPosts = 0;
+  const { app, storage } = client(async (url) => {
+    if (url.endsWith('/auth/google/challenge')) return ok(challenge);
+    loginPosts++; return response(auth());
+  });
+  assert.equal(await app.googleLogin('My phone', async () => null), false);
+  assert.equal(loginPosts, 0); assert.equal(storage.value, null);
+  await assert.rejects(app.googleLogin('My phone', async () => { await app.logout(); return 'private-google-token'; }), { code: 'SESSION_CHANGED' });
+  assert.equal(loginPosts, 0); assert.equal(app.account(), null);
+});
 test('simultaneous expired requests share one refresh and retry only with the new access token', async () => {
   let refreshes = 0;
   const { app, storage } = client(async (url, options) => {

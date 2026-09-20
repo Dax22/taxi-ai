@@ -18,8 +18,13 @@ export function createDeviceSessionsService({ repository, authenticate, getAccou
     fields(data, ['email', 'password', 'deviceName']);
     const name = label(data.deviceName, 'Device name', 2, 60);
     const authenticated = await authenticate({ email: data.email, password: data.password });
+    return issue(authenticated.id, name);
+  }
+  // Internal port called only after password or Google authentication succeeds.
+  function issue(userId, deviceName) {
+    const name = label(deviceName, 'Device name', 2, 60);
     return unitOfWork(() => {
-      const user = getAccount(authenticated.id); requireRole(user, 'customer');
+      const user = getAccount(userId); requireRole(user, 'customer');
       const now = clock(); repository.purge(now);
       check(repository.list(user.id).filter((s) => active(s, now)).length < 5,
         'DEVICE_LIMIT', 'Five devices are already signed in. Sign out a device from your web account, then try again.');
@@ -86,6 +91,6 @@ export function createDeviceSessionsService({ repository, authenticate, getAccou
       return { revoked: true };
     });
   }
-  return Object.freeze({ login, sessionFor, refresh, logout, list, revoke,
+  return Object.freeze({ login, issue, sessionFor, refresh, logout, list, revoke,
     revokeUser: (id) => repository.revokeUser(id, clock()), sweep: () => unitOfWork(() => repository.purge(clock())) });
 }

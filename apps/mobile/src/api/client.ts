@@ -88,6 +88,25 @@ export class MobileClient {
     const result = parseSignIn(await this.send('/auth/login', { data: { email, password, deviceName }, preview }));
     await this.adopt(result, epoch, preview);
   }
+  async googleLogin(deviceName: string, chooseIdentity: (challenge: { nonce: string; webClientId: string }) => Promise<string | null>, preview = '') {
+    const epoch = ++this.epoch;
+    this.credentials = null; this.saved = null; this.publish(null);
+    await this.store(() => this.vault.clear());
+    if (epoch !== this.epoch) throw changed();
+    const challenge = await this.send('/auth/google/challenge', { data: {}, preview });
+    if (epoch !== this.epoch) throw changed();
+    if (typeof challenge.challenge !== 'string' || !/^[a-f0-9]{64}$/.test(challenge.challenge)
+      || typeof challenge.nonce !== 'string' || !/^[a-f0-9]{64}$/.test(challenge.nonce)
+      || typeof challenge.webClientId !== 'string' || !/^[A-Za-z0-9_-]+\.apps\.googleusercontent\.com$/.test(challenge.webClientId)) {
+      throw new ApiError('Google sign-in returned an invalid challenge. Please try again.', 'INVALID_RESPONSE');
+    }
+    const idToken = await chooseIdentity({ nonce: challenge.nonce, webClientId: challenge.webClientId });
+    if (epoch !== this.epoch) throw changed();
+    if (idToken === null) return false;
+    if (typeof idToken !== 'string' || idToken.length > 16_384) throw new ApiError('Google identity could not be read.', 'INVALID_RESPONSE');
+    const result = parseSignIn(await this.send('/auth/google', { data: { challenge: challenge.challenge, idToken, deviceName }, preview }));
+    await this.adopt(result, epoch, preview); return true;
+  }
   async restore() {
     const epoch = this.epoch, raw = await this.vault.read();
     if (epoch !== this.epoch) throw changed();

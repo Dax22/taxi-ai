@@ -18,6 +18,18 @@
   .auth-promise > span { display: grid; place-items: center; background: var(--brand); min-width: 34px; height: 34px; border-radius: 50%; font-size: 20px; }
   .account-card { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 28px; min-width: 0; }
   .auth-card { box-shadow: 0 12px 45px #20222508; padding: 32px; }
+  .google-button { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px; margin-top: 24px; min-height: 48px; width: 100%; border: 0; border-radius: 24px; background: #fff; color: #1f1f1f; padding: 0; }
+  .google-button img { width: 216px; max-width: 100%; height: auto; }
+  #google-progress { font-size: 13px; }
+  .google-button:hover { background: #f4f7fb; }
+  .google-button:disabled { opacity: .55; cursor: wait; }
+  .auth-divider { display: flex; align-items: center; gap: 16px; color: var(--muted); font-size: 12px; margin-top: 24px; }
+  .auth-divider::before, .auth-divider::after { content: ''; height: 1px; background: var(--line); flex: 1; }
+  .access-card { max-width: 660px; margin: 35px auto; }
+  .access-card h1 { font-size: clamp(30px, 5vw, 46px); }
+  .access-methods { display: grid; grid-template-columns: 1fr auto; gap: 16px; padding-block: 24px; border-bottom: 1px solid var(--line); }
+  .access-methods dd { margin: 0; font-weight: 600; }
+  #access-email { overflow-wrap: anywhere; margin-top: 20px; }
   .auth-mode { display: flex; padding: 5px; border-radius: 6px; background: var(--soft); margin-bottom: 28px; }
   .auth-mode button { flex: 1; padding: 11px; background: transparent; border-radius: 4px; font-size: 13px; }
   .auth-mode button[aria-pressed="true"] { background: var(--brand); font-weight: 700; }

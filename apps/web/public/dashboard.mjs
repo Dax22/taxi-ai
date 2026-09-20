@@ -22,6 +22,7 @@ import { createPageController } from './dashboard/page-controller.mjs';
 import { createSafetyController } from './dashboard/safety-controller.mjs';
 import { createSafetyView } from './dashboard/safety-view.mjs';
 import { createAccountModeView, modePreferences } from './dashboard/account-mode-view.mjs';
+import { createGoogleSignIn, consumeGoogleOutcome } from './dashboard/google-auth.mjs';
 
 let serverTime = { now: Date.now(), received: performance.now() };
 const client = createApiClient({ onServerTime(now) { serverTime = { now, received: performance.now() }; } });
@@ -86,6 +87,14 @@ const view = createDashboardView({
   }), 'Report marked reviewed.'),
 });
 const authForm = bindAuthForm({ onSubmit: (path, data) => page.authenticate(path, data) });
+const google = createGoogleSignIn({ client, navigate: (url) => location.assign(url), view: {
+  available(value) { $('google-auth').hidden = !value; },
+  busy(value) { $('google-sign-in').disabled = value; $('google-sign-in').setAttribute('aria-busy', String(value)); $('google-progress').hidden = !value; },
+  error(value) { $('page-error').textContent = value; },
+} });
+$('google-sign-in').addEventListener('click', () => void google.start());
+$('page-notice').textContent = consumeGoogleOutcome(location, history);
+void google.load();
 const modeView = createAccountModeView({ onSwitch: (...args) => page.switchMode(...args), onCancel: () => page.cancelSwitch(),
   onAddDriver: (vehicle) => page.addDriver(vehicle), onOpenRide: (id) => page.openRide(id) });
 let storage;

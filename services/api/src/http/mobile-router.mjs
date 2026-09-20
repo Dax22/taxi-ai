@@ -6,7 +6,7 @@ import { readBody } from './body.mjs';
 import { json } from './responses.mjs';
 
 /** Versioned native surface. Cookie identity and browser CSRF are never reused. */
-export function createMobileRouter({ devices, accounts, drivers, rides, clock, rateLimiter }) {
+export function createMobileRouter({ devices, accounts, drivers, rides, clock, rateLimiter, googleAuth }) {
   function summary(ride) {
     return { id: ride.id, status: ride.status, pickup: ride.pickup.name, destination: ride.destination.name,
       fareKobo: ride.trip?.fareKobo ?? ride.negotiation?.agreement?.amountKobo ?? null,
@@ -25,19 +25,22 @@ export function createMobileRouter({ devices, accounts, drivers, rides, clock, r
     check(['GET','POST'].includes(request.method), 'METHOD_NOT_ALLOWED', 'Use GET or POST.');
     check(!request.headers.origin && !request.headers['sec-fetch-site'], 'INVALID_ORIGIN', 'Use the native app for this endpoint.');
     const path = pathname.slice('/api/mobile/v1'.length), write = request.method === 'POST';
-    const auth = write && ['/auth/login','/auth/refresh','/auth/logout'].includes(path);
+    const auth = (!write && path === '/auth/providers') || (write && ['/auth/login','/auth/refresh','/auth/logout','/auth/google/challenge','/auth/google'].includes(path));
     const accessToken = request.headers.authorization?.match(/^Bearer ([a-f0-9]{64})$/)?.[1];
     let session = auth ? null : devices.sessionFor(accessToken);
     if (!auth) check(session, 'UNAUTHENTICATED', 'Sign in to continue.');
     rateLimiter.consume(auth ? `auth:${clientAddress}` : `mobile:${session.user.id}`, clock(), auth ? 30 : 120, auth ? 10 * 60_000 : 60_000);
     let data;
     if (write) {
-      data = await readBody(request, path === '/driver/application/upload' ? 2_800_000 : 4096);
+      data = await readBody(request, path === '/driver/application/upload' ? 2_800_000 : path === '/auth/google' ? 20_000 : 4096);
       if (!auth) { session = devices.sessionFor(accessToken); check(session, 'UNAUTHENTICATED', 'Sign in to continue.'); }
     }
     const query = new URL(request.url, origin).searchParams;
     let body;
-    if (auth) body = path === '/auth/login' ? await devices.login(data) : path === '/auth/refresh' ? devices.refresh(data) : devices.logout(data);
+    if (auth && path === '/auth/providers') body = { google: googleAuth.settings() };
+    else if (auth && path === '/auth/google/challenge') body = googleAuth.nativeChallenge(data);
+    else if (auth && path === '/auth/google') body = await googleAuth.nativeLogin(data);
+    else if (auth) body = path === '/auth/login' ? await devices.login(data) : path === '/auth/refresh' ? devices.refresh(data) : devices.logout(data);
     else if (!write && path === '/session') body = { user: session.user, sessionId: session.id };
     else if (!write && path === '/activity') {
       const mode = query.get('mode'); check(['customer','work'].includes(mode), 'INVALID_MODE', 'Choose Customer or Work.');

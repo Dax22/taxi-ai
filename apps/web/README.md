@@ -1,8 +1,9 @@
 # Taxi Ai web
 
-Run `npm run dev` from the repository root, then open http://localhost:3000.
-The **Your account** button opens `/app`. Node.js 22.12+ works; no dependency
-installation or provider credentials are required.
+Run `npm ci` once, then `npm run dev` from the repository root and open http://localhost:3000.
+The **Your account** button opens `/app`. Node.js 22.12+ works. Email/password
+preview needs no provider credentials. Optional Google sign-in and sign-in method
+management are described in [Google setup](../../docs/google-sign-in.md).
 
 ## Client structure
 

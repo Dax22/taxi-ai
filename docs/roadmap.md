@@ -6,6 +6,15 @@ with shared accounts and Customer, Drive & deliver and My store modes. The
 moves the mobile foundation earlier. Completed milestones below describe the
 prototype; planned milestones do not claim shipped features.
 
+## Current account milestone — Google sign-in (implemented; configuration/device acceptance pending)
+
+Release 0.19 / mobile 0.3 adds Google sign-up and login, safe existing-account
+linking, staff isolation and schema-14 identity storage. Credentials belong to the
+owner's Google Cloud project. Follow [Google setup](google-sign-in.md).
+Next: activate/test Google; add verification, recovery and deletion; complete the
+native ride lifecycle with the same APIs. Keep Eats, vendors and courier modules
+independent, and add Sign in with Apple before consumer iOS store submission.
+
 ## 0 — Repository foundation (implemented)
 
 - Record the accepted product scope and open decisions.
