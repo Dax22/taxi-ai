@@ -83,9 +83,62 @@ export function createAccountsService({ repository, driverProfiles, passwords, t
   async function login(data) {
     fields(data, ['email', 'password']);
     const record = repository.findByEmail(emailAddress(data.email));
-    const valid = await passwords.verify(passwordInput(data.password), record?.passwordHash);
-    check(record && valid, 'INVALID_CREDENTIALS', 'Email or password is incorrect.');
+    const valid = await passwords.verify(passwordInput(data.password), record?.passwordEnabled ? record.passwordHash : undefined);
+    check(record?.passwordEnabled && valid, 'INVALID_CREDENTIALS', 'Email or password is incorrect.');
     return profile(record.id);
+  }
+
+  // Only a verified provider adapter can reach this port; HTTP accepts no claims.
+  // Google subject is the stable identifier. Email matches never link accounts.
+  function resolveGoogle(identity, linkUserId = null) {
+    fields(identity, ['subject', 'email', 'name']);
+    const subject = label(identity.subject, 'Google identity', 1, 255), email = emailAddress(identity.email);
+    const name = typeof identity.name === 'string' && identity.name.trim().length >= 2
+      && !/[\u0000-\u001f\u007f]/.test(identity.name) ? identity.name.trim().slice(0, 80) : 'Taxi Ai member';
+    return unitOfWork(() => {
+      const owner = repository.googleOwner(subject);
+      if (owner) {
+        const user = profile(owner); requireRole(user, 'customer');
+        check(!linkUserId || linkUserId === owner, 'GOOGLE_ACCOUNT_CONFLICT', 'This Google account is already connected to a different Taxi Ai account.');
+        audit.record(user.id, 'account.google_signed_in', user.id, clock()); return user;
+      }
+      const collision = repository.findByEmail(email);
+      let id = linkUserId;
+      if (id) {
+        const user = profile(id); requireRole(user, 'customer');
+        check(user.email === email && collision?.id === id && collision.passwordEnabled,
+          'GOOGLE_ACCOUNT_CONFLICT', 'Choose the Google account with the same email as your Taxi Ai account.');
+        check(!repository.googleLinked(id), 'GOOGLE_ACCOUNT_CONFLICT', 'A different Google account is already connected.');
+      } else {
+        check(!collision, 'GOOGLE_ACCOUNT_EXISTS', 'Sign in with your Taxi Ai password first, then connect Google from Sign-in methods.');
+        id = tokens.id();
+        repository.insert({ id, email, name, passwordHash: '', passwordEnabled: false, role: 'customer', createdAt: clock() });
+        repository.grant(id, 'customer', clock()); audit.record(id, 'account.created', id, clock());
+      }
+      repository.linkGoogle(id, subject, clock()); audit.record(id, 'account.google_connected', id, clock());
+      return profile(id);
+    });
+  }
+
+  function signInMethods(userId) {
+    const user = profile(userId); requireRole(user, 'customer');
+    return { password: Boolean(repository.findByEmail(user.email)?.passwordEnabled), google: repository.googleLinked(userId) };
+  }
+
+  async function unlinkGoogle(userId, data, sessionToken) {
+    fields(data, ['password']);
+    const user = profile(userId); requireRole(user, 'customer');
+    check(signInMethods(userId).password, 'GOOGLE_LAST_METHOD', 'Google is your only sign-in method. Keep it connected to retain access.');
+    await login({ email: user.email, password: data.password });
+    return unitOfWork(() => {
+      check(sessionFor(sessionToken)?.user.id === userId, 'UNAUTHENTICATED', 'Your session changed. Sign in again.');
+      requireRole(profile(userId), 'customer');
+      repository.unlinkGoogle(userId);
+      // Remove credentials that may have been obtained with the old method.
+      repository.deleteUserSessions(userId); revokeDevices(userId);
+      audit.record(userId, 'account.google_disconnected', userId, clock());
+      return { disconnected: true };
+    });
   }
 
   function revokeSession(token) {
@@ -117,6 +170,7 @@ export function createAccountsService({ repository, driverProfiles, passwords, t
       check(!repository.hasAdmin(), 'ADMIN_EXISTS', 'An administrator already exists. This command only sets up the first administrator.');
       const user = repository.findByEmail(email);
       check(user?.role === 'customer', 'INVALID_ACCOUNT', 'Register a separate customer account for administration first.');
+      check(user.passwordEnabled && !repository.googleLinked(user.id), 'INVALID_ACCOUNT', 'Use a separate password account without Google connected for administration.');
       check(!repository.capabilities(user.id).includes('driver'), 'INVALID_ACCOUNT', 'Use a separate account without a driver profile for administration.');
       check(!hasRideHistory(user.id), 'ACCOUNT_HAS_RIDES', 'Use a separate account that has no ride requests.');
       repository.promoteToAdmin(user.id);
@@ -128,6 +182,6 @@ export function createAccountsService({ repository, driverProfiles, passwords, t
     });
   }
 
-  return Object.freeze({ profile, register, login, addDriverProfile, issueSession, sessionFor, revokeSession, bootstrapAdmin,
+  return Object.freeze({ profile, register, login, resolveGoogle, signInMethods, unlinkGoogle, addDriverProfile, issueSession, sessionFor, revokeSession, bootstrapAdmin,
     sessionOwner: (hash) => repository.findSession(hash, clock())?.userId ?? null });
 }

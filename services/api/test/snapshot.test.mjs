@@ -36,6 +36,9 @@ test('a live WAL snapshot preserves rides and chat, clears transient data only i
   const native = await fetch(h.base + '/api/mobile/v1/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: customer.user.email, password: PASSWORD, deviceName: 'Snapshot phone' }) });
   assert.equal(native.status, 200); await native.json();
   const spare = h.client(); await spare.register('spare-driver', 'driver');
+  h.db.prepare("INSERT INTO account_identities VALUES ('google','snapshot-subject',?,?)").run(customer.user.id, TEST_NOW);
+  h.db.prepare(`INSERT INTO google_auth_attempts(state_hash,binding_hash,nonce,verifier,channel,intent,expires_at)
+    VALUES ('snapshot-state','snapshot-binding','snapshot-nonce','private-pkce-verifier','web','login',?)`).run(TEST_NOW + 600_000);
   await submitApplication(fixtureApi(spare));
   await approveApplication(fixtureApi(admin), spare.user.id);
   const available = await spare.online({ mode: 'gps', lat: 9.087654, lng: 7.412345 });
@@ -49,7 +52,8 @@ test('a live WAL snapshot preserves rides and chat, clears transient data only i
     for (const name of ['users', 'drivers', 'rides', 'ride_trips', 'ride_activity', 'fare_events', 'chat_messages', 'idempotency', 'audit_events', 'driver_applications', 'driver_documents', 'driver_document_reads', 'driver_application_events', 'driver_application_commands']) {
       assert.equal(JSON.stringify(copy.prepare(`SELECT * FROM ${name}`).all()), sourceRows.get(name), name);
     }
-    for (const name of ['sessions', 'device_sessions', 'device_refresh_tokens', 'voice_participants']) assert.equal(copy.prepare(`SELECT count(*) AS n FROM ${name}`).get().n, 0);
+    for (const name of ['sessions', 'device_sessions', 'device_refresh_tokens', 'voice_participants', 'google_auth_attempts']) assert.equal(copy.prepare(`SELECT count(*) AS n FROM ${name}`).get().n, 0);
+    assert.equal(copy.prepare('SELECT subject FROM account_identities').get().subject, 'snapshot-subject');
     const call = copy.prepare('SELECT * FROM voice_calls').get();
     assert.equal(call.status, 'ended'); assert.equal(call.reason, 'snapshot_reset'); assert.equal(call.offer_sdp, null); assert.equal(call.caller_session, '');
     const availability = copy.prepare('SELECT * FROM driver_availability WHERE id = ?').get(available.id);
@@ -62,6 +66,7 @@ test('a live WAL snapshot preserves rides and chat, clears transient data only i
     assert.deepEqual(copy.prepare('PRAGMA foreign_key_check').all(), []);
   } finally { copy.close(); }
   assert.ok(!readFileSync(path).includes(Buffer.from('sdp-sensitive')));
+  assert.ok(!readFileSync(path).includes(Buffer.from('private-pkce-verifier')));
   assert.ok(!readFileSync(path).includes(Buffer.from('9.087654')));
   const restoredPath = join(dir, 'restored.sqlite'); saveSnapshot(path, restoredPath);
   const restored = openDatabase(restoredPath);

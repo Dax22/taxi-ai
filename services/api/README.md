@@ -1,15 +1,16 @@
 # Local accounts and ride API
 
 `npm run dev` starts one Node process serving the website and `/api` on loopback.
-It uses `node:sqlite` with explicit schema migrations and no third-party runtime
-dependencies. This milestone is a local prototype, not a production auth service
+It uses `node:sqlite` with explicit schema migrations and Google's locked server
+authentication library behind an infrastructure adapter. Run root `npm ci` before
+starting. This milestone is a local prototype, not a production auth service
 or transport dispatch system.
 Optional private hosting uses a separate staging mode documented in
 [the deployment guide](../../docs/staging.md). Local behaviour remains the default.
 
 ## Code boundaries
 
-`src/application.mjs` wires the accounts, device-sessions, drivers, rides, chat, calls, locations, availability, payments and safety modules. Each module
+`src/application.mjs` wires the accounts, google-auth, device-sessions, drivers, rides, chat, calls, locations, availability, payments, safety and admin-console modules. Each module
 contains a service, repository and route factory; rides also has pure domain
 helpers. Services receive repositories, clock and cross-module operations as
 explicit dependencies. They do not import HTTP or database adapters. Repositories

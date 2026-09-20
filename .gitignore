@@ -4,6 +4,9 @@ build/
 coverage/
 .next/
 .expo/
+# Generated native projects; Expo config and plugins remain the source of truth.
+apps/mobile/ios/
+apps/mobile/android/
 .env
 .env.*
 !.env.example

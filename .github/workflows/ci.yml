@@ -28,6 +28,8 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
           package-manager-cache: false
+      - name: Install locked server dependencies
+        run: npm ci --ignore-scripts --no-fund --no-audit
       - name: Check architecture and behaviour
         run: npm run verify
   container:

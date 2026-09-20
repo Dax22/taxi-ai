@@ -1,6 +1,6 @@
 {
   "name": "taxi-ai",
-  "version": "0.18.0",
+  "version": "0.19.0",
   "private": true,
   "description": "Taxi Ai project foundation for Abuja rides, food and courier delivery",
   "type": "module",
@@ -8,20 +8,23 @@
     "node": ">=22.12.0"
   },
   "scripts": {
-    "dev": "node --experimental-sqlite apps/web/server.mjs",
-    "start": "node --experimental-sqlite apps/web/server.mjs",
-    "config:check": "node --experimental-sqlite scripts/config-check.mjs",
+    "dev": "node --env-file-if-exists=.env --experimental-sqlite apps/web/server.mjs",
+    "start": "node --env-file-if-exists=.env --experimental-sqlite apps/web/server.mjs",
+    "config:check": "node --env-file-if-exists=.env --experimental-sqlite scripts/config-check.mjs",
     "staging:access": "node --experimental-sqlite scripts/staging-access.mjs",
-    "backup": "node --experimental-sqlite scripts/database-snapshot.mjs backup",
-    "restore": "node --experimental-sqlite scripts/database-snapshot.mjs restore",
+    "backup": "node --env-file-if-exists=.env --experimental-sqlite scripts/database-snapshot.mjs backup",
+    "restore": "node --env-file-if-exists=.env --experimental-sqlite scripts/database-snapshot.mjs restore",
     "check": "node scripts/check.mjs",
     "test": "node --experimental-sqlite --test packages/shared/test/*.test.mjs apps/web/test/*.test.mjs apps/admin/test/*.test.mjs services/api/test/*.test.mjs scripts/test/*.test.mjs",
     "test:journey": "node --experimental-sqlite --test services/api/test/journey.test.mjs apps/web/test/page-controller.test.mjs apps/web/test/dashboard-view.test.mjs apps/web/test/api-client.test.mjs",
     "test:safety": "node --experimental-sqlite --test services/api/test/safety.test.mjs services/api/test/safety-migration.test.mjs apps/web/test/safety.test.mjs",
     "verify": "npm run check && npm test",
-    "admin": "node --experimental-sqlite scripts/create-admin.mjs",
+    "admin": "node --env-file-if-exists=.env --experimental-sqlite scripts/create-admin.mjs",
     "demo": "node scripts/fare-demo.mjs",
     "mobile:start": "npm --prefix apps/mobile start",
     "mobile:verify": "npm --prefix apps/mobile run verify"
+  },
+  "dependencies": {
+    "google-auth-library": "11.1.0"
   }
 }

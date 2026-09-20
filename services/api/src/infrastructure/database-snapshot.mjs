@@ -13,7 +13,7 @@ export function validateSnapshot(db) {
 
 function clearTransientState(db, now) {
   transaction(db, () => {
-    db.exec('DELETE FROM sessions; DELETE FROM device_sessions; DELETE FROM voice_participants;');
+    db.exec('DELETE FROM sessions; DELETE FROM device_sessions; DELETE FROM voice_participants; DELETE FROM google_auth_attempts;');
     db.prepare(`UPDATE voice_calls SET
       ended_at = CASE WHEN status IN ('ringing', 'connecting', 'connected') THEN ? ELSE ended_at END,
       reason = CASE WHEN status IN ('ringing', 'connecting', 'connected') THEN 'snapshot_reset' ELSE reason END,

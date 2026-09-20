@@ -79,7 +79,7 @@ Its retry fingerprint includes make, model, year, colour and plate. Legacy
 model/plate-only clients keep their existing request and retry behaviour. Schema
 12 adds an empty table without modifying existing records. Back up saved data
 using the previous release before upgrading. Release 0.18 adds reporting indexes;
-current backup/restore requires schema 13.
+current backup/restore requires schema 14.
 
 Uber's [eligible vehicle catalogue](https://www.uber.com/us/en/eligible-vehicles/)
 documents model/year eligibility and local requirements. The guided selection

@@ -9,7 +9,7 @@ verify physical arrival or provide background/native-mobile tracking.
 ## Try it locally
 
 Run `npm run dev` and open `http://localhost:3000/app`. Use separate browser
-profiles for the customer and approved driver. No API keys or npm installation
+profiles for the customer and approved driver. No map API keys or extra map package installation
 are required for the default public mapping services.
 
 1. As the customer, click **Enable online maps** after reading the provider note.

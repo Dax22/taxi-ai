@@ -88,9 +88,19 @@ iOS/Android JavaScript/Hermes bundles. It does not build or sign an Xcode/Gradle
 binary, submit to stores or perform device QA. CI has a separate native job on
 Node 24 using the mobile lockfile.
 
-Web/backend have no third-party runtime packages; native dependencies install only
-here. Metro watches this app and the pure shared package without changing the
+The web/backend uses the locked Google authentication library installed by root
+`npm ci`. Native dependencies have their own lockfile and install here. Metro
+watches this app and the pure shared package without changing the
 root to npm workspaces or hoisting dependencies.
+
+## Google sign-up and sign-in
+
+Mobile 0.3.0 adds Google login to configured development builds. It uses a server
+nonce and verified Google identity before adopting the existing Taxi Ai device
+session. Expo Go keeps password login; its runtime has no Google native module.
+Follow [Google setup](../../docs/google-sign-in.md) for client IDs, signing
+certificates, server configuration, existing-account linking and device acceptance.
+Native Google authentication is not activated by a bundle export alone.
 
 ## Structure
 

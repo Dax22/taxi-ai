@@ -10,7 +10,12 @@ for (const path of [...files(resolve(app,'app')), ...files(resolve(app,'src'))])
   const source = readFileSync(path,'utf8'), name = relative(root,path), imports = [];
   if (/\bfetch\s*\(/.test(source) && !path.endsWith('/src/api/client.ts')) failures.push(`${name}: network access belongs to the mobile API client.`);
   if (/\b(?:localStorage|AsyncStorage)\b/.test(source)) failures.push(`${name}: private credentials must use the secure vault.`);
-  if (/\bimport\s*\(/.test(source) || /\brequire\s*\(/.test(source)) failures.push(`${name}: use static imports.`);
+  // One literal, declared native SDK can load lazily after the Expo Go guard.
+  // Keep every other module/dependency statically checkable.
+  const lazyGoogle = path.endsWith('/src/session/google-provider.ts')
+    ? source.replaceAll("import('react-native-nitro-google-signin')", "'react-native-nitro-google-signin'") : source;
+  if (/\bimport\s*\(/.test(lazyGoogle) || /\brequire\s*\(/.test(source)) failures.push(`${name}: use static imports except the guarded Google native adapter.`);
+  if (path.endsWith('/src/session/google-provider.ts') && !dependencies['react-native-nitro-google-signin']) failures.push(`${name}: undeclared Google native dependency.`);
   for (const match of source.matchAll(/\b(?:from|import)\s*['"]([^'"]+)['"]/g)) {
     const value = match[1];
     if (!value.startsWith('.')) {

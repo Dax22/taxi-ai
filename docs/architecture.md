@@ -13,6 +13,13 @@ and the [unified platform design](unified-platform.md). The account foundation
 now implements Customer/Work on the website. [Schema 10](unified-accounts.md) adds
 capabilities while preserving legacy identities, review evidence and sessions.
 
+Google identity is now an optional module in release 0.19 (schema 14). The
+account module owns external identity mappings and collision/linking rules;
+`google-auth` owns expiring web/native challenges; the Google SDK remains behind
+an infrastructure adapter. Web sessions and native credentials keep their
+existing transports. See [Google authentication](google-sign-in.md) for module
+responsibilities, configured activation, threat controls and acceptance limits.
+
 ## Implemented modules
 
 | Module | Responsibility | Owns |

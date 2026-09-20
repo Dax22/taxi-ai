@@ -29,6 +29,7 @@
       <div class="account-card auth-card">
         <div class="auth-mode" role="group" aria-label="Choose account action"><button id="show-login" type="button" aria-pressed="true">Sign in</button><button id="show-register" type="button" aria-pressed="false">Create account</button></div>
         <h2 id="auth-title">Welcome back.</h2><p class="supporting-copy" id="auth-description">Sign in to pick up where you left off.</p>
+        <div id="google-auth" hidden><button id="google-sign-in" class="google-button" type="button" aria-label="Sign in with Google"><img src="/assets/google-sign-in.png" width="216" height="48" alt=""><span id="google-progress" hidden>Opening Google…</span></button><p class="small-note">New here? Google can create your Taxi Ai account too.</p><p class="auth-divider">or continue with email</p></div>
         <form id="auth-form" class="stack-form">
           <div id="registration-fields" hidden><label for="account-name">Your name</label><input id="account-name" autocomplete="name" minlength="2" maxlength="80" disabled></div>
           <label for="account-email">Email address</label><input id="account-email" type="email" autocomplete="username" maxlength="254" required>
@@ -45,6 +46,7 @@
         <div class="card-topline"><div><p class="eyebrow">ONE ACCOUNT / TAXI AI</p><h2 id="mode-title">How are you using Taxi Ai?</h2></div>
           <div class="mode-picker" role="group" aria-label="Account mode"><button id="mode-customer" type="button" aria-pressed="true">Customer</button><button id="mode-work" type="button" aria-pressed="false">Work</button></div></div>
         <p><a class="text-link" href="/devices">Manage signed-in mobile devices ↗</a></p>
+        <p><a class="text-link" href="/account-access">Sign-in methods · connect Google ↗</a></p>
         <p id="mode-note" class="supporting-copy"></p>
         <p class="small-note">Switching clears unsaved forms in this window. Saved journeys, calls and active trip location sharing continue.</p>
         <div id="mode-confirm" class="mode-confirm" hidden role="group" aria-labelledby="mode-confirm-title"><h3 id="mode-confirm-title">Go offline before switching?</h3><p>Your Work availability is online. Going offline stops matching for this account.</p><div class="review-actions"><button id="mode-offline-confirm" type="button" class="button button-primary button-small">Go offline and switch</button><button id="mode-cancel" type="button" class="button button-outline button-small">Stay in Work</button></div></div>
