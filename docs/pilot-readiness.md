@@ -46,7 +46,8 @@ They are not browser automation or visual/device tests.
 Run `npm run verify` before uploading changes. The focused tests are also included
 in the normal full suite and the existing Node 22.12/24 CI matrix. No database
 migration was added by the journey-verification release. The subsequent
-[driver-onboarding release](driver-onboarding.md) advances the current schema to 8.
+[driver-onboarding release](driver-onboarding.md) adds schema 8, followed by
+[Trip Safety](safety.md) at the current schema 9.
 
 ## Fixes in this milestone
 
@@ -103,9 +104,9 @@ Complete the following separate milestones before a real ride pilot:
   enabling charges; handle authenticated callbacks and reconciliation.
 - Provision production mapping, notification delivery and voice relay capacity;
   complete physical-device and network checks.
-- Implement the agreed SOS, emergency contacts and controlled incident details,
-  plus staffed response and verified emergency-service escalation arrangements.
-  No SOS or police messaging is implemented by this testing milestone.
+- Connect the implemented test SOS, trusted contacts and controlled incident records
+  to verified delivery, staffed response and agreed emergency-service escalation.
+  The Trip Safety preview simulates notifications; no police or contact messages are sent.
 
 Automatic crash detection and native background tracking remain later mobile
 work. Taxi Ai Eats, courier and autonomous-service plans are unchanged.

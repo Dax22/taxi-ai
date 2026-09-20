@@ -103,7 +103,8 @@ repository constructor alone is insufficient.
 
 The existing `data/taxi-ai.sqlite` location is preserved. Ordered migrations
 `002_chat.sql`, `003_trip_lifecycle.sql`, `004_voice_calls.sql` and
-`005_locations.sql`, `006_matching.sql` and `007_payments.sql` upgrade schemas 1–6 to 7 without resetting
+`005_locations.sql`, `006_matching.sql`, `007_payments.sql`, `008_driver_onboarding.sql`
+and `009_trip_safety.sql` advance the current schema to 9 without resetting
 records or silently booking prior agreements. Older binaries refuse the upgraded
 database. Local data and secrets are excluded from Git and static serving.
 See [API notes](../services/api/README.md) for routes and current security limits.
@@ -268,7 +269,7 @@ gateway token and tester-key hashes before startup. HTTP enforces the gateway
 and tester boundary before routing; business authorization still uses account
 sessions. Staging cookies use the `__Host-` prefix, Secure, HttpOnly and
 SameSite=Strict, without Domain. Local cookies are never accepted in staging.
-The staging configuration itself adds no schema changes; the current application schema is 7.
+The staging configuration itself adds no schema changes; the current application schema is 9.
 
 `health.mjs` checks database/schema readability and shutdown state. Telemetry
 records only generated request IDs, coarse categories, method, status and timing;
@@ -354,3 +355,29 @@ controller resets onboarding with the other account-bound features. No document
 content is stored in localStorage, URLs, static files or logs. Downloads and file
 reads arriving after a reset are ignored. Backups retain private documents and
 must receive the same access controls as the database.
+
+
+## Trip Safety
+
+`modules/safety/` separates pure validation/state transitions, SQL, service rules
+and route adapters. Composition injects readonly account, participant trip,
+current shared-location and session-owner ports. Incident creation snapshots those
+ports within one synchronous transaction; it does not reach into another module's
+repository or open a nested transaction. Notifications are durable simulated rows,
+not external side effects. Contact removal and administrator closure cancel queued
+work in the same transaction. Trip closure revokes links through a narrow callback
+but never marks an incident resolved.
+
+Account routes enforce reporter/owner/admin access; the peer in a trip cannot read
+the other's report. The isolated bearer-read route accepts only a token and returns
+a minimal trip projection. Token and owner session hashes, exact expiry and current
+trip status are checked server-side. Retried link creation cannot recover a raw
+secret. Replacement requires the current link ID. Backups revoke every active link
+and retain private incident evidence. See [the safety contract](safety.md).
+
+`safety-controller.mjs` isolates account/trip/admin selection generations, pending
+commands, private DTO viewer IDs and in-memory link secrets. `safety-view.mjs` owns
+form drafts, exact displayed review versions and text-only rendering. The separate
+trip-share controller clears details on hidden pages, errors and link expiry.
+All browser requests use the existing API client. No AI agent or notification
+provider operates on these records in this milestone.

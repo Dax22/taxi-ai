@@ -6,6 +6,7 @@ import { chatRoutes } from '../modules/chat/routes.mjs';
 import { callRoutes } from '../modules/calls/routes.mjs';
 import { locationRoutes } from '../modules/locations/routes.mjs';
 import { availabilityRoutes } from '../modules/availability/routes.mjs';
+import { safetyRoutes } from '../modules/safety/routes.mjs';
 import { paymentRoutes } from '../modules/payments/routes.mjs';
 import { requireSameOrigin, readSessionToken, sessionCookie, requireCsrf } from './security.mjs';
 import { readBody } from './body.mjs';
@@ -13,8 +14,8 @@ import { json } from './responses.mjs';
 
 /** HTTP owns parsing, cookies, CSRF and response codes; services own decisions. */
 export function createApiRouter(application, { secure = false } = {}) {
-  const { accounts, drivers, rides, chat, calls, locations, availability, payments, rateLimiter, clock } = application;
-  const routes = [...accountRoutes(accounts, (token, age) => sessionCookie(token, age, secure)), ...driverRoutes(drivers), ...rideRoutes(rides), ...chatRoutes(chat), ...callRoutes(calls), ...locationRoutes(locations), ...availabilityRoutes(availability), ...paymentRoutes(payments)];
+  const { accounts, drivers, rides, chat, calls, locations, availability, payments, safety, rateLimiter, clock } = application;
+  const routes = [...accountRoutes(accounts, (token, age) => sessionCookie(token, age, secure)), ...driverRoutes(drivers), ...rideRoutes(rides), ...chatRoutes(chat), ...callRoutes(calls), ...locationRoutes(locations), ...availabilityRoutes(availability), ...paymentRoutes(payments), ...safetyRoutes(safety)];
   return async function handleApi({ request, response, pathname, origin, clientAddress }) {
     const write = request.method === 'POST';
     check(['GET', 'POST'].includes(request.method), 'METHOD_NOT_ALLOWED', 'Use GET or POST.');
@@ -22,7 +23,10 @@ export function createApiRouter(application, { secure = false } = {}) {
     const route = routes.find((entry) => entry.method === request.method && entry.path.test(pathname));
     const token = readSessionToken(request.headers.cookie, secure);
     let session = null, data;
-    if (route?.access === 'auth') {
+    if (route?.access === 'capability') {
+      rateLimiter.consume(`trip-link:${clientAddress}`, clock(), 30, 60_000);
+      data = await readBody(request, 1024);
+    } else if (route?.access === 'auth') {
       rateLimiter.consume(`auth:${clientAddress}`, clock(), 30, 10 * 60_000);
       data = await readBody(request);
     } else {

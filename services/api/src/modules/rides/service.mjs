@@ -280,5 +280,11 @@ export function createRidesService({ repository, getAccount, unitOfWork, audit, 
       completedAt: ride.trip?.completedAt ?? null, pickup: route.pickup.name, destination: route.destination.name };
   }
 
-  return Object.freeze({ get, list, history, mutate, conversationContext, conversationIds, paymentContext, sweep });
+  function safetyContext(user, id) {
+    const ride = record(id); requireParticipant(ride, user);
+    const route = routeForRide(id) ?? createDemoQuote(ride.pickupId, ride.destinationId);
+    return { rideId: id, status: ride.trip?.status ?? ride.status, pickup: route.pickup.name, destination: route.destination.name,
+      driver: ride.driverSnapshotJson ? JSON.parse(ride.driverSnapshotJson) : peer(ride.driverId, true) };
+  }
+  return Object.freeze({ get, list, history, mutate, conversationContext, conversationIds, paymentContext, safetyContext, sweep });
 }

@@ -116,9 +116,12 @@ or process shutdown, even after their reuse TTL expires.
 
 Driver GPS updates go only to Taxi Ai's API. They are not sent to search/routing
 providers, although visible map tiles can disclose the area being viewed. GPS is
-stored and sent for this local preview; it is not end-to-end encrypted. Only the
-customer and assigned driver can read it. Administrators cannot use location
-routes to inspect positions. Before a driver claims a request, its available
+stored and sent for this local preview; it is not end-to-end encrypted. The
+location routes remain customer/assigned-driver only. Explicit private trip links
+can disclose the available shared position to their recipients, and a manual test
+SOS freezes it for the reporter and administrators. Neither starts GPS; see
+[Trip Safety](safety.md). Administrators cannot use location routes to inspect
+positions outside that saved evidence. Before a driver claims a request, its available
 list shows approximate coordinates rounded to two decimals, without exact point
 labels or route geometry. Claimed participants can see the saved planned route.
 
@@ -143,8 +146,9 @@ Stopping, trip closure, revoked/expired session or lost approval logically clear
 the latest position and ownership hashes. Leaving the selected journey/signing
 out closes the browser watcher and attempts server cleanup. A failed stop request
 shows a retry message; the lease still expires. Completion/cancellation clears
-sharing inside the ride transaction. No breadcrumb history is kept, and audit
-events contain only record IDs, not coordinates.
+sharing inside the ride transaction. No breadcrumb history is kept. A saved test
+SOS retains its frozen location snapshot after GPS stops, including in backups;
+ordinary audit events contain only record IDs, not coordinates.
 
 Consumed quotes retain exact pickup/destination/route details with ride history.
 Unconsumed quotes expire after 15 minutes and are pruned with their retry keys

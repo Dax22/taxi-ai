@@ -7,9 +7,9 @@ const identity = (session) => session.user ? `${session.user.id}:${session.user.
 
 /** Coordinates account boundaries and dashboard actions. DOM/media adapters are injected. */
 export function createPageController({ client, view, conversation, conversationView, calls, sharing,
-  availability, planner, payments, onboarding, authForm, feedback }) {
+  availability, planner, payments, onboarding, safety, authForm, feedback }) {
   let state = emptyState(), sessionKey = null, generation = 0, refreshing = null, busy = false;
-  const features = [conversation, calls, sharing, availability, planner, payments, ...(onboarding ? [onboarding] : [])];
+  const features = [conversation, calls, sharing, availability, planner, payments, ...[onboarding, safety].filter(Boolean)];
 
   function clear() {
     generation++; sessionKey = null; state = emptyState(); client.reset(); view.reset();
@@ -27,7 +27,8 @@ export function createPageController({ client, view, conversation, conversationV
   function selection(ride) {
     calls.setContext(state.user, ride); sharing.context(state.user, ride);
     payments.context(state.user, ride);
-    void conversation.show(ride, state.user); void payments.poll();
+    safety?.context(state.user, ride);
+    void conversation.show(ride, state.user); void payments.poll(); void safety?.poll();
   }
 
   function refresh() {
@@ -62,9 +63,10 @@ export function createPageController({ client, view, conversation, conversationV
         const selected = view.selected(), occupied = state.rides.some((ride) => isActiveRide(ride.status));
         calls.setContext(state.user, selected); sharing.context(state.user, selected);
         onboarding?.context(state.user);
+        safety?.context(state.user, selected);
         payments.context(state.user, selected); availability.context(state.user, occupied);
         void planner.setContext(state.user, occupied);
-        await Promise.all([payments.poll(), availability.poll(), conversation.show(selected, state.user), onboarding?.poll()]);
+        await Promise.all([payments.poll(), availability.poll(), conversation.show(selected, state.user), onboarding?.poll(), safety?.poll()]);
         if (epoch === generation) feedback.synced();
       } catch (error) {
         if ([401, 403].includes(error.status)) clear();
@@ -122,7 +124,7 @@ export function createPageController({ client, view, conversation, conversationV
       const result = await client.request(path, { method: 'POST', data }); session(result); authForm.reset();
     }),
     logout: () => runAction(async () => {
-      onboarding?.reset(); calls.reset(); payments.reset(); void availability.stop(); availability.reset();
+      onboarding?.reset(); safety?.reset(); calls.reset(); payments.reset(); void availability.stop(); availability.reset();
       sharing.shutdown(); sharing.reset(); planner.reset();
       await client.request('/api/auth/logout', { method: 'POST' }); clear();
     }),
