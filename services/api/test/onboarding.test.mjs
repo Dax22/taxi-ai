@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { request as httpRequest } from 'node:http';
-import { harness, participants, bootstrapAdmin, PASSWORD, requestRide, claimRide } from './helpers.mjs';
+import { TEST_NOW, harness, participants, bootstrapAdmin, PASSWORD, requestRide, claimRide } from './helpers.mjs';
 import { IMAGE, DETAILS, CHECKS, submitApplication, approveApplication, fixtureApi } from './driver-fixtures.mjs';
 import { driverDocumentDeadline } from '../../../packages/shared/src/driver-onboarding.mjs';
 import { createDriverDocumentCodec } from '../src/infrastructure/driver-document-codec.mjs';
@@ -20,6 +20,30 @@ async function change(driver, action, extra = {}) {
 }
 const review = (admin, application, data) => admin.post(`/api/admin/drivers/${application.driverId}/review`, { expectedVersion: application.version, ...data });
 const approval = { decision: 'approved', reason: 'Fictional manual checks completed.', reference: 'TEST-REFERENCE', checks: CHECKS };
+
+test('the server enforces 2000 through its calendar year on save, legacy submission and review', async (t) => {
+  const h = await harness(t), { driver,admin } = await applicants(h);
+  for (const year of [1999,2027,'2000',2000.5]) {
+    const rejected = await driver.post('/api/driver/application/save',{ expectedVersion:0,details:{ ...DETAILS,vehicle:{ ...DETAILS.vehicle,year } } });
+    assert.equal(rejected.status,400); assert.equal(rejected.body.error.code,'INVALID_INPUT');
+    assert.equal((await app(driver)).version,0);
+  }
+  for (const year of [2000,2026]) {
+    const saved = await change(driver,'save',{ details:{ ...DETAILS,vehicle:{ ...DETAILS.vehicle,year } } });
+    assert.equal(saved.details.vehicle.year,year);
+  }
+  let application = await submitApplication(fixtureApi(driver));
+  // Simulate a submission persisted by the previous release, before the 2000 policy.
+  h.db.prepare('UPDATE driver_applications SET details_json=? WHERE driver_id=?')
+    .run(JSON.stringify({ ...DETAILS,vehicle:{ ...DETAILS.vehicle,year:1999 } }),driver.user.id);
+  for (const doc of application.documents) await admin.send(`/api/driver-documents/${doc.id}`);
+  assert.equal((await review(admin,application,approval)).body.error.code,'INVALID_INPUT');
+  assert.equal((await app(driver)).status,'submitted');
+  application = await change(driver,'reopen');
+  assert.equal(application.details.vehicle.year,1999,'old data can still be read for correction');
+  assert.equal((await driver.post('/api/driver/application/submit',{ expectedVersion:application.version })).body.error.code,'INVALID_INPUT');
+  assert.equal((await app(driver)).status,'draft');
+});
 
 async function rideStep(who, ride, action, data = {}) {
   const result = await who.post(`/api/rides/${ride.id}/${action}`, { expectedVersion: ride.version, ...data });
@@ -159,8 +183,8 @@ test('Abuja expiry is exact, impossible dates fail, and expiry blocks online, cl
   let ride = await claimRide(driver, await requestRide(customer));
   ride = await rideStep(driver, ride, 'offers', { amountKobo: 450000 }); ride = await rideStep(customer, ride, 'accept', { offerId: ride.negotiation.currentOffer.id });
   // Move expiry to an exact boundary without advancing beyond the session lifetime.
-  h.db.prepare("UPDATE driver_documents SET expires_on='1970-01-01' WHERE driver_id=? AND kind='insurance'").run(driver.user.id);
-  h.advance(driverDocumentDeadline('1970-01-01') - 1_000_000 - 1);
+  h.db.prepare("UPDATE driver_documents SET expires_on='2026-01-01' WHERE driver_id=? AND kind='insurance'").run(driver.user.id);
+  h.advance(driverDocumentDeadline('2026-01-01') - TEST_NOW - 1);
   await driver.post('/api/auth/login', { email: driver.user.email, password: PASSWORD });
   await customer.post('/api/auth/login', { email: customer.user.email, password: PASSWORD });
   assert.equal((await app(driver)).eligibility.eligible, true);

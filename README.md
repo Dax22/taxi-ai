@@ -34,9 +34,11 @@ is not connected. Use fictional details and documents.
 
 - One personal login, Customer/Work mode switching and optional driver enrollment.
 - Native sign-in, Home/Activity/Work/Account navigation and device revocation.
+- Web/mobile vehicle registration with make/year/model/colour dropdowns, years from
+  2000 onwards, dependent models and custom entries for unlisted vehicles.
 - Full mobile driver applications: vehicle details, private documents and submission
   into the existing manual review workflow.
-- Shared colour-matched vehicle illustrations, readable plates and approved vehicle
+- Rounded 3D-style car icons in ten colours, readable plates and approved vehicle
   identity on web/native journey cards; the web map keeps its explicit GPS consent.
   Exact-model 3D renders remain a separate catalogue milestone.
   See [vehicle identity](docs/vehicle-identity.md).

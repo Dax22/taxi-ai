@@ -11,7 +11,7 @@ export function renderVehicleCard(container, vehicle, { label = 'YOUR VEHICLE', 
   rendered.set(container,key);
   const card = element('article', undefined, `vehicle-card${compact ? ' vehicle-card-compact' : ''}`);
   const art = element('div', undefined, 'vehicle-card-art'), img = element('img');
-  img.src = value.assetPath; img.alt = ''; img.width = 640; img.height = 380; img.decoding = 'async';
+  img.src = value.assetPath; img.alt = ''; img.width = 640; img.height = 640; img.decoding = 'async';
   art.append(img);
   const info = element('div', undefined, 'vehicle-card-info'), plate = element('p', value.plate, 'vehicle-plate');
   plate.setAttribute('aria-label', `Number plate ${value.plate}`);

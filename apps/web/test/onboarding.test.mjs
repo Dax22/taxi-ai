@@ -63,9 +63,15 @@ const vehicleSource = (await readFile(new URL('../public/dashboard/vehicle-card.
   .replace("'./dom.mjs'", `'${new URL('../public/dashboard/dom.mjs', import.meta.url)}'`)
   .replace("'/shared/vehicle-profile.mjs'", `'${new URL('../../../packages/shared/src/vehicle-profile.mjs', import.meta.url)}'`);
 const vehicleModule = `data:text/javascript;base64,${Buffer.from(vehicleSource).toString('base64')}`;
+const fieldsSource = (await readFile(new URL('../public/dashboard/vehicle-fields.mjs', import.meta.url), 'utf8'))
+  .replace("'./dom.mjs'", `'${new URL('../public/dashboard/dom.mjs', import.meta.url)}'`)
+  .replace("'/shared/vehicle-profile.mjs'", `'${new URL('../../../packages/shared/src/vehicle-profile.mjs', import.meta.url)}'`)
+  .replace("'/shared/vehicle-registration.mjs'", `'${new URL('../../../packages/shared/src/vehicle-registration.mjs', import.meta.url)}'`);
+const fieldsModule = `data:text/javascript;base64,${Buffer.from(fieldsSource).toString('base64')}`;
 const source = (await readFile(new URL('../public/dashboard/onboarding-view.mjs', import.meta.url), 'utf8'))
   .replace("'./dom.mjs'", `'${new URL('../public/dashboard/dom.mjs', import.meta.url)}'`)
   .replace("'./vehicle-card.mjs'", `'${vehicleModule}'`)
+  .replace("'./vehicle-fields.mjs'", `'${fieldsModule}'`)
   .replace("'/shared/vehicle-profile.mjs'", `'${new URL('../../../packages/shared/src/vehicle-profile.mjs', import.meta.url)}'`)
   .replace("'/shared/driver-onboarding.mjs'", `'${new URL('../../../packages/shared/src/driver-onboarding.mjs', import.meta.url)}'`);
 const { createOnboardingView } = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
@@ -79,6 +85,7 @@ function dom(t) {
     replaceChildren(...children) { this.children = children; }
     addEventListener(name, fn) { this.handlers[name] = fn; }
     setAttribute(name, value) { this[name] = value; }
+    setCustomValidity(value) { this.validationMessage = value; }
     reset() {
       const fields = this.id.includes('details') ? ['legalName', 'phone', 'licenceNumber', 'make', 'model', 'year', 'colour', 'plate']
         : this.id.includes('upload') ? ['expiresOn', 'file'] : ['reason', 'reference'];
@@ -148,13 +155,52 @@ test('a cookie switch between page refresh and private reads cannot show a diffe
 test('vehicle previews follow unsaved details, keep identity as text, and clear on account reset', (t) => {
   const f = dom(t); f.render();
   const card = () => f.node('onboarding-vehicle-preview').children[0];
-  assert.equal(card().children[0].children[0].src,'/assets/vehicles/sedan-yellow.svg');
+  assert.equal(card().children[0].children[0].src,'/assets/vehicles/sedan-yellow.png');
   assert.equal(card().children[1].children[1].textContent,'Toyota Corolla');
-  f.node('onboarding-colour').value = 'Blue'; f.node('onboarding-model').value = '<New model>';
+  f.node('onboarding-colour').value = 'Blue'; f.node('onboarding-model').value = '__other__';
+  f.node('onboarding-model').handlers.change(); f.node('onboarding-model-other').value = '<New model>';
   f.node('onboarding-details-form').handlers.input();
-  assert.equal(card().children[0].children[0].src,'/assets/vehicles/sedan-blue.svg');
+  assert.equal(card().children[0].children[0].src,'/assets/vehicles/sedan-blue.png');
   assert.equal(card().children[1].children[1].textContent,'Toyota <New model>');
   assert.equal(card().children[1].children[0].textContent,'UNSAVED VEHICLE PREVIEW');
   assert.equal(f.node('onboarding-submit').disabled,true);
   f.view.reset(); assert.equal(f.node('onboarding-vehicle-preview').children.length,0);
+});
+
+test('vehicle dropdowns reset the previous model on make changes and send explicit custom values', (t) => {
+  const f = dom(t); f.render();
+  const values = (name) => f.node('onboarding-' + name).children.map((option) => option.value);
+  assert.ok(values('year').includes('2000')); assert.ok(!values('year').includes('1999'));
+  assert.equal(values('year')[1],String(new Date().getUTCFullYear()));
+  f.node('onboarding-make').value = 'Honda'; f.node('onboarding-make').handlers.change();
+  assert.equal(f.node('onboarding-model').value,'');
+  assert.ok(values('model').includes('Civic')); assert.ok(!values('model').includes('Corolla'));
+  f.node('onboarding-model').value = 'Civic'; f.node('onboarding-model').handlers.change();
+  f.render({ ...application,version:8 });
+  assert.equal(f.node('onboarding-make').value,'Honda'); assert.equal(f.node('onboarding-model').value,'Civic');
+  for (const [name,text] of [['make','Unlisted make'],['model','Unlisted model'],['colour','Blue and white']]) {
+    f.node('onboarding-' + name).value = '__other__'; f.node('onboarding-' + name).handlers.change();
+    assert.equal(f.node('onboarding-' + name + '-other-row').hidden,false);
+    f.node('onboarding-' + name + '-other').value = text; f.node('onboarding-' + name + '-other').handlers.input();
+  }
+  f.node('onboarding-details-form').handlers.submit(f.event);
+  assert.deepEqual(f.actions.at(-1)[1].details.vehicle,{ make:'Unlisted make',model:'Unlisted model',year:2020,colour:'Blue and white',plate:'TEST-123' });
+  assert.equal(f.actions.at(-1)[1].expectedVersion,7);
+  f.view.reset();
+  for (const name of ['make','model','colour']) {
+    assert.equal(f.node('onboarding-' + name + '-other').value,'');
+    assert.equal(f.node('onboarding-' + name + '-other-row').hidden,true);
+  }
+});
+
+test('saved unlisted details and pre-2000 years remain visible, without becoming a valid new application', (t) => {
+  const f = dom(t), old = { ...application,details:{ ...application.details,vehicle:{ make:'Unlisted',model:'<Actual model>',year:1999,colour:'Two tone',plate:'OLD-123' } } };
+  f.render(old);
+  assert.equal(f.node('onboarding-make').value,'__other__');
+  assert.equal(f.node('onboarding-model-other').value,'<Actual model>');
+  assert.equal(f.node('onboarding-year').value,'1999'); assert.match(f.node('onboarding-year').validationMessage,/2000/);
+  f.node('onboarding-year').value = '2000'; f.node('onboarding-year').handlers.change();
+  assert.equal(f.node('onboarding-year').validationMessage,'');
+  f.node('onboarding-details-form').handlers.submit(f.event);
+  assert.equal(f.actions.at(-1)[1].details.vehicle.model,'<Actual model>'); assert.equal(f.actions.at(-1)[1].details.vehicle.year,2000);
 });

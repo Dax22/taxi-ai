@@ -8,7 +8,7 @@ import { createRuntimeConfig } from '../src/infrastructure/runtime-config.mjs';
 import { createTelemetry } from '../src/infrastructure/telemetry.mjs';
 import { createCallConfig } from '../src/infrastructure/call-config.mjs';
 import { isInternalHealth, requestContext } from '../src/http/security.mjs';
-import { harness, participants, PASSWORD, httpFetch } from './helpers.mjs';
+import { TEST_NOW, harness, participants, PASSWORD, httpFetch } from './helpers.mjs';
 
 // Fixed test values only. No deployed access keys, accounts or provider traffic.
 const testerKey = 'a'.repeat(64), proxyKey = 'b'.repeat(64);
@@ -149,7 +149,7 @@ test('a complete routed ride, chat, call signaling and GPS survive staging isola
     headers: { 'X-Location-Client': locationWindow, 'Idempotency-Key': randomUUID() } });
   const started = await location(`/api/rides/${ride.id}/location/start`); assert.equal(started.status, 200);
   const share = started.body.share;
-  assert.equal((await location(`/api/location-shares/${share.id}/position`, { sequence: 1, lat: pickup.lat, lng: pickup.lng, accuracy: 10, capturedAt: 1000000 })).status, 200);
+  assert.equal((await location(`/api/location-shares/${share.id}/position`, { sequence: 1, lat: pickup.lat, lng: pickup.lng, accuracy: 10, capturedAt: TEST_NOW })).status, 200);
   await h.restart();
   assert.equal((await customer.send(`/api/rides/${ride.id}`)).body.ride.trip.pickupPin, pin);
   assert.equal((await customer.send(`/api/rides/${ride.id}/location`)).body.share.position.lat, pickup.lat);

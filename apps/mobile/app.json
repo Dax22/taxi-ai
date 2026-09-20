@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Taxi Ai", "slug": "taxi-ai", "version": "0.2.0", "scheme": "taxiai",
+    "name": "Taxi Ai", "slug": "taxi-ai", "version": "0.2.1", "scheme": "taxiai",
     "orientation": "default", "userInterfaceStyle": "light", "icon": "./assets/icon.png",
     "ios": { "supportsTablet": true, "bundleIdentifier": "com.taxiai.app" },
     "android": { "package": "com.taxiai.app", "blockedPermissions": ["android.permission.RECORD_AUDIO", "android.permission.CAMERA", "android.permission.ACCESS_FINE_LOCATION", "android.permission.ACCESS_COARSE_LOCATION", "android.permission.ACCESS_BACKGROUND_LOCATION"] },

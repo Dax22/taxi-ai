@@ -1,17 +1,18 @@
 .vehicle-card { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); border: 1px solid var(--line); border-radius: 22px; overflow: hidden; background: white; margin-block: 22px; }
-.vehicle-card-art { display: flex; align-items: center; justify-content: center; background: #f1f3ef; min-width: 0; }
-.vehicle-card-art img { display: block; width: 100%; height: auto; object-fit: contain; aspect-ratio: 640 / 380; }
+.vehicle-card-art { display: flex; align-items: center; justify-content: center; background: #f7f7f4; min-width: 0; }
+/* The source is square with generous transparent margins. Crop those margins, never stretch the car. */
+.vehicle-card-art img { display: block; width: 100%; max-width: 440px; height: auto; object-fit: cover; aspect-ratio: 1.6; }
 .vehicle-card-info { min-width: 0; padding: clamp(20px, 3vw, 32px); align-self: center; overflow-wrap: anywhere; }
 .vehicle-card-info h3, .onboarding-panel .vehicle-card-info h3 { margin: 10px 0 8px; font-size: clamp(22px, 3vw, 30px); letter-spacing: -.04em; line-height: 1.15; }
 .vehicle-description { font-size: 15px; color: var(--muted); }
 .vehicle-card-info .vehicle-plate { display: inline-block; max-width: 100%; border: 1px solid #9ba69e; border-left: 7px solid #467260; border-radius: 7px; padding: 10px 16px; margin: 18px 0 14px; background: #fcfdfb; color: var(--ink); font-size: clamp(18px, 3vw, 24px); font-weight: 800; letter-spacing: .07em; overflow-wrap: anywhere; }
 .vehicle-card-info .small-note { font-size: 12px; line-height: 1.6; }
 .vehicle-card-compact { grid-template-columns: 1fr; }
-.vehicle-card-compact .vehicle-card-art img { max-height: 180px; }
+.vehicle-card-compact .vehicle-card-art img { max-width: 300px; }
 .vehicle-card-compact .vehicle-card-info { padding: 20px; }
 .onboarding-progress { display: flex; flex-wrap: wrap; gap: 8px; margin: 22px 0 14px; }
 .onboarding-progress a { display: inline-flex; align-items: center; gap: 8px; padding: 12px 18px; min-height: 44px; border-radius: 30px; border: 1px solid var(--line); text-decoration: none; color: var(--ink); font-size: 14px; font-weight: 600; }
 .onboarding-progress a:first-child { background: var(--brand-soft); }
 .onboarding-progress a:hover, .onboarding-progress a:focus-visible { background: var(--brand); }
 .onboarding-panel .stack-form { scroll-margin-top: 24px; }
-@media (max-width: 600px) { .vehicle-card { grid-template-columns: 1fr; }.vehicle-card-art img { max-height: 210px; }.vehicle-card-info { padding: 20px; }.onboarding-progress a { padding-inline: 14px; } }
+@media (max-width: 600px) { .vehicle-card { grid-template-columns: 1fr; }.vehicle-card-art img { max-width: 336px; }.vehicle-card-info { padding: 20px; }.onboarding-progress a { padding-inline: 14px; } }

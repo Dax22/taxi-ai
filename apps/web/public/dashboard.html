@@ -62,14 +62,18 @@
           <div id="onboarding-vehicle-preview"></div>
           <dl id="onboarding-summary" class="onboarding-summary"></dl>
           <form id="onboarding-details-form" class="stack-form" autocomplete="off"><fieldset id="onboarding-details-fields"><legend>1. Driver and vehicle details</legend>
+            <p class="small-note">Choose the details on your vehicle documents. Select Other if a make, model or colour is missing from the list.</p>
             <div class="onboarding-grid">
               <div><label for="onboarding-legalName">Full legal name</label><input id="onboarding-legalName" minlength="2" maxlength="100" required></div>
               <div><label for="onboarding-phone">Contact number (private)</label><input id="onboarding-phone" type="tel" placeholder="+234…" pattern="\+[1-9][0-9]{7,14}" maxlength="16" required></div>
               <div><label for="onboarding-licenceNumber">Driving licence number</label><input id="onboarding-licenceNumber" minlength="3" maxlength="40" required></div>
-              <datalist id="onboarding-makes"></datalist><div><label for="onboarding-make">Vehicle make</label><input id="onboarding-make" list="onboarding-makes" placeholder="Toyota" minlength="2" maxlength="40" required></div>
-              <datalist id="onboarding-models"></datalist><div><label for="onboarding-model">Vehicle model</label><input id="onboarding-model" list="onboarding-models" placeholder="Corolla" minlength="2" maxlength="80" required></div>
-              <div><label for="onboarding-year">Vehicle year</label><input id="onboarding-year" type="number" min="1980" max="2100" step="1" required></div>
-              <datalist id="onboarding-colours"></datalist><div><label for="onboarding-colour">Colour</label><input id="onboarding-colour" list="onboarding-colours" minlength="2" maxlength="30" required></div>
+              <div><label for="onboarding-make">Vehicle make</label><select id="onboarding-make" required><option value="">Select make</option></select></div>
+              <div id="onboarding-make-other-row" hidden><label for="onboarding-make-other">Enter vehicle make</label><input id="onboarding-make-other" minlength="2" maxlength="40" disabled></div>
+              <div><label for="onboarding-year">Vehicle year</label><select id="onboarding-year" aria-describedby="onboarding-year-hint" required><option value="">Select year</option></select><p id="onboarding-year-hint" class="small-note">Choose a year from 2000 onwards.</p></div>
+              <div><label for="onboarding-model">Vehicle model</label><select id="onboarding-model" required disabled><option value="">Select make first</option></select></div>
+              <div id="onboarding-model-other-row" hidden><label for="onboarding-model-other">Enter vehicle model</label><input id="onboarding-model-other" minlength="2" maxlength="80" disabled></div>
+              <div><label for="onboarding-colour">Colour</label><select id="onboarding-colour" required><option value="">Select colour</option></select></div>
+              <div id="onboarding-colour-other-row" hidden><label for="onboarding-colour-other">Describe the colour or two-tone paint</label><input id="onboarding-colour-other" minlength="2" maxlength="30" disabled></div>
               <div><label for="onboarding-plate">Number plate</label><input id="onboarding-plate" minlength="2" maxlength="15" required></div>
             </div><button type="submit" class="button button-primary button-small">Save details</button>
           </fieldset></form>

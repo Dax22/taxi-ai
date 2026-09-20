@@ -39,5 +39,5 @@ export function vehiclePresentation(vehicle = {}) {
     illustrationNote: colour ? 'Illustration, not an exact model. Check the vehicle and plate.'
       : 'Illustration only; model and colour are not represented.',
     // No exact-model claim until an asset has been licensed and checked against its generation/trim.
-    visualMatch: 'illustration', assetPath: `/assets/vehicles/sedan-${colour?.id ?? 'neutral'}.svg` });
+    visualMatch: 'illustration', assetPath: `/assets/vehicles/sedan-${colour?.id ?? 'neutral'}.png` });
 }

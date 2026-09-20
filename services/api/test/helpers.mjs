@@ -14,6 +14,8 @@ import { createCallConfig } from '../src/infrastructure/call-config.mjs';
 export const bootstrapAdmin = (db, email) => createApplication({ db }).accounts.bootstrapAdmin(email);
 
 // Test fixtures only. No accounts or passwords are seeded into the application.
+// A calendar-realistic fixed clock also exercises vehicle model-year policy.
+export const TEST_NOW = Date.UTC(2026, 0, 1) + 1_000_000;
 export const PASSWORD = 'A long test-only password 123';
 
 // Node fetch may normalize Host; use the real HTTP header in gateway tests.
@@ -31,7 +33,7 @@ export function httpFetch(url, options = {}) {
 export async function harness(t, { persistent = false, callConfig = createCallConfig({}), mapProvider, runtime, gatewayHeaders = {}, telemetry } = {}) {
   const folder = persistent ? await mkdtemp(join(tmpdir(), 'taxi-ai-test-')) : null;
   const filename = folder ? join(folder, 'test.sqlite') : ':memory:';
-  let now = 1_000_000, server, db, base, stopped = true;
+  let now = TEST_NOW, server, db, base, stopped = true;
   async function start() {
     db = openDatabase(filename);
     server = createAppServer({ db, clock: () => now, callConfig, mapProvider, runtime, telemetry });

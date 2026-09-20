@@ -1,14 +1,15 @@
 import { check } from '../../shared/errors.mjs';
 import { fields, label } from '../../shared/validation.mjs';
 import { DRIVER_DOCUMENTS, driverDocumentDeadline } from '../../../../../packages/shared/src/driver-onboarding.mjs';
+import { isVehicleRegistrationYear, vehicleYearMessage } from '../../../../../packages/shared/src/vehicle-registration.mjs';
 
-export function applicationDetails(data) {
+export function applicationDetails(data, now = Date.now()) {
   fields(data, ['legalName', 'phone', 'licenceNumber', 'vehicle']);
   fields(data.vehicle, ['make', 'model', 'year', 'colour', 'plate']);
   const phone = label(data.phone, 'Phone number', 9, 16);
   check(/^\+[1-9]\d{7,14}$/.test(phone), 'INVALID_INPUT', 'Use an international phone number, such as +234 followed by the number.');
   const year = data.vehicle.year;
-  check(Number.isInteger(year) && year >= 1980 && year <= 2100, 'INVALID_INPUT', 'Use a four-digit vehicle year between 1980 and 2100.');
+  check(isVehicleRegistrationYear(year, now), 'INVALID_INPUT', vehicleYearMessage(now));
   const plate = label(data.vehicle.plate, 'Number plate', 2, 15).toUpperCase();
   check(/^[A-Z0-9 -]+$/.test(plate), 'INVALID_INPUT', 'Use letters, numbers, spaces or dashes for the number plate.');
   return { legalName: label(data.legalName, 'Legal name', 2, 100), phone,

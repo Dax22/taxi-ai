@@ -119,7 +119,7 @@ test('the driver marker uses the trip vehicle colour only with a reported positi
   const cars = () => descendants(root).filter((n) => n.tag === 'image' && n.attributes.href.startsWith('/assets/vehicles/'));
   map.render({ enabled:true,tiles,vehicle }); assert.equal(cars().length,0);
   map.render({ enabled:true,tiles,vehicle,driver:ABUJA_CENTER,stale:true });
-  assert.equal(cars().length,1); assert.equal(cars()[0].attributes.href,'/assets/vehicles/sedan-blue.svg');
+  assert.equal(cars().length,1); assert.equal(cars()[0].attributes.href,'/assets/vehicles/sedan-blue.png');
   assert.equal(cars()[0].attributes.opacity,'.55');
   assert.ok(descendants(root).some((n) => n.tag === 'g' && n.attributes.class === 'map-marker map-marker-stale'));
   map.render({ enabled:false,tiles,vehicle,driver:ABUJA_CENTER }); assert.equal(cars().length,0);

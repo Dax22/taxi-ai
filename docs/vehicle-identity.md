@@ -1,15 +1,22 @@
 # Vehicle identity and guided registration
 
-Release 0.16.0 / mobile 0.2.0 reuses schema 11. It does not migrate, reset or invent
+Release 0.16.1 / mobile 0.2.1 reuses schema 11. It does not migrate, reset or invent
 vehicle approvals. The web and native app use one driver application and the same
 server decisions. Use fictional information and images in the development preview.
 
 ## Included
 
-- Native Work → driver application: Details, Documents and Review, with editable
-  make/model suggestions, year, solid-colour palette or a free-text colour, plate,
-  legal name, international contact number and licence number. Suggestions are not
-  an exhaustive vehicle catalogue or a service-eligibility policy.
+- Web and native Work → driver application: Details, Documents and Review, with
+  make, year, model and colour dropdowns, number plate, legal name, international
+  contact number and licence number. Changing make clears the previous model.
+  Other / not listed opens an explicit custom make, model or colour field.
+  The starter list covers twelve makes; it is not exhaustive and does not claim
+  factory model-year/trim coverage. Documents and manual review establish identity.
+- Years run from 2000 through the current UTC calendar year, newest first. Shared
+  rules power both interfaces; the server validates saves, submissions and approvals
+  using its clock. Older saved records remain readable and historical trips remain
+  unchanged. An old draft or reopened application needs a year that meets the policy;
+  existing approvals are not retroactively revoked by this update.
 - In-app selection of PNG/JPEG files through the system document picker, preview,
   private upload, replacement, removal, expiry dates, submission, review reason and
   reopening. Administrators still inspect evidence and record decisions on web.
@@ -18,9 +25,11 @@ server decisions. Use fictional information and images in the development previe
   journey's colour illustration only when a driver-reported position is available.
   No synthetic movement, heading or live-location claim is added.
 - Responsive cards with preserved image aspect ratios and a large text plate.
-  Original perspective vector geometry renders locally in native and is served as
-  small same-origin colour variants on web. Unknown/custom/two-tone colours use a
-  neutral illustration and retain the driver's written colour description.
+  Rounded 3D-style PNG icons follow the supplied reference, with ten separately
+  generated paint variants. Identical 640×640 assets are served locally on web and
+  bundled for native. Layout crops empty transparent margins without stretching
+  the car. Unknown/custom/two-tone colours use white fallback artwork with an
+  explicit mismatch note. See [icon provenance and prompts](design/vehicle-icons.md).
 - Home, Activity, Work and Account native tabs with consistent vector icons.
 
 **Current artwork is a generic perspective illustration, not a GLB model or an
@@ -74,7 +83,7 @@ This behaviour needs the physical-device review below.
 
 ## Exact-model visual catalogue: next asset milestone
 
-The make/model suggestions and generic artwork must not be described as an exact
+The make/model dropdowns and generic artwork must not be described as an exact
 vehicle model catalogue. Exact matches need acquired assets and visual review:
 
 1. Build a licensed or commissioned catalogue keyed by make, model, generation,
@@ -112,9 +121,11 @@ TypeScript boundaries and both platform bundle exports.
 Manual review required before a pilot:
 
 - On iOS/Android phones and tablets, sign in with the same web account. Enter both
-  suggested and unlisted models, custom colours, long plates and large text.
+  listed and unlisted models, custom colours, long plates and large text. Change make
+  after choosing a model; the model must clear. Check the 2000/current-year boundaries.
 - Test portrait/landscape, keyboard reachability, VoiceOver/TalkBack, step navigation
-  and background privacy. Open/cancel the system picker, choose a file, background
+  and background privacy. Native dropdown sheets must close on backgrounding and
+  Android Back without changing the selected value. Open/cancel the system picker, choose a file, background
   and resume: the form and selected file should survive while the account stays valid.
 - Test valid JPEG/PNG, HEIC rejection, oversized files, expired documents, replacement,
   network loss, retry and logout/revocation while the picker or upload is pending.
@@ -128,5 +139,5 @@ Manual review required before a pilot:
   appear with reported GPS and retain a last-known indication when stale.
 
 This workspace has not run an iOS/Android simulator or signed binary, and browser
-visual inspection remains unavailable. Bundle/DOM checks and the standalone vector
+visual inspection remains unavailable. Bundle/DOM checks and the standalone PNG
 asset review are not a substitute for device or browser acceptance.

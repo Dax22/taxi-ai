@@ -11,9 +11,10 @@ keyboard, accessibility and tablet QA remain pending.
 - Existing-account sign-in, secure session restore and per-device sign-out.
 - Home, Activity, Work and Account tabs; driver application screen.
 - Separate customer/work activity with current and paginated past journeys.
-- Complete driver applications: guided details, make/model suggestions, colour choices,
+- Complete driver applications: guided make/year/model/colour dropdowns, years from
+  2000 through the current year, Other fields for unlisted values,
   number plate, private PNG/JPEG uploads, expiry dates, review, corrections and resubmission.
-- Shared colour-matched perspective vehicle cards in Work and journey details.
+- Shared rounded 3D-style vehicle icons in ten colours in Work and journey details.
   Illustrations are labelled; exact-model 3D assets are not included.
 - The same manual approval workflow as the web. Administrators review on the web.
 - Native device list and remote sign-out; web recovery at `/devices`.
@@ -97,6 +98,8 @@ root to npm workspaces or hoisting dependencies.
 | `src/api/client.ts` | HTTPS, bearer transport, one refresh at a time, stale-response rejection |
 | `src/onboarding/` | Guided application, form conversion and user-selected file adapters |
 | `src/ui/` | Shared visual components and focus-scoped loading |
+| `src/assets/vehicles/` | Bundled colour variants; identical to the web icons |
+| `packages/shared/src/vehicle-registration.*` | Registration year policy and choice normalisation |
 | `packages/shared/src/mobile-contracts.*` | Versioned wire types and runtime readers |
 | `services/api/src/modules/device-sessions/` | Device token lifecycle and ownership |
 | `services/api/src/http/mobile-router.mjs` | Narrow native API surface |

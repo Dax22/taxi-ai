@@ -30,6 +30,16 @@ test('native private application contracts reject malformed evidence, duplicate 
     { documents:[{ ...doc,sizeBytes:MAX_DRIVER_FILE_BYTES+1 }] }]) assert.throws(() => parseOnboarding(wrap({ ...application,...data })));
 });
 
+test('native registration accepts the year boundaries but requires correction of pre-2000 saved vehicles', () => {
+  const now = Date.UTC(2026,8,20), draft = draftFromDetails(details);
+  for (const year of ['2000','2026']) assert.equal(detailsFromDraft({ ...draft,year },now).vehicle.year,Number(year));
+  for (const year of ['1999','2027','2e3','2000.0']) assert.throws(() => detailsFromDraft({ ...draft,year },now),/2000 to 2026/);
+  const old = { ...details,vehicle:{ ...details.vehicle,year:1999 } };
+  const parsed = parseOnboarding({ apiVersion:1,serverNow:now,application:{ ...application,details:old,vehicle:old.vehicle } });
+  assert.equal(draftFromDetails(parsed.details).year,'1999','legacy reads preserve the actual saved year');
+  assert.throws(() => detailsFromDraft(draftFromDetails(parsed.details),now),/2000/);
+});
+
 test('selected image reads are bounded, filenames are portable and cache copies are removed after success or failure', async () => {
   const selected = { uri:'file:///app/cache/DocumentPicker/photo.jpg',name:'My 🚗 vehicle.jpg',mimeType:'image/jpeg' };
   let read = 0, removed = 0;
