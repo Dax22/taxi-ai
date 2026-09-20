@@ -54,9 +54,13 @@ credentials on session reset. These tests do not replace browser interaction rev
 plus dashboard/session regressions with disposable data. See
 [pilot preparation](../../docs/pilot-readiness.md) for scope and manual results.
 
-The website retains the approved yellow motion emblem, amber/graphite palette,
-pale backgrounds and original concept artwork. See [the brand guide](../../docs/brand.md).
-Car illustrations do not depict an operational fleet. Eats, courier and autonomous
+The website retains the approved yellow motion emblem and amber/graphite palette.
+The homepage uses a centered hero and original white 3D city/route artwork, with
+its responsive presentation in `public/homepage.css`. The booking form follows
+the illustration and retains its existing service tabs and negotiation dialog.
+The `<picture>` serves a smaller WebP on phone/tablet widths. See
+[the brand guide](../../docs/brand.md). The city scene is a concept, not a live map
+or operational fleet. Eats, courier and autonomous
 services are informational sections with accurate planned-service labels.
 
 ## Working experiences

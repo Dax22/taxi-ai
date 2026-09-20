@@ -52,16 +52,8 @@
   .button-full { width: 100%; }
   .button:disabled { background: #e8e7e2; color: #74746d; cursor: not-allowed; transform: none; }
   .text-link { display: inline-flex; gap: 24px; align-items: center; justify-content: space-between; padding: 6px 0; font-size: 13px; font-weight: 600; background: transparent; }
-  .hero-intro { display: flex; justify-content: space-between; align-items: flex-end; padding: 45px 0 34px; }
-  .hero-intro .eyebrow { display: flex; gap: 10px; align-items: center; margin-bottom: 18px; }
-  .hero-intro .tiny-dot, .desktop-nav .tiny-dot { background: var(--brand); }
   h1 { font-size: clamp(60px, 6.5vw, 94px); line-height: .98; letter-spacing: -.065em; }
   h1 span { color: #70706a; }
-  .hero-aside { max-width: 270px; padding: 0 5px 4px 0; font-size: 16px; line-height: 1.6; }
-  .hero-aside .text-link { margin-top: 28px; width: 150px; border-bottom: 1px solid var(--ink); padding-bottom: 10px; }
-  .hero-stage { position: relative; min-height: 520px; border-radius: 8px; overflow: hidden; background: #d3d5d2; display: flex; align-items: center; padding: 32px; }
-  .hero-image { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 59%; }
-  .booking-card { position: relative; width: 365px; flex: 0 0 365px; background: rgba(255,255,253,.98); border-radius: 7px; padding: 22px 24px 0; box-shadow: 0 10px 38px #12181010; }
   .service-tabs { display: flex; border-bottom: 1px solid var(--line); margin-bottom: 24px; }
   .service-tabs button { flex: 1; font-size: 12px; background: transparent; color: var(--muted); padding: 6px 12px 15px; border-bottom: 2px solid transparent; }
   .service-tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--brand-strong); background: var(--brand-soft); font-weight: 700; }
@@ -82,11 +74,6 @@
   .booking-footnote { font-size: 9px; color: var(--muted); text-align: center; margin: 12px 0 19px; }
   .preview-label { margin-inline: -24px; border-top: 1px solid var(--line); padding: 13px 12px; display: flex; justify-content: center; align-items: center; gap: 7px; font-size: 8px; letter-spacing: .055em; color: #62695e; }
   .preview-label .tiny-dot { width: 4px; height: 4px; background: var(--brand-strong); }
-  .hero-caption { position: absolute; left: 440px; right: 30px; bottom: 23px; color: white; display: flex; justify-content: space-between; align-items: center; gap: 20px; font-size: 11px; text-shadow: 0 1px 5px #000; }
-  .hero-caption > span:first-child { font-size: 8px; letter-spacing: .1em; }
-  .hero-caption > span:last-child span { margin-left: 28px; font-size: 22px; }
-  .hero-bottom { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); padding: 16px 0 22px; border-bottom: 1px solid var(--line); }
-  .hero-bottom span { margin-inline: 16px; color: #a6aca1; }
   .status-pill { display: inline-flex; font-size: 8px; font-weight: 600; letter-spacing: .07em; padding: 6px 9px; border: 1px solid #d2d6cd; border-radius: 20px; line-height: 1.5; }
   .planned-panel { min-height: 316px; }
   .planned-panel h2 { font-size: 30px; margin: 18px 0 15px; }
@@ -184,7 +171,6 @@
 }
 
 @layer responsive {
-  @media (min-width: 1600px) { .hero-stage { min-height: 560px; } }
   @media (max-width: 1100px) {
     .shell { width: calc(100% - 56px); }
     .desktop-nav { gap: 19px; font-size: 12px; }
@@ -193,8 +179,6 @@
     .how-section { gap: 35px; grid-template-columns: .95fr 1.3fr; }
     .steps-grid { gap: 19px; }
     .section-lead h2 { font-size: 30px; }
-    .hero-caption > span:first-child { display: none; }
-    .hero-caption { justify-content: flex-end; }
     .service-card { padding: 22px; }
     .service-card .status-pill { font-size: 7px; }
     .service-card h3 { font-size: 27px; }
@@ -202,16 +186,7 @@
   @media (max-width: 800px) {
     .site-header { height: 80px; }
     .desktop-nav { display: none; }
-    .hero-intro { padding-top: 32px; gap: 25px; }
     h1 { font-size: 66px; }
-    .hero-intro .eyebrow { font-size: 8px; }
-    .hero-aside { font-size: 12px; max-width: 180px; }
-    .hero-aside .text-link { font-size: 11px; margin-top: 18px; }
-    .hero-stage { min-height: 490px; padding: 24px; }
-    .booking-card { width: 330px; flex-basis: 330px; padding-inline: 20px; }
-    .preview-label { margin-inline: -20px; }
-    .hero-image { object-position: 61% center; }
-    .hero-caption { display: none; }
     .how-section { display: block; padding-block: 60px; }
     .section-lead h2 { font-size: 36px; }
     .section-lead > p:last-child { max-width: none; }
@@ -242,22 +217,12 @@
     .brand { font-size: 26px; gap: 7px; }
     .brand-mark { width: 40px; height: 30px; }
     .button-small { font-size: 10px; padding: 10px 13px; gap: 15px; }
-    .hero-intro { padding: 32px 0 24px; display: block; }
     h1 { font-size: clamp(58px, 14vw, 78px); }
-    .hero-intro .eyebrow { font-size: 8px; letter-spacing: .1em; }
-    .hero-aside { max-width: none; display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; margin-top: 25px; }
-    .hero-aside p { font-size: 11px; }
-    .hero-aside .text-link { width: auto; min-width: 100px; margin: 0; font-size: 10px; padding-bottom: 5px; }
-    .hero-stage { padding: 200px 12px 12px; display: block; min-height: auto; }
-    .hero-image { height: 255px; object-position: 65% 68%; }
-    .booking-card { width: 100%; padding: 20px 20px 0; }
     .service-tabs { margin-bottom: 20px; }
     .field select { font-size: 16px; height: 26px; }
     .field label { font-size: 10px; }
     .field { padding-left: 33px; }
     .route-dot, .route-square { top: 30px; }
-    .hero-bottom { font-size: 9px; gap: 15px; padding-top: 13px; }
-    .hero-bottom span { margin-inline: 5px; }
     .how-section { padding-block: 50px; }
     .section-lead h2 { font-size: 34px; }
     .steps-grid { grid-template-columns: 1fr; gap: 22px; }
