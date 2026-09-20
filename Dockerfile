@@ -4,6 +4,7 @@ WORKDIR /app
 RUN mkdir -p /data /backups && chmod 700 /data /backups && chown node:node /data /backups /app
 COPY --chown=node:node package.json ./
 COPY --chown=node:node apps/web ./apps/web
+COPY --chown=node:node apps/admin ./apps/admin
 COPY --chown=node:node packages/shared ./packages/shared
 COPY --chown=node:node services/api ./services/api
 COPY --chown=node:node scripts ./scripts

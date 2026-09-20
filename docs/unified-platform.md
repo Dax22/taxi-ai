@@ -322,5 +322,7 @@ The initial account and native foundations are implemented. Native sign-in,
 Customer/Work navigation, own saved activity and driver enrollment/status share
 existing accounts with web. Native booking, location/media, Eats, courier and
 vendor operations remain later work. See [the native contract](mobile-foundation.md).
-A separate [staff dashboard](admin-dashboard.md) is planned alongside native
-ride workflows, before the live pilot; it is outside the public app mode switcher.
+A separate [staff dashboard](admin-dashboard.md) now provides account profiles,
+trip history, fare/payment totals and analytics at `/admin`. It is outside the
+public app mode switcher. Dedicated staff sessions, MFA and scoped roles remain
+requirements before the live pilot.

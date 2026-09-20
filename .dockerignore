@@ -3,6 +3,8 @@
 !apps/
 !apps/web/
 !apps/web/**
+!apps/admin/
+!apps/admin/**
 !packages/
 !packages/shared/
 !packages/shared/**

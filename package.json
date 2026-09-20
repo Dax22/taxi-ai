@@ -1,6 +1,6 @@
 {
   "name": "taxi-ai",
-  "version": "0.17.0",
+  "version": "0.18.0",
   "private": true,
   "description": "Taxi Ai project foundation for Abuja rides, food and courier delivery",
   "type": "module",
@@ -15,7 +15,7 @@
     "backup": "node --experimental-sqlite scripts/database-snapshot.mjs backup",
     "restore": "node --experimental-sqlite scripts/database-snapshot.mjs restore",
     "check": "node scripts/check.mjs",
-    "test": "node --experimental-sqlite --test packages/shared/test/*.test.mjs apps/web/test/*.test.mjs services/api/test/*.test.mjs scripts/test/*.test.mjs",
+    "test": "node --experimental-sqlite --test packages/shared/test/*.test.mjs apps/web/test/*.test.mjs apps/admin/test/*.test.mjs services/api/test/*.test.mjs scripts/test/*.test.mjs",
     "test:journey": "node --experimental-sqlite --test services/api/test/journey.test.mjs apps/web/test/page-controller.test.mjs apps/web/test/dashboard-view.test.mjs apps/web/test/api-client.test.mjs",
     "test:safety": "node --experimental-sqlite --test services/api/test/safety.test.mjs services/api/test/safety-migration.test.mjs apps/web/test/safety.test.mjs",
     "verify": "npm run check && npm test",
