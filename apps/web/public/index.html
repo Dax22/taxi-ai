@@ -8,9 +8,10 @@
   <title>Taxi Ai — Your city. Your terms.</title>
   <link rel="icon" href="/favicon.svg?v=amber" type="image/svg+xml">
   <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/homepage.css">
   <script type="module" src="/app.mjs"></script>
 </head>
-<body>
+<body class="landing-page">
   <a class="skip-link" href="#book">Skip to booking demo</a>
   <header class="site-header shell">
     <a class="brand" href="#top" aria-label="Taxi Ai home"><img class="brand-mark" src="/assets/taxi-ai-mark.svg" width="48" height="36" alt=""><span>Taxi Ai</span></a>
@@ -26,13 +27,20 @@
   <main id="top">
     <section class="hero shell" aria-labelledby="hero-title">
       <div class="hero-intro">
-        <div><p class="eyebrow"><span class="tiny-dot" aria-hidden="true"></span> A NEW WAY TO MOVE THROUGH ABUJA</p><h1 id="hero-title">Your city.<br><span>Your terms.</span></h1></div>
-        <div class="hero-aside"><p>From the everyday ride to<br>what’s next. Let’s move forward.</p><a class="text-link" href="#how-it-works">Meet Taxi Ai <span aria-hidden="true">↓</span></a></div>
+        <p class="eyebrow"><span class="tiny-dot" aria-hidden="true"></span> YOUR CITY. YOUR NEXT CHAPTER.</p>
+        <h1 id="hero-title">Move through Abuja.<br><span>On your terms.</span></h1>
+        <p class="hero-description">Your everyday ride, with a little more say.<br>Start with a suggestion. Agree on a fare together.</p>
+        <div class="hero-actions"><a class="button button-dark" href="/app">Try a ride <span aria-hidden="true">↗</span></a><a class="text-link" href="#book" data-service="ride">Explore the fare demo <span aria-hidden="true">↓</span></a></div>
+        <p class="hero-preview-note">Starting with Abuja · Web preview · No live dispatch</p>
       </div>
 
-      <div class="hero-stage" id="book">
-        <img class="hero-image" src="/assets/taxi-hero.webp" width="1536" height="1024" alt="Concept image of a black sedan beside curved modern architecture" fetchpriority="high">
-        <div class="booking-card">
+      <div class="hero-stage">
+        <figure class="hero-visual">
+          <picture><source media="(max-width: 800px)" srcset="/assets/city-route-hero-small.webp"><img class="hero-image" src="/assets/city-route-hero.webp" width="1774" height="887" alt="A miniature white city with green parks, a small yellow taxi and a dark route connecting two yellow location pins" fetchpriority="high" decoding="async"></picture>
+          <div class="journey-peek" aria-hidden="true"><span class="journey-peek-icon">↗</span><div><p class="eyebrow">A LITTLE MORE FREEDOM</p><p>Your journey.<br>Your agreed fare.</p></div><span class="journey-peek-line"></span><small>Suggested. Discussed. Agreed.</small></div>
+          <figcaption>AN ILLUSTRATION OF WHAT’S AHEAD · NOT A LIVE MAP</figcaption>
+        </figure>
+        <div class="booking-card" id="book">
           <div class="service-tabs" role="tablist" aria-label="Choose a service">
             <button id="tab-ride" type="button" role="tab" aria-selected="true" aria-controls="panel-ride" data-tab="ride">Ride <span aria-hidden="true">↗</span></button>
             <button id="tab-eats" type="button" role="tab" aria-selected="false" aria-controls="panel-eats" tabindex="-1" data-tab="eats">Eats</button>
@@ -59,7 +67,6 @@
           </div>
           <div class="preview-label"><span class="tiny-dot" aria-hidden="true"></span> INTERACTIVE PREVIEW · NO LIVE BOOKINGS</div>
         </div>
-        <div class="hero-caption"><span>01 / EVERYDAY, REIMAGINED</span><span>Designed for the way you move. <span aria-hidden="true">↗</span></span></div>
       </div>
       <div class="hero-bottom"><p>One city. Countless possibilities.</p><p>Rides <span>/</span> Eats <span>/</span> Deliveries</p></div>
     </section>

@@ -19,6 +19,7 @@ test('the local site serves HTML, modules and artwork with correct content types
       ['/trip-share', 'text/html'], ['/trip-share.mjs', 'text/javascript'], ['/shared/safety.mjs', 'text/javascript'],
       ...['safety-controller', 'safety-view', 'safety-format', 'trip-share-controller'].map((name) => [`/dashboard/${name}.mjs`, 'text/javascript']),
       ['/dashboard.css', 'text/css'], ['/dashboard.mjs', 'text/javascript'], ['/styles.css', 'text/css'],
+      ['/homepage.css', 'text/css'],
       ['/dashboard/api-client.mjs', 'text/javascript'], ['/dashboard/auth-form.mjs', 'text/javascript'],
       ['/dashboard/page-controller.mjs', 'text/javascript'],
       ['/dashboard/dom.mjs', 'text/javascript'], ['/dashboard/views.mjs', 'text/javascript'],
@@ -34,7 +35,8 @@ test('the local site serves HTML, modules and artwork with correct content types
       ['/dashboard/conversation-view.mjs', 'text/javascript'],
       ['/dashboard/chat-reports-view.mjs', 'text/javascript'],
       ['/app.mjs', 'text/javascript'], ['/shared/fare-negotiation.mjs', 'text/javascript'],
-      ['/shared/demo-booking.mjs', 'text/javascript'], ['/assets/taxi-hero.webp', 'image/webp'],
+      ['/shared/demo-booking.mjs', 'text/javascript'], ['/assets/city-route-hero.webp', 'image/webp'],
+      ['/assets/city-route-hero-small.webp', 'image/webp'],
       ['/assets/autonomous.webp', 'image/webp'], ['/favicon.svg?v=amber', 'image/svg+xml'],
       ['/assets/taxi-ai-mark.svg', 'image/svg+xml']]) {
       const response = await fetch(base + path);
