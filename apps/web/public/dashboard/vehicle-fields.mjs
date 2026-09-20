@@ -3,8 +3,8 @@ import { VEHICLE_MAKES, VEHICLE_COLOURS, modelsForMake } from '/shared/vehicle-p
 import { OTHER_VEHICLE_CHOICE, vehicleChoice, vehicleRegistrationYears, isVehicleRegistrationYear, vehicleYearMessage } from '/shared/vehicle-registration.mjs';
 
 /** Dropdown state is separate from persisted details; custom values never become asset URLs. */
-export function createVehicleFields({ onChange }) {
-  const input = (name) => $(`onboarding-${name}`);
+export function createVehicleFields({ onChange, prefix = 'onboarding' }) {
+  const input = (name) => $(`${prefix}-${name}`);
   let disabled = false;
   function options(name, choices, placeholder, other = false) {
     const items = [['', placeholder], ...choices.map((value) => [value, value]), ...(other ? [[OTHER_VEHICLE_CHOICE, 'Other / not listed']] : [])];

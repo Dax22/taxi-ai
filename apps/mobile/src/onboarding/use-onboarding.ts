@@ -31,7 +31,7 @@ export function useDriverOnboarding() {
     return retry.current.key;
   }
   function accept(app: DriverOnboarding | null, name: string, vehicle = client.account()?.driver?.vehicle) {
-    setApplication(app); const next = draftFromDetails(app?.details ?? null, vehicle, name);
+    setApplication(app); const next = draftFromDetails(app?.details ?? null, app?.vehicle ?? vehicle, name);
     savedDraft.current = JSON.stringify(next); setDraft(next); setFile(null); setExpiresOn('');
     setKind((Object.keys(DRIVER_DOCUMENTS) as DocumentKind[]).find((k) => app?.eligibility.missing.includes(k)) ?? 'profile_photo');
     setStale(false); retry.current = null;
@@ -73,7 +73,7 @@ export function useDriverOnboarding() {
     const details = detailsFromDraft(draft); let app = application;
     if (!app) {
       if (!client.account()?.driver) {
-        const vehicle = { model: `${details.vehicle.make} ${details.vehicle.model}`.slice(0,80), plate: details.vehicle.plate };
+        const vehicle = details.vehicle;
         await client.addDriver(vehicle, keyFor('start', vehicle)); current(); retry.current = null;
       }
       app = await client.application(); current(); setApplication(app);

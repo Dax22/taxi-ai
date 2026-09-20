@@ -204,3 +204,15 @@ test('saved unlisted details and pre-2000 years remain visible, without becoming
   f.node('onboarding-details-form').handlers.submit(f.event);
   assert.equal(f.actions.at(-1)[1].details.vehicle.model,'<Actual model>'); assert.equal(f.actions.at(-1)[1].details.vehicle.year,2000);
 });
+
+test('a first application carries the initial vehicle selection into the full form without inventing personal details', (t) => {
+  const f = dom(t), selected = { ...application.details.vehicle, colour: 'Blue' };
+  f.render({ ...application, version: 0, details: null, vehicle: selected, documents: [] });
+  for (const [name, value] of Object.entries(selected)) assert.equal(f.node('onboarding-' + name).value, String(value));
+  for (const name of ['legalName', 'phone', 'licenceNumber']) assert.equal(f.node('onboarding-' + name).value, '');
+  assert.equal(f.node('onboarding-submit').disabled, true);
+  assert.equal(f.node('onboarding-vehicle-preview').children[0].children[0].children[0].src, '/assets/vehicles/sedan-blue.png');
+  for (const name of ['legalName', 'phone', 'licenceNumber']) f.node('onboarding-' + name).value = application.details[name];
+  f.node('onboarding-details-form').handlers.submit(f.event);
+  assert.deepEqual(f.actions.at(-1), ['save', { expectedVersion: 0, details: { ...application.details, vehicle: selected } }]);
+});

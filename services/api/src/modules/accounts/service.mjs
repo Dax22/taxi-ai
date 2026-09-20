@@ -6,7 +6,7 @@ export const SESSION_MS = 12 * 60 * 60 * 1000;
 
 /**
  * Transport-independent account use cases. Ports are supplied at composition:
- * repository, driverProfiles {find, insert}, passwords {hash, verify}, tokens
+ * repository, driverProfiles {find, insert, validateVehicle}, passwords {hash, verify}, tokens
  * {id, generate, digest}, unitOfWork, audit, hasRideHistory and clock.
  */
 export function createAccountsService({ repository, driverProfiles, passwords, tokens, unitOfWork, audit, hasRideHistory, clock, revokeDevices = () => {} }) {
@@ -19,7 +19,12 @@ export function createAccountsService({ repository, driverProfiles, passwords, t
   }
 
   function vehicleInput(data) {
-    fields(data, ['model', 'plate']);
+    fields(data, ['model', 'plate', 'make', 'year', 'colour'], ['model', 'plate']);
+    if (['make', 'year', 'colour'].some((field) => Object.hasOwn(data, field))) {
+      const selection = driverProfiles.validateVehicle(data);
+      return { model: `${selection.make} ${selection.model}`, plate: selection.plate, selection };
+    }
+    // Older clients can still add a display-model/plate pair, then complete their application.
     const vehicle = { model: label(data.model, 'Vehicle model', 2, 80),
       plate: label(data.plate, 'Vehicle plate', 2, 15).toUpperCase() };
     check(/^[A-Z0-9 -]+$/.test(vehicle.plate), 'INVALID_PLATE', 'Use letters, digits, spaces or dashes for the plate.');
@@ -55,7 +60,8 @@ export function createAccountsService({ repository, driverProfiles, passwords, t
     fields(data, ['vehicle']);
     const vehicle = vehicleInput(data.vehicle);
     check(typeof key === 'string' && /^[A-Za-z0-9_-]{16,128}$/.test(key), 'INVALID_IDEMPOTENCY_KEY', 'A unique request key is required.');
-    const fingerprint = tokens.digest(JSON.stringify(['driver-profile', vehicle.model, vehicle.plate]));
+    const fingerprint = tokens.digest(JSON.stringify(['driver-profile', vehicle.model, vehicle.plate,
+      ...(vehicle.selection ? [vehicle.selection] : [])]));
     return unitOfWork(() => {
       const user = profile(userId);
       requireRole(user, 'customer');

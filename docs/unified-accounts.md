@@ -1,15 +1,16 @@
 # Unified accounts and website modes
 
 Version 0.14.0 implements the first unified-platform milestone for **rides**.
-One personal account can use Customer and Work on the website. The mobile app,
-Taxi Ai Eats, courier/motorbike delivery and My store are still planned. No
+One personal account can use Customer and Work on the website. The native foundation
+and driver application now share this account. Taxi Ai Eats, courier/motorbike delivery and My store are still planned. No
 vendor, delivery or administrator privilege is available through the mode picker.
 
 ## Try it
 
 1. Open `/app` and create an account or sign in. New accounts start in Customer.
-2. Select **Apply to drive**. Enter a fictional car model and plate and select
-   **Add driver profile**. The same account opens Work with a draft application.
+2. Select **Apply to drive**. Choose a make, year (2000 onwards), model and colour
+   from the dropdowns, enter a fictional plate and select **Continue to driver
+   application**. The same account opens Work with these details already filled in.
 3. Complete the existing [driver application](driver-onboarding.md). A separate
    administrator must review the documents. Work is available for application
    access while pending; matching requires approval and current documents.
@@ -87,7 +88,7 @@ checks. Enrollment also requires a unique `Idempotency-Key`.
 | --- | --- |
 | `POST /api/auth/register` | `name`, `email`, `password`; optional legacy `role` and driver `vehicle` |
 | `GET /api/session` | Profile includes `capabilities: ["customer", "driver"]` as applicable; approval is separate |
-| `POST /api/account/driver-profile` | `{ "vehicle": { "model": "Toyota Corolla", "plate": "TEST-001" } }`; returns own `user` and `replayed` |
+| `POST /api/account/driver-profile` | `{ "vehicle": { "make": "Toyota", "model": "Corolla", "year": 2020, "colour": "Blue", "plate": "TEST-001" } }`; returns own `user` and `replayed`; legacy model/plate-only input remains supported |
 | `GET /api/rides?mode=customer` | Own passenger rides, no available work; `activeElsewhere` contains own work references/statuses |
 | `GET /api/rides?mode=work` | Own assigned driver rides and eligible nearby requests; own personal requests are excluded from available work |
 | `GET /api/rides/history?mode=customer&before=:id` | Passenger history; optional cursor must belong to the selected mode |

@@ -77,7 +77,8 @@ export function createOnboardingController({ client, view, files }) {
       }
     } finally { if (current(epoch)) { pending = false; render(); await poll(); } }
   }
-  return Object.freeze({ context, reset, open, poll, run, download, close() {
+  return Object.freeze({ context, reset, open, poll, run, download,
+    focus() { if (user && application) view.focus(); }, close() {
     generation++; selected = application = polling = null; pending = false; error = ''; view.reset(); render();
   } });
 }

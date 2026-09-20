@@ -36,6 +36,8 @@ is not connected. Use fictional details and documents.
 - Native sign-in, Home/Activity/Work/Account navigation and device revocation.
 - Web/mobile vehicle registration with make/year/model/colour dropdowns, years from
   2000 onwards, dependent models and custom entries for unlisted vehicles.
+- Dropdowns start at **Apply to drive** on web. The chosen car and colour preview
+  carry into the full application, including when continuing on mobile.
 - Full mobile driver applications: vehicle details, private documents and submission
   into the existing manual review workflow.
 - Rounded 3D-style car icons in ten colours, readable plates and approved vehicle
@@ -44,7 +46,7 @@ is not connected. Use fictional details and documents.
   See [vehicle identity](docs/vehicle-identity.md).
 - Website Download app section stays Coming soon until real store URLs are added.
 - Separate staff dashboard planned in [the admin design](docs/admin-dashboard.md).
-- Additive schema-11 migration preserves existing accounts, sessions and trip history.
+- Additive schema-12 migration preserves existing accounts, sessions and trip history.
 - Server-checked trip roles, self-claim prevention and conflicting-work protection.
 - Private driver applications, contact/licence/vehicle details and bounded image uploads.
 - Administrator approval, rejection and corrections with recorded manual checks and review history.
@@ -216,9 +218,10 @@ automatically at startup. `npm run backup -- /absolute/new-backup.sqlite` makes 
 validated copy without changing the source. See [staging and recovery](docs/staging.md)
 for restore, transient-data removal, scheduling and off-host backup requirements.
 
-The current schema is **11**: Trip Safety added schema 9, unified accounts added
-schema 10 and native device sessions added schema 11. Vehicle presentation and
-mobile onboarding in 0.16 reuse this schema without a migration. Backups
+The current schema is **12**: Trip Safety added schema 9, unified accounts added
+schema 10, native device sessions added schema 11 and initial vehicle selections
+add schema 12 in 0.17. This new table preserves the car chosen before full driver
+details are complete without changing existing applications or approvals. Backups
 retain private contact/incident data while revoking trip links.
 
 The earlier payment milestone upgrades schema 1–6 to 7 without resetting existing records

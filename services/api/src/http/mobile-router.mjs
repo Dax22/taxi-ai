@@ -17,7 +17,7 @@ export function createMobileRouter({ devices, accounts, drivers, rides, clock, r
   function onboarding(user, application) {
     return { driverId: application.driverId, status: application.status, version: application.version,
       details: application.details, busy: application.busy, eligibility: application.eligibility,
-      reviewReason: application.reviewReason, vehicle: application.details?.vehicle ?? user.driver.vehicle,
+      reviewReason: application.reviewReason, vehicle: application.vehicle ?? user.driver.vehicle,
       documents: application.documents.map(({ id, kind, name, mimeType, sizeBytes, expiresOn }) =>
         ({ id, kind, name, mimeType, sizeBytes, expiresOn })) };
   }

@@ -67,7 +67,7 @@ export function createOnboardingView({ onAction, onDownload, onClose }) {
     const changed = renderedVersion !== app.version;
     if (changed) {
       if (!dirty) {
-        const details = app.details ?? {}, vehicle = details.vehicle ?? {};
+        const details = app.details ?? {}, vehicle = details.vehicle ?? app.vehicle ?? {};
         for (const name of ['legalName', 'phone', 'licenceNumber', 'plate']) input(name).value = details[name] ?? vehicle[name] ?? '';
         vehicleFields.load(vehicle);
         formVersion = app.version;

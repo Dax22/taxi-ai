@@ -1,11 +1,17 @@
 # Vehicle identity and guided registration
 
-Release 0.16.1 / mobile 0.2.1 reuses schema 11. It does not migrate, reset or invent
-vehicle approvals. The web and native app use one driver application and the same
+Release 0.17.0 / mobile 0.2.2 adds schema 12 to save the initial vehicle selection
+before a driver's personal details are complete. It preserves existing records and
+approvals. The web and native app use one driver application and the same
 server decisions. Use fictional information and images in the development preview.
 
 ## Included
 
+- Website `/app` → **Apply to drive** opens **Choose your car**, with make, year,
+  model and colour dropdowns immediately, a typed plate and a live colour preview.
+  **Continue to driver application** saves the selection, opens Work and pre-fills
+  the full application. Saved selections survive refresh and can be continued on
+  mobile. Cancelling clears only the unsaved form; polling preserves edits.
 - Web and native Work → driver application: Details, Documents and Review, with
   make, year, model and colour dropdowns, number plate, legal name, international
   contact number and licence number. Changing make clears the previous model.
@@ -42,6 +48,8 @@ rotatable 3D viewer are claimed in this milestone.
 
 | Data | Meaning and visibility |
 | --- | --- |
+| `application.vehicle` | Owner/admin resolved vehicle: saved complete details, otherwise initial selection, otherwise legacy model/plate; not an approval |
+| `driver_vehicle_selections` | Initial structured choice persisted with profile creation; removed atomically when complete application details are saved |
 | `application.details.vehicle` | Owner/admin editable make, model, year, colour and plate; never used as public approval by itself |
 | `driver.vehicle.model` / `plate` | Existing display-model and plate fields, retained for older clients |
 | `driver.vehicle.make`, `modelName`, `year`, `colour` | Added only from the currently approved application; no contact/licence/document data |
@@ -65,6 +73,17 @@ form is preserved with a request to load/review saved details; it never silently
 rebases onto a newer version. Duplicate taps are blocked, token refresh retries
 retain the same command body/key, and account/navigation changes discard late
 results. Upload reads recheck device authorization before any write.
+
+Initial enrollment uses the same year/plate validation as the full application.
+Its retry fingerprint includes make, model, year, colour and plate. Legacy
+model/plate-only clients keep their existing request and retry behaviour. Schema
+12 adds an empty table without modifying existing records. Back up saved data
+using the previous release before upgrading; current backup/restore requires 12.
+
+Uber's [eligible vehicle catalogue](https://www.uber.com/us/en/eligible-vehicles/)
+documents model/year eligibility and local requirements. The guided selection
+pattern is useful here, but Taxi Ai's starter catalogue and 2000-onwards policy
+are its own; they do not reproduce Uber's city-specific eligibility rules.
 
 ## Native file and lifecycle handling
 
@@ -120,6 +139,10 @@ TypeScript boundaries and both platform bundle exports.
 
 Manual review required before a pilot:
 
+- Start with a customer-only account on web. Select **Apply to drive**, choose a
+  car and continue. Confirm all five vehicle fields carry into the application,
+  survive a refresh and appear on mobile with the same login. Personal details
+  must still be completed and documents reviewed before accepting rides.
 - On iOS/Android phones and tablets, sign in with the same web account. Enter both
   listed and unlisted models, custom colours, long plates and large text. Change make
   after choosing a model; the model must clear. Check the 2000/current-year boundaries.

@@ -30,11 +30,18 @@ function setup() {
       throw new Error(`Unexpected fixture request ${path}`);
     },
     async rideCommand(path, data) { commands.push({ path, data }); return { ride }; },
+    async command(path, data) {
+      commands.push({ path, data });
+      const result = await intercept(path, { method: 'POST', data });
+      if (result?.user) current = { ...current, user: result.user };
+      return result;
+    },
   };
   const view = { render(next) { rendered = structuredClone(next); selected ??= next.rides[0]?.id; },
     reset() { resets.push('view'); selected = null; }, setBusy() {}, select(id) { selected = id; },
     selected() { return [...(rendered?.rides ?? []), ...(rendered?.history ?? [])].find((item) => item.id === selected); } };
   const feature = (name) => ({ reset() { resets.push(name); }, async poll() {}, async stop() {}, shutdown() {},
+    focus() { contexts.push([name, 'focus']); },
     setContext(...args) { contexts.push([name, ...args]); }, context(...args) { contexts.push([name, ...args]); },
     async show(...args) { contexts.push([name, ...args]); } });
   const calls = feature('calls'), sharing = feature('sharing'), availability = feature('availability');
@@ -47,6 +54,18 @@ function setup() {
   return { page, calls, sharing, availability, setWrites(value) { writes = value; }, setOffline(value) { offline = value; }, requests, feedback, resets, contexts, commands, rendered: () => rendered,
     session(next) { current = next; }, intercept(fn) { intercept = fn; } };
 }
+
+test('choosing a car saves the structured selection and opens the full application in Work on the same account', async () => {
+  const h = setup(); await h.page.refresh();
+  const vehicle = { make: 'Toyota', model: 'Corolla', year: 2020, colour: 'Blue', plate: 'TEST-001' };
+  h.intercept(async (path) => path === '/api/account/driver-profile'
+    ? { user: { ...customer, capabilities: ['customer', 'driver'], driver: { status: 'pending' } }, replayed: false } : undefined);
+  await h.page.addDriver(vehicle);
+  assert.deepEqual(h.commands, [{ path: '/api/account/driver-profile', data: { vehicle } }]);
+  assert.equal(h.rendered().mode, 'work'); assert.equal(h.rendered().account.id, customer.id);
+  assert.equal(h.rendered().user.role, 'driver'); assert.ok(h.contexts.some(([name, action]) => name === 'onboarding' && action === 'focus'));
+  assert.ok(h.feedback.some(([name, message]) => name === 'notice' && /car details are saved/.test(message)));
+});
 
 test('customer, driver and administrator refreshes select only their role data and initialise feature contexts', async () => {
   const h = setup(); await h.page.refresh();

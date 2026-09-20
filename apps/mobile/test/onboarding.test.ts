@@ -18,6 +18,8 @@ test('a form preserves structured model identity, accepts unlisted vehicles and 
     assert.throws(() => detailsFromDraft({ ...draft,...input }));
   }
   assert.equal(draftFromDetails(null,{ ...details.vehicle,model:'Toyota Corolla',modelName:'Corolla' }).model,'Corolla');
+  const continued = draftFromDetails(null,details.vehicle);
+  assert.deepEqual(detailsFromDraft({ ...continued,legalName:details.legalName,phone:details.phone,licenceNumber:details.licenceNumber }).vehicle,details.vehicle);
 });
 
 test('native private application contracts reject malformed evidence, duplicate documents and invented approval states', () => {

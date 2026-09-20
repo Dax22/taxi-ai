@@ -14,6 +14,9 @@ keyboard, accessibility and tablet QA remain pending.
 - Complete driver applications: guided make/year/model/colour dropdowns, years from
   2000 through the current year, Other fields for unlisted values,
   number plate, private PNG/JPEG uploads, expiry dates, review, corrections and resubmission.
+- Resume the car chosen during website **Apply to drive**, including its year and
+  colour, before completing personal details. Native enrollment saves the same
+  structured fields so interrupted applications can continue on either interface.
 - Shared rounded 3D-style vehicle icons in ten colours in Work and journey details.
   Illustrations are labelled; exact-model 3D assets are not included.
 - The same manual approval workflow as the web. Administrators review on the web.

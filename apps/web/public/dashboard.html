@@ -49,7 +49,25 @@
         <p class="small-note">Switching clears unsaved forms in this window. Saved journeys, calls and active trip location sharing continue.</p>
         <div id="mode-confirm" class="mode-confirm" hidden role="group" aria-labelledby="mode-confirm-title"><h3 id="mode-confirm-title">Go offline before switching?</h3><p>Your Work availability is online. Going offline stops matching for this account.</p><div class="review-actions"><button id="mode-offline-confirm" type="button" class="button button-primary button-small">Go offline and switch</button><button id="mode-cancel" type="button" class="button button-outline button-small">Stay in Work</button></div></div>
         <div id="mode-active" class="mode-active" hidden><h3>You have a journey in another mode</h3><p class="small-note">Open it to continue, chat or use Trip safety. Finish or cancel it before starting a conflicting journey.</p><ul id="mode-active-list"></ul></div>
-        <form id="driver-enrollment" class="stack-form driver-enrollment" hidden><fieldset id="driver-enrollment-fields"><legend>Add a driver profile</legend><p class="small-note">Keep your current login and Customer access. Complete the document review in Work before you can accept rides. Use fictional details in this preview.</p><div class="onboarding-grid"><div><label for="driver-profile-model">Car make and model</label><input id="driver-profile-model" placeholder="e.g. Toyota Corolla" minlength="2" maxlength="80" required></div><div><label for="driver-profile-plate">Number plate</label><input id="driver-profile-plate" placeholder="Use a test plate" minlength="2" maxlength="15" required></div></div><div class="review-actions"><button type="submit" class="button button-primary button-small">Add driver profile</button><button id="driver-enrollment-cancel" type="button" class="button button-outline button-small">Cancel</button></div></fieldset></form>
+        <form id="driver-enrollment" class="stack-form driver-enrollment" hidden>
+          <fieldset id="driver-enrollment-fields"><legend>Choose your car</legend>
+            <p class="supporting-copy">Choose your make, year, model and colour, then add your number plate. We’ll save these details for your driver application.</p>
+            <p class="small-note">Keep your current login and Customer access. Document review is required before you can accept rides. Use fictional details in this preview.</p>
+            <div class="onboarding-grid">
+              <div><label for="driver-profile-make">Vehicle make</label><select id="driver-profile-make" required><option value="">Select make</option></select></div>
+              <div id="driver-profile-make-other-row" hidden><label for="driver-profile-make-other">Enter vehicle make</label><input id="driver-profile-make-other" minlength="2" maxlength="40" disabled></div>
+              <div><label for="driver-profile-year">Vehicle year</label><select id="driver-profile-year" aria-describedby="driver-profile-year-hint" required><option value="">Select year</option></select><p id="driver-profile-year-hint" class="small-note">Choose a year from 2000 onwards.</p></div>
+              <div><label for="driver-profile-model">Vehicle model</label><select id="driver-profile-model" required disabled><option value="">Select make first</option></select></div>
+              <div id="driver-profile-model-other-row" hidden><label for="driver-profile-model-other">Enter vehicle model</label><input id="driver-profile-model-other" minlength="2" maxlength="80" disabled></div>
+              <div><label for="driver-profile-colour">Colour</label><select id="driver-profile-colour" required><option value="">Select colour</option></select></div>
+              <div id="driver-profile-colour-other-row" hidden><label for="driver-profile-colour-other">Describe the colour or two-tone paint</label><input id="driver-profile-colour-other" minlength="2" maxlength="30" disabled></div>
+              <div><label for="driver-profile-plate">Number plate</label><input id="driver-profile-plate" placeholder="Use a test plate" minlength="2" maxlength="15" pattern="[A-Za-z0-9 \-]+" required></div>
+            </div>
+            <p class="small-note">Can’t find your vehicle? Choose Other / not listed and enter the details shown on your documents.</p>
+            <div id="driver-profile-preview" hidden></div>
+            <div class="review-actions"><button type="submit" class="button button-primary button-small">Continue to driver application</button><button id="driver-enrollment-cancel" type="button" class="button button-outline button-small">Cancel</button></div>
+          </fieldset>
+        </form>
         <p class="mode-coming small-note">Coming later: Taxi Ai Eats, courier delivery by car or motorbike, and My store. These services are not open for orders yet.</p>
       </section>
       <section id="onboarding-panel" class="account-card onboarding-panel" hidden aria-labelledby="onboarding-title">

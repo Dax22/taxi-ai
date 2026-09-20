@@ -158,9 +158,9 @@ test('schema nine gains capabilities without changing any existing records, revi
   const h = await harness(t, { persistent: true }), { customer, driver, admin } = await participants(h);
   const pending = h.client(); await pending.register('legacy-pending', 'driver');
   const ride = await agree(customer, driver); await change(customer, ride, 'confirm');
-  const tables = h.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT IN ('account_capabilities','account_commands','device_sessions','device_refresh_tokens') ORDER BY name").all().map((row) => row.name);
+  const tables = h.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT IN ('account_capabilities','account_commands','device_sessions','device_refresh_tokens','driver_vehicle_selections') ORDER BY name").all().map((row) => row.name);
   const snapshot = new Map(tables.map((name) => [name, h.db.prepare(`SELECT * FROM ${name}`).all()]));
-  h.db.exec('DROP TABLE device_refresh_tokens; DROP TABLE device_sessions; DROP TABLE account_commands; DROP TABLE account_capabilities; PRAGMA user_version=9;');
+  h.db.exec('DROP TABLE driver_vehicle_selections; DROP TABLE device_refresh_tokens; DROP TABLE device_sessions; DROP TABLE account_commands; DROP TABLE account_capabilities; PRAGMA user_version=9;');
   await h.restart();
   for (const name of tables) assert.deepEqual(h.db.prepare(`SELECT * FROM ${name}`).all(), snapshot.get(name), name);
   assert.equal(h.db.prepare('PRAGMA user_version').get().user_version, SCHEMA_VERSION);

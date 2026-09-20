@@ -26,11 +26,14 @@ test('native onboarding completes the same application, rejects cross-device sta
   const api = await native(h,customer);
   assert.equal((await api.send('/driver/onboarding')).status,403);
   assert.equal((await api.send('/driver/application/save',{ expectedVersion:0,details:DETAILS })).status,403);
-  assert.equal((await api.send('/account/driver-profile',{ vehicle:{ model:'Toyota Corolla',plate:'TEST-NEW' } })).status,200);
+  const selection = { make:'Honda',model:'Civic',year:2019,colour:'Blue',plate:'TEST-NEW' };
+  assert.equal((await api.send('/account/driver-profile',{ vehicle:selection })).status,200);
   let app = await api.app(); assert.equal(app.version,0);
+  assert.equal(app.details,null); assert.deepEqual(app.vehicle,selection);
   const key = randomUUID(), data = { expectedVersion:app.version,details:DETAILS };
   const save = await api.send('/driver/application/save',data,key);
   assert.equal(save.status,200); app = parseOnboarding(save.body); assert.equal(app.details.vehicle.colour,'Yellow');
+  assert.deepEqual(app.vehicle,DETAILS.vehicle);
   assert.equal((await api.send('/driver/application/save',data,key)).body.replayed,true);
   assert.equal((await api.send('/driver/application/save',data)).body.error.code,'STALE_VERSION');
   assert.equal((await api.send('/driver/application/save',{ ...data,expectedVersion:app.version,driverId:admin.user.id })).status,400);

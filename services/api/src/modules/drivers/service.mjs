@@ -15,7 +15,8 @@ export function createDriversService({ repository, getAccount, hasDriverWork, co
   function view(user, id) {
     const app = access(user, id), read = user.role === 'admin' ? repository.readIds(id, user.id) : [];
     const documents = repository.documents(id).map((doc) => ({ ...doc, readByReviewer: read.includes(doc.id) }));
-    return { ...app, name: getAccount(id).name, documents, eligibility: eligibility(app, documents, clock()),
+    return { ...app, vehicle: app.details?.vehicle ?? repository.selection(id) ?? repository.find(id).vehicle,
+      name: getAccount(id).name, documents, eligibility: eligibility(app, documents, clock()),
       busy: hasDriverWork(id), events: repository.events(id) };
   }
   function list(user) {

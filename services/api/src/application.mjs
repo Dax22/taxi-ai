@@ -13,6 +13,7 @@ import { createAccountsRepository } from './modules/accounts/repository.mjs';
 import { createAccountsService } from './modules/accounts/service.mjs';
 import { createDriversRepository } from './modules/drivers/repository.mjs';
 import { createDriversService } from './modules/drivers/service.mjs';
+import { vehicleDetails } from './modules/drivers/domain.mjs';
 import { createRidesRepository } from './modules/rides/repository.mjs';
 import { createRidesService } from './modules/rides/service.mjs';
 import { createChatRepository } from './modules/chat/repository.mjs';
@@ -38,7 +39,7 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
   const rideRepository = createRidesRepository(db);
   let drivers, devices;
   const accounts = createAccountsService({ repository: accountRepository,
-    driverProfiles: { insert: driverRepository.insert, find: (id) => {
+    driverProfiles: { insert: driverRepository.insert, validateVehicle: (data) => vehicleDetails(data, clock()), find: (id) => {
       const driver = driverRepository.find(id);
       return driver ? { ...driver, eligibility: drivers.eligibilityFor(id) } : null;
     } },

@@ -1,5 +1,5 @@
 import { envelope, parseAccount, parseSignIn, parseActivity, parseDevices, parseOnboarding } from '../../../../packages/shared/src/mobile-contracts.mjs';
-import type { Account, Credentials, DriverCommands, Mode, SignIn } from '../../../../packages/shared/src/mobile-contracts.mjs';
+import type { Account, Credentials, DriverCommands, DriverDetails, Mode, SignIn } from '../../../../packages/shared/src/mobile-contracts.mjs';
 
 export interface Vault { read(): Promise<string | null>; write(value: string): Promise<void>; clear(): Promise<void> }
 export interface SavedSession { origin: string; refreshToken: string; sessionId: string; previewAccess: string }
@@ -149,7 +149,7 @@ export class MobileClient {
   }
   async devices() { return parseDevices(await this.request('/devices')); }
   async revoke(id: string) { return this.request(`/devices/${id}/revoke`, {}); }
-  async addDriver(vehicle: { model: string; plate: string }, key: string) {
+  async addDriver(vehicle: DriverDetails['vehicle'], key: string) {
     const epoch = this.epoch, body = await this.request('/account/driver-profile', { vehicle }, key); if (epoch !== this.epoch) throw changed(); const user = parseAccount(body.user); this.publish(user); return user;
   }
   async logout(): Promise<string | null> {
