@@ -7,6 +7,11 @@ and audio calling, route quotes, driver location sharing, availability/nearby ma
 without mixing their rules into ride logic.
 See [ADR 0001](decisions/0001-modular-monolith.md) for the decision and tradeoffs.
 
+The target product is now one app and website with Customer, Drive & deliver
+and My store modes. This is planned in [ADR 0002](decisions/0002-unified-app-and-multi-role-accounts.md)
+and the [unified platform design](unified-platform.md). The implemented modules
+below still use one role per account; the design update does not migrate data.
+
 ## Implemented modules
 
 | Module | Responsibility | Owns |
@@ -173,10 +178,20 @@ after a second session check. Queued actions cannot run under a replacement
 session; responses from an earlier API-client generation cannot update the clock
 or erase current retry keys. See [journey verification](pilot-readiness.md).
 
-Native iOS/Android apps and tablet layouts remain planned. They should use the
-same server use cases through reviewed API contracts. The current browser-cookie
-transport is not a completed native authentication design. TypeScript, OpenAPI
-schemas and client generation are future decisions; this code is JavaScript ESM.
+One native Taxi Ai app for iOS/Android, including tablets, is planned in
+`apps/mobile/`. React Native + Expo + TypeScript is the proposed mobile stack;
+the current website/backend remain JavaScript ESM. Both clients will expose
+Customer, Drive & deliver and My store modes over shared server use cases and
+reviewed API contracts. Native views and device adapters will be platform-aware.
+
+The current browser-cookie transport is not a completed native authentication
+design. Define device sessions, secure credential storage, expiry/revocation,
+API schemas and compatibility before connecting the app. Replace fixed public
+roles through a forward migration to capabilities and store memberships.
+Mode selection remains per client; authorization, ownership and worker capacity
+remain server-side. Existing reset/late-response guards must extend from account
+identity to acting context, store and service. See the
+[unified plan](unified-platform.md) for active-work continuity and acceptance cases.
 
 ## Participant chat
 

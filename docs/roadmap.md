@@ -1,5 +1,11 @@
 # Delivery milestones
 
+The accepted next direction is one Taxi Ai app for iOS/Android and one website
+with shared accounts and Customer, Drive & deliver and My store modes. The
+[unified platform plan](unified-platform.md) supersedes separate native apps and
+moves the mobile foundation earlier. Completed milestones below describe the
+current single-role prototype; planned milestones do not claim shipped features.
+
 ## 0 — Repository foundation (implemented)
 
 - Record the accepted product scope and open decisions.
@@ -16,7 +22,7 @@ confirmation to the tested shared fare module, with mobile/tablet/desktop CSS.
 
 Complete the manual browser review in `apps/web/README.md` before treating layout
 and end-to-end interaction as verified. The current cloud browser blocked local
-preview access. Vendor authentication remains a later milestone.
+preview access. Vendor memberships and operations remain a later milestone.
 
 ## 2a — Local accounts and saved ride requests (implemented; browser review pending)
 
@@ -154,7 +160,35 @@ sensing or staffed emergency response are enabled. Manual browser/clipboard,
 mobile/tablet, GPS and hosted-recipient testing remain pending. Hosting on Alibaba
 Cloud remains paused.
 
-## 2l — Real ride pilot
+## 2l — Unified accounts and web navigation (next; planned)
+
+- Replace fixed public roles with one personal account and separately approved
+  capabilities, retaining explicit staff privileges and scoped store memberships.
+- Migrate existing records without losing accounts, history or review evidence,
+  without granting driver approval or enabling unfinished services.
+- Add a context-aware web shell with Customer and Drive & deliver modes first;
+  show vendor/delivery availability accurately until their modules are built.
+- Enforce ownership, self-assignment prevention and cross-mode workload limits.
+- Extend stale-response, retry and cache isolation to acting context/store/service.
+- Document shared API contracts and the native session/revocation design.
+
+Acceptance: the same eligible account can buy and work, with explicit mode
+switching and preserved active-trip/safety access. Permission/migration tests and
+real browser review must cover the scenarios in [the unified plan](unified-platform.md).
+
+## 2m — One mobile app, rides first (planned)
+
+Build `apps/mobile/` using the proposed React Native + Expo + TypeScript stack.
+Deliver one iOS/Android app with phone/tablet layouts, secure sign-in and the same
+Customer/Work ride journey as the website. Create a clear mode switcher and
+feature boundaries for later Eats, courier and My store capabilities.
+
+Navigation/design work may overlap 2l; connected flows depend on its access and
+API contract. Integrate and test location, notifications and in-app calling in
+development builds on physical devices. The browser website continues to support
+the same services, with explicit handling of device capability differences.
+
+## 2n — Real ride pilot (release gate; planned)
 
 Harden authentication and hosting; add verified driver onboarding, production mapping, vehicle
 matching, operational booking state, verified payment-provider integration and live receipts. Implement authenticated
@@ -163,18 +197,29 @@ recovery from interrupted requests before enabling real transactions.
 Connect the test SOS foundation to verified trusted-contact notification and staffed incident handling with an
 agreed emergency-response channel before inviting real passengers.
 
-## 3 — Delivery and operations
+## 3a — Courier and shared delivery work (planned)
 
-Build food-vendor menus and order management, courier parcel workflows,
-motorcycle delivery, larger-vehicle selection and operational support tools.
-Pilot coverage, delivery capacity and vendor operations before expanding.
+Add parcel details, quotes, item/vehicle limits, pickup/custody, delivery proof,
+cancellation and support. Enable approved motorcycle, car and van delivery in the
+same Work mode. Enforce worker/vehicle capacity across passenger and delivery
+services; no multi-job batching initially. Decide courier pricing before its
+checkout or negotiation flow is implemented.
 
-## 4 — Mobile and intelligence
+## 3b — Taxi Ai Eats and My store (planned)
 
-Deliver the customer and driver apps for iOS/Android, with tablet layouts.
-Add evaluated fare/ETA models and bounded AI assistance as data and operational
-readiness permit. The website and native app milestones can overlap once their
-shared API is stable.
+Add vendor/store onboarding, scoped staff memberships, menus, inventory, opening
+hours, customer checkout, preparation, delivery handover and settlements in the
+same mobile app and website. Reuse shared delivery capacity while keeping food
+order rules distinct from passenger trips. Pilot coverage, stock consistency,
+delivery capacity and vendor operations before expanding. 3a/3b can be
+reprioritized, but Eats delivery requires the shared delivery contract.
+
+## 4 — Evaluated intelligence (planned)
+
+Add evaluated fare/ETA models and bounded adaptive assistance as data and
+operational readiness permit. Agent tools inherit account/store permissions;
+explicit fare acceptance, payments and safety operations remain controlled
+application actions. Manual flows must remain usable when AI is unavailable.
 
 ## Future — Autonomous services
 

@@ -29,14 +29,14 @@ switching. Do not discard them to make a checkout succeed. With a clean working
 tree, run:
 
 ```bash
-git switch feat/autonomous-concept
-git pull --ff-only origin feat/autonomous-concept
+git switch docs/unified-platform-plan
+git pull --ff-only origin docs/unified-platform-plan
 npm run verify
 ```
 
 Git normally creates a tracking branch when the name exists only on `origin`.
 If the switch reports an ambiguous branch name, explicitly use
-`git switch --track origin/feat/autonomous-concept` for the first checkout.
+`git switch --track origin/docs/unified-platform-plan` for the first checkout.
 
 ## Save your own changes to GitHub
 
@@ -75,7 +75,7 @@ a Taxi Ai business mailbox.
 
 Existing milestones are stacked: project foundation → web booking demo → accounts
 and rides → modular architecture → private chat → ride lifecycle → voice → locations
-→ private staging → driver matching → simulated payments → journey verification → driver onboarding → trip safety → city-map homepage → autonomous concept. Each pull request reviews only its next layer.
+→ private staging → driver matching → simulated payments → journey verification → driver onboarding → trip safety → city-map homepage → autonomous concept → unified platform plan. Each pull request reviews only its next layer.
 Pushing keeps the code on GitHub; it does not merge the stack into `main`. Review
 the dependencies before merging or retargeting their pull requests.
 
@@ -83,9 +83,14 @@ the dependencies before merging or retargeting their pull requests.
 
 Read [the architecture](docs/architecture.md) and its
 [decision record](docs/decisions/0001-modular-monolith.md) first.
+For new account, client or delivery work, also read
+[ADR 0002](docs/decisions/0002-unified-app-and-multi-role-accounts.md) and the
+[unified platform plan](docs/unified-platform.md). Use one mobile application;
+client mode selection must never be treated as server authorization.
 
 | Change | Location |
 | --- | --- |
+| Planned unified mobile client | `apps/mobile/`; define auth/API contracts before connected flows |
 | Pure fare/money rules | `packages/shared/src/` |
 | Account, driver, ride, chat, payment or safety use case | Its `services/api/src/modules/<feature>/service.mjs` |
 | Feature SQL | Its `repository.mjs` |
