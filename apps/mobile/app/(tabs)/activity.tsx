@@ -4,10 +4,14 @@ import { useSession } from '../../src/session/provider';
 import { useResource } from '../../src/ui/use-resource';
 import { Button, Card, Heading, Loading, Notice, Pill, Screen, fare, readable, styles } from '../../src/ui/components';
 import type { Mode, RideSummary } from '../../../../packages/shared/src/mobile-contracts.mjs';
+import { VehicleCard } from '../../src/ui/vehicle-card';
 function RideCard({ ride }: { ride: RideSummary }) {
+  const [showVehicle, setShowVehicle] = useState(false);
   return <Card><Pill>{readable(ride.status).toUpperCase()}</Pill><Text style={styles.h2}>{ride.pickup} → {ride.destination}</Text>
     <Text style={styles.body}>{ride.fareKobo === null ? `Suggested fare ${fare(ride.suggestedFareKobo)}` : `Agreed fare ${fare(ride.fareKobo)}`}</Text>
     <Text style={styles.small}>{new Date(ride.createdAt).toLocaleDateString()} · {ride.isDemo ? 'Preview journey' : 'Journey'}</Text>
+    {ride.driver && <><Button title={showVehicle ? 'Hide vehicle details' : 'View vehicle details'} secondary onPress={() => setShowVehicle((v) => !v)}/>
+      {showVehicle && <><Text style={styles.body}>Driver: {ride.driver.name}</Text><VehicleCard vehicle={ride.driver.vehicle} label="VEHICLE FOR THIS JOURNEY" compact/></>}</>}
   </Card>;
 }
 function Journeys({ mode }: { mode: Mode }) {

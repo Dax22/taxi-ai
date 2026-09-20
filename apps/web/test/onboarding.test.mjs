@@ -59,8 +59,14 @@ test('a stale poll cannot replace saved evidence; stale review failures do not r
   await f.c.poll(); assert.equal(f.views.at(-1).application, null);
 });
 
+const vehicleSource = (await readFile(new URL('../public/dashboard/vehicle-card.mjs', import.meta.url), 'utf8'))
+  .replace("'./dom.mjs'", `'${new URL('../public/dashboard/dom.mjs', import.meta.url)}'`)
+  .replace("'/shared/vehicle-profile.mjs'", `'${new URL('../../../packages/shared/src/vehicle-profile.mjs', import.meta.url)}'`);
+const vehicleModule = `data:text/javascript;base64,${Buffer.from(vehicleSource).toString('base64')}`;
 const source = (await readFile(new URL('../public/dashboard/onboarding-view.mjs', import.meta.url), 'utf8'))
   .replace("'./dom.mjs'", `'${new URL('../public/dashboard/dom.mjs', import.meta.url)}'`)
+  .replace("'./vehicle-card.mjs'", `'${vehicleModule}'`)
+  .replace("'/shared/vehicle-profile.mjs'", `'${new URL('../../../packages/shared/src/vehicle-profile.mjs', import.meta.url)}'`)
   .replace("'/shared/driver-onboarding.mjs'", `'${new URL('../../../packages/shared/src/driver-onboarding.mjs', import.meta.url)}'`);
 const { createOnboardingView } = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
 const html = await readFile(new URL('../public/dashboard.html', import.meta.url), 'utf8');
@@ -72,6 +78,7 @@ function dom(t) {
     append(...children) { this.children.push(...children); if (this.tag === 'select' && !this.value && children[0]) this.value = children[0].value; }
     replaceChildren(...children) { this.children = children; }
     addEventListener(name, fn) { this.handlers[name] = fn; }
+    setAttribute(name, value) { this[name] = value; }
     reset() {
       const fields = this.id.includes('details') ? ['legalName', 'phone', 'licenceNumber', 'make', 'model', 'year', 'colour', 'plate']
         : this.id.includes('upload') ? ['expiresOn', 'file'] : ['reason', 'reference'];
@@ -136,4 +143,18 @@ test('a cookie switch between page refresh and private reads cannot show a diffe
   f.client.request = async () => ({ application }); await f.c.poll();
   f.client.request = async () => ({ document: { id: 'doc', driverId: 'other' }, base64: 'private' });
   await f.c.download('doc'); assert.equal(f.saved.length, 0);
+});
+
+test('vehicle previews follow unsaved details, keep identity as text, and clear on account reset', (t) => {
+  const f = dom(t); f.render();
+  const card = () => f.node('onboarding-vehicle-preview').children[0];
+  assert.equal(card().children[0].children[0].src,'/assets/vehicles/sedan-yellow.svg');
+  assert.equal(card().children[1].children[1].textContent,'Toyota Corolla');
+  f.node('onboarding-colour').value = 'Blue'; f.node('onboarding-model').value = '<New model>';
+  f.node('onboarding-details-form').handlers.input();
+  assert.equal(card().children[0].children[0].src,'/assets/vehicles/sedan-blue.svg');
+  assert.equal(card().children[1].children[1].textContent,'Toyota <New model>');
+  assert.equal(card().children[1].children[0].textContent,'UNSAVED VEHICLE PREVIEW');
+  assert.equal(f.node('onboarding-submit').disabled,true);
+  f.view.reset(); assert.equal(f.node('onboarding-vehicle-preview').children.length,0);
 });

@@ -1,11 +1,18 @@
 import { $, element } from './dom.mjs';
 import { DRIVER_DOCUMENTS, DRIVER_REVIEW_CHECKS, DRIVER_APPLICATION_LABELS } from '/shared/driver-onboarding.mjs';
+import { VEHICLE_MAKES, VEHICLE_COLOURS, modelsForMake } from '/shared/vehicle-profile.mjs';
+import { renderVehicleCard } from './vehicle-card.mjs';
 
 const detailFields = ['legalName', 'phone', 'licenceNumber', 'make', 'model', 'year', 'colour', 'plate'];
 const editable = (app) => ['draft', 'changes_requested', 'rejected'].includes(app?.status);
 export function createOnboardingView({ onAction, onDownload, onClose }) {
   let current = null, user = null, formVersion = null, dirty = false, renderedVersion = null, lastState = null;
   const input = (name) => $(`onboarding-${name}`);
+  function suggestions(id, values) {
+    input(id).replaceChildren();
+    for (const value of values) { const option = element('option'); option.value = value; input(id).append(option); }
+  }
+  suggestions('makes', Object.keys(VEHICLE_MAKES)); suggestions('colours', VEHICLE_COLOURS.map((c) => c.name));
   for (const [kind, spec] of Object.entries(DRIVER_DOCUMENTS)) {
     const option = element('option', spec.label); option.value = kind; input('kind').append(option);
   }
@@ -48,6 +55,7 @@ export function createOnboardingView({ onAction, onDownload, onClose }) {
     for (const id of ['documents', 'history', 'summary']) $(`onboarding-${id}`).replaceChildren();
     input('title').textContent = 'Your driver application'; input('eligibility').textContent = ''; input('stale').hidden = true;
     input('status').textContent = ''; input('reason-note').textContent = ''; input('error').textContent = '';
+    renderVehicleCard(input('vehicle-preview'), null);
     $('onboarding-panel').hidden = true; expiry();
   }
   function render({ user: account, application: app, pending, error }) {
@@ -58,6 +66,7 @@ export function createOnboardingView({ onAction, onDownload, onClose }) {
     input('loading').hidden = Boolean(app); input('content').hidden = !app;
     if (!app) return;
     const owner = user.role === 'driver', canEdit = owner && editable(app) && !app.busy;
+    input('progress').hidden = !owner;
     const changed = renderedVersion !== app.version;
     if (changed) {
       if (!dirty) {
@@ -78,6 +87,10 @@ export function createOnboardingView({ onAction, onDownload, onClose }) {
             : 'Complete your details and all five documents, then submit for review.';
     input('stale').hidden = !dirty || formVersion === app.version;
     input('reload').disabled = pending;
+    suggestions('models', modelsForMake(input('make').value));
+    const preview = owner ? Object.fromEntries(['make','model','colour','plate'].map((key) => [key,input(key).value])) : app.details?.vehicle;
+    if (preview && owner && /^\d{4}$/.test(input('year').value)) preview.year = Number(input('year').value);
+    renderVehicleCard(input('vehicle-preview'), preview, { label: owner ? dirty ? 'UNSAVED VEHICLE PREVIEW' : 'YOUR VEHICLE PREVIEW' : 'VEHICLE SUBMITTED FOR REVIEW' });
     input('summary').replaceChildren();
     if (!owner && app.details) {
       for (const [term, value] of [['Legal name', app.details.legalName], ['Contact', app.details.phone], ['Licence', app.details.licenceNumber],

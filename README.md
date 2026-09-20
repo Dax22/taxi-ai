@@ -33,7 +33,13 @@ private documents and recorded manual checks; external identity/licence verifica
 is not connected. Use fictional details and documents.
 
 - One personal login, Customer/Work mode switching and optional driver enrollment.
-- Native sign-in, Customer/Work tabs, activity, driver enrollment and device revocation.
+- Native sign-in, Home/Activity/Work/Account navigation and device revocation.
+- Full mobile driver applications: vehicle details, private documents and submission
+  into the existing manual review workflow.
+- Shared colour-matched vehicle illustrations, readable plates and approved vehicle
+  identity on web/native journey cards; the web map keeps its explicit GPS consent.
+  Exact-model 3D renders remain a separate catalogue milestone.
+  See [vehicle identity](docs/vehicle-identity.md).
 - Website Download app section stays Coming soon until real store URLs are added.
 - Separate staff dashboard planned in [the admin design](docs/admin-dashboard.md).
 - Additive schema-11 migration preserves existing accounts, sessions and trip history.
@@ -77,7 +83,7 @@ is not connected. Use fictional details and documents.
 documents, production mapping/tracking, actual dispatch, real payment-provider integration and payouts, password
 recovery, live safety notifications and staffed emergency response, food/vendor
 ordering, motorcycle courier delivery, AI estimators and
-native iOS/Android apps. Autonomous taxis remain **Coming soon**, with no launch date.
+complete native ride workflows and store releases. Autonomous taxis remain **Coming soon**, with no launch date.
 
 ## Run in VS Code
 
@@ -208,8 +214,9 @@ automatically at startup. `npm run backup -- /absolute/new-backup.sqlite` makes 
 validated copy without changing the source. See [staging and recovery](docs/staging.md)
 for restore, transient-data removal, scheduling and off-host backup requirements.
 
-The current schema is **9**: driver onboarding added schema 8 and Trip Safety
-adds schema 9 without changing existing records or inventing incidents. Backups
+The current schema is **11**: Trip Safety added schema 9, unified accounts added
+schema 10 and native device sessions added schema 11. Vehicle presentation and
+mobile onboarding in 0.16 reuse this schema without a migration. Backups
 retain private contact/incident data while revoking trip links.
 
 The earlier payment milestone upgrades schema 1–6 to 7 without resetting existing records
@@ -254,7 +261,7 @@ review a deployment; the Docker image deliberately refuses an incomplete setup.
 | `scripts/database-snapshot.mjs` | Checked backups/restores into new files |
 | `scripts/staging-access.mjs` | Add/remove invited tester access keys |
 | `.github/workflows/ci.yml` | Automated verification on Node 22.12.0 and 24 |
-| `apps/mobile/` | Unified iOS/Android app planning notes; not yet runnable |
+| `apps/mobile/` | Runnable Expo iOS/Android foundation, accounts and driver onboarding |
 | `docs/` | Requirements, architecture, roadmap and approved brand |
 
 The backend is a **modular monolith**: business modules share one process/database
@@ -269,7 +276,7 @@ The terminal example runs with `npm run demo`. Read [the architecture](docs/arch
 
 The latest development branch is `feat/unified-accounts`. Version 0.14.0 adds
 Customer/Work modes, same-login driver enrollment and schema-10 capabilities
-while preserving the Trip Safety and light 3D homepage work. Native mobile, Eats,
+while preserving the Trip Safety and light 3D homepage work. Full native ride workflows, Eats,
 courier and vendor workflows remain planned. Follow [the upgrade and acceptance
 guide](docs/unified-accounts.md) before switching a saved database to this release.
 Read [CONTRIBUTING.md](CONTRIBUTING.md) for the GitHub/VS Code workflow and where

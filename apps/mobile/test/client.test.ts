@@ -111,3 +111,31 @@ test('revocation during a pending read cannot restore an expired account from a 
   finish(ok({ user })); await rejected;
   assert.equal(app.account(), null); assert.equal(storage.value, null);
 });
+
+test('application edits preserve their version and request key through token rotation, while stale edits are not retried', async () => {
+  const application = { driverId:user.id,status:'draft',version:2,busy:false,details:null,
+    vehicle:{ model:'Toyota Corolla',plate:'TEST-123' },documents:[],eligibility:{ eligible:false,missing:[],expired:[] },reviewReason:null };
+  const attempts: RequestInit[] = [];
+  let stale = false;
+  const { app,storage } = client(async (url,options) => {
+    if (url.endsWith('/auth/login')) return response(auth());
+    if (url.endsWith('/auth/refresh')) return response(auth(2));
+    if (url.endsWith('/driver/onboarding')) return ok({ application });
+    attempts.push(options);
+    if (stale) return response({ error:{ code:'STALE_VERSION',message:'Load the saved application.' } },409);
+    if (new Headers(options.headers).get('Authorization') === `Bearer ${auth().credentials.accessToken}`) return unauthorized();
+    return ok({ application });
+  });
+  await app.login(user.email,'Test password','Phone');
+  await app.applicationCommand('submit',{ expectedVersion:1 },'same-key-for-retry');
+  assert.equal(attempts.length,2);
+  assert.equal(attempts[0].body,attempts[1].body);
+  assert.equal(new Headers(attempts[1].headers).get('Idempotency-Key'),'same-key-for-retry');
+  assert.equal(JSON.parse(String(attempts[1].body)).expectedVersion,1);
+  assert.ok(!storage.value!.includes('TEST-123'));
+  stale = true;
+  await assert.rejects(app.applicationCommand('submit',{ expectedVersion:1 },'different-request-key'),{ code:'STALE_VERSION' });
+  assert.equal(attempts.length,3);
+  application.driverId = 'another-driver';
+  await assert.rejects(app.application(),{ code:'SESSION_CHANGED' });
+});

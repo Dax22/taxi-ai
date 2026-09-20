@@ -60,3 +60,13 @@ coming-soon badge and concept caption accompany the scene. See
 
 Branding changes do not enable live bookings, food orders, courier dispatch,
 communications, payments or autonomous rides.
+
+## Vehicle identity cards
+
+Vehicle cards use the same amber/graphite interface with an original perspective
+SVG illustration and the registered solid colour from a bounded palette. The
+number plate is selectable text, separate from the artwork. Unknown or two-tone
+colours use a clearly labelled neutral illustration. The illustration is not an
+exact make/model render. Shared geometry lives in `packages/shared/src/vehicle-artwork.mjs`;
+web SVG assets are generated from it and native uses the same geometry directly.
+See [vehicle identity](vehicle-identity.md) for the exact-model catalogue roadmap.

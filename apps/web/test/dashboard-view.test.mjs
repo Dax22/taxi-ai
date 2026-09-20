@@ -15,7 +15,7 @@ async function moduleUrl(name, dependencies = {}) {
 }
 const tripModel = await moduleUrl('trip-model.mjs');
 const tripView = await moduleUrl('trip-view.mjs', { './trip-model.mjs': tripModel });
-const { createDashboardView } = await import(await moduleUrl('views.mjs', { './trip-view.mjs': tripView }));
+const { createDashboardView } = await import(await moduleUrl('views.mjs', { './trip-view.mjs': tripView, './vehicle-card.mjs': await moduleUrl('vehicle-card.mjs') }));
 const { createAccountModeView, modePreferences } = await import(await moduleUrl('account-mode-view.mjs'));
 const html = await readFile(new URL('../public/dashboard.html', import.meta.url), 'utf8');
 
@@ -114,4 +114,13 @@ test('mode preferences are per-account and optional browser storage failure does
   assert.equal(preference.get('two'), 'customer');
   const unavailable = modePreferences(); assert.equal(unavailable.get('one'), null);
   assert.doesNotThrow(() => { unavailable.set('one', 'work'); unavailable.clear('one'); });
+});
+
+test('journey cards use the selected trip snapshot and clear the vehicle when no trip or account is selected', (t) => {
+  const h = setup(t), original = { ...ride,driver:{ ...ride.driver,vehicle:{ model:'Honda Accord',plate:'OLD-123',colour:'Red',year:2018 } } };
+  h.view.render({ ...state(driver,[original]),user:{ ...driver,driver:{ ...driver.driver,vehicle:{ model:'Toyota Corolla',plate:'NEW-456',colour:'Blue' } } } });
+  const details = h.node('detail-vehicle-card').children[0].children[1];
+  assert.equal(details.children[1].textContent,'Honda Accord'); assert.equal(details.children[3].textContent,'OLD-123');
+  h.view.render(state(customer,[])); assert.equal(h.node('detail-vehicle-card').hidden,true); assert.deepEqual(h.node('detail-vehicle-card').children,[]);
+  h.view.reset(); assert.deepEqual(h.node('driver-vehicle-card').children,[]);
 });

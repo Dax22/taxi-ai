@@ -10,7 +10,16 @@ export function createMobileRouter({ devices, accounts, drivers, rides, clock, r
   function summary(ride) {
     return { id: ride.id, status: ride.status, pickup: ride.pickup.name, destination: ride.destination.name,
       fareKobo: ride.trip?.fareKobo ?? ride.negotiation?.agreement?.amountKobo ?? null,
-      suggestedFareKobo: ride.suggestedFareKobo, createdAt: ride.createdAt, isDemo: ride.isDemo };
+      suggestedFareKobo: ride.suggestedFareKobo, createdAt: ride.createdAt, isDemo: ride.isDemo,
+      driver: ride.driver ? { id: ride.driver.id, name: ride.driver.name, vehicle: ride.driver.vehicle } : null };
+  }
+  // An explicit owner-only projection keeps reviewer identities, hashes and audit internals off native clients.
+  function onboarding(user, application) {
+    return { driverId: application.driverId, status: application.status, version: application.version,
+      details: application.details, busy: application.busy, eligibility: application.eligibility,
+      reviewReason: application.reviewReason, vehicle: application.details?.vehicle ?? user.driver.vehicle,
+      documents: application.documents.map(({ id, kind, name, mimeType, sizeBytes, expiresOn }) =>
+        ({ id, kind, name, mimeType, sizeBytes, expiresOn })) };
   }
   return async ({ request, response, pathname, clientAddress, origin }) => {
     check(['GET','POST'].includes(request.method), 'METHOD_NOT_ALLOWED', 'Use GET or POST.');
@@ -23,7 +32,7 @@ export function createMobileRouter({ devices, accounts, drivers, rides, clock, r
     rateLimiter.consume(auth ? `auth:${clientAddress}` : `mobile:${session.user.id}`, clock(), auth ? 30 : 120, auth ? 10 * 60_000 : 60_000);
     let data;
     if (write) {
-      data = await readBody(request, 4096);
+      data = await readBody(request, path === '/driver/application/upload' ? 2_800_000 : 4096);
       if (!auth) { session = devices.sessionFor(accessToken); check(session, 'UNAUTHENTICATED', 'Sign in to continue.'); }
     }
     const query = new URL(request.url, origin).searchParams;
@@ -40,6 +49,13 @@ export function createMobileRouter({ devices, accounts, drivers, rides, clock, r
       const application = drivers.get(session.user, session.user.id);
       body = { application: { status: application.status, eligibility: application.eligibility,
         documentCount: application.documents.length, vehicle: session.user.driver.vehicle } };
+    } else if (!write && path === '/driver/onboarding') {
+      check(hasCapability(session.user, 'driver'), 'FORBIDDEN', 'Add a driver profile first.');
+      body = { application: onboarding(session.user, drivers.get(session.user, session.user.id)) };
+    } else if (write && /^\/driver\/application\/(save|upload|remove|submit|reopen)$/.test(path)) {
+      check(hasCapability(session.user, 'driver'), 'FORBIDDEN', 'Add a driver profile first.');
+      const result = drivers.command(session.user, session.user.id, path.split('/').at(-1), data, request.headers['idempotency-key']);
+      body = { application: onboarding(session.user, result.application), replayed: result.replayed };
     } else if (write && path === '/account/driver-profile') body = accounts.addDriverProfile(session.user.id, data, request.headers['idempotency-key']);
     else if (!write && path === '/devices') body = { devices: devices.list(session.user, session.id) };
     else if (write && /^\/devices\/[a-f0-9-]{36}\/revoke$/.test(path)) {

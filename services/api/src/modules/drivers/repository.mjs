@@ -1,8 +1,10 @@
 const documentColumns = `id, driver_id AS driverId, kind, name, mime_type AS mimeType,
   size_bytes AS sizeBytes, sha256, expires_on AS expiresOn, created_at AS createdAt`;
 function profile(row) {
+  const approved = row?.status === 'approved' && row.approved_details ? JSON.parse(row.approved_details).vehicle : null;
   return row ? { id: row.user_id, status: row.status,
-    vehicle: { model: row.vehicle_model, plate: row.vehicle_plate } } : null;
+    vehicle: { model: row.vehicle_model, plate: row.vehicle_plate,
+      ...(approved ? { make: approved.make, modelName: approved.model, year: approved.year, colour: approved.colour } : {}) } } : null;
 }
 function application(row) {
   return row ? { driverId: row.driver_id, status: row.status, version: row.version,
@@ -14,8 +16,10 @@ function application(row) {
 /** All application, document and retry writes join the caller's transaction. */
 export function createDriversRepository(db) {
   return Object.freeze({
-    find: (id) => profile(db.prepare('SELECT * FROM drivers WHERE user_id = ?').get(id)),
-    list: () => db.prepare(`SELECT d.* FROM drivers d JOIN driver_applications a ON a.driver_id=d.user_id
+    find: (id) => profile(db.prepare(`SELECT d.*, CASE WHEN a.status='approved' THEN a.details_json END AS approved_details
+      FROM drivers d LEFT JOIN driver_applications a ON a.driver_id=d.user_id WHERE d.user_id = ?`).get(id)),
+    list: () => db.prepare(`SELECT d.*, CASE WHEN a.status='approved' THEN a.details_json END AS approved_details
+      FROM drivers d JOIN driver_applications a ON a.driver_id=d.user_id
       ORDER BY (a.status='submitted') DESC, a.updated_at DESC, d.user_id LIMIT 100`).all().map(profile),
     insert(id, vehicle, now) {
       db.prepare('INSERT INTO drivers (user_id, vehicle_model, vehicle_plate) VALUES (?, ?, ?)').run(id, vehicle.model, vehicle.plate);

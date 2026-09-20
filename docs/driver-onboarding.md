@@ -133,7 +133,7 @@ fares, messages, payments and receipts, and backfills driver/vehicle snapshots.
 All existing drivers receive a **draft** application with no invented evidence.
 Their old test approval does not permit new work. Unstarted legacy work must be
 cancelled before they can apply; already-started trips can finish. Nothing resets
-or deletes saved journeys. Current backup/restore commands require schema 10 (see [unified accounts](unified-accounts.md));
+or deletes saved journeys. Current backup/restore commands require schema 11 (see [mobile foundation](mobile-foundation.md));
 restore an older backup with its matching release, then upgrade a separate copy.
 
 `npm run verify` includes HTTP workflow/privacy tests, expiry boundaries, session
@@ -151,3 +151,11 @@ keyboard navigation, two independent sessions, corrections/renewals, a dropped
 upload response and a logout during a pending upload. Confirm files are downloaded
 only for the active authorised account and that printing a receipt excludes the
 private application panel. Hosting on Alibaba Cloud remains paused.
+
+## Mobile registration and vehicle presentation
+
+Release 0.16 brings the full owner application to iOS/Android using the same
+manual review service, versions and idempotency records. Approved make, model,
+year and colour now accompany the plate in new trip snapshots. Private document
+images are not customer-facing artwork. See [vehicle identity](vehicle-identity.md)
+for the shared cards, illustration limits and cross-device acceptance checklist.
