@@ -14,8 +14,13 @@ const activeTrip = "SELECT 1 FROM ride_trips t WHERE t.ride_id = rides.id AND t.
 export function createRidesRepository(db) {
   return Object.freeze({
     find: (id) => db.prepare(`SELECT ${columns} FROM rides WHERE id = ?`).get(id) ?? null,
-    listFor: (id) => db.prepare(`SELECT ${columns} FROM rides WHERE customer_id = ? OR driver_id = ?
-      ORDER BY (status IN ('requested', 'negotiating') OR EXISTS (${activeTrip})) DESC, created_at DESC, id DESC LIMIT 50`).all(id, id),
+    listFor: (id, mode = null) => db.prepare(`SELECT ${columns} FROM rides WHERE
+      ((? IS NULL OR ? = 'customer') AND customer_id = ? OR (? IS NULL OR ? = 'work') AND driver_id = ?)
+      ORDER BY (status IN ('requested', 'negotiating') OR EXISTS (${activeTrip})) DESC, created_at DESC, id DESC LIMIT 50`).all(mode, mode, id, mode, mode, id),
+    activeFor: (id) => db.prepare(`SELECT ${columns} FROM rides WHERE (customer_id = ? OR driver_id = ?)
+      AND (status IN ('requested', 'negotiating') OR (status='agreed' AND
+        (NOT EXISTS (SELECT 1 FROM ride_trips t WHERE t.ride_id=rides.id) OR EXISTS (${activeTrip}))))
+      ORDER BY created_at DESC, id DESC`).all(id, id),
     listAvailable: () => db.prepare(`SELECT ${columns} FROM rides WHERE status = 'requested' ORDER BY created_at, id`).all(),
     expiring: (now) => db.prepare(`SELECT ${columns} FROM rides WHERE status = 'requested' AND request_expires_at <= ?`).all(now),
     expire(id, now) {
@@ -27,6 +32,9 @@ export function createRidesRepository(db) {
       AND (status IN ('requested', 'negotiating') OR EXISTS (${activeTrip}))`).get(id)),
     hasNegotiation: (id) => Boolean(db.prepare(`SELECT id FROM rides WHERE driver_id = ?
       AND (status = 'negotiating' OR EXISTS (${activeTrip}))`).get(id)),
+    hasCustomerWork: (id, now) => Boolean(db.prepare(`SELECT id FROM rides WHERE customer_id=? AND
+      ((status='requested' AND request_expires_at>?) OR status='negotiating' OR
+        (status='agreed' AND (NOT EXISTS (SELECT 1 FROM ride_trips t WHERE t.ride_id=rides.id) OR EXISTS (${activeTrip}))))`).get(id, now)),
     hasDriverWork: (id) => Boolean(db.prepare(`SELECT id FROM rides WHERE driver_id=? AND
       (status='negotiating' OR (status='agreed' AND (NOT EXISTS (SELECT 1 FROM ride_trips t WHERE t.ride_id=rides.id)
         OR EXISTS (${activeTrip}))))`).get(id)),
@@ -76,11 +84,11 @@ export function createRidesRepository(db) {
     },
     activity: (id) => db.prepare(`SELECT id, actor_id AS actorId, type, reason, created_at AS createdAt
       FROM ride_activity WHERE ride_id = ? ORDER BY id`).all(id),
-    history: (userId, before, limit) => db.prepare(`SELECT ${columns} FROM rides
-      WHERE (customer_id = ? OR driver_id = ?) AND (status = 'cancelled'
+    history: (userId, before, limit, mode = null) => db.prepare(`SELECT ${columns} FROM rides
+      WHERE ((? IS NULL OR ? = 'customer') AND customer_id = ? OR (? IS NULL OR ? = 'work') AND driver_id = ?) AND (status = 'cancelled'
         OR EXISTS (SELECT 1 FROM ride_trips t WHERE t.ride_id = rides.id AND t.status = 'completed'))
         AND (? IS NULL OR updated_at < ? OR (updated_at = ? AND id < ?))
       ORDER BY updated_at DESC, id DESC LIMIT ?`)
-      .all(userId, userId, before?.id ?? null, before?.updatedAt ?? null, before?.updatedAt ?? null, before?.id ?? null, limit),
+      .all(mode, mode, userId, mode, mode, userId, before?.id ?? null, before?.updatedAt ?? null, before?.updatedAt ?? null, before?.id ?? null, limit),
   });
 }

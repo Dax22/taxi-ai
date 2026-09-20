@@ -1,6 +1,6 @@
 # ADR 0002: Unified app and accounts with multiple capabilities
 
-Status: accepted product direction; implementation planned.
+Status: accepted; account/web foundation implemented, broader platform planned.
 
 ## Context
 
@@ -53,8 +53,10 @@ flows in subsequent releases. See [the product and reliability plan](../unified-
 - Shared process/database failures can still affect multiple services. Reliable
   operations require observed performance, recovery drills and staffed support.
 
-## Scope of this change
+## Implementation status
 
-This decision updates planning documents and the reserved mobile directory only.
-It changes no executable code, database schema, user role or deployed service.
-Version 0.13.2 and schema 9 remain the current prototype.
+The original decision was documentation-only at version 0.13.2/schema 9.
+Version 0.14.0/schema 10 implements Customer/Work on the website, additive public
+capabilities and driver enrollment under the same login. Staff remains separate.
+See [the account implementation](../unified-accounts.md). Native authentication,
+mobile apps, scoped store memberships and delivery workflows remain planned.

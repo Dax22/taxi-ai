@@ -8,8 +8,7 @@ export function createLocationsService({ repository, provider, getAccount, sessi
   function context(input, clientRequired = false) {
     const user = getAccount(input.userId);
     check(user && typeof input.sessionToken === 'string', 'UNAUTHENTICATED', 'Sign in to use locations.');
-    check(['customer', 'driver'].includes(user.role), 'FORBIDDEN', 'Locations are for customers and assigned drivers.');
-    if (user.role === 'driver') requireRole(user, 'driver');
+    requireRole(user, 'customer');
     const sessionHash = tokens.digest(input.sessionToken);
     check(sessionOwner(sessionHash) === user.id, 'UNAUTHENTICATED', 'This location session has expired.');
     const clientHash = input.clientId ? tokens.digest(clientIdentity(input.clientId)) : null;
@@ -97,7 +96,8 @@ export function createLocationsService({ repository, provider, getAccount, sessi
   }
   function tracking(input, rideId) {
     const ctx = context(input);
-    getRideContext(ctx.user, rideId);
+    const ride = getRideContext(ctx.user, rideId);
+    if (ride.driverId === ctx.userId) requireRole(ctx.user, 'driver');
     sweep();
     return { share: shareView(repository.currentShare(rideId), ctx) };
   }

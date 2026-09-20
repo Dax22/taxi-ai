@@ -5,7 +5,9 @@ Rides, Taxi Ai Eats and courier delivery, starting in Abuja, Nigeria.
 Target product: **one Taxi Ai mobile app and one website**, with the same account
 and Customer, Drive & deliver and My store modes. A person can have multiple
 approved capabilities. This direction is documented in the
-[unified platform plan](docs/unified-platform.md); it is not yet implemented.
+[unified platform plan](docs/unified-platform.md). The first milestone is implemented:
+one website account with Customer and Work modes for rides. Mobile, Eats, courier
+and My store remain planned. See [unified accounts](docs/unified-accounts.md).
 
 ## What works today
 
@@ -28,7 +30,9 @@ test trip. There is no live dispatch or payment. Driver applications now store
 private documents and recorded manual checks; external identity/licence verification
 is not connected. Use fictional details and documents.
 
-- Customer/driver registration and password sign-in, with separate dashboards.
+- One personal login, Customer/Work mode switching and optional driver enrollment.
+- Additive schema-10 migration preserves existing accounts, sessions and trip history.
+- Server-checked trip roles, self-claim prevention and conflicting-work protection.
 - Private driver applications, contact/licence/vehicle details and bounded image uploads.
 - Administrator approval, rejection and corrections with recorded manual checks and review history.
 - Current-document eligibility for new work, and stable driver/vehicle snapshots in trip history.
@@ -120,7 +124,8 @@ test driver approval and a full customer/driver negotiation.
 
 3. Sign in again. That account now has the driver-approval dashboard. The command
    revokes its old sessions and works only when no administrator exists yet.
-4. Register a driver in another browser session. Complete **Your driver application**,
+4. Create a personal account in another browser session, select **Apply to drive**,
+   and add a fictional car model/plate. In Work, complete **Your driver application**,
    upload the five fictional documents and click **Submit for review**.
 5. In the administrator dashboard, open **Review application**, download and inspect
    every file, record the manual checks/reference/reason, then choose **Record approval**.
@@ -136,7 +141,7 @@ an HTTP endpoint. Additional administrators and account recovery are not built y
    suggested fare** and **Request this test ride**. Alternatively use the
    **Sample-area demo** for Wuse II → Maitama without an external service.
 2. Open a different browser/profile or one private window and sign in as the
-   approved driver. Two ordinary tabs share a login; use separate sessions.
+   approved driver and select **Work**. Two ordinary tabs share a login; use separate sessions.
 3. In **Your availability**, choose **Share location and go online** for a routed
    request, using an Abuja device near the pickup. For a local sample request,
    select the same sample pickup area and click **Go online in sample area**.
@@ -257,10 +262,11 @@ The terminal example runs with `npm run demo`. Read [the architecture](docs/arch
 
 ## Development and review
 
-The latest development branch is `docs/unified-platform-plan`, which includes
-the existing Trip Safety and light 3D homepage work plus the accepted unified
-app/account direction. This latest change is documentation only: the native app,
-multi-capability accounts and vendor/delivery workflows remain planned.
+The latest development branch is `feat/unified-accounts`. Version 0.14.0 adds
+Customer/Work modes, same-login driver enrollment and schema-10 capabilities
+while preserving the Trip Safety and light 3D homepage work. Native mobile, Eats,
+courier and vendor workflows remain planned. Follow [the upgrade and acceptance
+guide](docs/unified-accounts.md) before switching a saved database to this release.
 Read [CONTRIBUTING.md](CONTRIBUTING.md) for the GitHub/VS Code workflow and where
 new code belongs. `npm run check` validates syntax and module conventions;
 `npm test` checks behaviour; `npm run verify` runs both. GitHub Actions is configured

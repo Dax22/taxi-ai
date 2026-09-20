@@ -262,9 +262,9 @@ testers or marking the consolidation ready to merge:
 ## Availability in the matching release
 
 Matching introduced schema 6, payments schema 7, driver onboarding schema 8 and
-Trip Safety schema 9.
+Trip Safety schema 9, followed by [unified accounts](unified-accounts.md) at schema 10.
 Preserve a backup with the matching previous release before upgrading. Current
-backup commands require schema 9; restore older snapshots with their matching
+backup commands require schema 10; restore older snapshots with their matching
 release, then upgrade a separate copy. Onboarding snapshots retain private details,
 document bytes and review history. They are not anonymised or encrypted by the app.
 Availability positions and ownership are removed from snapshots.

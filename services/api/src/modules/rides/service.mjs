@@ -4,7 +4,7 @@ import { distanceMeters } from '../../../../../packages/shared/src/locations.mjs
 import { REQUEST_MS, EXPAND_MS, searchRadius } from '../../../../../packages/shared/src/matching.mjs';
 import { check } from '../../shared/errors.mjs';
 import { fields } from '../../shared/validation.mjs';
-import { requireRole, requireEligibleDriver } from '../../shared/policies.mjs';
+import { hasCapability, requireRole, requireEligibleDriver } from '../../shared/policies.mjs';
 import { requireParticipant, requireVersion, restoreNegotiation, canonical } from './domain.mjs';
 
 /**
@@ -65,12 +65,22 @@ export function createRidesService({ repository, getAccount, unitOfWork, audit, 
     return view(ride, user);
   }
 
-  function list(user) {
+  function requireMode(user, mode) {
+    check(mode === null || ['customer', 'work'].includes(mode), 'INVALID_MODE', 'Choose Customer or Work.');
+    if (mode) check(hasCapability(user, mode === 'work' ? 'driver' : 'customer'), 'FORBIDDEN', 'This account does not have that capability.');
+  }
+  const inMode = (ride, user, mode) => !mode || (mode === 'work' ? ride.driverId : ride.customerId) === user.id;
+
+  function list(user, mode = null) {
+    requireMode(user, mode);
     sweep();
-    const position = user.role === 'driver' && user.driver.status === 'approved' ? availabilityFor(user.id, clock()) : null;
-    const available = position ? repository.listAvailable().map((ride) => ({ ride, metres: matchDistance(ride, position, clock()) }))
+    const position = mode !== 'customer' && hasCapability(user, 'driver') && user.driver?.status === 'approved' ? availabilityFor(user.id, clock()) : null;
+    const available = position ? repository.listAvailable().filter((ride) => ride.customerId !== user.id).map((ride) => ({ ride, metres: matchDistance(ride, position, clock()) }))
       .filter((item) => item.metres !== null).sort((a, b) => a.metres - b.metres || a.ride.createdAt - b.ride.createdAt || a.ride.id.localeCompare(b.ride.id)).slice(0, 50) : [];
-    return { matchingSettings: { allowSimulation }, rides: repository.listFor(user.id).map((ride) => view(ride, user)), available: available.map(({ ride, metres }) => {
+    return { matchingSettings: { allowSimulation },
+      activeElsewhere: repository.activeFor(user.id).filter((ride) => !inMode(ride, user, mode)).map((ride) => ({
+        id: ride.id, mode: ride.customerId === user.id ? 'customer' : 'work', status: repository.findTrip(ride.id)?.status ?? ride.status })),
+      rides: repository.listFor(user.id, mode).map((ride) => view(ride, user)), available: available.map(({ ride, metres }) => {
       const route = routeForRide(ride.id);
       const area = (point) => ({ name: `Near ${point.lat.toFixed(2)}, ${point.lng.toFixed(2)} (approximate area)` });
       const quote = route ? { pickup: area(route.pickup), destination: area(route.destination) }
@@ -90,16 +100,18 @@ export function createRidesService({ repository, getAccount, unitOfWork, audit, 
     return metres <= searchRadius(ride.createdAt, now) ? metres : null;
   }
 
-  function history(user, beforeId = null) {
+  function history(user, beforeId = null, mode = null) {
+    requireMode(user, mode);
     sweep();
     let before = null;
     if (beforeId !== null) {
       check(typeof beforeId === 'string' && /^[a-f0-9-]{36}$/.test(beforeId), 'INVALID_CURSOR', 'Invalid history cursor.');
       before = record(beforeId);
       requireParticipant(before, user);
+      check(inMode(before, user, mode), 'INVALID_CURSOR', 'This history cursor belongs to another mode.');
       check(before.status === 'cancelled' || before.trip?.status === 'completed', 'INVALID_CURSOR', 'Use a completed, cancelled or expired journey as the cursor.');
     }
-    const rows = repository.history(user.id, before, 21);
+    const rows = repository.history(user.id, before, 21, mode);
     const page = rows.slice(0, 20);
     return { rides: page.map((ride) => view(ride, user)), nextBefore: rows.length > 20 ? page.at(-1).id : null };
   }
@@ -118,6 +130,8 @@ export function createRidesService({ repository, getAccount, unitOfWork, audit, 
       catch (error) { check(false, 'INVALID_ROUTE', error.message); }
     }
     check(!repository.hasOpenRequest(user.id), 'OPEN_REQUEST_EXISTS', 'You already have an open request. Finish or cancel it first.');
+    check(!repository.hasDriverWork(user.id), 'DRIVER_BUSY', 'Finish or cancel your assigned work before requesting a personal ride.');
+    check(!availabilityFor(user.id, now), 'DRIVER_ONLINE', 'Go offline from Work before requesting a personal ride.');
     const id = tokens.id();
     repository.insert({ id, customerId: user.id, pickupId: quote.pickup.id,
       destinationId: quote.destination.id, suggestedFareKobo: quote.suggestedFareKobo, now, expiresAt: now + REQUEST_MS });
@@ -130,9 +144,11 @@ export function createRidesService({ repository, getAccount, unitOfWork, audit, 
     requireEligibleDriver(user);
     fields(data, ['expectedVersion']);
     const ride = record(id);
+    check(ride.customerId !== user.id, 'FORBIDDEN', 'You cannot drive your own request.');
     check(ride.status === 'requested', 'REQUEST_UNAVAILABLE', 'Another driver took this request, or it is no longer open.');
     requireVersion(ride, data.expectedVersion);
     check(!repository.hasNegotiation(user.id), 'DRIVER_BUSY', 'Finish your current negotiation or trip first.');
+    check(!repository.hasCustomerWork(user.id, now), 'CUSTOMER_BUSY', 'Finish or cancel your personal journey before accepting work.');
     const availability = availabilityFor(user.id, now);
     check(availability, 'DRIVER_OFFLINE', 'Go online with a fresh location before selecting a request.');
     check(matchDistance(ride, availability, now) !== null, 'OUTSIDE_MATCH_AREA', 'This request is outside your current matching area. Refresh nearby requests.');
@@ -149,7 +165,7 @@ export function createRidesService({ repository, getAccount, unitOfWork, audit, 
       : ['expectedVersion', 'offerId']);
     const ride = record(id);
     requireParticipant(ride, user);
-    if (user.role === 'driver') requireRole(user, 'driver');
+    if (ride.driverId === user.id) requireRole(user, 'driver');
     requireVersion(ride, data.expectedVersion);
     check(['requested', 'negotiating'].includes(ride.status), 'REQUEST_CLOSED', 'This request has already ended.');
     check(ride.status === 'negotiating', 'NO_DRIVER', 'Wait for a driver before negotiating a fare.');
@@ -175,17 +191,21 @@ export function createRidesService({ repository, getAccount, unitOfWork, audit, 
     action === 'start' ? ['expectedVersion', 'pickupPin'] : ['expectedVersion']);
     const ride = record(id);
     requireParticipant(ride, user);
-    if (user.role === 'driver') requireRole(user, 'driver');
+    if (ride.driverId === user.id) requireRole(user, 'driver');
     requireVersion(ride, data.expectedVersion);
     const status = ride.trip?.status ?? ride.status;
     let next;
     let reason = null;
     if (action === 'confirm') {
       requireRole(user, 'customer');
+      check(ride.customerId === user.id, 'FORBIDDEN', 'Only the passenger on this trip can confirm it.');
       check(ride.status === 'agreed' && !ride.trip, 'INVALID_TRIP_STATE', 'An agreed fare is required before confirming this booking.');
       requireEligibleDriver(getAccount(ride.driverId));
       check(!repository.hasOpenRequest(user.id), 'OPEN_REQUEST_EXISTS', 'Finish or cancel your other request or trip before confirming.');
       check(!repository.hasNegotiation(ride.driverId), 'DRIVER_BUSY', 'This driver has another negotiation or trip. Ask them to finish it before confirming.');
+      check(!repository.hasDriverWork(user.id), 'DRIVER_BUSY', 'Finish your assigned work before confirming a personal ride.');
+      check(!repository.hasCustomerWork(ride.driverId, now), 'CUSTOMER_BUSY', 'This driver has a personal journey to finish before taking work.');
+      check(!availabilityFor(user.id, now), 'DRIVER_ONLINE', 'Go offline from Work before confirming a personal ride.');
       const agreement = negotiationFor(ride).snapshot().agreement;
       check(agreement, 'INVALID_TRIP_STATE', 'Both participants must agree the fare first.');
       repository.bookTrip({ ride, fareKobo: agreement.amountKobo, pin: tokens.pickupPin(), now });
@@ -204,6 +224,7 @@ export function createRidesService({ repository, getAccount, unitOfWork, audit, 
       next = 'cancelled';
     } else {
       requireRole(user, 'driver');
+      check(ride.driverId === user.id, 'FORBIDDEN', 'Only the assigned driver can operate this trip.');
       const transition = TRIP_TRANSITIONS[action];
       check(transition && status === transition.from, 'INVALID_TRIP_STATE', 'This trip action is not available at the current stage.');
       if (action === 'start') {
@@ -244,7 +265,7 @@ export function createRidesService({ repository, getAccount, unitOfWork, audit, 
       if (previous) {
         check(previous.fingerprint === fingerprint, 'KEY_REUSED', 'This request key was already used for another action.');
         requireParticipant(record(previous.rideId), user);
-        if (user.role === 'driver') requireRole(user, 'driver');
+        if (record(previous.rideId).driverId === user.id) requireRole(user, 'driver');
         return previous.errorCode ? { errorCode: previous.errorCode }
           : { ride: view(record(previous.rideId), user), replayed: true };
       }
@@ -283,7 +304,7 @@ export function createRidesService({ repository, getAccount, unitOfWork, audit, 
   function safetyContext(user, id) {
     const ride = record(id); requireParticipant(ride, user);
     const route = routeForRide(id) ?? createDemoQuote(ride.pickupId, ride.destinationId);
-    return { rideId: id, status: ride.trip?.status ?? ride.status, pickup: route.pickup.name, destination: route.destination.name,
+    return { rideId: id, customerId: ride.customerId, driverId: ride.driverId, status: ride.trip?.status ?? ride.status, pickup: route.pickup.name, destination: route.destination.name,
       driver: ride.driverSnapshotJson ? JSON.parse(ride.driverSnapshotJson) : peer(ride.driverId, true) };
   }
   return Object.freeze({ get, list, history, mutate, conversationContext, conversationIds, paymentContext, safetyContext, sweep });

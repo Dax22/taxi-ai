@@ -1,10 +1,11 @@
 # One Taxi Ai account, app and website
 
-Status: accepted product direction; implementation planned. This document records
+Status: accepted product direction; account/web foundation implemented in 0.14.0.
+See [unified accounts](unified-accounts.md) for delivered scope. This document records
 the user's request to combine customer, driver, delivery and food-vendor access
 before mobile development proceeds. It supersedes the separate customer/driver
-mobile-app plan. The current prototype still has one role per account and no
-runnable native app or vendor/delivery ordering flow.
+mobile-app plan. The website now supports Customer/Work capabilities under one
+account. There is no runnable native app or vendor/delivery ordering flow yet.
 
 ## Product structure
 
@@ -80,8 +81,9 @@ is requested for actual work, not merely because an account has a driver profile
 
 ## Identity, permissions and business ownership
 
-Replace the permanent public `users.role` choice through a forward migration.
-The following are conceptual records, not a committed SQL schema:
+The schema-10 migration adds customer/driver capability grants while retaining
+`users.role` for compatibility and explicit staff classification. Driver approval
+stays separate. The following broader records remain the target conceptual model:
 
 | Record | Responsibility |
 | --- | --- |

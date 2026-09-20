@@ -135,3 +135,18 @@ test('availability view exposes explicit consent, a usable stop button, and hide
   view.render({ ...state, user: { id: 'customer', role: 'customer' } }); assert.equal(node('availability-panel').hidden, true);
   assert.match(html, /Customers cannot see this location/);
 });
+
+test('mode switching checks server availability, requires consent and confirms offline after the write', async () => {
+  const f = await setup(); await f.c.start(); const count = f.commands.length;
+  assert.equal(await f.c.prepareSwitch(), false);
+  assert.equal(f.commands.length, count); assert.equal(f.clears, 0);
+  f.commandHook = async () => { throw new Error('Offline write failed'); };
+  await assert.rejects(f.c.prepareSwitch(true), /Offline write failed/);
+  assert.equal(f.clears, 1); assert.equal(f.c.snapshot().availability.online, true);
+  f.commandHook = null;
+  assert.equal(await f.c.prepareSwitch(true), true); assert.equal(f.c.snapshot().availability, null);
+  const other = await setup(); other.availability = { id: 'other-window', online: true, owned: false };
+  assert.equal(await other.c.prepareSwitch(), false);
+  other.commandHook = async () => ({ availability: null }); // A different window immediately came online again.
+  await assert.rejects(other.c.prepareSwitch(true), /another window/);
+});

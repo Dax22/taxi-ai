@@ -46,7 +46,7 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
     tokens, unitOfWork, audit, clock });
   let calls, locations, payments, safety;
   const availability = createAvailabilityService({ repository: createAvailabilityRepository(db),
-    getAccount: accounts.profile, sessionOwner: accounts.sessionOwner, isBusy: rideRepository.hasNegotiation,
+    getAccount: accounts.profile, sessionOwner: accounts.sessionOwner, isBusy: (id) => rideRepository.hasNegotiation(id) || rideRepository.hasCustomerWork(id, clock()),
     unitOfWork, tokens, audit, clock, allowSimulation });
   const rides = createRidesService({ repository: rideRepository,
     getAccount: accounts.profile, unitOfWork, audit, tokens, clock,

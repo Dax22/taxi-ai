@@ -21,14 +21,17 @@ import { createGeolocation } from './dashboard/geolocation.mjs';
 import { createPageController } from './dashboard/page-controller.mjs';
 import { createSafetyController } from './dashboard/safety-controller.mjs';
 import { createSafetyView } from './dashboard/safety-view.mjs';
+import { createAccountModeView, modePreferences } from './dashboard/account-mode-view.mjs';
 
 let serverTime = { now: Date.now(), received: performance.now() };
 const client = createApiClient({ onServerTime(now) { serverTime = { now, received: performance.now() }; } });
+// Calls, trip GPS and availability belong to the account/session, not its workspace mode.
+const activityClient = createApiClient();
 const callView = createCallView({ onStart: () => calls.start(), onAnswer: () => calls.answer(),
   onDecline: () => calls.decline(), onEnd: () => calls.end(), onMute: () => calls.mute(),
   onOpenRide: (id) => page.openRide(id),
 });
-const calls = createCallController({ client, media: createCallMedia(), view: callView });
+const calls = createCallController({ client: activityClient, media: createCallMedia(), view: callView });
 const locationView = createLocationView({ onEnable: () => planner.enable(), onSearch: (side, query) => planner.search(side, query),
   onClear: (side) => planner.clear(side), onSelect: (side, value) => planner.select(side, value), onPick: (value) => planner.pick(value),
   onTarget: (value) => planner.setTarget(value), onPreview: () => planner.preview(), onBook: () => planner.book(),
@@ -39,10 +42,10 @@ const planner = createLocationPlanner({ client, view: locationView,
   onBook: (quoteId) => page.rideCommand('/api/rides', { quoteId },
     'Your route and suggested fare are saved. An approved driver can start negotiation.'),
 });
-const sharing = createLocationSharing({ client, device: createGeolocation(), view: locationView,
+const sharing = createLocationSharing({ client: activityClient, device: createGeolocation(), view: locationView,
   serverNow: () => serverTime.now + performance.now() - serverTime.received });
 const availabilityView = createAvailabilityView({ onOnline: (mode, areaId) => availability.start(mode, areaId), onOffline: () => availability.stop() });
-const availability = createAvailabilityController({ client, device: createGeolocation(), view: availabilityView,
+const availability = createAvailabilityController({ client: activityClient, device: createGeolocation(), view: availabilityView,
   serverNow: () => serverTime.now + performance.now() - serverTime.received,
   onStatus: (online) => page.availabilityChanged(online),
 });
@@ -83,7 +86,12 @@ const view = createDashboardView({
   }), 'Report marked reviewed.'),
 });
 const authForm = bindAuthForm({ onSubmit: (path, data) => page.authenticate(path, data) });
-const page = createPageController({ client, view, conversation, conversationView, calls, sharing, availability,
+const modeView = createAccountModeView({ onSwitch: (...args) => page.switchMode(...args), onCancel: () => page.cancelSwitch(),
+  onAddDriver: (vehicle) => page.addDriver(vehicle), onOpenRide: (id) => page.openRide(id) });
+let storage;
+try { storage = window.sessionStorage; } catch { /* Mode selection remains usable without storage. */ }
+const page = createPageController({ client, activityClient, view, modeView, preferences: modePreferences(storage),
+  conversation, conversationView, calls, sharing, availability,
   planner, payments, onboarding, safety, authForm, feedback: {
     clear() { $('page-error').textContent = ''; $('page-notice').textContent = ''; },
     error(message) { $('page-error').textContent = message; },

@@ -2,6 +2,8 @@ import { sessionCookie } from '../../http/security.mjs';
 
 export function accountRoutes(accounts, cookie = sessionCookie) {
   return [
+    { method: 'POST', path: /^\/api\/account\/driver-profile$/, access: 'write',
+      handle: ({ user, data, key }) => ({ body: accounts.addDriverProfile(user.id, data, key) }) },
     ...['register', 'login'].map((action) => ({
       method: 'POST', path: new RegExp(`^/api/auth/${action}$`), access: 'auth',
       async handle({ data, token }) {

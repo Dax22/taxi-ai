@@ -47,7 +47,8 @@ Run `npm run verify` before uploading changes. The focused tests are also includ
 in the normal full suite and the existing Node 22.12/24 CI matrix. No database
 migration was added by the journey-verification release. The subsequent
 [driver-onboarding release](driver-onboarding.md) adds schema 8, followed by
-[Trip Safety](safety.md) at the current schema 9.
+[Trip Safety](safety.md) at schema 9 and [unified accounts](unified-accounts.md)
+at the current schema 10.
 
 ## Fixes in this milestone
 

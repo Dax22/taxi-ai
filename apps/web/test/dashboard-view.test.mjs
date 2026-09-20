@@ -16,6 +16,7 @@ async function moduleUrl(name, dependencies = {}) {
 const tripModel = await moduleUrl('trip-model.mjs');
 const tripView = await moduleUrl('trip-view.mjs', { './trip-model.mjs': tripModel });
 const { createDashboardView } = await import(await moduleUrl('views.mjs', { './trip-view.mjs': tripView }));
+const { createAccountModeView, modePreferences } = await import(await moduleUrl('account-mode-view.mjs'));
 const html = await readFile(new URL('../public/dashboard.html', import.meta.url), 'utf8');
 
 // Strict IDs come from the shipped HTML; the small fixture does not test layout or a browser.
@@ -26,7 +27,8 @@ class ElementFixture {
   setAttribute(name, value) { this[name] = value; }
   addEventListener(type, fn) { this.handlers[type] = fn; }
   closest() { return null; }
-  focus() {}
+  focus() { this.focused = true; }
+  reset() { this.resets = (this.resets ?? 0) + 1; }
 }
 function setup(t) {
   const old = globalThis.document, nodes = new Map(), created = [];
@@ -76,4 +78,40 @@ test('fare buttons retain the displayed offer version and never accept a newer p
   assert.deepEqual(h.commands[0].slice(0, 2), ['/api/rides/ride-one/accept', { expectedVersion: 4, offerId: 'offer-one' }]);
   h.node('accept-fare').onclick();
   assert.deepEqual(h.commands[1].slice(0, 2), ['/api/rides/ride-one/accept', { expectedVersion: 5, offerId: 'offer-two' }]);
+});
+
+
+test('mode controls use actual HTML, keep enrollment separate from approval and omit public administrator switching', (t) => {
+  const h = setup(t), switches = [], applications = [], opened = [];
+  const mode = createAccountModeView({ onSwitch: (...args) => switches.push(args), onCancel() {},
+    onAddDriver: (value) => applications.push(value), onOpenRide: (id) => opened.push(id) });
+  const customerAccount = { ...customer, capabilities: ['customer'] };
+  let value = { account: customerAccount, mode: 'customer', modePrompt: false, activeElsewhere: [] };
+  mode.render(value);
+  assert.equal(h.node('mode-customer')['aria-pressed'], 'true');
+  assert.equal(h.node('mode-work').textContent, 'Apply to drive');
+  h.node('mode-work').handlers.click(); assert.equal(h.node('driver-enrollment').hidden, false);
+  assert.equal(h.node('driver-profile-model').focused, true);
+  h.node('driver-profile-model').value = 'Toyota'; h.node('driver-profile-plate').value = 'TEST-001';
+  h.node('driver-enrollment').handlers.submit({ preventDefault() {} });
+  assert.deepEqual(applications, [{ model: 'Toyota', plate: 'TEST-001' }]);
+  value = { ...value, account: { ...customerAccount, capabilities: ['customer', 'driver'], driver: { status: 'pending' } },
+    mode: 'work', modePrompt: true, activeElsewhere: [{ id: 'passenger-journey', mode: 'customer', status: 'booked' }] };
+  mode.render(value); assert.equal(h.node('driver-enrollment').hidden, true);
+  assert.match(h.node('mode-note').textContent, /Approval.*required/);
+  assert.equal(h.node('mode-confirm').hidden, false); assert.equal(h.node('mode-active').hidden, false);
+  h.node('mode-active-list').children[0].children[0].handlers.click(); assert.deepEqual(opened, ['passenger-journey']);
+  h.node('mode-offline-confirm').handlers.click(); assert.deepEqual(switches, [['customer', true]]);
+  mode.render({ ...value, account: { id: 'staff', role: 'admin', capabilities: [] } });
+  assert.equal(h.node('account-modes').hidden, true);
+  mode.reset(); assert.equal(h.node('mode-active-list').children.length, 0);
+});
+
+test('mode preferences are per-account and optional browser storage failure does not block navigation', () => {
+  const values = new Map(), storage = { getItem: (key) => values.get(key), setItem: (key, value) => values.set(key, value), removeItem: (key) => values.delete(key) };
+  const preference = modePreferences(storage); preference.set('one', 'work'); preference.set('two', 'customer');
+  assert.equal(preference.get('one'), 'work'); preference.clear('one'); assert.equal(preference.get('one'), undefined);
+  assert.equal(preference.get('two'), 'customer');
+  const unavailable = modePreferences(); assert.equal(unavailable.get('one'), null);
+  assert.doesNotThrow(() => { unavailable.set('one', 'work'); unavailable.clear('one'); });
 });

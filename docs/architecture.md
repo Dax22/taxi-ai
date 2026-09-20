@@ -9,14 +9,15 @@ See [ADR 0001](decisions/0001-modular-monolith.md) for the decision and tradeoff
 
 The target product is now one app and website with Customer, Drive & deliver
 and My store modes. This is planned in [ADR 0002](decisions/0002-unified-app-and-multi-role-accounts.md)
-and the [unified platform design](unified-platform.md). The implemented modules
-below still use one role per account; the design update does not migrate data.
+and the [unified platform design](unified-platform.md). The account foundation
+now implements Customer/Work on the website. [Schema 10](unified-accounts.md) adds
+capabilities while preserving legacy identities, review evidence and sessions.
 
 ## Implemented modules
 
 | Module | Responsibility | Owns |
 | --- | --- | --- |
-| Accounts | Registration, authentication, sessions, first-admin setup, own profile | `users`, `sessions` |
+| Accounts | Registration, authentication, sessions, first-admin setup, own profile and driver enrollment | `users`, `sessions`, `account_capabilities`, `account_commands` |
 | Drivers | Private applications, documents, manual review and expiry eligibility | `drivers`, `driver_applications`, `driver_documents`, `driver_document_reads`, `driver_application_events`, `driver_application_commands` |
 | Rides | Requests, fares, bookings, pickup verification, progress, cancellation and history | `rides`, `fare_events`, `idempotency`, `ride_trips`, `ride_activity` |
 | Chat | Participant messages, read markers, retries and reports | `chat_messages`, `chat_reads`, `chat_commands`, `chat_reports` |
@@ -109,7 +110,8 @@ repository constructor alone is insufficient.
 The existing `data/taxi-ai.sqlite` location is preserved. Ordered migrations
 `002_chat.sql`, `003_trip_lifecycle.sql`, `004_voice_calls.sql` and
 `005_locations.sql`, `006_matching.sql`, `007_payments.sql`, `008_driver_onboarding.sql`
-and `009_trip_safety.sql` advance the current schema to 9 without resetting
+and `009_trip_safety.sql`, followed by `010_account_capabilities.sql`, advance
+the current schema to 10 without resetting
 records or silently booking prior agreements. Older binaries refuse the upgraded
 database. Local data and secrets are excluded from Git and static serving.
 See [API notes](../services/api/README.md) for routes and current security limits.
@@ -165,6 +167,7 @@ controller coordinates session state, dashboard reads and actions:
 | `dashboard/map-view.mjs` | Visible raster tiles, SVG routes/pins and keyboard map interaction |
 | `dashboard/payments-controller.mjs` | Isolated payment/receipt requests and paged driver/admin records |
 | `dashboard/payments-view.mjs` | Simulation controls, printable receipts and exact totals |
+| `dashboard/account-mode-view.mjs` | Per-window Customer/Work navigation, enrollment and active-journey return paths |
 | `dashboard/dom.mjs` | Small DOM helpers using text content |
 
 Views do not call `fetch`. The client retains the displayed offer ID/version and
@@ -186,11 +189,13 @@ reviewed API contracts. Native views and device adapters will be platform-aware.
 
 The current browser-cookie transport is not a completed native authentication
 design. Define device sessions, secure credential storage, expiry/revocation,
-API schemas and compatibility before connecting the app. Replace fixed public
-roles through a forward migration to capabilities and store memberships.
+API schemas and compatibility before connecting the app. Public capabilities
+are implemented; scoped store memberships remain part of the later Eats module.
 Mode selection remains per client; authorization, ownership and worker capacity
-remain server-side. Existing reset/late-response guards must extend from account
-identity to acting context, store and service. See the
+remain server-side. Workspace resets and retry keys are now scoped to account
+and Customer/Work mode. Calls/GPS/availability use a separate session client and
+preserve active trip ownership across mode changes. Store/service contexts will
+follow when their workflows exist. See the
 [unified plan](unified-platform.md) for active-work continuity and acceptance cases.
 
 ## Participant chat

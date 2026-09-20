@@ -21,7 +21,9 @@ contains small common errors, validation and authorization policies. See
 [the architecture](../../docs/architecture.md) for ownership and transaction contracts.
 
 Ordered migrations add chat, trip, call, location, availability, payment, driver
-application and safety tables, bringing the schema to version 9.
+application, safety and account-capability tables, bringing the schema to version 10.
+[Unified accounts](../../docs/unified-accounts.md) explains the additive migration,
+legacy-role compatibility and enrollment contract.
 The `data/taxi-ai.sqlite` location, existing test accounts, sessions and rides are
 preserved. No reset is required. Earlier code refuses the upgraded file; use a separate database when comparing branches.
 
@@ -37,7 +39,8 @@ preserved. No reset is required. Earlier code refuses the upgraded file; use a s
   No auth tokens go into local storage.
 - CSRF: exact configured Host/Origin checks, JSON writes and a session-bound CSRF
   header for authenticated mutations. Login/registration also require Origin.
-- Authorization: actors and roles come from the session/database. Only an approved
+- Authorization: actors, capabilities and staff privileges come from the session/database.
+  UI modes grant no access. Trip actions check the stored passenger/driver IDs. Only an approved
   online driver within the matching area can claim; only the customer and assigned driver can negotiate or read
   a request. Unknown and unrelated request IDs both return 404.
 - Privacy: available requests show sample areas or approximate two-decimal
@@ -49,7 +52,8 @@ preserved. No reset is required. Earlier code refuses the upgraded file; use a s
   contain no email, phone number, password or session information.
 - Limits: 16 KiB JSON bodies; 30 authentication attempts per source IP per ten
   minutes; 60 authenticated writes per user per minute. Counters survive restart.
-  One open customer request, one driver negotiation and at most 100 fare offers
+  Personal journeys and driver work cannot overlap under the same account; own
+  requests cannot be claimed. One open customer request, one driver negotiation and at most 100 fare offers
   per request. Lists show the latest 50 own rides, nearest 50 eligible requests
   and up to 100 driver applications. This is not a production anti-abuse system.
 - Persistence: SQLite foreign keys, CHECK/unique constraints, WAL, full synchronous
@@ -103,11 +107,12 @@ the client refreshes without automatically accepting a replacement price.
 
 | Method and path | Access / purpose |
 | --- | --- |
-| `POST /api/auth/register` | Same-origin; customer or driver only |
+| `POST /api/auth/register` | Same-origin; personal customer by default; legacy customer/driver input supported |
+| `POST /api/account/driver-profile` | Own personal account; vehicle details, CSRF and idempotency key; pending application only |
 | `POST /api/auth/login` | Same-origin; creates a rotated session |
 | `GET /api/session` | Own profile + CSRF token, or null when signed out |
 | `POST /api/auth/logout` | Session + CSRF; revokes the current session |
-| `GET /api/rides` | Own requests; approved drivers also see open requests |
+| `GET /api/rides?mode=customer` or `?mode=work` | Own mode-scoped requests/history; Work includes eligible nearby requests; active journeys elsewhere have return references |
 | `POST /api/rides` | Customer; `{ quoteId }` for a saved route, or `{ pickupId, destinationId }` for the sample demo |
 | `GET /api/rides/:id` | Assigned participants only |
 | `POST /api/rides/:id/claim` | Approved driver; `{ expectedVersion }` |
@@ -117,7 +122,7 @@ the client refreshes without automatically accepting a replacement price.
 | `POST /api/rides/:id/confirm` | Customer; `{ expectedVersion }` |
 | `POST /api/rides/:id/depart`, `/arrive`, `/complete` | Assigned approved driver; `{ expectedVersion }` |
 | `POST /api/rides/:id/start` | Assigned approved driver; `{ expectedVersion, pickupPin }` |
-| `GET /api/rides/history?before=:id` | Own completed/cancelled journeys, 20 per page |
+| `GET /api/rides/history?mode=customer&before=:id` | Own terminal journeys in Customer or Work, 20 per page; cursor scoped to mode |
 | `GET /api/admin/drivers` | Administrator only |
 | `POST /api/admin/drivers/:id/review` | Administrator; versioned manual evidence/reason; see onboarding contract |
 
@@ -126,7 +131,7 @@ All ride writes need session + CSRF + idempotency key. JSON errors contain a sta
 
 Register a dedicated customer account and run `npm run admin -- registered-email`
 to bootstrap the first administrator locally. This command revokes that account's
-sessions, refuses an account with ride history and refuses if an admin exists.
+sessions, refuses an account with ride history or a driver capability, and refuses if an admin exists.
 Driver review now supports private documents, submission, corrections and
 recorded manual checks. See [driver onboarding](../../docs/driver-onboarding.md).
 External identity/licence verification, suspension and appeals remain future work.

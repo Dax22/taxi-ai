@@ -48,7 +48,7 @@ test('address search is authenticated and bounded; route pricing and exact locat
   const search = await customer.post('/api/locations/search', { query: 'Wuse' });
   assert.equal(search.body.places.length, 1); assert.equal(search.body.places[0].lat, points.pickup.lat);
   assert.equal((await customer.post('/api/locations/search', { query: 'Wu', provider: 'http://bad' })).status, 400);
-  assert.equal((await driver.post('/api/locations/quotes', points)).status, 403);
+  assert.equal((await driver.post('/api/locations/quotes', points)).status, 201);
   const preview = await quote(customer);
   assert.equal(preview.route.distanceMeters, 7000); assert.equal(preview.route.durationSeconds, 1200);
   assert.equal(preview.route.suggestedFareKobo, 250000); assert.equal(preview.route.trafficAware, false);

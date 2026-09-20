@@ -132,7 +132,7 @@ these references do not establish a security certification.
 `009_trip_safety.sql` adds seven tables without modifying existing accounts,
 documents, trip snapshots or payments. Schema 8 → 9 and repeat startup are tested.
 Take a backup using the matching previous release before upgrading saved data;
-current backup/restore commands require schema 9. Older binaries reject this file.
+current backup/restore commands require schema 10; see [unified accounts](unified-accounts.md). Older binaries reject this file.
 
 Snapshots revoke trip links and remove both link/session hashes. They retain
 contacts, frozen incident locations, original recipient names/numbers, notes,
