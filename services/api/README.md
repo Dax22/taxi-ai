@@ -9,7 +9,7 @@ Optional private hosting uses a separate staging mode documented in
 
 ## Code boundaries
 
-`src/application.mjs` wires the accounts, drivers, rides, chat, calls, locations, availability, payments and safety modules. Each module
+`src/application.mjs` wires the accounts, device-sessions, drivers, rides, chat, calls, locations, availability, payments and safety modules. Each module
 contains a service, repository and route factory; rides also has pure domain
 helpers. Services receive repositories, clock and cross-module operations as
 explicit dependencies. They do not import HTTP or database adapters. Repositories
@@ -21,7 +21,7 @@ contains small common errors, validation and authorization policies. See
 [the architecture](../../docs/architecture.md) for ownership and transaction contracts.
 
 Ordered migrations add chat, trip, call, location, availability, payment, driver
-application, safety and account-capability tables, bringing the schema to version 10.
+application, safety, account-capability and native device-session tables, bringing the schema to version 11.
 [Unified accounts](../../docs/unified-accounts.md) explains the additive migration,
 legacy-role compatibility and enrollment contract.
 The `data/taxi-ai.sqlite` location, existing test accounts, sessions and rides are
@@ -247,3 +247,11 @@ All authenticated writes retain CSRF, role/record and idempotency checks. No
 provider messaging or emergency escalation occurs. See [Trip Safety](../../docs/safety.md)
 for routes, transitions, retry/lifecycle rules, schema-nine migration and backup
 privacy. `npm run test:safety` runs focused API, migration and client regressions.
+
+## Native API v1
+
+`/api/mobile/v1` has a separate bearer router and hashed rotating device sessions.
+It exposes own account/activity/application summaries and driver enrollment, not
+staff or trip-operation APIs. Browser CSRF rules remain unchanged. See the
+[mobile contract](../../docs/mobile-foundation.md) for endpoints, rotation/replay,
+staging tester access and recovery from lost phones.

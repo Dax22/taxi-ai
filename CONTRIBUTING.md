@@ -11,7 +11,9 @@ npm run verify
 npm run dev
 ```
 
-The code has no third-party dependencies to install. Administrator/email setup
+The web/backend have no third-party runtime dependencies to install. The native
+app has its own lockfile: use Node 24 and `npm ci --prefix apps/mobile`, then follow
+[mobile setup](apps/mobile/README.md). Administrator/email setup
 can wait while you work on the code and homepage demo. Driver approval testing
 requires the separate local administrator setup in [README.md](README.md).
 
@@ -29,14 +31,14 @@ switching. Do not discard them to make a checkout succeed. With a clean working
 tree, run:
 
 ```bash
-git switch feat/unified-accounts
-git pull --ff-only origin feat/unified-accounts
+git switch feat/mobile-foundation
+git pull --ff-only origin feat/mobile-foundation
 npm run verify
 ```
 
 Git normally creates a tracking branch when the name exists only on `origin`.
 If the switch reports an ambiguous branch name, explicitly use
-`git switch --track origin/feat/unified-accounts` for the first checkout.
+`git switch --track origin/feat/mobile-foundation` for the first checkout.
 
 ## Save your own changes to GitHub
 
@@ -75,7 +77,7 @@ a Taxi Ai business mailbox.
 
 Existing milestones are stacked: project foundation → web booking demo → accounts
 and rides → modular architecture → private chat → ride lifecycle → voice → locations
-→ private staging → driver matching → simulated payments → journey verification → driver onboarding → trip safety → city-map homepage → autonomous concept → unified platform plan. Each pull request reviews only its next layer.
+→ private staging → driver matching → simulated payments → journey verification → driver onboarding → trip safety → city-map homepage → autonomous concept → unified platform plan → unified accounts → mobile foundation. Each pull request reviews only its next layer.
 Pushing keeps the code on GitHub; it does not merge the stack into `main`. Review
 the dependencies before merging or retargeting their pull requests.
 
@@ -90,7 +92,8 @@ client mode selection must never be treated as server authorization.
 
 | Change | Location |
 | --- | --- |
-| Planned unified mobile client | `apps/mobile/`; define auth/API contracts before connected flows |
+| Unified native client | `apps/mobile/`; versioned contracts and session adapters precede new connected flows |
+| Separate staff dashboard (planned) | `apps/admin/`; [access and monitoring design](docs/admin-dashboard.md) |
 | Pure fare/money rules | `packages/shared/src/` |
 | Account, driver, ride, chat, payment or safety use case | Its `services/api/src/modules/<feature>/service.mjs` |
 | Feature SQL | Its `repository.mjs` |
@@ -127,7 +130,9 @@ another module's internals or introducing generic abstractions without a use.
 `npm run check` checks JavaScript syntax and our static module conventions.
 `npm test` covers domain, browser API client, HTTP, persistence and architecture
 behaviour. `npm run verify` runs both. The GitHub workflow runs the same command
-on Node 22.12.0 and Node 24 for pushes and pull requests. Hosted Actions must be
+on Node 22.12.0 and Node 24 for pushes and pull requests. A separate Node 24 job
+installs native dependencies and checks boundaries, types, session tests and both
+iOS/Android bundles; these exports are not signed native binaries. Hosted Actions must be
 enabled for the repository; passing local checks is not a claim that CI ran.
 
 `npm run test:journey` runs the focused full HTTP journey and dashboard/session

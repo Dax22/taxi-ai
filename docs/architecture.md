@@ -401,3 +401,17 @@ form drafts, exact displayed review versions and text-only rendering. The separa
 trip-share controller clears details on hidden pages, errors and link expiry.
 All browser requests use the existing API client. No AI agent or notification
 provider operates on these records in this milestone.
+
+## Native foundation and future staff application
+
+Release 0.15 adds `modules/device-sessions` and a separate `/api/mobile/v1` bearer
+router. The composition root injects account verification/profile and revocation
+ports; services retain their transaction boundaries. Web cookies keep their CSRF
+contract. Wire readers/types belong to `packages/shared/src/mobile-contracts.*`.
+Native UI, secure storage and transport are separate in `apps/mobile`; backend
+imports are forbidden by `scripts/check-mobile.mjs`. Native dependencies install
+independently, with their own lockfile and CI job.
+
+Schema 11 adds device families and hashed token history. Snapshots clear both.
+See [native auth/API](mobile-foundation.md) and [the separate staff dashboard
+design](admin-dashboard.md). `apps/admin` is reserved, not a deployed dashboard.

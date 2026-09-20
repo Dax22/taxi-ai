@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { openDatabase } from '../../services/api/src/infrastructure/database.mjs';
 import { createApplication } from '../../services/api/src/application.mjs';
+import { createMobileRouter } from '../../services/api/src/http/mobile-router.mjs';
 import { createApiRouter } from '../../services/api/src/http/router.mjs';
 import { sendError, json } from '../../services/api/src/http/responses.mjs';
 import { requestContext, requireStagingAccess, isInternalHealth } from '../../services/api/src/http/security.mjs';
@@ -16,6 +17,10 @@ import { check } from '../../services/api/src/shared/errors.mjs';
 // Explicit allowlist: never serve the repository root or arbitrary disk paths.
 const routes = new Map([
   ['/', ['public/index.html', 'text/html; charset=utf-8']],
+  ['/devices', ['public/devices.html', 'text/html; charset=utf-8']],
+  ['/devices.mjs', ['public/devices.mjs', 'text/javascript; charset=utf-8']],
+  ['/download.mjs', ['public/download.mjs', 'text/javascript; charset=utf-8']],
+  ['/app-release.mjs', ['public/app-release.mjs', 'text/javascript; charset=utf-8']],
   ['/app', ['public/dashboard.html', 'text/html; charset=utf-8']],
   ['/trip-share', ['public/trip-share.html', 'text/html; charset=utf-8']],
   ['/trip-share.mjs', ['public/trip-share.mjs', 'text/javascript; charset=utf-8']],
@@ -80,9 +85,10 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
   if (runtime.mode === 'staging' && callConfig.mode === 'local') throw new Error('Staging calls require off or a configured relay.');
   const application = createApplication({ db, clock, callConfig, mapProvider, allowSimulation: runtime.mode === 'local' });
   const handleApi = createApiRouter(application, { secure: runtime.mode === 'staging' });
+  const handleMobile = createMobileRouter(application);
   const health = createHealth(db);
   const cleanup = setInterval(() => {
-    try { application.rides.sweep(); application.availability.sweep(); application.calls.sweep(); application.locations.sweep(); application.safety.sweep(); }
+    try { application.rides.sweep(); application.availability.sweep(); application.calls.sweep(); application.locations.sweep(); application.safety.sweep(); application.devices.sweep(); }
     catch { telemetry.event('maintenance_failed'); }
   }, 5000);
   cleanup.unref();
@@ -108,7 +114,7 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
       let context;
       if (!isInternalHealth(request, pathname)) {
         context = requestContext(request, runtime);
-        requireStagingAccess(request, response, runtime);
+        requireStagingAccess(request, response, runtime, pathname);
       }
       if (['/health/live', '/health/ready'].includes(pathname)) {
         check(['GET', 'HEAD'].includes(request.method), 'METHOD_NOT_ALLOWED', 'Use GET or HEAD.');
@@ -119,7 +125,7 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
       }
       check(!health.draining(), 'SERVER_DRAINING', 'Taxi Ai is restarting. Please retry shortly.');
       if (pathname.startsWith('/api/')) {
-        await handleApi({ request, response, pathname, ...context });
+        await (pathname.startsWith('/api/mobile/v1/') ? handleMobile : handleApi)({ request, response, pathname, ...context });
         return;
       }
     } catch (error) {

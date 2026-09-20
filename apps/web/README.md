@@ -197,3 +197,16 @@ Mode selection is an optional per-account session-storage preference; it is not
 sent as authority on commands. Sign-out and account/session changes reset both
 transports. See [the unified account guide](../../docs/unified-accounts.md) for
 schema compatibility and mode-switch/device acceptance that remains pending.
+
+## Mobile downloads and device recovery
+
+The landing page includes `#download-app`. `app-release.mjs` holds independently
+validated Apple/Google URLs, initially null; no store listing is invented. When
+a platform's real listing is public, set its URL and verify the link on desktop,
+phone and tablet. With no URL, the button is disabled and says Coming soon.
+
+`/devices` uses the personal web session and CSRF protection to list/revoke native
+sessions. From the account page choose Manage signed-in mobile devices. Manually
+check session changes in another tab, failed revocation/retry, an empty list and
+a lost phone's next native request. Review the Download app header/section at
+320px, 390px, tablet and desktop widths, keyboard focus and disabled link labels.

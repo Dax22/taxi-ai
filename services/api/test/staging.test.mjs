@@ -163,3 +163,23 @@ test('a complete routed ride, chat, call signaling and GPS survive staging isola
   assert.equal((await customer.post(`/api/payments/rides/${ride.id}/start`, { expectedVersion: 0 })).status, 403);
   assert.equal((await driver.send('/api/driver/earnings')).body.summary.simulatedPaidKobo, '0');
 });
+
+
+test('native bearer sessions require the independent tester gate and trusted HTTPS proxy', async (t) => {
+  const { h, logs } = await setup(t), web = h.client(); await web.register('native-stage');
+  const nativeHeaders = { ...gatewayHeaders, 'X-Taxi-Ai-Preview-Access': gatewayHeaders.Authorization, 'Content-Type': 'application/json' };
+  delete nativeHeaders.Authorization;
+  const response = await httpFetch(h.base + '/api/mobile/v1/auth/login', { method: 'POST', headers: nativeHeaders,
+    body: JSON.stringify({ email: web.user.email, password: PASSWORD, deviceName: 'Private preview phone' }) });
+  assert.equal(response.status, 200); const auth = await response.json();
+  assert.equal(response.headers.get('set-cookie'), null);
+  const headers = { ...nativeHeaders, Authorization: `Bearer ${auth.credentials.accessToken}` };
+  const valid = await httpFetch(h.base + '/api/mobile/v1/session', { headers }); assert.equal(valid.status, 200); await valid.json();
+  for (const changed of [{ 'X-Taxi-Ai-Preview-Access': undefined }, { 'X-Taxi-Ai-Preview-Access': 'Basic bad' }, { 'X-Taxi-Ai-Proxy-Token': 'c'.repeat(64) }, { 'X-Forwarded-Proto': 'http' }]) {
+    const deniedHeaders = { ...headers, ...changed }; for (const key of Object.keys(deniedHeaders)) if (deniedHeaders[key] === undefined) delete deniedHeaders[key];
+    const denied = await httpFetch(h.base + '/api/mobile/v1/session', { headers: deniedHeaders });
+    assert.ok([401,403].includes(denied.status)); await denied.json();
+  }
+  const browser = await httpFetch(h.base + '/app', { headers }); assert.equal(browser.status, 401); await browser.text();
+  assert.ok(!JSON.stringify(logs).includes(auth.credentials.accessToken)); assert.ok(!JSON.stringify(logs).includes(testerKey));
+});

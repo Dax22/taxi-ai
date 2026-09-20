@@ -1,10 +1,12 @@
 {
   "name": "taxi-ai",
-  "version": "0.14.0",
+  "version": "0.15.0",
   "private": true,
   "description": "Taxi Ai project foundation for Abuja rides, food and courier delivery",
   "type": "module",
-  "engines": { "node": ">=22.12.0" },
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "scripts": {
     "dev": "node --experimental-sqlite apps/web/server.mjs",
     "start": "node --experimental-sqlite apps/web/server.mjs",
@@ -18,6 +20,8 @@
     "test:safety": "node --experimental-sqlite --test services/api/test/safety.test.mjs services/api/test/safety-migration.test.mjs apps/web/test/safety.test.mjs",
     "verify": "npm run check && npm test",
     "admin": "node --experimental-sqlite scripts/create-admin.mjs",
-    "demo": "node scripts/fare-demo.mjs"
+    "demo": "node scripts/fare-demo.mjs",
+    "mobile:start": "npm --prefix apps/mobile start",
+    "mobile:verify": "npm --prefix apps/mobile run verify"
   }
 }

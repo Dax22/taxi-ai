@@ -125,3 +125,18 @@
     .future-image-wrap figcaption { font-size: 9px; margin-top: 12px; }
   }
 }
+
+/* Native releases have a permanent home; links activate only for real listings. */
+.download-section { display: grid; grid-template-columns: 1.1fr 1fr; gap: clamp(28px, 6vw, 88px); align-items: center; padding-block: 88px; scroll-margin-top: 32px; }
+.download-section h2 { font-size: clamp(36px, 4.5vw, 60px); letter-spacing: -.055em; line-height: 1.04; margin: 16px 0 24px; }
+.download-section p { max-width: 510px; line-height: 1.65; }
+.download-card { background: #fff3c8; border: 1px solid #e6d99d; border-radius: 26px; padding: clamp(24px, 4vw, 48px); }
+.download-card h3 { font-size: 28px; letter-spacing: -.035em; margin-block: 24px; }
+.download-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+.download-actions .button { white-space: normal; min-height: 48px; }
+.download-actions button:disabled { cursor: default; opacity: 1; color: #5b5b4d; background: #fff8e2; border-color: #cfc5a1; }
+@media (max-width: 1150px) { .download-nav { font-size: 13px; } .header-end .location { display: none; } }
+@media (max-width: 800px) { .download-section { grid-template-columns: 1fr; padding-block: 56px; } }
+@media (max-width: 440px) { .header-end { gap: 10px; } .download-nav { max-width: 74px; line-height: 1.2; } }
+
+@media (max-width: 580px) { .landing-page .site-header { height: auto; min-height: 73px; padding-block: 14px; flex-wrap: wrap; gap: 14px; } .landing-page .header-end { flex: 1; justify-content: flex-end; } }
