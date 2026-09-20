@@ -29,14 +29,14 @@ switching. Do not discard them to make a checkout succeed. With a clean working
 tree, run:
 
 ```bash
-git switch feat/driver-onboarding
-git pull --ff-only origin feat/driver-onboarding
+git switch feat/trip-safety
+git pull --ff-only origin feat/trip-safety
 npm run verify
 ```
 
 Git normally creates a tracking branch when the name exists only on `origin`.
 If the switch reports an ambiguous branch name, explicitly use
-`git switch --track origin/feat/driver-onboarding` for the first checkout.
+`git switch --track origin/feat/trip-safety` for the first checkout.
 
 ## Save your own changes to GitHub
 
@@ -75,7 +75,7 @@ a Taxi Ai business mailbox.
 
 Existing milestones are stacked: project foundation → web booking demo → accounts
 and rides → modular architecture → private chat → ride lifecycle → voice → locations
-→ private staging → driver matching → simulated payments → journey verification → driver onboarding. Each pull request reviews only its next layer.
+→ private staging → driver matching → simulated payments → journey verification → driver onboarding → trip safety. Each pull request reviews only its next layer.
 Pushing keeps the code on GitHub; it does not merge the stack into `main`. Review
 the dependencies before merging or retargeting their pull requests.
 
@@ -87,7 +87,7 @@ Read [the architecture](docs/architecture.md) and its
 | Change | Location |
 | --- | --- |
 | Pure fare/money rules | `packages/shared/src/` |
-| Account, driver, ride, chat or payment use case | Its `services/api/src/modules/<feature>/service.mjs` |
+| Account, driver, ride, chat, payment or safety use case | Its `services/api/src/modules/<feature>/service.mjs` |
 | Feature SQL | Its `repository.mjs` |
 | Route mapping | Its `routes.mjs` |
 | HTTP parsing/cookies/error translation | `services/api/src/http/` |
@@ -97,6 +97,7 @@ Read [the architecture](docs/architecture.md) and its
 | Dashboard presentation | `apps/web/public/dashboard/views.mjs` |
 | Chat coordination and rendering | `apps/web/public/dashboard/conversation-*.mjs` |
 | Driver application/review UI | `apps/web/public/dashboard/onboarding-*.mjs` |
+| Trip Safety dashboard and limited public viewer | `apps/web/public/dashboard/safety-*.mjs`, `trip-share-controller.mjs`, `apps/web/public/trip-share.mjs` |
 | Payments, receipts and earnings UI | `apps/web/public/dashboard/payments-*.mjs` |
 | Dashboard transport/retry policy | `apps/web/public/dashboard/api-client.mjs` |
 

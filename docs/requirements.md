@@ -61,14 +61,17 @@ Use it as inspiration for a modern, spacious autonomous-mobility theme with
 original Taxi Ai branding and assets. Prioritize booking clarity, legible controls,
 accessible contrast and touch layouts on smaller screens.
 
-## AI and safety: proposed for later design
+## AI and safety
 
 Candidates include fare/ETA prediction, driver matching assistance, multilingual
 help, food search and human-reviewed fraud or unusual-trip alerts. Validate each
 against actual user needs and available data; none exists in this foundation.
 
-Security candidates include driver verification, trip-start PINs, trusted-contact
-trip sharing, private communication, reporting and an emergency assistance flow.
+The current preview includes recorded driver review, trip-start PINs, private
+communication, reporting and [Trip Safety](safety.md): trusted contacts, manual test
+SOS, private trip links and administrator incident review. Contact delivery is
+simulated. External identity verification, real notification delivery and staffed
+emergency assistance remain separate milestones.
 Detection models must support a staffed response process and should not claim to
 guarantee safety. Call recording and retention are undecided and must not be
 enabled silently.

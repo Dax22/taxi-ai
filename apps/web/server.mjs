@@ -17,6 +17,13 @@ import { check } from '../../services/api/src/shared/errors.mjs';
 const routes = new Map([
   ['/', ['public/index.html', 'text/html; charset=utf-8']],
   ['/app', ['public/dashboard.html', 'text/html; charset=utf-8']],
+  ['/trip-share', ['public/trip-share.html', 'text/html; charset=utf-8']],
+  ['/trip-share.mjs', ['public/trip-share.mjs', 'text/javascript; charset=utf-8']],
+  ['/dashboard/safety-controller.mjs', ['public/dashboard/safety-controller.mjs', 'text/javascript; charset=utf-8']],
+  ['/dashboard/safety-view.mjs', ['public/dashboard/safety-view.mjs', 'text/javascript; charset=utf-8']],
+  ['/dashboard/safety-format.mjs', ['public/dashboard/safety-format.mjs', 'text/javascript; charset=utf-8']],
+  ['/dashboard/trip-share-controller.mjs', ['public/dashboard/trip-share-controller.mjs', 'text/javascript; charset=utf-8']],
+  ['/shared/safety.mjs', ['../../packages/shared/src/safety.mjs', 'text/javascript; charset=utf-8']],
   ['/dashboard.css', ['public/dashboard.css', 'text/css; charset=utf-8']],
   ['/dashboard.mjs', ['public/dashboard.mjs', 'text/javascript; charset=utf-8']],
   ['/dashboard/onboarding-controller.mjs', ['public/dashboard/onboarding-controller.mjs', 'text/javascript; charset=utf-8']],
@@ -70,7 +77,7 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
   const handleApi = createApiRouter(application, { secure: runtime.mode === 'staging' });
   const health = createHealth(db);
   const cleanup = setInterval(() => {
-    try { application.rides.sweep(); application.availability.sweep(); application.calls.sweep(); application.locations.sweep(); }
+    try { application.rides.sweep(); application.availability.sweep(); application.calls.sweep(); application.locations.sweep(); application.safety.sweep(); }
     catch { telemetry.event('maintenance_failed'); }
   }, 5000);
   cleanup.unref();

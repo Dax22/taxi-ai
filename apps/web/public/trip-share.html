@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><meta name="theme-color" content="#F4B400">
+  <title>Taxi Ai — Private trip view</title>
+  <link rel="icon" href="/favicon.svg?v=amber" type="image/svg+xml"><link rel="stylesheet" href="/styles.css"><link rel="stylesheet" href="/dashboard.css">
+  <script type="module" src="/trip-share.mjs"></script>
+</head>
+<body class="account-page">
+  <a class="skip-link" href="#shared-main">Skip to trip</a>
+  <header class="site-header shell"><a class="brand" href="/" aria-label="Taxi Ai home"><img class="brand-mark" src="/assets/taxi-ai-mark.svg" width="48" height="36" alt=""><span>Taxi Ai</span></a><span class="status-badge">PRIVATE LINK</span></header>
+  <main id="shared-main" class="shell account-shell trip-share-shell">
+    <p class="eyebrow">TAXI AI / ABUJA</p><h1>A trip shared with you.</h1>
+    <p class="safety-preview-note"><strong>Development preview.</strong> This is a test trip view. It does not monitor emergencies or dispatch help. For an actual emergency, use your phone to contact emergency services or someone you trust.</p>
+    <p class="supporting-copy">Keep this link private. It stops working when it expires, is revoked, its owner signs out or the trip ends.</p>
+    <p id="shared-message" class="supporting-copy" role="status">Checking this private link…</p>
+    <section id="shared-card" class="account-card" aria-label="Shared trip details" hidden><dl id="shared-details" class="safety-details"></dl></section>
+    <button id="shared-refresh" type="button" class="button button-primary">Refresh trip</button>
+    <p class="small-note">The view refreshes every 10 seconds while this page is visible. Reopen the original shared link after reloading this page.</p>
+    <noscript><p>Enable JavaScript to open a private trip link.</p></noscript>
+  </main>
+  <footer class="shell account-footer"><p>Taxi Ai · Starting with Abuja.</p></footer>
+</body>
+</html>

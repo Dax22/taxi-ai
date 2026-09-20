@@ -141,13 +141,26 @@ See [driver onboarding](driver-onboarding.md). These are recorded manual checks,
 not identity-provider validation. Real document processing, reviewer operations
 and browser/file-picker testing remain prerequisites for production use.
 
-## 2k — Real ride pilot
+## 2k — Trip Safety (implemented; browser/device review pending)
+
+- Customer/driver trusted contacts and manual test SOS on confirmed active trips.
+- Private immutable trip/driver/plate/location snapshots and administrator review history.
+- Explicitly simulated contact notifications, delivery states, bounded retries and cancellation.
+- Expiring, revocable trip links with session/trip cleanup and limited bearer reads.
+- Schema-nine preservation and backups that retain incident evidence while revoking links.
+
+See [Trip Safety](safety.md). No external messages, police contact, automatic crash
+sensing or staffed emergency response are enabled. Manual browser/clipboard,
+mobile/tablet, GPS and hosted-recipient testing remain pending. Hosting on Alibaba
+Cloud remains paused.
+
+## 2l — Real ride pilot
 
 Harden authentication and hosting; add verified driver onboarding, production mapping, vehicle
 matching, operational booking state, verified payment-provider integration and live receipts. Implement authenticated
 production messaging operations and validate the voice relay on target networks/devices. Exercise concurrency, permission checks and
 recovery from interrupted requests before enabling real transactions.
-Complete SOS, trusted-contact notification and staffed incident handling with an
+Connect the test SOS foundation to verified trusted-contact notification and staffed incident handling with an
 agreed emergency-response channel before inviting real passengers.
 
 ## 3 — Delivery and operations

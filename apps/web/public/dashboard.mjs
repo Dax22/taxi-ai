@@ -19,6 +19,8 @@ import { createPaymentsController } from './dashboard/payments-controller.mjs';
 import { createPaymentsView } from './dashboard/payments-view.mjs';
 import { createGeolocation } from './dashboard/geolocation.mjs';
 import { createPageController } from './dashboard/page-controller.mjs';
+import { createSafetyController } from './dashboard/safety-controller.mjs';
+import { createSafetyView } from './dashboard/safety-view.mjs';
 
 let serverTime = { now: Date.now(), received: performance.now() };
 const client = createApiClient({ onServerTime(now) { serverTime = { now, received: performance.now() }; } });
@@ -64,6 +66,12 @@ const conversation = createConversationController({ client, view: conversationVi
 const onboardingView = createOnboardingView({ onAction: (...args) => onboarding.run(...args),
   onDownload: (id) => onboarding.download(id), onClose: () => onboarding.close() });
 const onboarding = createOnboardingController({ client, view: onboardingView, files: driverFiles });
+const safetyView = createSafetyView({ onAdd: (data) => safety.add(data), onRemove: (contact) => safety.remove(contact),
+  onRaise: (data) => safety.raise(data), onShare: (minutes) => safety.share(minutes), onRevoke: (link) => safety.revoke(link),
+  onCopy: () => safety.copy(), onOpen: (id) => safety.open(id), onPage: (...args) => safety.page(...args),
+  onReview: (...args) => safety.review(...args), onSimulate: (...args) => safety.simulate(...args) });
+const safety = createSafetyController({ client, view: safetyView, origin: location.origin,
+  copy: (value) => navigator.clipboard.writeText(value) });
 const view = createDashboardView({
   serverNow: () => serverTime.now + performance.now() - serverTime.received,
   onCommand: (...args) => page.rideCommand(...args),
@@ -76,7 +84,7 @@ const view = createDashboardView({
 });
 const authForm = bindAuthForm({ onSubmit: (path, data) => page.authenticate(path, data) });
 const page = createPageController({ client, view, conversation, conversationView, calls, sharing, availability,
-  planner, payments, onboarding, authForm, feedback: {
+  planner, payments, onboarding, safety, authForm, feedback: {
     clear() { $('page-error').textContent = ''; $('page-notice').textContent = ''; },
     error(message) { $('page-error').textContent = message; },
     notice(message) { $('page-notice').textContent = message; },
@@ -93,7 +101,7 @@ const poll = () => { if (!document.hidden) void page.poll(); };
 $('logout').addEventListener('click', () => page.logout());
 $('refresh').addEventListener('click', () => page.poll());
 document.addEventListener('visibilitychange', () => { if (document.hidden) availability.shutdown(); else poll(); });
-window.addEventListener('pagehide', () => { calls.shutdown(); sharing.shutdown(); availability.shutdown(); });
+window.addEventListener('pagehide', () => { calls.shutdown(); sharing.shutdown(); availability.shutdown(); safety.reset(); });
 window.addEventListener('afterprint', () => document.body.classList.remove('print-receipt'));
 setInterval(() => { view.tick(); conversationView.tick(); calls.tick(); planner.tick(); sharing.tick(); availability.tick(); }, 1000);
 setInterval(() => { if (!document.hidden || calls.hasMedia()) void calls.poll(); }, 2000);

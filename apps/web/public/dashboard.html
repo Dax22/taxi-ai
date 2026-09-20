@@ -102,6 +102,18 @@
       </section>
       <div class="dashboard-layout" id="ride-dashboard">
         <aside class="dashboard-sidebar">
+          <section id="trusted-contacts-panel" class="account-card" hidden aria-labelledby="contacts-title">
+            <p class="eyebrow">TRIP SAFETY</p><h2 id="contacts-title">Trusted contacts</h2>
+            <p class="small-note">Save up to three people for test SOS alerts. Use fictional details in this preview. Numbers are unverified and no messages are sent.</p>
+            <p id="contacts-error" class="error-text" role="alert"></p><p id="contacts-notice" class="small-note" role="status"></p>
+            <ul id="contacts-list" class="safety-contacts"></ul>
+            <form id="contact-form" class="stack-form" autocomplete="off"><fieldset id="contact-fields" disabled><legend>Add a trusted contact</legend>
+              <label for="contact-name">Name</label><input id="contact-name" minlength="2" maxlength="80" required>
+              <label for="contact-phone">Phone with country code</label><input id="contact-phone" type="tel" pattern="\+[1-9][0-9]{7,14}" maxlength="16" placeholder="+234…" required aria-describedby="contact-privacy">
+              <button type="submit" class="button button-outline button-full">Save contact</button>
+            </fieldset></form>
+            <p id="contact-privacy" class="small-note">Removing a contact cancels unsent test alerts. Details already attached to a saved incident stay in its private records.</p>
+          </section>
           <section class="account-card" id="customer-panel" hidden aria-labelledby="request-title"><p class="eyebrow">YOUR NEXT JOURNEY</p><h2 id="request-title">Sample-area demo.</h2><p id="sample-disabled-note" class="small-note" hidden>For hosted testing, use a route preview above. Sample-area requests are available in local development.</p><form id="request-form" class="stack-form"><fieldset id="request-fields"><legend class="visually-hidden">Choose your journey</legend><label for="request-pickup">Pickup area</label><select id="request-pickup" required></select><label for="request-destination">Destination</label><select id="request-destination" required></select><div class="quote-preview"><span>Suggested fare</span><strong id="request-quote"></strong><p class="small-note">Sample price, not a live quote or AI estimate. You and the driver agree the final fare.</p></div><button class="button button-primary button-full" type="submit">Request a test ride <span aria-hidden="true">↗</span></button></fieldset></form><p id="open-request-note" class="small-note" hidden>Finish or cancel your open request before creating another.</p></section>
           <section id="driver-panel" class="account-card" hidden aria-labelledby="driver-title"><p class="eyebrow">DRIVE WITH TAXI AI</p><h2 id="driver-title">Your driver profile.</h2><p id="driver-status" class="status-badge"></p><p id="driver-vehicle"></p><p id="driver-guidance" class="supporting-copy"></p></section>
           <section class="sidebar-note"><p class="eyebrow">A CLEAR AGREEMENT</p><p>Either person can make an offer. The other person must accept that exact price before the fare is agreed.</p><p class="small-note">Chat and audio calls stay in Taxi Ai. Phone numbers are not exchanged. Discussing a price by voice still needs an accepted offer in the app.</p></section>
@@ -131,6 +143,7 @@
             <p id="tracking-route-summary" class="supporting-copy"></p><p id="tracking-provider-note" class="small-note"></p>
             <div id="tracking-map" class="location-map"></div><p class="map-attribution">© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a> · OSRM routing · <a href="https://www.openstreetmap.org/fixthemap" target="_blank" rel="noopener">Fix the map</a></p>
             <p id="tracking-status" class="small-note" role="status"></p><p id="tracking-guidance" class="small-note"></p><p id="tracking-error" class="error-text" role="alert"></p>
+            <p class="small-note">While GPS is shared, either participant can include it in a private trip link or save it with a test SOS. Link recipients can view the latest available position; the reporter and administrators can read a saved incident snapshot. Stopping GPS does not delete those saved incident records.</p>
             <div class="review-actions"><button id="tracking-start" type="button" class="button button-primary button-small" hidden>Share my location</button><button id="tracking-stop" type="button" class="button button-outline button-small" hidden>Stop sharing</button></div>
           </section>
           <section id="ride-detail" class="account-card detail-card" hidden aria-labelledby="detail-title">
@@ -152,6 +165,28 @@
             <form id="trip-cancel-form" class="stack-form cancellation-form" hidden><fieldset id="trip-cancel-fields"><legend>Cancel this journey?</legend><label for="trip-cancel-reason">Reason</label><select id="trip-cancel-reason" required><option value="plans_changed">Plans changed</option><option value="pickup_problem">Pickup problem</option><option value="other">Other reason</option></select><p class="small-note">This ends the request or booking. No cancellation fee is charged in this preview.</p><div class="review-actions"><button id="trip-cancel-submit" type="submit" class="button button-outline button-small">Confirm cancellation</button><button id="trip-cancel-dismiss" type="button" class="button button-primary button-small">Keep journey</button></div></fieldset></form>
             <section id="trip-activity" class="history-section" hidden aria-labelledby="trip-activity-title"><h3 id="trip-activity-title">Trip activity</h3><ol id="trip-timeline" class="trip-timeline"></ol></section>
             <div id="live-history" class="history-section" hidden><h3>Fare history</h3><ol id="live-offer-history"></ol></div>
+          </section>
+          <section id="safety-panel" class="account-card safety-panel" hidden aria-labelledby="safety-title">
+            <div class="card-topline"><h2 id="safety-title">Trip safety</h2><span class="status-badge">TEST ONLY</span></div>
+            <p class="safety-preview-note"><strong>Development preview.</strong> Test SOS records are saved; no messages are sent to contacts, police or emergency services. For an actual emergency, use your phone to contact emergency services or someone you trust.</p>
+            <p id="safety-error" class="error-text" role="alert"></p><p id="safety-notice" class="small-note" role="status"></p><p id="safety-guidance" class="supporting-copy"></p>
+            <form id="safety-form" class="stack-form"><fieldset id="safety-fields" disabled><legend>Create a test SOS</legend>
+              <label for="safety-kind">Concern</label><select id="safety-kind"><option value="need_help">Need help</option><option value="possible_crash">Possible crash</option><option value="unsafe_behaviour">Unsafe behaviour</option><option value="other">Other concern</option></select>
+              <label for="safety-note">Note (optional)</label><textarea id="safety-note" rows="3" maxlength="500" placeholder="Add details for the test administrator…"></textarea>
+              <p class="small-note">Choose contacts for simulated alerts (optional):</p><div id="safety-recipients" class="safety-recipients"></div>
+              <p class="small-note">The report saves the trip reference, driver ID, vehicle plate and the last available driver-shared location with its timestamp. This does not turn on GPS.</p>
+              <button id="safety-raise" type="submit" class="button safety-sos button-full">Create test SOS</button>
+            </fieldset></form>
+            <div id="safety-incidents"></div>
+            <section class="safety-sharing" aria-labelledby="safety-share-title"><h3 id="safety-share-title">Share your trip privately</h3>
+              <p class="small-note">Anyone with the link can see the route, driver name, vehicle plate and available shared location. It expires, and stops working after revocation, sign-out or the end of the trip. Share only with someone you trust.</p>
+              <p id="safety-share-status" class="small-note" role="status"></p>
+              <label for="safety-share-minutes">Link duration</label><select id="safety-share-minutes"><option value="15">15 minutes</option><option value="30">30 minutes</option><option value="60">60 minutes</option></select>
+              <div class="review-actions"><button id="safety-share-create" type="button" class="button button-primary button-small" disabled>Create private link</button><button id="safety-share-revoke" type="button" class="button button-outline button-small" disabled>Revoke link</button></div>
+              <p id="safety-share-recover" class="small-note" hidden>The private URL is shown only when created. Replace this link to get a new URL; the old link will stop working.</p>
+              <div id="safety-share-url-row" class="stack-form" hidden><label for="safety-share-url">Private trip link</label><input id="safety-share-url" readonly autocomplete="off"><button id="safety-share-copy" type="button" class="button button-outline button-small" disabled>Copy link</button></div>
+              <p class="small-note">Recipients need access to this preview. A localhost link works only on the computer running Taxi Ai.</p>
+            </section>
           </section>
           <section id="payment-panel" class="account-card payment-panel" hidden aria-labelledby="payment-title">
             <div class="card-topline"><h2 id="payment-title">Trip payment</h2><span id="payment-status" class="status-badge" role="status"></span></div>
@@ -184,6 +219,15 @@
           <section class="account-card" aria-labelledby="trip-history-title"><div class="card-topline"><h2 id="trip-history-title">Trip history</h2><span id="history-count" class="small-note"></span></div><p class="small-note">Completed, cancelled and expired journeys, newest first.</p><button id="history-refresh" type="button" class="text-link history-refresh">Refresh history</button><div id="history-list" class="request-list"></div><button id="history-more" type="button" class="button button-outline button-full" hidden>Load older trips</button></section>
         </div>
       </div>
+      <section id="safety-admin-panel" class="account-card safety-admin-panel" hidden aria-labelledby="safety-admin-title">
+        <div class="card-topline"><h2 id="safety-admin-title">Safety incidents</h2><span class="status-badge">TEST REVIEW</span></div>
+        <p class="safety-preview-note">This is a test incident queue. Acknowledging or closing a record does not dispatch help. Notification controls simulate delivery; no contacts, police or emergency services receive messages.</p>
+        <p id="safety-admin-error" class="error-text" role="alert"></p><p id="safety-admin-notice" class="small-note" role="status"></p>
+        <label for="safety-admin-filter">Incident status</label><select id="safety-admin-filter"><option value="open">Open</option><option value="acknowledged">Acknowledged</option><option value="resolved">Closed</option><option value="all">All statuses</option></select>
+        <div id="safety-admin-list"></div><div class="review-actions"><button id="safety-admin-latest" type="button" class="button button-outline button-small" disabled>Newest incidents</button><button id="safety-admin-older" type="button" class="button button-outline button-small" disabled>Older incidents</button></div>
+        <div id="safety-admin-detail" tabindex="-1"></div>
+        <form id="safety-review-form" class="stack-form" hidden><fieldset id="safety-review-fields" disabled><legend>Record an administrator action</legend><label for="safety-review-note">Action note</label><textarea id="safety-review-note" rows="3" minlength="5" maxlength="500" required></textarea><p class="small-note">Acknowledge the incident before closing it. Closing cancels test alerts that have not been sent.</p><button id="safety-review-submit" type="submit" class="button button-primary">Acknowledge test incident</button></fieldset></form>
+      </section>
       <section id="payments-admin-panel" class="account-card payments-admin-panel" hidden aria-labelledby="admin-payments-title">
         <div class="card-topline"><h2 id="admin-payments-title">Payment records</h2><span class="status-badge">SIMULATED</span></div>
         <p class="small-note">Completed trips and their latest payment attempts. These test records do not represent collected funds or driver payouts.</p>

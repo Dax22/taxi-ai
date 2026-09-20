@@ -38,6 +38,7 @@ function setup() {
     async show(...args) { contexts.push([name, ...args]); } });
   const page = createPageController({ client, view, conversation: feature('conversation'), calls: feature('calls'),
     sharing: feature('sharing'), availability: feature('availability'), planner: feature('planner'), payments: feature('payments'),
+    onboarding: feature('onboarding'), safety: feature('safety'),
     conversationView: { setBusy() {} }, authForm: { reset() { resets.push('auth'); } },
     feedback: Object.fromEntries(['clear', 'error', 'notice', 'synced', 'offline'].map((name) => [name, (...args) => feedback.push([name, ...args])])) });
   return { page, requests, feedback, resets, contexts, commands, rendered: () => rendered,
@@ -69,7 +70,7 @@ test('an account switch clears private screens and device contexts before the ne
   });
   await h.page.poll();
   assert.deepEqual(h.rendered().rides, []);
-  for (const name of ['view', 'conversation', 'calls', 'sharing', 'availability', 'planner', 'payments']) assert.ok(h.resets.includes(name));
+  for (const name of ['view', 'conversation', 'calls', 'sharing', 'availability', 'planner', 'payments', 'onboarding', 'safety']) assert.ok(h.resets.includes(name));
   assert.deepEqual(h.feedback.at(-1), ['offline']);
 });
 

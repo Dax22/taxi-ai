@@ -59,13 +59,16 @@ pale backgrounds and original concept artwork. See [the brand guide](../../docs/
 Car illustrations do not depict an operational fleet. Eats, courier and autonomous
 services are informational sections with accurate planned-service labels.
 
-## Two working experiences
+## Working experiences
 
 - `/`: the original landing page and single-browser fare demonstration. Its
   customer/driver role buttons operate only on temporary in-memory sample state.
 - `/app`: password registration/sign-in, role-specific dashboards, administrator
   review, persistent test requests and fare negotiation between real separate
   account sessions. Roles and agreements are checked by the local backend.
+
+- `/trip-share`: a limited private trip view opened with a bearer fragment link.
+  It uses no account data and requires invited-tester access when hosted.
 
 The dashboard refreshes every three seconds while visible. It keeps an offer's
 exact ID and version when sending acceptance and asks the user to review again
@@ -94,7 +97,7 @@ Automated API and domain tests do not establish browser layout, accessibility or
 complete browser interaction correctness. The available cloud browser blocks
 local server/file previews; visual and browser interaction review is outstanding.
 
-1. Check both pages at 390px, 768px and 1440px widths for overflow, readable text,
+1. Check the homepage, dashboard and private trip viewer at 390px, 768px and 1440px widths for overflow, readable text,
    usable controls and correct amber-logo rendering.
 2. Use the keyboard through sign-in, registration, vehicle fields, the request
    form and fare controls. Check labels, focus visibility and error announcements.
@@ -149,3 +152,20 @@ history. Its state clears with account/session changes; form drafts keep their
 original version when a concurrent update arrives. Browser file-picker/download,
 keyboard and phone/tablet layout acceptance is still pending. Follow the
 [onboarding acceptance guide](../../docs/driver-onboarding.md#upgrade-and-verification).
+
+
+## Trip Safety interface
+
+`safety-controller.mjs` owns contacts, private reports, administrator queue/detail
+selection and one-time in-memory link secrets. `safety-view.mjs` preserves drafts
+while polling, captures review versions and renders input as text. The page
+controller resets it on account changes and logout. `trip-share-controller.mjs`
+separates the limited viewer from account features; `trip-share.mjs` removes the
+fragment before sending the token in a bounded same-origin POST. No token is
+stored in localStorage. Hidden/error/expired viewers clear their displayed data.
+
+Follow [the safety manual checklist](../../docs/safety.md#verification-and-outstanding-review)
+for contacts, test SOS, administrator acknowledgment/closure, simulated delivery,
+clipboard fallback, link lifecycle and mobile/tablet layouts. Automated DOM
+fixtures do not constitute real browser/device acceptance. All safety messaging
+remains simulated and emergency-service integration is absent.

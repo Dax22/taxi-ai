@@ -151,6 +151,14 @@ export function createLocationsService({ repository, provider, getAccount, sessi
       return { share: shareView(repository.share(id), ctx), replayed: false };
     });
   }
+  // Read-only port: the safety use case already checked ride access. No nested writes.
+  function safetyPosition(rideId) {
+    const share = repository.currentShare(rideId), now = clock();
+    if (!share?.positionJson || now >= share.seenAt + SHARE_MS || sessionOwner(share.sessionHash) !== share.driverId
+      || getAccount(share.driverId)?.driver?.status !== 'approved') return null;
+    const point = JSON.parse(share.positionJson);
+    return { ...point, source: 'driver_shared', stale: now - point.capturedAt >= FRESH_MS };
+  }
   return Object.freeze({ settings, search, quote, quoteForRide, bindQuote, routeForRide: repository.rideRoute,
-    tracking, shareCommand, update, sweep, closeRide });
+    tracking, shareCommand, update, sweep, closeRide, safetyPosition });
 }

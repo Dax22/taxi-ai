@@ -176,11 +176,14 @@ Incomplete/invalid copies are not published. A restore never overwrites the acti
 database. Only trusted snapshots matching this release's schema are accepted.
 
 Saved accounts/password hashes, rides, agreed fares, pickup PINs, trip activity,
-chat and consumed route history are preserved. Sessions, active call setup/locks,
-shared GPS positions/ownership and unused quotes are removed from the copy.
+chat and consumed route history are preserved. Trusted contacts, frozen incident
+locations, recipient names/numbers, notes and review/delivery history are also
+retained; snapshots contain private data and are not anonymised or app-encrypted. Sessions, active call setup/locks,
+shared live GPS positions/ownership and unused quotes are removed from the copy.
+All active private trip links are revoked and both token/session hashes cleared.
 Active calls are marked ended with `snapshot_reset`; active trips are retained for
 operator review. Restoring repeats the cleanup, requires everyone to sign in and
-does not resume calls/GPS. An ordinary server restart still preserves valid
+does not resume calls/GPS or restore private-link access. An ordinary server restart still preserves valid
 sessions and follows normal call/location lease expiry.
 
 To activate a restored copy: stop **app** and **gateway**, set `TAXI_AI_DB_PATH`
@@ -258,9 +261,10 @@ testers or marking the consolidation ready to merge:
 
 ## Availability in the matching release
 
-Matching introduced schema 6, payments schema 7, and driver onboarding schema 8.
+Matching introduced schema 6, payments schema 7, driver onboarding schema 8 and
+Trip Safety schema 9.
 Preserve a backup with the matching previous release before upgrading. Current
-backup commands require schema 8; restore older snapshots with their matching
+backup commands require schema 9; restore older snapshots with their matching
 release, then upgrade a separate copy. Onboarding snapshots retain private details,
 document bytes and review history. They are not anonymised or encrypted by the app.
 Availability positions and ownership are removed from snapshots.
@@ -280,3 +284,17 @@ URL, hosted checkout or real payment processing are configured. Payment testing
 for this milestone is local; see [payments](payments.md). Backups retain the
 payment, attempt, receipt and retry records while clearing transient access and
 location state. Future live data must be separated from these preview records.
+
+
+## Trip Safety in private staging
+
+Customers/drivers can create test SOS records, save fictional trusted contacts
+and create expiring private trip links. Administrators can record acknowledgments
+and closure. All notification records remain simulations; their state-changing
+simulator endpoints are local-only and return 403 in staging, including replays.
+No background worker sends notifications. See [Trip Safety](safety.md).
+
+The invited-tester gateway remains required on `/trip-share` and its bearer-read
+API. A recipient needs their own preview access as well as the private link.
+No route bypasses the staging gate. Emergency operations, provider delivery,
+verified contacts and response arrangements must be implemented separately.

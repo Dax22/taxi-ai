@@ -16,6 +16,8 @@ async function withServer(run, mode = 'local', maps = 'community') {
 test('the local site serves HTML, modules and artwork with correct content types', async () => {
   await withServer(async (base) => {
     for (const [path, type] of [['/', 'text/html'], ['/app', 'text/html'],
+      ['/trip-share', 'text/html'], ['/trip-share.mjs', 'text/javascript'], ['/shared/safety.mjs', 'text/javascript'],
+      ...['safety-controller', 'safety-view', 'safety-format', 'trip-share-controller'].map((name) => [`/dashboard/${name}.mjs`, 'text/javascript']),
       ['/dashboard.css', 'text/css'], ['/dashboard.mjs', 'text/javascript'], ['/styles.css', 'text/css'],
       ['/dashboard/api-client.mjs', 'text/javascript'], ['/dashboard/auth-form.mjs', 'text/javascript'],
       ['/dashboard/page-controller.mjs', 'text/javascript'],
@@ -45,7 +47,7 @@ test('the local site serves HTML, modules and artwork with correct content types
 
 test('microphone and geolocation permissions are scoped to the account page; only configured tiles can load externally', async () => {
   for (const mode of ['local', 'off']) await withServer(async (base) => {
-    for (const path of ['/', '/app', '/app?preview=1', '/api/session']) {
+    for (const path of ['/', '/app', '/app?preview=1', '/api/session', '/trip-share']) {
       const result = await fetch(base + path);
       const policy = result.headers.get('permissions-policy');
       assert.equal(policy, `camera=(), microphone=${path.startsWith('/app') && mode !== 'off' ? '(self)' : '()'}, geolocation=${path.startsWith('/app') ? '(self)' : '()'}`);

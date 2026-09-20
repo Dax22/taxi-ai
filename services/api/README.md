@@ -9,7 +9,7 @@ Optional private hosting uses a separate staging mode documented in
 
 ## Code boundaries
 
-`src/application.mjs` wires the accounts, drivers, rides, chat, calls, locations and availability modules. Each module
+`src/application.mjs` wires the accounts, drivers, rides, chat, calls, locations, availability, payments and safety modules. Each module
 contains a service, repository and route factory; rides also has pure domain
 helpers. Services receive repositories, clock and cross-module operations as
 explicit dependencies. They do not import HTTP or database adapters. Repositories
@@ -20,7 +20,8 @@ implements SQLite, password/token operations, audit and rate limits. `src/shared
 contains small common errors, validation and authorization policies. See
 [the architecture](../../docs/architecture.md) for ownership and transaction contracts.
 
-Ordered migrations add chat, trip, call, location, availability and payment tables, bringing the schema to version 7.
+Ordered migrations add chat, trip, call, location, availability, payment, driver
+application and safety tables, bringing the schema to version 9.
 The `data/taxi-ai.sqlite` location, existing test accounts, sessions and rides are
 preserved. No reset is required. Earlier code refuses the upgraded file; use a separate database when comparing branches.
 
@@ -41,7 +42,9 @@ preserved. No reset is required. Earlier code refuses the upgraded file; use a s
   a request. Unknown and unrelated request IDs both return 404.
 - Privacy: available requests show sample areas or approximate two-decimal
   coordinates and a fare suggestion. Exact route points, labels and geometry are
-  limited to the customer and assigned driver after claiming.
+  limited to the customer and assigned driver after claiming. Explicit private
+  trip links disclose route labels, vehicle details and the last shared position
+  to the bearer; private incident snapshots are readable by the reporter/admin.
   Assigned peers see name and, for the driver, car/plate details. Peer payloads
   contain no email, phone number, password or session information.
 - Limits: 16 KiB JSON bodies; 30 authentication attempts per source IP per ten
@@ -58,7 +61,8 @@ preserved. No reset is required. Earlier code refuses the upgraded file; use a s
   Raw forwarded host headers are ignored. Direct app ports must remain private.
 - Operations: internal liveness/readiness checks, bounded graceful shutdown and
   allowlisted JSON logs with request IDs. Backup/restore snapshots keep persistent
-  business records and clear sessions, call setup, shared GPS, availability positions and unused quotes.
+  business records and clear sessions, call setup, shared live GPS, availability positions and unused quotes; trip links are revoked.
+  Contacts and frozen incident evidence are retained as private persistent records.
 
 The SQLite API requires `--experimental-sqlite` on Node 22.12; npm scripts include
 it. See [the Node 22.12 documentation](https://nodejs.org/download/release/v22.12.0/docs/api/sqlite.html).
@@ -115,7 +119,7 @@ the client refreshes without automatically accepting a replacement price.
 | `POST /api/rides/:id/start` | Assigned approved driver; `{ expectedVersion, pickupPin }` |
 | `GET /api/rides/history?before=:id` | Own completed/cancelled journeys, 20 per page |
 | `GET /api/admin/drivers` | Administrator only |
-| `POST /api/admin/drivers/:id/review` | Administrator; `{ decision }` approved or rejected |
+| `POST /api/admin/drivers/:id/review` | Administrator; versioned manual evidence/reason; see onboarding contract |
 
 All ride writes need session + CSRF + idempotency key. JSON errors contain a stable
 `error.code` and readable `error.message`; internal details are not returned.
@@ -123,8 +127,9 @@ All ride writes need session + CSRF + idempotency key. JSON errors contain a sta
 Register a dedicated customer account and run `npm run admin -- registered-email`
 to bootstrap the first administrator locally. This command revokes that account's
 sessions, refuses an account with ride history and refuses if an admin exists.
-Driver review supports pending → approved/rejected. There is no document upload,
-licence check, resubmission, suspension or appeals workflow yet.
+Driver review now supports private documents, submission, corrections and
+recorded manual checks. See [driver onboarding](../../docs/driver-onboarding.md).
+External identity/licence verification, suspension and appeals remain future work.
 
 ## Participant chat
 
@@ -164,8 +169,9 @@ The ride service binds a nonexpired quote inside the ride-creation transaction.
 
 Sharing starts only after booking and only for its assigned approved driver.
 Updates are bound to a session and browser-window nonce, with monotonic sequences,
-bounded coordinates, accuracy and age. The assigned participants alone can read
-the latest position. Completion/cancellation clears it in the trip transaction;
+bounded coordinates, accuracy and age. Assigned participants can read the latest position. Explicit trip links expose
+a limited position read, and incident reports freeze an available position for
+reporter/admin review; neither action starts GPS. Completion/cancellation clears it in the trip transaction;
 five-second cleanup and request checks expire abandoned or revoked shares.
 See [the location guide](../../docs/locations.md) for API routes, provider setup,
 retention, privacy and validation limits.
@@ -224,3 +230,15 @@ uses the saved booking fare and verifies the pure simulator’s response; no rea
 provider is connected. Staging rejects simulation writes. See the
 [payment contract](../../docs/payments.md) for endpoints, money encoding, retry
 semantics, schema-seven backfill, privacy and future provider requirements.
+
+
+## Trip Safety
+
+`modules/safety/` owns trusted contacts, manual test SOS, versioned administrator
+review, notification simulation and hashed private-link records. The reporter and
+administrators can read an incident; the other trip participant cannot. The
+`/api/trip-share/view` bearer endpoint exposes only a limited trip projection.
+All authenticated writes retain CSRF, role/record and idempotency checks. No
+provider messaging or emergency escalation occurs. See [Trip Safety](../../docs/safety.md)
+for routes, transitions, retry/lifecycle rules, schema-nine migration and backup
+privacy. `npm run test:safety` runs focused API, migration and client regressions.
