@@ -10,13 +10,15 @@ export function createCallController({ client, media, view, makeId = () => crypt
   let pending = null, pendingAt = 0, stream = null, transport = null, localCallId = null;
   let outgoing = null, sent = false, received = false, muted = false, connection = 'idle', error = '';
   let lastContact = 0, lastPulse = -Infinity, disconnectedAt = null;
-  const allowed = (account) => account && (account.role === 'customer' || (account.role === 'driver' && account.driver?.status === 'approved'));
+  const allowed = (account) => account && (account.capabilities?.includes('customer')
+    || account.role === 'customer' || (account.role === 'driver' && account.driver?.status === 'approved'));
   const current = (epoch) => epoch === generation && Boolean(user);
   const command = (path, data) => client.command(path, data, headers);
   function render() {
     view.render({ user, selected, active, recent, settings, pending, ending: Boolean(ending), muted, connection, error,
       supported: media.supported(), local: Boolean(stream && localCallId),
-      canStart: Boolean(allowed(user) && settings?.enabled && selected?.driver && canChatDuringRide(selected.status)
+      canStart: Boolean(allowed(user) && (selected?.driver?.id !== user.id || user.driver?.status === 'approved')
+        && settings?.enabled && selected?.driver && canChatDuringRide(selected.status)
         && !isActiveCall(active) && !pending && !ending && media.supported()) });
   }
   function release() {
@@ -46,6 +48,7 @@ export function createCallController({ client, media, view, makeId = () => crypt
   async function begin(answer = false) {
     if (!allowed(user) || pending || ending || !media.supported()) return;
     const call = active, ride = selected;
+    if (!answer && ride?.driver?.id === user.id && user.driver?.status !== 'approved') return;
     if (answer ? !call || call.status !== 'ringing' || call.callee.id !== user.id
       : isActiveCall(call) || !settings?.enabled || !ride?.driver || !canChatDuringRide(ride.status)) return;
     const epoch = ++generation;
@@ -198,7 +201,7 @@ export function createCallController({ client, media, view, makeId = () => crypt
     muted = !muted; for (const track of stream.getAudioTracks()) track.enabled = !muted; render();
   }
   return Object.freeze({ setContext, reset, poll, tick, start: () => begin(false), answer: () => begin(true), decline,
-    end, mute, hasMedia: () => Boolean(stream || pending), snapshot: () => ({ active, pending, connection, muted, error }),
+    end, mute, hasMedia: () => Boolean(stream || pending), snapshot: () => ({ selected, active, pending, connection, muted, error }),
     shutdown() { void end('client_closed'); },
   });
 }

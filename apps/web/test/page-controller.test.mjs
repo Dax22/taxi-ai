@@ -4,10 +4,10 @@ import { readFile } from 'node:fs/promises';
 
 // Resolve one browser import for Node fixtures; this is not browser/device QA.
 const source = (await readFile(new URL('../public/dashboard/page-controller.mjs', import.meta.url), 'utf8'))
-  .replace("'/shared/trip-lifecycle.mjs'", `'${new URL('../../../packages/shared/src/trip-lifecycle.mjs', import.meta.url)}'`);
+  .replace(/from\s+(['"])(.*?)\1/g, (_, quote, specifier) => `from${' '}'${new URL('../../../packages/shared/src/' + specifier.slice(8), import.meta.url)}'`);
 const { createPageController } = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
-const customer = { id: 'customer-one', role: 'customer', name: 'Customer' };
-const driver = { id: 'driver-one', role: 'driver', name: 'Driver', driver: { status: 'approved' } };
+const customer = { id: 'customer-one', role: 'customer', capabilities: ['customer'], name: 'Customer' };
+const driver = { id: 'driver-one', role: 'driver', capabilities: ['customer', 'driver'], name: 'Driver', driver: { status: 'approved' } };
 const admin = { id: 'admin-one', role: 'admin' };
 const ride = { id: 'ride-one', status: 'negotiating', version: 2 };
 const session = (user = customer, token = 'csrf-one') => ({ user, csrfToken: user ? token : null });
@@ -16,14 +16,15 @@ const deferred = () => { let resolve, reject; const promise = new Promise((yes, 
 function setup() {
   let current = session(), rendered, selected = null, intercept = async () => undefined;
   const requests = [], feedback = [], resets = [], contexts = [], commands = [];
-  const client = { reset() { resets.push('client'); }, setCsrf() {},
+  let mode = 'customer', writes = false, offline = true;
+  const client = { setMode(value) { mode = value; }, pendingWrites: () => writes, reset() { resets.push('client'); }, setCsrf() {},
     async request(path, options) {
       requests.push(path);
       const result = await intercept(path, options); if (result !== undefined) return result;
       if (path === '/api/session') return current;
-      if (path === '/api/rides') return { rides: [ride], available: [], matchingSettings: { allowSimulation: true } };
+      if (path.startsWith('/api/rides?')) return { rides: [ride], available: [], matchingSettings: { allowSimulation: true } };
       if (path === '/api/chat') return { conversations: [{ rideId: ride.id, unread: 1 }] };
-      if (path === '/api/rides/history') return { rides: [], nextBefore: null };
+      if (path.startsWith('/api/rides/history?')) return { rides: [], nextBefore: null };
       if (path === '/api/admin/drivers') return { drivers: [driver] };
       if (path === '/api/admin/chat-reports') return { reports: [{ id: 'report-one' }] };
       throw new Error(`Unexpected fixture request ${path}`);
@@ -36,12 +37,14 @@ function setup() {
   const feature = (name) => ({ reset() { resets.push(name); }, async poll() {}, async stop() {}, shutdown() {},
     setContext(...args) { contexts.push([name, ...args]); }, context(...args) { contexts.push([name, ...args]); },
     async show(...args) { contexts.push([name, ...args]); } });
-  const page = createPageController({ client, view, conversation: feature('conversation'), calls: feature('calls'),
-    sharing: feature('sharing'), availability: feature('availability'), planner: feature('planner'), payments: feature('payments'),
+  const calls = feature('calls'), sharing = feature('sharing'), availability = feature('availability');
+  availability.prepareSwitch = async (confirmed) => confirmed || offline;
+  const activityClient = { reset() { resets.push('activityClient'); }, setCsrf() {} };
+  const page = createPageController({ client, activityClient, view, conversation: feature('conversation'), calls, sharing, availability, planner: feature('planner'), payments: feature('payments'),
     onboarding: feature('onboarding'), safety: feature('safety'),
     conversationView: { setBusy() {} }, authForm: { reset() { resets.push('auth'); } },
     feedback: Object.fromEntries(['clear', 'error', 'notice', 'synced', 'offline'].map((name) => [name, (...args) => feedback.push([name, ...args])])) });
-  return { page, requests, feedback, resets, contexts, commands, rendered: () => rendered,
+  return { page, calls, sharing, availability, setWrites(value) { writes = value; }, setOffline(value) { offline = value; }, requests, feedback, resets, contexts, commands, rendered: () => rendered,
     session(next) { current = next; }, intercept(fn) { intercept = fn; } };
 }
 
@@ -77,7 +80,7 @@ test('an account switch clears private screens and device contexts before the ne
 test('expired authentication and a failed session recheck cannot leave the previous account visible', async () => {
   const h = setup(); await h.page.refresh();
   h.intercept(async (path) => {
-    if (path === '/api/rides') throw Object.assign(new Error('Sign in'), { status: 401 });
+    if (path.startsWith('/api/rides?')) throw Object.assign(new Error('Sign in'), { status: 401 });
   });
   await h.page.poll();
   assert.equal(h.rendered().user, null); assert.deepEqual(h.rendered().rides, []);
@@ -89,7 +92,7 @@ test('a cookie change during dashboard reads discards the entire mixed response'
   const h = setup(); await h.page.refresh(); let sessionReads = 0;
   h.intercept(async (path) => {
     if (path === '/api/session' && ++sessionReads === 2) return session(admin, 'new-cookie');
-    if (path === '/api/rides') return { rides: [{ ...ride, id: 'other-account-ride' }], available: [], matchingSettings: { allowSimulation: true } };
+    if (path.startsWith('/api/rides?')) return { rides: [{ ...ride, id: 'other-account-ride' }], available: [], matchingSettings: { allowSimulation: true } };
   });
   await h.page.refresh();
   assert.equal(h.rendered().user.id, admin.id); assert.deepEqual(h.rendered().rides, []);
@@ -145,4 +148,65 @@ test('sign-in, history selection and sign-out clear the previous account and res
   assert.ok(h.contexts.some(([name, , selected]) => name === 'payments' && selected?.id === history.id));
   await h.page.logout();
   assert.equal(h.rendered().user, null); assert.deepEqual(h.rendered().history, []);
+});
+
+
+test('one account switches modes with isolated history, selections and cache resets, while session activity survives', async () => {
+  const h = setup(); h.session(session(driver)); await h.page.refresh();
+  const workRide = { ...ride, id: 'work-ride', customer, driver: { id: driver.id }, status: 'booked' };
+  h.intercept(async (path) => path === '/api/rides?mode=work'
+    ? { rides: [workRide], available: [], matchingSettings: { allowSimulation: true } } : undefined);
+  h.calls.hasMedia = () => true; h.calls.snapshot = () => ({ selected: workRide });
+  h.sharing.sharing = () => true; h.sharing.snapshot = () => ({ ride: workRide });
+  h.resets.length = 0;
+  assert.equal(await h.page.switchMode('work'), true);
+  assert.equal(h.page.snapshot().user.role, 'driver'); assert.equal(h.page.snapshot().account.role, 'driver');
+  assert.ok(h.requests.includes('/api/rides?mode=work'));
+  assert.ok(h.requests.includes('/api/rides/history?mode=work'));
+  assert.ok(h.resets.includes('payments')); assert.ok(h.resets.includes('conversation'));
+  for (const name of ['calls', 'sharing', 'availability', 'activityClient']) assert.ok(!h.resets.includes(name), name);
+  assert.equal(await h.page.switchMode('customer'), true);
+  assert.equal(h.page.snapshot().user.role, 'customer'); assert.equal(h.page.snapshot().account.role, 'driver');
+  const tracks = h.contexts.filter(([name]) => name === 'sharing');
+  assert.ok(tracks.slice(-2).every(([, actor, selected]) => actor.role === 'driver' && selected.id === workRide.id));
+  assert.ok(!h.resets.includes('calls')); assert.ok(!h.resets.includes('sharing'));
+});
+
+test('changing to Customer requires explicit offline confirmation and stays in Work on failure', async () => {
+  const h = setup(); h.session(session(driver)); await h.page.refresh(); await h.page.switchMode('work');
+  h.setOffline(false);
+  assert.equal(await h.page.switchMode('customer'), false);
+  assert.equal(h.page.snapshot().mode, 'work'); assert.equal(h.page.snapshot().modePrompt, true);
+  h.page.cancelSwitch(); assert.equal(h.page.snapshot().modePrompt, false);
+  h.availability.prepareSwitch = async () => { throw new Error('Offline confirmation failed'); };
+  assert.equal(await h.page.switchMode('customer', true), false); assert.equal(h.page.snapshot().mode, 'work');
+  h.availability.prepareSwitch = async (confirmed) => confirmed;
+  assert.equal(await h.page.switchMode('customer', true), true);
+});
+
+test('late reads from the previous mode cannot populate the new mode and pending writes prevent switching', async () => {
+  const h = setup(); h.session(session(driver)); await h.page.refresh();
+  const wait = deferred(); let waiting = false;
+  h.intercept(async (path) => { if (path === '/api/rides?mode=customer') { waiting = true; return wait.promise; } });
+  const old = h.page.refresh();
+  while (!waiting) await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(await h.page.switchMode('work'), true);
+  wait.resolve({ rides: [{ ...ride, id: 'late-customer-trip' }], available: [], matchingSettings: { allowSimulation: true } });
+  await old;
+  assert.equal(h.page.snapshot().mode, 'work');
+  assert.ok(!h.page.snapshot().rides.some((item) => item.id === 'late-customer-trip'));
+  h.setWrites(true); assert.equal(await h.page.switchMode('customer'), false);
+  assert.equal(h.page.snapshot().mode, 'work');
+  assert.ok(h.feedback.some(([name, text]) => name === 'error' && text.includes('current action')));
+});
+
+test('an unavailable mode cannot be selected and an enrolled driver profile does not require another login', async () => {
+  const h = setup(); await h.page.refresh();
+  assert.equal(await h.page.switchMode('work'), false); assert.equal(h.page.snapshot().mode, 'customer');
+  // Adding capabilities through a server session does not invalidate the cookie or activity contexts.
+  h.session(session({ ...customer, capabilities: ['customer', 'driver'], driver: { status: 'pending' } }));
+  h.resets.length = 0; await h.page.refresh();
+  assert.equal(await h.page.switchMode('work'), true);
+  assert.equal(h.page.snapshot().user.id, customer.id);
+  assert.ok(!h.resets.includes('activityClient'));
 });

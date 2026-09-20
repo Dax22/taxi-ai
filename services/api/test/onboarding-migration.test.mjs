@@ -45,7 +45,7 @@ test('schema seven preserves paid receipts and active trips, snapshots vehicles 
   const before = new Map(names.map((name) => [name, JSON.stringify(old.prepare(`SELECT * FROM ${name}`).all())])); old.close();
   const db = openDatabase(path);
   try {
-    assert.equal(SCHEMA_VERSION, 9);
+    assert.ok(SCHEMA_VERSION >= 9);
     for (const name of names) {
       const rows = db.prepare(`SELECT * FROM ${name}`).all().map((row) => { if (name === 'rides') delete row.driver_snapshot_json; return row; });
       assert.equal(JSON.stringify(rows), before.get(name), name);

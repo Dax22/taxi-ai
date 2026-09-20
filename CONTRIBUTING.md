@@ -29,14 +29,14 @@ switching. Do not discard them to make a checkout succeed. With a clean working
 tree, run:
 
 ```bash
-git switch docs/unified-platform-plan
-git pull --ff-only origin docs/unified-platform-plan
+git switch feat/unified-accounts
+git pull --ff-only origin feat/unified-accounts
 npm run verify
 ```
 
 Git normally creates a tracking branch when the name exists only on `origin`.
 If the switch reports an ambiguous branch name, explicitly use
-`git switch --track origin/docs/unified-platform-plan` for the first checkout.
+`git switch --track origin/feat/unified-accounts` for the first checkout.
 
 ## Save your own changes to GitHub
 

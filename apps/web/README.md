@@ -11,7 +11,7 @@ installation or provider credentials are required.
 clears account data before subsequent reads, rechecks the session before publishing
 parallel results, and cancels queued actions after a session change. Other modules in
 `public/dashboard/` separate API transport/retry keys (`api-client.mjs`), login and
-registration forms (`auth-form.mjs`), role-specific rendering (`views.mjs`) and
+registration forms (`auth-form.mjs`), mode-specific rendering (`views.mjs`) and
 small DOM helpers (`dom.mjs`). Views receive callbacks and never call the network.
 The homepage's independent sample demonstration remains in `public/app.mjs`.
 
@@ -71,9 +71,11 @@ services are informational sections with accurate planned-service labels.
 
 - `/`: the original landing page and single-browser fare demonstration. Its
   customer/driver role buttons operate only on temporary in-memory sample state.
-- `/app`: password registration/sign-in, role-specific dashboards, administrator
-  review, persistent test requests and fare negotiation between real separate
-  account sessions. Roles and agreements are checked by the local backend.
+- `/app`: one personal login with Customer/Work modes, optional driver enrollment,
+  administrator review, persistent test requests and negotiation between distinct
+  trip participants. Capabilities, trip roles and agreements are server-checked.
+  [The account guide](../../docs/unified-accounts.md) documents switching, active
+  call/GPS continuity and the required manual acceptance.
 
 - `/trip-share`: a limited private trip view opened with a bearer fragment link.
   It uses no account data and requires invited-tester access when hosted.
@@ -109,7 +111,8 @@ local server/file previews; visual and browser interaction review is outstanding
    usable controls and correct amber-logo rendering.
 2. Use the keyboard through sign-in, registration, vehicle fields, the request
    form and fare controls. Check labels, focus visibility and error announcements.
-3. Create customer, driver and separate operator accounts. Promote the operator
+3. Create two personal test accounts and a separate operator account. Add a driver
+   profile through **Apply to drive** on one personal account. Promote the operator
    using the documented command and sign in again. Complete the driver application,
    upload fictional documents, submit, then record the administrator review as
    described in [driver onboarding](../../docs/driver-onboarding.md).
@@ -121,7 +124,8 @@ local server/file previews; visual and browser interaction review is outstanding
    and verify that a new offer is needed. Open two customer tabs and check that an
    out-of-date acceptance cannot accept or replace a newer driver's offer.
 6. Sign out. Protected requests should fail until sign-in. Pending and rejected
-   driver accounts should see their status without access to claim controls.
+   driver applications should see their status in Work without claim controls;
+   those same people can still use Customer for personal rides.
 7. Stop the server while a page is open, restart it and use Refresh. Confirm the
    connection status recovers, and retries do not duplicate requests or agreements.
 8. Check the original homepage demo, Eats/Courier labels and autonomous section.
@@ -181,3 +185,15 @@ for contacts, test SOS, administrator acknowledgment/closure, simulated delivery
 clipboard fallback, link lifecycle and mobile/tablet layouts. Automated DOM
 fixtures do not constitute real browser/device acceptance. All safety messaging
 remains simulated and emergency-service integration is absent.
+
+
+## Unified account navigation
+
+`account-mode-view.mjs` renders Customer/Work controls, driver enrollment and active
+journey return paths. `page-controller.mjs` keeps the real account separate from
+its presentation role. A mode-scoped transport owns business reads/retry keys;
+a separate session transport owns calls, active trip GPS and availability.
+Mode selection is an optional per-account session-storage preference; it is not
+sent as authority on commands. Sign-out and account/session changes reset both
+transports. See [the unified account guide](../../docs/unified-accounts.md) for
+schema compatibility and mode-switch/device acceptance that remains pending.

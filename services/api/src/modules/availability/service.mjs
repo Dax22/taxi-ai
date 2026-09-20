@@ -1,6 +1,6 @@
 import { check } from '../../shared/errors.mjs';
 import { fields } from '../../shared/validation.mjs';
-import { requireEligibleDriver } from '../../shared/policies.mjs';
+import { hasCapability, requireEligibleDriver } from '../../shared/policies.mjs';
 import { AVAILABILITY_MS, POSITION_MS } from '../../../../../packages/shared/src/matching.mjs';
 import { commandKey, clientIdentity, sequence, position, startData } from './domain.mjs';
 
@@ -9,7 +9,7 @@ export function createAvailabilityService({ repository, getAccount, sessionOwner
   function context(input, clientRequired = false) {
     const user = getAccount(input.userId);
     check(user && typeof input.sessionToken === 'string', 'UNAUTHENTICATED', 'Sign in to change availability.');
-    check(user.role === 'driver', 'FORBIDDEN', 'Driver availability requires a driver account.');
+    check(hasCapability(user, 'driver'), 'FORBIDDEN', 'Driver availability requires a driver account.');
     const sessionHash = tokens.digest(input.sessionToken);
     check(sessionOwner(sessionHash) === user.id, 'UNAUTHENTICATED', 'This session has expired.');
     const clientHash = input.clientId ? tokens.digest(clientIdentity(input.clientId)) : null;

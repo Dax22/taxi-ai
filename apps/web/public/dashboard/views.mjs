@@ -31,13 +31,13 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
         : `${ride.matching.mode === 'gps' ? `Searching within ${searchRadius(ride.createdAt, serverNow()) / 1000} km of pickup` : 'Searching for drivers in the same sample area'} · ${Math.ceil((ride.matching.expiresAt - serverNow()) / 1000)} seconds remaining.` : '';
     for (const button of document.querySelectorAll('[data-request-expires]')) {
       button.dataset.locked = String(!state.availabilityOnline || Number(button.dataset.requestExpires) <= serverNow()
-        || state.rides.some((item) => isActiveRide(item.status)));
+        || (state.activeElsewhere?.length > 0 || state.rides.some((item) => isActiveRide(item.status))));
     }
     for (const button of document.querySelectorAll('button')) {
-      if (button.closest('#calls-panel, #location-planner, #location-tracking, #availability-panel, #payment-panel, #earnings-panel, #payments-admin-panel, #onboarding-panel, #trusted-contacts-panel, #safety-panel, #safety-admin-panel')) continue; // Feature controllers own their controls.
+      if (button.closest('#account-modes, #calls-panel, #location-planner, #location-tracking, #availability-panel, #payment-panel, #earnings-panel, #payments-admin-panel, #onboarding-panel, #trusted-contacts-panel, #safety-panel, #safety-admin-panel')) continue; // Feature controllers own their controls.
       button.disabled = busy || button.dataset.locked === 'true';
     }
-    $('request-fields').disabled = busy || state.rides.some((item) => isActiveRide(item.status));
+    $('request-fields').disabled = busy || (state.activeElsewhere?.length > 0 || state.rides.some((item) => isActiveRide(item.status)));
   }
 
   function render(nextState = state) {
@@ -52,7 +52,7 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
     const customer = user.role === 'customer';
     const driver = user.role === 'driver';
     const admin = user.role === 'admin';
-    $('dashboard-role').textContent = `TAXI AI / ${user.role.toUpperCase()}`;
+    $('dashboard-role').textContent = `TAXI AI / ${driver ? 'WORK' : user.role.toUpperCase()}`;
     $('dashboard-title').textContent = admin ? 'Keep the city moving.' : driver ? 'Your next connection.' : 'Where will today take you?';
     $('dashboard-description').textContent = admin ? 'Review driver applications for the development preview.'
       : driver ? 'Go online to find nearby requests and agree a fare with the customer.' : 'Request a journey and agree a fare with your driver.';
@@ -64,7 +64,7 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
     $('admin-dashboard').hidden = !admin;
     $('chat-reports-panel').hidden = !admin;
     $('available-section').hidden = !driver || !user.driver.eligibility?.eligible || user.driver.status !== 'approved';
-    $('open-request-note').hidden = !state.rides.some((ride) => isActiveRide(ride.status));
+    $('open-request-note').hidden = !(state.activeElsewhere?.length > 0 || state.rides.some((ride) => isActiveRide(ride.status)));
     if (driver) {
       $('driver-status').textContent = DRIVER_APPLICATION_LABELS[user.driver.eligibility?.reviewStatus] ?? user.driver.status.toUpperCase();
       $('driver-vehicle').textContent = `${user.driver.vehicle.model} · ${user.driver.vehicle.plate}`;
@@ -110,7 +110,7 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
     }
     $('available-list').replaceChildren();
     if (!state.available.length) $('available-list').append(element('p', 'Nearby requests appear while you are online. Local sample mode matches requests from your selected sample area.', 'empty-state'));
-    const driverBusy = state.rides.some((ride) => isActiveRide(ride.status));
+    const driverBusy = (state.activeElsewhere?.length > 0 || state.rides.some((ride) => isActiveRide(ride.status)));
     for (const ride of state.available) {
       const row = element('div', undefined, 'request-row');
       const description = element('div');
@@ -246,6 +246,7 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
       for (const id of ['detail-title', 'detail-person', 'detail-reference', 'detail-status', 'fare-value', 'fare-label',
         'fare-guidance', 'fare-expiry', 'driver-vehicle', 'driver-status', 'driver-guidance', 'account-identity', 'matching-status']) $(id).textContent = '';
       $('live-offer-amount').value = ''; $('accept-fare').onclick = null;
+      $('request-pickup').value = 'wuse-ii'; $('request-destination').value = 'maitama'; updateQuote();
       $('live-offer-history').replaceChildren(); $('available-list').replaceChildren(); $('driver-applications').replaceChildren();
       $('chat-reports-list').replaceChildren();
       $('ride-list').replaceChildren(); $('history-list').replaceChildren(); tripView.reset();

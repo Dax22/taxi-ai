@@ -34,7 +34,7 @@ test('schema eight upgrades without altering accounts, documents, trip snapshots
   for (let round = 0; round < 2; round++) {
     const db = openDatabase(path);
     try {
-      assert.equal(SCHEMA_VERSION, 9); assert.equal(db.prepare('PRAGMA user_version').get().user_version, 9);
+      assert.ok(SCHEMA_VERSION >= 9); assert.equal(db.prepare('PRAGMA user_version').get().user_version, SCHEMA_VERSION);
       for (const name of tables) assert.deepEqual(db.prepare(`SELECT * FROM ${name}`).all(), before.get(name), name);
       for (const name of ['trusted_contacts', 'safety_incidents', 'safety_incident_events', 'safety_notifications', 'safety_notification_events', 'trip_share_links', 'safety_commands']) {
         assert.equal(db.prepare(`SELECT count(*) AS n FROM ${name}`).get().n, 0, name);

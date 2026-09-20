@@ -8,7 +8,7 @@ import { commandKey, version, identifier, contactData, incidentData, noteText, c
 export function createSafetyService({ repository, getAccount, getTrip, locationForTrip, sessionOwner, unitOfWork, tokens, audit, clock, allowSimulation = false }) {
   const settings = Object.freeze({ mode: 'simulation', canSimulate: allowSimulation, localOnly: allowSimulation, maxContacts: MAX_CONTACTS, shareMinutes: SHARE_MINUTES });
   function actor(id) { const user = getAccount(id); check(user, 'UNAUTHENTICATED', 'Sign in to continue.'); return user; }
-  function participant(user) { check(['customer', 'driver'].includes(user.role), 'FORBIDDEN', 'Use a customer or driver account.'); }
+  function participant(user) { requireRole(user, 'customer'); }
   const envelope = (user, data) => ({ viewerId: user.id, settings, ...data });
   const contactView = (row) => row?.active ? { id: row.id, name: row.name, phone: row.phone, version: row.version, verified: false } : null;
   const linkView = (row) => row ? { id: row.id, rideId: row.rideId, active: Boolean(row.active), version: row.version,
@@ -102,7 +102,7 @@ export function createSafetyService({ repository, getAccount, getTrip, locationF
         const recipients = value.contactIds.map((contactId) => ownContact(user, contactId, true));
         resourceId = tokens.id();
         const snapshot = { rideId: id, tripStatus: ride.status, pickup: ride.pickup, destination: ride.destination, driver: ride.driver,
-          reporter: { id: user.id, name: user.name, role: user.role }, location: locationForTrip(id), recordedAt: now };
+          reporter: { id: user.id, name: user.name, role: ride.customerId === user.id ? 'customer' : 'driver' }, location: locationForTrip(id), recordedAt: now };
         repository.addIncident({ id: resourceId, rideId: id, reporterId: user.id, ...value, snapshot, now });
         repository.incidentEvent(resourceId, user.id, 'created', '', 0, now);
         for (const contact of recipients) {

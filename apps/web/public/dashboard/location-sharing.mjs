@@ -102,5 +102,5 @@ export function createLocationSharing({ client, device, view, makeId = () => cry
     render();
   }
   return Object.freeze({ context, reset, start, stop, poll, tick, sharing: () => Boolean(stopWatch || pending),
-    shutdown() { void stop(); }, snapshot: () => ({ share, pending, error, sharing: Boolean(stopWatch) }) });
+    shutdown() { void stop(); }, snapshot: () => ({ ride, share, pending, error, sharing: Boolean(stopWatch) }) });
 }

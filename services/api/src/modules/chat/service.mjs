@@ -15,15 +15,14 @@ export function createChatService({ repository, getAccount, getRideContext, list
   function conversation(userId, rideId) {
     const user = actor(userId);
     const ride = getRideContext(user, rideId); // The rides port enforces participant access, including for administrators.
-    if (user.role === 'driver') requireRole(user, 'driver');
+    if (ride.driverId === user.id) requireRole(user, 'driver');
     check(ride.driverId, 'CHAT_NOT_READY', 'Chat opens when a driver starts your negotiation.');
     return { user, ride };
   }
 
   function summaries(userId) {
     const user = actor(userId);
-    if (user.role === 'driver' && user.driver.status !== 'approved') return [];
-    return listConversationIds(user).map((rideId) => ({ rideId,
+    return listConversationIds(user).filter((id) => getRideContext(user, id).driverId !== user.id || user.driver?.status === 'approved').map((rideId) => ({ rideId,
       unread: repository.unread(rideId, userId), lastSequence: repository.latest(rideId) }));
   }
 

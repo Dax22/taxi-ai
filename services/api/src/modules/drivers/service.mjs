@@ -1,13 +1,13 @@
 import { check } from '../../shared/errors.mjs';
 import { fields, label } from '../../shared/validation.mjs';
-import { requireRole } from '../../shared/policies.mjs';
+import { hasCapability, requireRole } from '../../shared/policies.mjs';
 import { applicationDetails, documentExpiry, eligibility, canonical } from './domain.mjs';
 import { DRIVER_REVIEW_CHECKS } from '../../../../../packages/shared/src/driver-onboarding.mjs';
 
 /** Manual review records evidence; it does not perform external identity checks. */
 export function createDriversService({ repository, getAccount, hasDriverWork, codec, tokens, unitOfWork, audit, clock }) {
   function access(user, id) {
-    check(user?.role === 'admin' || (user?.role === 'driver' && user.id === id), 'FORBIDDEN', 'Only the applicant and administrators can access this application.');
+    check(user?.role === 'admin' || (hasCapability(user, 'driver') && user.id === id), 'FORBIDDEN', 'Only the applicant and administrators can access this application.');
     const app = repository.application(id);
     check(app, 'NOT_FOUND', 'Driver application not found.'); return app;
   }
@@ -33,7 +33,7 @@ export function createDriversService({ repository, getAccount, hasDriverWork, co
   function command(user, id, action, data, key) {
     access(user, id);
     if (action === 'review') { requireRole(user, 'admin'); check(user.id !== id, 'FORBIDDEN', 'You cannot review your own application.'); }
-    else check(user.role === 'driver' && user.id === id, 'FORBIDDEN', 'Only the applicant can change the application.');
+    else check(hasCapability(user, 'driver') && user.id === id, 'FORBIDDEN', 'Only the applicant can change the application.');
     check(typeof key === 'string' && /^[A-Za-z0-9_-]{16,128}$/.test(key), 'INVALID_IDEMPOTENCY_KEY', 'A unique request key is required.');
     const allowed = { save: ['details'], upload: ['kind', 'name', 'mimeType', 'base64', 'expiresOn'],
       remove: ['documentId'], submit: [], reopen: [], review: ['decision', 'reason', 'reference', 'checks'] }[action];
@@ -106,7 +106,7 @@ export function createDriversService({ repository, getAccount, hasDriverWork, co
   function download(user, documentId) {
     return unitOfWork(() => {
       const doc = repository.document(documentId);
-      check(doc && (user?.role === 'admin' || (user?.role === 'driver' && user.id === doc.driverId)), 'NOT_FOUND', 'Document not found.');
+      check(doc && (user?.role === 'admin' || (hasCapability(user, 'driver') && user.id === doc.driverId)), 'NOT_FOUND', 'Document not found.');
       if (user.role === 'admin') repository.readDocument(documentId, user.id, clock());
       audit.record(user.id, 'driver.document.downloaded', documentId, clock());
       return { document: { ...doc, downloadName: `${doc.kind}-${doc.id}.${doc.mimeType === 'image/png' ? 'png' : 'jpg'}` },

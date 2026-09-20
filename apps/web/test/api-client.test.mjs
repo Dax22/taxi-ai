@@ -103,3 +103,25 @@ test('late responses from a reset session cannot update the clock or delete a ne
   await client.command('/api/rides', data);
   assert.deepEqual(calls, ['key-1', 'key-2', 'key-2']); assert.deepEqual(times, [2000]);
 });
+
+test('mode changes reject late reads, preserve uncertain keys in their mode and cannot interrupt a write', async () => {
+  let resolveRead, resolveWrite, issued = 0;
+  const keys = [], times = [];
+  const client = createApiClient({ makeKey: () => `mode-key-${++issued}`, onServerTime: (time) => times.push(time),
+    fetchImpl: async (path, options) => {
+      if (path === '/api/pending-read') return new Promise((resolve) => { resolveRead = resolve; });
+      if (path === '/api/pending-write') return new Promise((resolve) => { resolveWrite = resolve; });
+      keys.push(options.headers['Idempotency-Key']); throw new Error('lost response');
+    } });
+  client.setCsrf('same-account'); client.setMode('customer');
+  const read = client.request('/api/pending-read'); const late = assert.rejects(read, { code: 'SESSION_CHANGED' });
+  await assert.rejects(client.command('/api/action', {}));
+  client.setMode('work');
+  resolveRead(response(200, { serverNow: 1000 })); await late; assert.deepEqual(times, []);
+  await assert.rejects(client.command('/api/action', {}));
+  client.setMode('customer'); await assert.rejects(client.command('/api/action', {}));
+  assert.deepEqual(keys, ['mode-key-1', 'mode-key-2', 'mode-key-1']);
+  const writing = client.request('/api/pending-write', { method: 'POST', data: {} });
+  assert.equal(client.pendingWrites(), true); assert.throws(() => client.setMode('work'), /current action/);
+  resolveWrite(response(200, {})); await writing; assert.equal(client.pendingWrites(), false);
+});

@@ -40,7 +40,9 @@ Prevent self-assignment and conflicting work across services/devices. Preserve
 active-activity navigation and clear private client state on context changes.
 See [the unified platform plan](unified-platform.md) for navigation, migration,
 reliability requirements, platform differences and delivery order. This is the
-target design; the current prototype still has one role per account.
+target design. The current prototype implements Customer and Work for rides under
+one personal account; native mobile, delivery and store workflows remain planned.
+See [unified accounts](unified-accounts.md) for implementation and migration.
 
 ## Fare agreement
 

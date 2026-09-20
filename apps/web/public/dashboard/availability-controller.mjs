@@ -124,6 +124,25 @@ export function createAvailabilityController({ client, device, view, onStatus = 
     } else void publish();
     render();
   }
+  async function prepareSwitch(confirmOffline = false) {
+    if (pending || ending) throw new Error('Wait for the availability action to finish before changing mode.');
+    const epoch = generation;
+    const result = await client.request('/api/availability', headers);
+    if (!current(epoch)) throw new Error('Your availability changed. Refresh before changing mode.');
+    availability = result.availability; settings = result.settings; render();
+    if (availability?.online) {
+      if (!confirmOffline) return false;
+      const id = availability.id;
+      generation++; release(); pending = false;
+      // Do not treat a failed POST or stale local timer as confirmed offline.
+      await command(`/api/availability/${id}/offline`, {});
+      const checked = await client.request('/api/availability', headers);
+      availability = checked.availability; render();
+      if (availability?.online) throw new Error('You are online in another window. Go offline there, then retry switching.');
+    } else { generation++; release(); }
+    return true;
+  }
   return Object.freeze({ context, reset, start, stop, poll, tick, shutdown: () => { void stop(); },
+    prepareSwitch,
     active: () => running || pending, snapshot: () => ({ availability, settings, running, pending, error }) });
 }

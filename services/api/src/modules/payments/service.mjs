@@ -1,6 +1,6 @@
 import { check } from '../../shared/errors.mjs';
 import { fields } from '../../shared/validation.mjs';
-import { requireRole } from '../../shared/policies.mjs';
+import { hasCapability, requireRole } from '../../shared/policies.mjs';
 import { requirePaymentVersion, verifySimulation, summarizePayments } from './domain.mjs';
 
 export function createPaymentsService({ repository, getAccount, tripForPayment, simulate, unitOfWork, tokens, audit, clock, allowSimulation = false }) {
@@ -46,6 +46,7 @@ export function createPaymentsService({ repository, getAccount, tripForPayment, 
     return unitOfWork(() => {
       const user = actor(userId), payment = owned(user, rideId);
       requireRole(user, 'customer');
+      check(payment.customerId === user.id, 'FORBIDDEN', 'Only the passenger on this trip can pay.');
       check(allowSimulation, 'FORBIDDEN', 'Payment simulation is available only in local development.');
       const previous = repository.findCommand(userId, key);
       if (previous) {
@@ -104,7 +105,7 @@ export function createPaymentsService({ repository, getAccount, tripForPayment, 
   function earnings(userId, beforeId = null) {
     const user = actor(userId);
     // Historical earnings remain readable if driving approval is later withdrawn.
-    check(user.role === 'driver', 'FORBIDDEN', 'A driver account is required.');
+    check(hasCapability(user, 'driver'), 'FORBIDDEN', 'A driver account is required.');
     return { settings, summary: summarizePayments(repository.totals(user.id)), ...page(user.id, beforeId) };
   }
   function transactions(userId, beforeId = null) {

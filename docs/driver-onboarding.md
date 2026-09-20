@@ -9,7 +9,8 @@ statement of all requirements for operating in Nigeria.
 
 ## Try the workflow
 
-1. Start `npm run dev` and open `/app`. Register a driver with fictional details.
+1. Start `npm run dev` and open `/app`. Create or sign in to a personal account,
+   select **Apply to drive**, and add fictional car details. Continue in Work.
 2. In **Your driver application**, save the legal name, international contact
    number, licence number and vehicle make/model/year/colour/plate.
 3. Upload a driver photo, driving-licence image, vehicle document, insurance
@@ -132,7 +133,7 @@ fares, messages, payments and receipts, and backfills driver/vehicle snapshots.
 All existing drivers receive a **draft** application with no invented evidence.
 Their old test approval does not permit new work. Unstarted legacy work must be
 cancelled before they can apply; already-started trips can finish. Nothing resets
-or deletes saved journeys. Current backup/restore commands require schema 8;
+or deletes saved journeys. Current backup/restore commands require schema 10 (see [unified accounts](unified-accounts.md));
 restore an older backup with its matching release, then upgrade a separate copy.
 
 `npm run verify` includes HTTP workflow/privacy tests, expiry boundaries, session

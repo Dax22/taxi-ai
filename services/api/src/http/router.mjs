@@ -1,4 +1,5 @@
 import { check } from '../shared/errors.mjs';
+import { hasCapability } from '../shared/policies.mjs';
 import { accountRoutes } from '../modules/accounts/routes.mjs';
 import { driverRoutes } from '../modules/drivers/routes.mjs';
 import { rideRoutes } from '../modules/rides/routes.mjs';
@@ -32,7 +33,7 @@ export function createApiRouter(application, { secure = false } = {}) {
     } else {
       session = accounts.sessionFor(token);
       if (route?.access !== 'public') check(session, 'UNAUTHENTICATED', 'Sign in to continue.');
-      if (route?.role) check(session?.user.role === route.role, 'FORBIDDEN', `A ${route.role} account is required.`);
+      if (route?.role) check(hasCapability(session?.user, route.role), 'FORBIDDEN', `The ${route.role} capability is required.`);
       if (route?.documentDownload) rateLimiter.consume(`document:${session.user.id}`, clock(), 30, 60_000);
       if (write) {
         requireCsrf(request, session);
@@ -41,7 +42,7 @@ export function createApiRouter(application, { secure = false } = {}) {
         session = accounts.sessionFor(token);
         check(session, 'UNAUTHENTICATED', 'Sign in to continue.');
         requireCsrf(request, session);
-        if (route?.role) check(session.user.role === route.role, 'FORBIDDEN', `A ${route.role} account is required.`);
+        if (route?.role) check(hasCapability(session.user, route.role), 'FORBIDDEN', `The ${route.role} capability is required.`);
       }
     }
     check(route, 'NOT_FOUND', 'API endpoint not found.');

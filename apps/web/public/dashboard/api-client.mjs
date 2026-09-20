@@ -1,11 +1,12 @@
 /** Same-origin transport, CSRF and retry keys. No DOM or page state dependencies. */
 export function createApiClient({ fetchImpl = globalThis.fetch, makeKey = () => crypto.randomUUID(), onServerTime = () => {} } = {}) {
-  let csrfToken = null, generation = 0;
+  let csrfToken = null, generation = 0, mode = '', writes = 0;
   const retryKeys = new Map();
 
   async function request(path, { method = 'GET', data, key, callClient, locationClient, availabilityClient } = {}) {
     if (!path.startsWith('/api/')) throw new Error('Use a same-origin API path.');
     const epoch = generation;
+    if (method === 'POST') writes++;
     let response, body;
     try {
       response = await fetchImpl(path, { method, credentials: 'same-origin', cache: 'no-store',
@@ -19,7 +20,7 @@ export function createApiClient({ fetchImpl = globalThis.fetch, makeKey = () => 
     } catch {
       if (epoch !== generation) throw changedSession();
       throw new Error('Connection interrupted. Check that Taxi Ai is running, then retry the same action.');
-    }
+    } finally { if (method === 'POST') writes--; }
     if (epoch !== generation) throw changedSession();
     if (!response.ok) {
       const error = new Error(body.error?.message ?? 'Unable to complete this request.');
@@ -32,7 +33,7 @@ export function createApiClient({ fetchImpl = globalThis.fetch, makeKey = () => 
   }
 
   async function command(path, data, { callClient, locationClient, availabilityClient } = {}) {
-    const fingerprint = `${callClient ?? ''}:${locationClient ?? ''}:${availabilityClient ?? ''}:${path}:${JSON.stringify(data)}`;
+    const fingerprint = `${mode}:${callClient ?? ''}:${locationClient ?? ''}:${availabilityClient ?? ''}:${path}:${JSON.stringify(data)}`;
     const key = retryKeys.get(fingerprint) ?? makeKey();
     retryKeys.set(fingerprint, key);
     try {
@@ -47,7 +48,14 @@ export function createApiClient({ fetchImpl = globalThis.fetch, makeKey = () => 
 
   return Object.freeze({ request, command, rideCommand: command,
     setCsrf(token) { csrfToken = token; },
-    reset() { generation++; csrfToken = null; retryKeys.clear(); },
+    pendingWrites: () => writes > 0,
+    setMode(value) {
+      if (mode === value) return;
+      if (writes) throw new Error('Wait for the current action to finish before changing mode.');
+      generation++; mode = value;
+      // Retain uncertain retry keys in their original mode until a same-action retry.
+    },
+    reset() { generation++; mode = ''; csrfToken = null; retryKeys.clear(); },
   });
 }
 

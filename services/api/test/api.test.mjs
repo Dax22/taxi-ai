@@ -133,7 +133,7 @@ test('participants alone can read or change a request, and peer payloads contain
   assert.equal((await outsider.send(`/api/rides/${ride.id}`)).status, 404);
   assert.equal((await outsider.post(`/api/rides/${ride.id}/offers`, { expectedVersion: ride.version, amountKobo: 470000 })).status, 404);
   assert.equal((await outsider.post(`/api/rides/${ride.id}/cancel`, { expectedVersion: ride.version })).status, 404);
-  assert.equal((await driver.post('/api/rides', { pickupId: 'garki', destinationId: 'jabi' })).status, 403);
+  assert.equal((await driver.post('/api/rides', { pickupId: 'garki', destinationId: 'jabi' })).body.error.code, 'DRIVER_BUSY');
   const payload = JSON.stringify((await customer.send(`/api/rides/${ride.id}`)).body);
   for (const secret of ['@example.test', 'password', 'csrf', 'token_hash', 'phone']) assert.ok(!payload.includes(secret), secret);
   assert.ok(payload.includes('Toyota Corolla'));

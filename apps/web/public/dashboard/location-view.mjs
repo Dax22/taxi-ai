@@ -72,11 +72,11 @@ export function createLocationView({ onEnable, onSearch, onClear, onSelect, onPi
         : 'Sharing enabled · waiting for a GPS fix' : activeTrip ? 'Driver location is not being shared.' : 'Location sharing is available during a confirmed trip.';
     $('tracking-guidance').textContent = isDriver ? !state.supported ? 'Location sharing needs browser geolocation and a secure connection.'
       : state.share?.active && !state.sharing ? 'Another window owns this sharing session. Stop it here before starting a new one.'
-        : 'Share only when you choose. Your assigned customer can see your latest position. Stop sharing, sign out or leave this journey to stop GPS updates.'
+        : 'Share only when you choose. Your assigned customer can see your latest position. Use Stop sharing to end GPS updates. Switching account modes keeps active trip sharing running.'
       : 'The driver chooses when to share. Positions are browser-reported and may be inaccurate. Stale positions are marked as last known.';
     const route = state.ride.route;
-    $('tracking-route-summary').textContent = route ? `${(route.distanceMeters / 1000).toFixed(1)} km · estimated ${Math.ceil(route.durationSeconds / 60)} min driving · excludes live traffic and pickup arrival time`
-      : 'This older sample-area ride has no saved road route.';
+    $('tracking-route-summary').textContent = `Journey ${state.ride.id.slice(0, 8).toUpperCase()} · ${state.ride.pickup?.name ?? 'Pickup'} → ${state.ride.destination?.name ?? 'Destination'} · ` + (route ? `${(route.distanceMeters / 1000).toFixed(1)} km · estimated ${Math.ceil(route.durationSeconds / 60)} min driving · excludes live traffic and pickup arrival time`
+      : 'Sample-area journey; no saved road route.');
     $('tracking-provider-note').textContent = settings?.enabled ? `Online maps load the visible area via ${settings.tileHost}. GPS updates are shared through Taxi Ai; they are not sent to the route or search service.` : 'Online street maps are currently unavailable.';
     trackingMap.render({ enabled: online && Boolean(settings?.tiles), tiles: settings?.tiles,
       pickup: route?.pickup, destination: route?.destination, route: route?.coordinates, driver: position, stale, focusKey: state.ride.id });

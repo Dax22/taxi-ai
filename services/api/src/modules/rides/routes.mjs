@@ -4,9 +4,9 @@ export function rideRoutes(rides) {
     return { status: action === 'create' && !result.replayed ? 201 : 200, body: result };
   }
   return [
-    { method: 'GET', path: /^\/api\/rides$/, access: 'read', handle: ({ user }) => ({ body: rides.list(user) }) },
+    { method: 'GET', path: /^\/api\/rides$/, access: 'read', handle: ({ user, query }) => ({ body: rides.list(user, query.get('mode')) }) },
     { method: 'GET', path: /^\/api\/rides\/history$/, access: 'read',
-      handle: ({ user, query }) => ({ body: rides.history(user, query.get('before')) }) },
+      handle: ({ user, query }) => ({ body: rides.history(user, query.get('before'), query.get('mode')) }) },
     { method: 'POST', path: /^\/api\/rides$/, access: 'write', handle: (context) => write('create', null, context) },
     { method: 'GET', path: /^\/api\/rides\/([a-f0-9-]{36})$/, access: 'read',
       handle: ({ user, match }) => ({ body: { ride: rides.get(user, match[1]) } }) },

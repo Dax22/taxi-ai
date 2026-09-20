@@ -9,14 +9,14 @@ export function createCallsService({ repository, getAccount, sessionOwner, getRi
   function actor(userId) {
     const user = getAccount(userId);
     check(user, 'UNAUTHENTICATED', 'Sign in to use calls.');
-    check(['customer', 'driver'].includes(user.role), 'FORBIDDEN', 'Calls are for the assigned customer and driver.');
-    if (user.role === 'driver') requireRole(user, 'driver');
+    requireRole(user, 'customer');
     return user;
   }
   function participant(user, id) {
     const call = repository.find(id);
     check(call && [call.callerId, call.calleeId].includes(user.id), 'NOT_FOUND', 'Call not found.');
-    getRideContext(user, call.rideId);
+    const ride = getRideContext(user, call.rideId);
+    if (ride.driverId === user.id) requireRole(user, 'driver');
     return call;
   }
   function owns(call, userId, sessionHash, clientHash) {
@@ -54,7 +54,7 @@ export function createCallsService({ repository, getAccount, sessionOwner, getRi
     for (const call of repository.active()) {
       const caller = getAccount(call.callerId), callee = getAccount(call.calleeId);
       const ride = getRideContext(caller, call.rideId);
-      const driver = caller.role === 'driver' ? caller : callee;
+      const driver = caller.id === ride.driverId ? caller : callee;
       if (!canChatDuringRide(ride.status)) close(call, 'ended', 'ride_closed', now);
       else if (config.mode !== call.mode || driver.driver?.status !== 'approved') close(call, 'ended', 'unavailable', now);
       else if (sessionOwner(call.callerSession) !== call.callerId

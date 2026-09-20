@@ -4,7 +4,7 @@ The accepted next direction is one Taxi Ai app for iOS/Android and one website
 with shared accounts and Customer, Drive & deliver and My store modes. The
 [unified platform plan](unified-platform.md) supersedes separate native apps and
 moves the mobile foundation earlier. Completed milestones below describe the
-current single-role prototype; planned milestones do not claim shipped features.
+prototype; planned milestones do not claim shipped features.
 
 ## 0 — Repository foundation (implemented)
 
@@ -160,31 +160,30 @@ sensing or staffed emergency response are enabled. Manual browser/clipboard,
 mobile/tablet, GPS and hosted-recipient testing remain pending. Hosting on Alibaba
 Cloud remains paused.
 
-## 2l — Unified accounts and web navigation (next; planned)
+## 2l — Unified accounts and web navigation (implemented; browser review pending)
 
-- Replace fixed public roles with one personal account and separately approved
-  capabilities, retaining explicit staff privileges and scoped store memberships.
-- Migrate existing records without losing accounts, history or review evidence,
-  without granting driver approval or enabling unfinished services.
-- Add a context-aware web shell with Customer and Drive & deliver modes first;
-  show vendor/delivery availability accurately until their modules are built.
-- Enforce ownership, self-assignment prevention and cross-mode workload limits.
-- Extend stale-response, retry and cache isolation to acting context/store/service.
-- Document shared API contracts and the native session/revocation design.
+- Schema-10 customer/driver capabilities preserve existing identities, sessions
+  and review evidence; driver approval stays separate from application access.
+- Same-login driver enrollment and Customer/Work website modes; staff remains
+  restricted, and vendor/delivery services are visibly unavailable.
+- Trip-specific ownership, self-claim prevention and conflicting workload checks.
+- Mode-scoped history, caches and retry keys; session-scoped calls and active GPS.
+- Confirmed offline transition and return paths to active journeys/Trip Safety.
 
 Acceptance: the same eligible account can buy and work, with explicit mode
-switching and preserved active-trip/safety access. Permission/migration tests and
-real browser review must cover the scenarios in [the unified plan](unified-platform.md).
+switching and preserved active-trip/safety access. Automated permission, migration
+and client fixtures pass; real browser/device acceptance remains pending. See
+[the implementation and review guide](unified-accounts.md).
 
-## 2m — One mobile app, rides first (planned)
+## 2m — One mobile app, rides first (next; planned)
 
 Build `apps/mobile/` using the proposed React Native + Expo + TypeScript stack.
 Deliver one iOS/Android app with phone/tablet layouts, secure sign-in and the same
 Customer/Work ride journey as the website. Create a clear mode switcher and
 feature boundaries for later Eats, courier and My store capabilities.
 
-Navigation/design work may overlap 2l; connected flows depend on its access and
-API contract. Integrate and test location, notifications and in-app calling in
+Define the native session/revocation and versioned API contract first, then scaffold
+the mobile workspace. Connected flows build on 2l’s capability and trip permissions. Integrate and test location, notifications and in-app calling in
 development builds on physical devices. The browser website continues to support
 the same services, with explicit handling of device capability differences.
 

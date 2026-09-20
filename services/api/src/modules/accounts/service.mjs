@@ -1,5 +1,6 @@
 import { check } from '../../shared/errors.mjs';
 import { fields, label, emailAddress, passwordInput } from '../../shared/validation.mjs';
+import { requireRole } from '../../shared/policies.mjs';
 
 export const SESSION_MS = 12 * 60 * 60 * 1000;
 
@@ -12,33 +13,64 @@ export function createAccountsService({ repository, driverProfiles, passwords, t
   function profile(id) {
     const user = repository.findById(id);
     if (!user) return null;
-    const driver = user.role === 'driver' ? driverProfiles.find(id) : null;
-    return { ...user, driver: driver ? { status: driver.status, vehicle: driver.vehicle, eligibility: driver.eligibility } : null };
+    const capabilities = repository.capabilities(id);
+    const driver = capabilities.includes('driver') ? driverProfiles.find(id) : null;
+    return { ...user, capabilities, driver: driver ? { status: driver.status, vehicle: driver.vehicle, eligibility: driver.eligibility } : null };
+  }
+
+  function vehicleInput(data) {
+    fields(data, ['model', 'plate']);
+    const vehicle = { model: label(data.model, 'Vehicle model', 2, 80),
+      plate: label(data.plate, 'Vehicle plate', 2, 15).toUpperCase() };
+    check(/^[A-Z0-9 -]+$/.test(vehicle.plate), 'INVALID_PLATE', 'Use letters, digits, spaces or dashes for the plate.');
+    return vehicle;
   }
 
   async function register(data) {
-    fields(data, ['name', 'email', 'password', 'role', 'vehicle'], ['name', 'email', 'password', 'role']);
+    fields(data, ['name', 'email', 'password', 'role', 'vehicle'], ['name', 'email', 'password']);
     const name = label(data.name, 'Name');
     const email = emailAddress(data.email);
     const password = passwordInput(data.password);
-    check(['customer', 'driver'].includes(data.role), 'INVALID_ROLE', 'Choose customer or driver.');
+    // Keep older registration clients working. New clients start as customers.
+    const role = data.role ?? 'customer';
+    check(['customer', 'driver'].includes(role), 'INVALID_ROLE', 'Choose customer or driver.');
     let vehicle;
-    if (data.role === 'driver') {
-      fields(data.vehicle, ['model', 'plate']);
-      vehicle = { model: label(data.vehicle.model, 'Vehicle model', 2, 80),
-        plate: label(data.vehicle.plate, 'Vehicle plate', 2, 15).toUpperCase() };
-      check(/^[A-Z0-9 -]+$/.test(vehicle.plate), 'INVALID_PLATE', 'Use letters, digits, spaces or dashes for the plate.');
-    } else check(!Object.hasOwn(data, 'vehicle'), 'INVALID_FIELDS', 'Vehicle details belong to driver accounts.');
+    if (role === 'driver') vehicle = vehicleInput(data.vehicle);
+    else check(!Object.hasOwn(data, 'vehicle'), 'INVALID_FIELDS', 'Add a driver profile after creating your account.');
     // Hash outside the short synchronous database transaction.
     const passwordHash = await passwords.hash(password);
     return unitOfWork(() => {
       check(!repository.findByEmail(email), 'EMAIL_IN_USE', 'An account already uses this email address. Try signing in.');
       const id = tokens.id();
       const now = clock();
-      repository.insert({ id, email, name, passwordHash, role: data.role, createdAt: now });
-      if (vehicle) driverProfiles.insert(id, vehicle, now);
+      repository.insert({ id, email, name, passwordHash, role, createdAt: now });
+      repository.grant(id, 'customer', now);
+      if (vehicle) { driverProfiles.insert(id, vehicle, now); repository.grant(id, 'driver', now); }
       audit.record(id, 'account.created', id, now);
       return profile(id);
+    });
+  }
+
+  function addDriverProfile(userId, data, key) {
+    fields(data, ['vehicle']);
+    const vehicle = vehicleInput(data.vehicle);
+    check(typeof key === 'string' && /^[A-Za-z0-9_-]{16,128}$/.test(key), 'INVALID_IDEMPOTENCY_KEY', 'A unique request key is required.');
+    const fingerprint = tokens.digest(JSON.stringify(['driver-profile', vehicle.model, vehicle.plate]));
+    return unitOfWork(() => {
+      const user = profile(userId);
+      requireRole(user, 'customer');
+      const previous = repository.findCommand(userId, key);
+      if (previous) {
+        check(previous.fingerprint === fingerprint, 'KEY_REUSED', 'This request key was already used for another application.');
+        return { user, replayed: true };
+      }
+      check(!user.driver && !user.capabilities.includes('driver'), 'DRIVER_PROFILE_EXISTS', 'You already have a driver profile. Open Work to continue your application.');
+      const now = clock();
+      driverProfiles.insert(userId, vehicle, now);
+      repository.grant(userId, 'driver', now);
+      repository.saveCommand(userId, key, fingerprint);
+      audit.record(userId, 'account.driver_profile_added', userId, now);
+      return { user: profile(userId), replayed: false };
     });
   }
 
@@ -79,14 +111,16 @@ export function createAccountsService({ repository, driverProfiles, passwords, t
       check(!repository.hasAdmin(), 'ADMIN_EXISTS', 'An administrator already exists. This command only sets up the first administrator.');
       const user = repository.findByEmail(email);
       check(user?.role === 'customer', 'INVALID_ACCOUNT', 'Register a separate customer account for administration first.');
+      check(!repository.capabilities(user.id).includes('driver'), 'INVALID_ACCOUNT', 'Use a separate account without a driver profile for administration.');
       check(!hasRideHistory(user.id), 'ACCOUNT_HAS_RIDES', 'Use a separate account that has no ride requests.');
       repository.promoteToAdmin(user.id);
+      repository.clearCapabilities(user.id);
       repository.deleteUserSessions(user.id);
       audit.record(user.id, 'admin.bootstrapped_locally', user.id, clock());
       return profile(user.id);
     });
   }
 
-  return Object.freeze({ profile, register, login, issueSession, sessionFor, revokeSession, bootstrapAdmin,
+  return Object.freeze({ profile, register, login, addDriverProfile, issueSession, sessionFor, revokeSession, bootstrapAdmin,
     sessionOwner: (hash) => repository.findSession(hash, clock())?.userId ?? null });
 }
