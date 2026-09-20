@@ -99,16 +99,6 @@
   .service-card h3 { font-size: 30px; margin-bottom: 15px; }
   .service-card p { color: var(--muted); font-size: 13px; max-width: 275px; margin-bottom: 30px; line-height: 1.7; }
   .service-card .text-link { margin-top: auto; border-top: 1px solid var(--line); padding-top: 16px; }
-  .future-section { background: var(--ink); color: #fff; overflow: hidden; }
-  .future-inner { display: grid; grid-template-columns: 1fr 1.2fr; gap: 50px; align-items: center; min-height: 510px; padding-block: 60px; }
-  .status-light { color: var(--brand); border-color: #8c6d24; margin-bottom: 45px; }
-  .future-copy .eyebrow { color: #b6b6ae; margin-bottom: 18px; }
-  .future-copy h2 { font-size: clamp(36px, 4vw, 58px); }
-  .future-copy > p:not(.eyebrow) { color: #c0c0b8; font-size: 14px; max-width: 355px; margin-top: 22px; line-height: 1.8; }
-  .future-copy > p.future-note { font-size: 11px; color: #b6b6af; }
-  .future-image-wrap { position: relative; }
-  .future-image-wrap img { width: 100%; border-radius: 4px; }
-  .future-image-wrap > span { position: absolute; right: 15px; bottom: 13px; font-size: 8px; letter-spacing: .06em; text-shadow: 0 1px 5px #000; }
   .connected-section { padding-block: 95px; }
   .connected-section > h2 { margin-top: 18px; }
   .connected-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 55px; margin-top: 50px; }
@@ -201,10 +191,6 @@
     .service-card h3 { font-size: 23px; }
     .service-card p { font-size: 11px; }
     .service-card .text-link { font-size: 11px; gap: 12px; }
-    .future-inner { gap: 25px; }
-    .future-copy h2 { font-size: 37px; }
-    .future-copy > p:not(.eyebrow) { font-size: 12px; }
-    .status-light { margin-bottom: 28px; font-size: 7px; }
     .connected-grid { gap: 25px; }
     .connected-grid h3 { font-size: 18px; }
     .connected-grid p { font-size: 12px; }
@@ -240,11 +226,6 @@
     .service-card h3 { font-size: 31px; }
     .service-card p { font-size: 13px; margin-bottom: 25px; }
     .service-card .text-link { font-size: 13px; }
-    .future-inner { grid-template-columns: 1fr; padding-block: 42px 22px; gap: 30px; }
-    .future-copy h2 { font-size: 43px; }
-    .future-copy > p:not(.eyebrow) { font-size: 13px; }
-    .future-copy > p.future-note { font-size: 11px; }
-    .status-light { font-size: 8px; }
     .connected-section { padding-block: 55px; }
     .connected-grid { grid-template-columns: 1fr; gap: 30px; margin-top: 35px; }
     .connected-grid article { border-top: 1px solid var(--line); padding-top: 24px; }

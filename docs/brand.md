@@ -51,5 +51,12 @@ The city scene is conceptual artwork, not a live or geographically accurate map.
 Keep the illustration label and preview/coming-soon service states. See
 [the artwork notes](design/city-route-hero.md) for the source prompt and exported assets.
 
+The autonomous section continues the light 3D theme. Its compact robotaxi uses
+yellow panels and sensor accents, with a man beside it using the app on an iPhone.
+Keep both subjects fully visible and preserve the image's 3:2 proportions using
+automatic height; do not stretch or crop it to fill a fixed box. A readable
+coming-soon badge and concept caption accompany the scene. See
+[the autonomous artwork notes](design/autonomous-concept.md) for its prompt and files.
+
 Branding changes do not enable live bookings, food orders, courier dispatch,
 communications, payments or autonomous rides.

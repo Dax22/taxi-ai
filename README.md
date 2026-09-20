@@ -252,8 +252,9 @@ The terminal example runs with `npm run demo`. Read [the architecture](docs/arch
 
 ## Development and review
 
-The latest development branch is `feat/city-route-homepage`, which includes Trip
-Safety and the new white 3D city-map homepage with Taxi Ai yellow accents.
+The latest development branch is `feat/autonomous-concept`, which includes Trip
+Safety, the white 3D city-map homepage and a matching yellow robotaxi concept
+with a passenger using the app. Autonomous rides remain a future service.
 Read [CONTRIBUTING.md](CONTRIBUTING.md) for the GitHub/VS Code workflow and where
 new code belongs. `npm run check` validates syntax and module conventions;
 `npm test` checks behaviour; `npm run verify` runs both. GitHub Actions is configured
