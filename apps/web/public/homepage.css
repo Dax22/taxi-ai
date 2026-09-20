@@ -52,6 +52,17 @@
   .hero-bottom span { margin-inline: 16px; color: #a2aa9f; }
   .landing-page .service-card { border-radius: 16px; background: #fff; }
   .landing-page .service-card:hover { background: #fffdf4; }
+  .future-section { background: var(--paper); color: var(--ink); border-block: 1px solid var(--line); }
+  .future-inner { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); gap: 40px; align-items: center; padding-block: 72px; }
+  .future-status { color: var(--brand-strong); background: var(--brand-soft); border-color: #e7c263; font-size: 9px; margin-bottom: 32px; }
+  .future-copy .eyebrow { color: #62685f; margin-bottom: 18px; }
+  .future-copy h2 { font-size: clamp(36px, 4vw, 58px); }
+  .future-copy > p:not(.eyebrow) { color: #5c625b; font-size: 14px; max-width: 355px; margin-top: 22px; line-height: 1.8; }
+  .future-copy > p.future-note { font-size: 12px; }
+  .future-image-wrap { min-width: 0; margin: 0; }
+  /* Preserve the whole 3:2 scene: never stretch or crop the vehicle or passenger. */
+  .future-image-wrap img { display: block; width: 100%; height: auto; aspect-ratio: 3 / 2; object-fit: contain; border-radius: 24px; }
+  .future-image-wrap figcaption { margin-top: 14px; text-align: center; color: #62685f; font-size: 10px; letter-spacing: .08em; }
 }
 
 @layer responsive {
@@ -77,6 +88,10 @@
     #trip-form .field select { font-size: 16px; }
     #trip-form .field label { font-size: 10px; }
     .booking-card .card-heading p { font-size: 11px; }
+    .future-inner { grid-template-columns: minmax(0, 1fr); gap: 30px; padding-block: 56px; }
+    .future-copy h2 { font-size: 46px; }
+    .future-copy > p:not(.eyebrow) { max-width: 460px; }
+    .future-status { margin-bottom: 24px; }
   }
   @media (max-width: 580px) {
     .landing-page .site-header { height: 73px; }
@@ -101,5 +116,12 @@
     .booking-card .booking-footnote { font-size: 9px; text-align: center; }
     .hero-bottom { padding-top: 20px; font-size: 9px; }
     .hero-bottom span { margin-inline: 5px; }
+    .future-inner { padding-block: 42px; gap: 26px; }
+    .future-copy h2 { font-size: clamp(32px, 10vw, 43px); }
+    .future-copy > p:not(.eyebrow) { font-size: 13px; margin-top: 18px; }
+    .future-copy > p.future-note { font-size: 12px; }
+    .future-status { font-size: 8px; }
+    .future-image-wrap img { border-radius: 16px; }
+    .future-image-wrap figcaption { font-size: 9px; margin-top: 12px; }
   }
 }

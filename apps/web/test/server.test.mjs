@@ -37,7 +37,8 @@ test('the local site serves HTML, modules and artwork with correct content types
       ['/app.mjs', 'text/javascript'], ['/shared/fare-negotiation.mjs', 'text/javascript'],
       ['/shared/demo-booking.mjs', 'text/javascript'], ['/assets/city-route-hero.webp', 'image/webp'],
       ['/assets/city-route-hero-small.webp', 'image/webp'],
-      ['/assets/autonomous.webp', 'image/webp'], ['/favicon.svg?v=amber', 'image/svg+xml'],
+      ['/assets/autonomous-concept.webp', 'image/webp'],
+      ['/assets/autonomous-concept-small.webp', 'image/webp'], ['/favicon.svg?v=amber', 'image/svg+xml'],
       ['/assets/taxi-ai-mark.svg', 'image/svg+xml']]) {
       const response = await fetch(base + path);
       assert.equal(response.status, 200, path);

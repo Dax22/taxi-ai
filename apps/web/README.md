@@ -58,8 +58,12 @@ The website retains the approved yellow motion emblem and amber/graphite palette
 The homepage uses a centered hero and original white 3D city/route artwork, with
 its responsive presentation in `public/homepage.css`. The booking form follows
 the illustration and retains its existing service tabs and negotiation dialog.
-The `<picture>` serves a smaller WebP on phone/tablet widths. See
-[the brand guide](../../docs/brand.md). The city scene is a concept, not a live map
+The hero `<picture>` serves a smaller WebP on phone/tablet widths. The autonomous
+section uses the same light theme with a yellow 3D robotaxi and a man using an
+iPhone. Its `srcset` offers 960px and 1536px versions, and `height: auto` with
+`object-fit: contain` preserves the full scene's proportions at every width.
+Both sections' styles live in `public/homepage.css`. See
+[the brand guide](../../docs/brand.md). These scenes are concepts, not a live map
 or operational fleet. Eats, courier and autonomous
 services are informational sections with accurate planned-service labels.
 
@@ -121,6 +125,10 @@ local server/file previews; visual and browser interaction review is outstanding
 7. Stop the server while a page is open, restart it and use Refresh. Confirm the
    connection status recovers, and retries do not duplicate requests or agreements.
 8. Check the original homepage demo, Eats/Courier labels and autonomous section.
+   At 390, 768 and 1440px, confirm the robotaxi and passenger are fully visible,
+   the wheels keep their natural proportions, and the concept/coming-soon labels
+   remain readable. The section stacks below 800px. Restart the development
+   server after pulling changed static asset routes.
    Chat, audio calling and local simulated payments belong to the account preview;
    live payment collection and dispatch remain unavailable. Follow [the chat review steps](../../docs/chat.md#manual-review)
    for message history, unread state, retries, reporting and fare cards.
