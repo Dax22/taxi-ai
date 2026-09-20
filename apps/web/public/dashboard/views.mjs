@@ -1,3 +1,4 @@
+import { DRIVER_APPLICATION_LABELS } from '/shared/driver-onboarding.mjs';
 import { DEMO_AREAS, createDemoQuote, formatNaira, nairaToKobo } from '/shared/demo-booking.mjs';
 import { $, element } from './dom.mjs';
 import { renderChatReports } from './chat-reports-view.mjs';
@@ -33,7 +34,7 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
         || state.rides.some((item) => isActiveRide(item.status)));
     }
     for (const button of document.querySelectorAll('button')) {
-      if (button.closest('#calls-panel, #location-planner, #location-tracking, #availability-panel, #payment-panel, #earnings-panel, #payments-admin-panel')) continue; // Feature controllers own their controls.
+      if (button.closest('#calls-panel, #location-planner, #location-tracking, #availability-panel, #payment-panel, #earnings-panel, #payments-admin-panel, #onboarding-panel')) continue; // Feature controllers own their controls.
       button.disabled = busy || button.dataset.locked === 'true';
     }
     $('request-fields').disabled = busy || state.rides.some((item) => isActiveRide(item.status));
@@ -62,15 +63,14 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
     $('ride-dashboard').hidden = admin;
     $('admin-dashboard').hidden = !admin;
     $('chat-reports-panel').hidden = !admin;
-    $('available-section').hidden = !driver || user.driver.status !== 'approved';
+    $('available-section').hidden = !driver || !user.driver.eligibility?.eligible || user.driver.status !== 'approved';
     $('open-request-note').hidden = !state.rides.some((ride) => isActiveRide(ride.status));
     if (driver) {
-      $('driver-status').textContent = user.driver.status.toUpperCase();
+      $('driver-status').textContent = DRIVER_APPLICATION_LABELS[user.driver.eligibility?.reviewStatus] ?? user.driver.status.toUpperCase();
       $('driver-vehicle').textContent = `${user.driver.vehicle.model} · ${user.driver.vehicle.plate}`;
-      $('driver-guidance').textContent = user.driver.status === 'pending'
-        ? 'Your application is waiting for administrator approval. This page will update when it is reviewed.'
-        : user.driver.status === 'rejected' ? 'Your application was not approved. Contact the test administrator.'
-          : 'Choose Go online below when you are ready for a request. Finish your current negotiation or trip before taking another.';
+      $('driver-guidance').textContent = user.driver.eligibility?.eligible
+        ? 'Choose Go online when you are ready for a request.'
+        : 'Complete or update your driver application above. Review approval and current documents are required for new rides.';
     }
     if (!selectedRide()) {
       selectedId = state.rides.find((ride) => isActiveRide(ride.status))?.id ?? state.rides[0]?.id ?? null;
@@ -132,17 +132,9 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
       const description = element('div');
       description.append(element('strong', driver.name), element('small', `${driver.vehicle.model} · ${driver.vehicle.plate}`));
       row.append(description);
-      if (driver.status === 'pending') {
-        const actions = element('div', undefined, 'review-actions');
-        for (const [decision, text] of [['approved', 'Approve'], ['rejected', 'Reject']]) {
-          const button = element('button', text, `button button-small ${decision === 'approved' ? 'button-primary' : 'button-outline'}`);
-          button.type = 'button';
-          button.setAttribute('aria-label', `${text} ${driver.name}`);
-          button.addEventListener('click', () => onReview(driver.id, decision, `Application ${decision}.`));
-          actions.append(button);
-        }
-        row.append(actions);
-      } else row.append(element('span', driver.status.toUpperCase(), 'status-badge'));
+      row.append(element('span', DRIVER_APPLICATION_LABELS[driver.applicationStatus] ?? driver.status, 'status-badge'));
+      const review = element('button', 'Review application', 'button button-outline button-small');
+      review.type = 'button'; review.addEventListener('click', () => onReview(driver.id)); row.append(review);
       $('driver-applications').append(row);
     }
     renderChatReports(state.reports ?? [], onReportReview);

@@ -10,11 +10,11 @@ export function createAvailabilityView({ onOnline, onOffline }) {
   $('availability-offline').addEventListener('click', onOffline);
   function render({ user, busy, availability, online, settings, pending, running, ending, error, supported }) {
     $('availability-panel').hidden = user?.role !== 'driver';
-    const approved = user?.driver?.status === 'approved';
+    const approved = user?.driver?.status === 'approved' && user.driver.eligibility?.eligible;
     $('availability-status').textContent = pending ? 'Getting ready…' : ending ? 'Going offline…'
       : busy ? 'On a request' : online ? availability.mode === 'sample' ? 'Online · sample area' : 'Online' : 'Offline';
     const area = DEMO_AREAS.find((item) => item.id === availability?.areaId)?.name;
-    $('availability-guidance').textContent = !approved ? 'Administrator approval is needed before you can go online.'
+    $('availability-guidance').textContent = !approved ? 'Complete your application and keep reviewed documents current before going online.'
       : busy ? 'Finish your negotiation or trip, then choose Go online for another request.'
         : online && availability.mode === 'sample' ? `Local simulation: matching sample pickups in ${area ?? 'your selected area'}.`
           : online ? availability.owned && running ? 'Looking for nearby pickups. Keep this page open to stay online.'

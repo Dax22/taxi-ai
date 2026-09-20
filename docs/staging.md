@@ -128,7 +128,8 @@ On that host, with Docker Compose available:
    docker compose exec app npm run admin -- registered-test-email@example.test
    ```
 
-   Sign in again and approve the driver test account. Nothing creates default
+   Sign in again and follow [driver onboarding](driver-onboarding.md) to submit
+   fictional documents and record the review. Nothing creates default
    administrator passwords. Set up two independent browser profiles/devices.
 
 Caddy can issue/renew certificates when DNS, public ports and persistent storage
@@ -257,10 +258,11 @@ testers or marking the consolidation ready to merge:
 
 ## Availability in the matching release
 
-Matching introduced schema 6; the payments release advances it to schema 7.
-Preserve a backup with the previous release before upgrading. Current backup
-commands require schema 7; use the matching release for a schema-six restore,
-then upgrade a separate copy if needed.
+Matching introduced schema 6, payments schema 7, and driver onboarding schema 8.
+Preserve a backup with the matching previous release before upgrading. Current
+backup commands require schema 8; restore older snapshots with their matching
+release, then upgrade a separate copy. Onboarding snapshots retain private details,
+document bytes and review history. They are not anonymised or encrypted by the app.
 Availability positions and ownership are removed from snapshots.
 
 Sample-area matching and new sample requests are local-only. Hosted staging

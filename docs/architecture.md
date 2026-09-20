@@ -12,7 +12,7 @@ See [ADR 0001](decisions/0001-modular-monolith.md) for the decision and tradeoff
 | Module | Responsibility | Owns |
 | --- | --- | --- |
 | Accounts | Registration, authentication, sessions, first-admin setup, own profile | `users`, `sessions` |
-| Drivers | Application profile and administrator review | `drivers` |
+| Drivers | Private applications, documents, manual review and expiry eligibility | `drivers`, `driver_applications`, `driver_documents`, `driver_document_reads`, `driver_application_events`, `driver_application_commands` |
 | Rides | Requests, fares, bookings, pickup verification, progress, cancellation and history | `rides`, `fare_events`, `idempotency`, `ride_trips`, `ride_activity` |
 | Chat | Participant messages, read markers, retries and reports | `chat_messages`, `chat_reads`, `chat_commands`, `chat_reports` |
 | Calls | Audio invitations, session/window ownership, signaling, expiry and history | `voice_calls`, `voice_participants`, `voice_commands` |
@@ -296,7 +296,7 @@ Before real bookings, implement verified onboarding/account recovery,
 production session operations, operated encrypted off-host backups and retention, deployment
 monitoring and measured concurrency/scale. Actual dispatch, production trip
 safety operations, production mapping and payments are additional product milestones. Current
-administrator approval grants local test access only, not document verification.
+administrator approval records manual review evidence and gates new test rides; it does not contact identity/licence providers.
 
 ## Driver availability and request matching
 
@@ -329,3 +329,28 @@ A future external adapter must perform I/O outside transactions and add durable
 verified reconciliation. No customer-controlled simulation endpoint can become a
 live payment endpoint. Aggregate kobo totals use BigInt internally and decimal
 strings in JSON; individual fares remain safe integers. See [payments](payments.md).
+
+
+## Driver onboarding and document privacy
+
+The [onboarding guide](driver-onboarding.md) describes the state machine, private
+API, review evidence and schema-eight upgrade. The drivers service receives a
+byte codec, clock, IDs/hashing, account lookup and a narrow unfinished-work query.
+Its repository alone owns application/document/read/event/command SQL. All writes,
+including an approval's evidence and public vehicle projection, share one transaction.
+
+Accounts registration creates both the driver row and draft application. The
+account profile receives eligibility through an injected driver-service port;
+that port reads application metadata without calling accounts again. Private
+contact/licence fields and document bytes never enter the public driver profile.
+Availability and rides enforce current eligibility through account projections.
+Already-started trip completion retains the prior approval policy. Rides snapshots
+only public driver identity/vehicle data at assignment, including migration backfill.
+
+`onboarding-controller.mjs` owns private requests, account/selection generations
+and pending actions. `onboarding-view.mjs` owns form drafts and exact displayed
+versions. `driver-files.mjs` owns bounded browser file reads/downloads. The page
+controller resets onboarding with the other account-bound features. No document
+content is stored in localStorage, URLs, static files or logs. Downloads and file
+reads arriving after a reset are ignored. Backups retain private documents and
+must receive the same access controls as the database.

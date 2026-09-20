@@ -13,7 +13,7 @@ export function createAccountsService({ repository, driverProfiles, passwords, t
     const user = repository.findById(id);
     if (!user) return null;
     const driver = user.role === 'driver' ? driverProfiles.find(id) : null;
-    return { ...user, driver: driver ? { status: driver.status, vehicle: driver.vehicle } : null };
+    return { ...user, driver: driver ? { status: driver.status, vehicle: driver.vehicle, eligibility: driver.eligibility } : null };
   }
 
   async function register(data) {
@@ -36,7 +36,7 @@ export function createAccountsService({ repository, driverProfiles, passwords, t
       const id = tokens.id();
       const now = clock();
       repository.insert({ id, email, name, passwordHash, role: data.role, createdAt: now });
-      if (vehicle) driverProfiles.insert(id, vehicle);
+      if (vehicle) driverProfiles.insert(id, vehicle, now);
       audit.record(id, 'account.created', id, now);
       return profile(id);
     });

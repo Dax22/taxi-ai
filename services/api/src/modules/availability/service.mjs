@@ -1,6 +1,6 @@
 import { check } from '../../shared/errors.mjs';
 import { fields } from '../../shared/validation.mjs';
-import { requireRole } from '../../shared/policies.mjs';
+import { requireEligibleDriver } from '../../shared/policies.mjs';
 import { AVAILABILITY_MS, POSITION_MS } from '../../../../../packages/shared/src/matching.mjs';
 import { commandKey, clientIdentity, sequence, position, startData } from './domain.mjs';
 
@@ -17,7 +17,8 @@ export function createAvailabilityService({ repository, getAccount, sessionOwner
     return { user, userId: user.id, sessionHash, clientHash };
   }
   function invalidReason(row, now) {
-    if (getAccount(row.driverId)?.driver?.status !== 'approved') return 'approval_changed';
+    const driver = getAccount(row.driverId)?.driver;
+    if (driver?.status !== 'approved' || !driver.eligibility?.eligible) return 'approval_changed';
     if (sessionOwner(row.sessionHash) !== row.driverId) return 'session_ended';
     if ((row.mode === 'sample' && !allowSimulation) || now >= row.seenAt + AVAILABILITY_MS
       || (row.mode === 'gps' && now >= JSON.parse(row.positionJson).capturedAt + POSITION_MS)) return 'expired';
@@ -62,7 +63,7 @@ export function createAvailabilityService({ repository, getAccount, sessionOwner
       }
       const now = clock(); let row;
       if (action === 'online') {
-        requireRole(ctx.user, 'driver');
+        requireEligibleDriver(ctx.user);
         const value = startData(data, now, allowSimulation);
         check(!isBusy(ctx.userId), 'DRIVER_BUSY', 'Finish your current negotiation or trip before going online.');
         check(!repository.current(ctx.userId), 'AVAILABILITY_BUSY', 'You are already online. Go offline before starting from this window.');
@@ -75,7 +76,7 @@ export function createAvailabilityService({ repository, getAccount, sessionOwner
     });
   }
   function update(input, id, data) {
-    const ctx = context(input, true); requireRole(ctx.user, 'driver'); sweep();
+    const ctx = context(input, true); requireEligibleDriver(ctx.user); sweep();
     return unitOfWork(() => {
       const row = owned(ctx, id);
       check(row.active, 'AVAILABILITY_CLOSED', 'You are offline. Choose Go online to start again.');

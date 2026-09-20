@@ -41,7 +41,7 @@ function setup(t) {
   return { view, node, commands };
 }
 const customer = { id: 'customer', name: 'Passenger', role: 'customer' };
-const driver = { id: 'driver', name: 'Driver', role: 'driver', driver: { status: 'approved', vehicle: { model: 'Toyota', plate: 'TEST-001' } } };
+const driver = { id: 'driver', name: 'Driver', role: 'driver', driver: { status: 'approved', eligibility: { eligible: true, reviewStatus: 'approved' }, vehicle: { model: 'Toyota', plate: 'TEST-001' } } };
 const ride = { id: 'ride-one', status: 'booked', version: 4, createdAt: 1000, suggestedFareKobo: 450000,
   pickup: { name: 'Wuse' }, destination: { name: 'Maitama' }, customer, driver: { id: driver.id, name: driver.name, vehicle: driver.driver.vehicle },
   negotiation: { agreement: { amountKobo: 470001 } }, trip: { pickupPin: '123456' }, activity: [] };

@@ -1,3 +1,4 @@
+import { submitApplication, approveApplication, fixtureApi } from './driver-fixtures.mjs';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import { request as httpRequest } from 'node:http';
@@ -102,8 +103,8 @@ export async function participants(h, driverCount = 1, { online = true } = {}) {
   const drivers = [];
   for (let i = 0; i < driverCount; i++) {
     const driver = h.client(); await driver.register(`driver${i}`, 'driver');
-    const result = await admin.post(`/api/admin/drivers/${driver.user.id}/review`, { decision: 'approved' });
-    assert.equal(result.status, 200);
+    await submitApplication(fixtureApi(driver));
+    await approveApplication(fixtureApi(admin), driver.user.id);
     if (online) await driver.online();
     drivers.push(driver);
   }

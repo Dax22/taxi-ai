@@ -1,3 +1,4 @@
+import { submitApplication, approveApplication } from './driver-fixtures.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
@@ -60,7 +61,8 @@ test('full customer/driver/admin journey: approval, matching, chat, fare, PIN, r
   await assert.rejects(customer.api.request('/api/admin/drivers'), { status: 403 });
   const applications = await admin.api.request('/api/admin/drivers');
   assert.equal(applications.drivers[0].vehicle.plate, 'TEST-001');
-  await admin.api.request(`/api/admin/drivers/${driver.user.id}/review`, { method: 'POST', data: { decision: 'approved' } });
+  await submitApplication(driver.api);
+  await approveApplication(admin.api, driver.user.id);
   assert.equal((await driver.api.request('/api/session')).user.driver.status, 'approved');
   t.diagnostic('Registration, CLI administrator setup and driver review passed.');
 

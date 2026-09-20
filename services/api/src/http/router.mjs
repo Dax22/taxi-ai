@@ -28,10 +28,16 @@ export function createApiRouter(application, { secure = false } = {}) {
     } else {
       session = accounts.sessionFor(token);
       if (route?.access !== 'public') check(session, 'UNAUTHENTICATED', 'Sign in to continue.');
+      if (route?.role) check(session?.user.role === route.role, 'FORBIDDEN', `A ${route.role} account is required.`);
+      if (route?.documentDownload) rateLimiter.consume(`document:${session.user.id}`, clock(), 30, 60_000);
       if (write) {
         requireCsrf(request, session);
         rateLimiter.consume(`write:${session.user.id}`, clock(), 60, 60_000);
-        data = await readBody(request);
+        data = await readBody(request, route?.maxBodyBytes);
+        session = accounts.sessionFor(token);
+        check(session, 'UNAUTHENTICATED', 'Sign in to continue.');
+        requireCsrf(request, session);
+        if (route?.role) check(session.user.role === route.role, 'FORBIDDEN', `A ${route.role} account is required.`);
       }
     }
     check(route, 'NOT_FOUND', 'API endpoint not found.');

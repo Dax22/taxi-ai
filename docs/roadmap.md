@@ -129,7 +129,19 @@ Follow [pilot preparation](pilot-readiness.md) for the focused check and the pen
 manual acceptance session. This milestone does not enable actual transport,
 identity verification, real payments or emergency messaging.
 
-## 2j — Real ride pilot
+## 2j — Driver applications and recorded manual review (implemented; browser review pending)
+
+- Private driver contact/licence/vehicle details and five bounded image documents.
+- Submission, rejection/corrections and resubmission, with versioned review evidence.
+- Required reviewer downloads, four manual checks and an approval reference/reason.
+- Expiry eligibility on new work; active trips and historical vehicle identities preserved.
+- Schema-eight upgrade without inventing verification for legacy approved drivers.
+
+See [driver onboarding](driver-onboarding.md). These are recorded manual checks,
+not identity-provider validation. Real document processing, reviewer operations
+and browser/file-picker testing remain prerequisites for production use.
+
+## 2k — Real ride pilot
 
 Harden authentication and hosting; add verified driver onboarding, production mapping, vehicle
 matching, operational booking state, verified payment-provider integration and live receipts. Implement authenticated

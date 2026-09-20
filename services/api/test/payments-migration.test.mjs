@@ -43,7 +43,7 @@ test('schema six preserves existing records and backfills only completed trips a
   const db = openDatabase(filename);
   try {
     assert.equal(db.prepare('PRAGMA user_version').get().user_version, SCHEMA_VERSION);
-    for (const table of tables) assert.equal(JSON.stringify(db.prepare(`SELECT * FROM ${table}`).all()), snapshot.get(table), table);
+    for (const table of tables) assert.equal(JSON.stringify(db.prepare(`SELECT * FROM ${table}`).all().map((row) => { if (table === 'rides') delete row.driver_snapshot_json; return row; })), snapshot.get(table), table);
     assert.equal(db.prepare('SELECT count(*) AS n FROM payments').get().n, 2);
     assert.equal(db.prepare('SELECT count(*) AS n FROM payment_attempts').get().n, 0);
     assert.equal(db.prepare('SELECT count(*) AS n FROM payment_receipts').get().n, 0);
