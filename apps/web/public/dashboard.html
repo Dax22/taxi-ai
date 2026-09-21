@@ -223,6 +223,24 @@
                 <p class="small-note">Arrival is reported by the driver. The example image does not verify the physical vehicle.</p>
                 <button id="vehicle-mismatch-report" type="button" class="button button-outline button-small">Vehicle doesn’t match?</button></div>
               <button id="trip-confirm" class="button button-primary button-full" type="button" hidden>Confirm test booking</button>
+              <section id="vehicle-check-panel" class="quote-preview" hidden aria-labelledby="vehicle-check-title">
+                <h3 id="vehicle-check-title">AI vehicle photo check</h3>
+                <p>Take a clear photo of one vehicle with its whole number plate visible. This optional check compares the photo with your assigned vehicle.</p>
+                <p id="vehicle-check-status" role="status"></p><p id="vehicle-check-error" class="error-text" role="alert"></p>
+                <form id="vehicle-check-form" class="stack-form">
+                  <label for="vehicle-check-file">Take or choose a vehicle photo (JPEG or PNG)</label>
+                  <input id="vehicle-check-file" type="file" accept="image/jpeg,image/png" capture="environment">
+                  <canvas id="vehicle-check-preview" class="vehicle-check-photo" role="img" aria-label="Selected vehicle photo" hidden></canvas>
+                  <p id="vehicle-check-disclosure" class="small-note"></p>
+                  <label><input id="vehicle-check-consent" type="checkbox"> I agree to send this photo for AI analysis.</label>
+                  <div class="review-actions"><button id="vehicle-check-submit" type="submit" class="button button-primary button-small" disabled>Analyse vehicle photo</button>
+                    <button id="vehicle-check-clear" type="button" class="button button-outline button-small" disabled>Clear photo</button></div>
+                </form>
+                <button id="vehicle-check-refresh" type="button" class="button button-outline button-small">Refresh check result</button>
+                <div id="vehicle-check-result" aria-live="polite"></div>
+                <button id="vehicle-check-report" type="button" class="button button-outline button-small" hidden>Report concern with this result</button>
+                <p class="small-note">AI can misread photos. This does not detect a cloned plate, prove when a photo was taken, identify the driver or authorise boarding. Reports require your confirmation.</p>
+              </section>
               <button id="trip-action" class="button button-primary button-full" type="button" hidden></button>
               <div id="pickup-pin-panel" class="pickup-pin-panel" hidden><p class="eyebrow">YOUR PICKUP PIN</p><output id="pickup-pin-value" aria-label="Your six-digit pickup PIN"></output><p class="small-note">Share this with your driver in person after checking the vehicle. Keep it private until pickup.</p></div>
               <div id="delivery-pin-panel" class="quote-preview" hidden><span>Recipient’s drop-off code</span><strong id="delivery-pin-value"></strong><p class="small-note">Share this code privately with the recipient. They give it to the driver only when the parcel is handed over.</p></div>
@@ -241,6 +259,7 @@
             <form id="safety-form" class="stack-form"><fieldset id="safety-fields" disabled><legend>Create a test SOS</legend>
               <label for="safety-kind">Concern</label><select id="safety-kind"><option value="need_help">Need help</option><option value="vehicle_mismatch">Vehicle or number plate does not match</option><option value="possible_crash">Possible crash</option><option value="unsafe_behaviour">Unsafe behaviour</option><option value="other">Other concern</option></select>
               <p class="small-note">For a different vehicle, describe the plate, model or colour you can safely observe. Reports go to review and do not automatically penalise the driver. Reporting does not cancel the trip; use Cancel booking before pickup if needed.</p>
+              <p id="safety-vehicle-check" class="small-note" hidden>The AI comparison result will be saved with this report for review. No photo is attached.</p>
               <label for="safety-note">Note (optional)</label><textarea id="safety-note" rows="3" maxlength="500" placeholder="Add details for the test administrator…"></textarea>
               <p class="small-note">Choose contacts for simulated alerts (optional):</p><div id="safety-recipients" class="safety-recipients"></div>
               <p class="small-note">The report saves the trip reference, driver ID, vehicle plate and the last available driver-shared location with its timestamp. This does not turn on GPS.</p>

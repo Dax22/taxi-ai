@@ -2,9 +2,11 @@ import { $, element } from './dom.mjs';
 import { safetyTime, safetyLocation } from './safety-format.mjs';
 import { SAFETY_KINDS, INCIDENT_LABELS, ALERT_LABELS } from '/shared/safety.mjs';
 import { vehicleMismatchReport } from '/shared/pickup-identity.mjs';
+import { CHECK_LABELS, CHECK_FIELDS } from '/shared/vehicle-checks.mjs';
 
 export function createSafetyView({ onAdd, onRemove, onRaise, onShare, onRevoke, onCopy, onOpen, onPage, onReview, onSimulate }) {
   let state = {}, contactsKey = '', incidentsKey = '', queueKey = '', detailKey = '', reviewKey = '';
+  let vehicleCheckId = null;
   const selectedContacts = new Set();
   function button(label, action, disabled = false) {
     const node = element('button', label, 'button button-outline button-small'); node.type = 'button'; node.disabled = disabled;
@@ -20,7 +22,11 @@ export function createSafetyView({ onAdd, onRemove, onRaise, onShare, onRevoke, 
       ['Vehicle colour', snapshot.driver.vehicle.colour || 'Not recorded'], ['Vehicle category', snapshot.driver.vehicle.category || 'standard'],
       ['Location at report', safetyLocation(snapshot.location)], ['Reporter', `${snapshot.reporter.name} · ${snapshot.reporter.role}`],
       ['Report note', record.note || 'No note provided.']]) details.append(element('dt', label), element('dd', value));
-    card.append(details, element('h4', 'Recorded actions'));
+    card.append(details);
+    if(snapshot.vehicleCheck){const check=snapshot.vehicleCheck;card.append(element('h4',`AI photo comparison · ${CHECK_LABELS[check.comparison.outcome]}`),
+      element('p',`Reference ${check.id} · ${safetyTime(check.checkedAt)} (Abuja). AI observations only; no photo is retained and no automatic penalty was applied.`,'small-note'));
+      for(const f of check.comparison.fields)card.append(element('p',`${CHECK_FIELDS[f.key]}: expected ${f.expected} · observed ${f.observed} · ${f.status}`));}
+    card.append(element('h4', 'Recorded actions'));
     const events = element('ol', undefined, 'safety-events');
     for (const item of record.events) events.append(element('li', `${item.action === 'created' ? 'Test SOS saved' : INCIDENT_LABELS[item.action]} · ${safetyTime(item.createdAt)} (Abuja) · ${item.actorId}${item.note ? ` · ${item.note}` : ''}`));
     card.append(events, element('h4', 'Contact notifications · simulation only'));
@@ -132,13 +138,14 @@ export function createSafetyView({ onAdd, onRemove, onRaise, onShare, onRevoke, 
     try {
       const data = $('safety-kind').value === 'vehicle_mismatch' ? vehicleMismatchReport($('safety-note').value)
         : { kind: $('safety-kind').value, note: $('safety-note').value };
-      onRaise({ ...data, contactIds: [...selectedContacts] });
+      onRaise({ ...data, contactIds: [...selectedContacts],...($('safety-kind').value==='vehicle_mismatch'&&vehicleCheckId?{vehicleCheckId}:{}) });
     } catch (error) { $('safety-error').textContent = error.message; }
   });
   function concern() {
     const mismatch = $('safety-kind').value === 'vehicle_mismatch';
     $('safety-note').maxLength = mismatch ? 480 : 500;
     $('safety-raise').textContent = mismatch ? 'Report different vehicle' : 'Create test SOS';
+    $('safety-vehicle-check').hidden = !mismatch || !vehicleCheckId;
   }
   $('safety-kind').addEventListener('change', concern);
   $('safety-share-create').addEventListener('click', () => { if (!$('safety-share-create').disabled) onShare(Number($('safety-share-minutes').value)); });
@@ -147,13 +154,15 @@ export function createSafetyView({ onAdd, onRemove, onRaise, onShare, onRevoke, 
   $('safety-admin-latest').addEventListener('click', () => onPage(null));
   $('safety-admin-older').addEventListener('click', () => { if (state.queue?.nextBefore) onPage(state.queue.nextBefore); });
   return Object.freeze({ render, saved, clearReview, focusReview() { $('safety-admin-detail').scrollIntoView({ behavior: 'smooth', block: 'start' }); },
-    vehicleMismatch(rideId) {
+    vehicleMismatch(rideId,checkId=null) {
       if (state.ride?.id !== rideId || state.user?.role !== 'customer' || state.pending) return;
+      vehicleCheckId = checkId;
       $('safety-kind').value = 'vehicle_mismatch'; concern();
       $('safety-panel').scrollIntoView({ behavior: 'smooth', block: 'start' }); $('safety-note').focus();
     },
     reset() {
       state = {}; contactsKey = incidentsKey = queueKey = detailKey = ''; selectedContacts.clear(); clearReview();
+      vehicleCheckId = null;
       for (const id of ['contact-name', 'contact-phone', 'safety-note', 'safety-share-url']) $(id).value = '';
       $('safety-kind').value = 'need_help'; concern(); $('safety-share-minutes').value = '15';
       for (const id of ['contacts-list', 'safety-recipients', 'safety-incidents', 'safety-admin-list', 'safety-admin-detail']) $(id).replaceChildren();

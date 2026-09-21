@@ -61,11 +61,11 @@ recorded vehicle colour and category. Reporting does not automatically suspend
 the driver, cancel the journey or impose a charge. The rider can explicitly
 cancel from the journey before pickup. The existing one-open-concern limit applies.
 
-This is rider confirmation and reporting, not automatic physical-car detection.
-GPS locates a phone rather than identifying a car. Future photo/plate comparison
-would need consented capture, plate OCR, comparison against approved evidence,
-measured confidence/false-match handling, bounded retention and human review.
-Generated category images are not reference evidence for that comparison.
+An optional [AI vehicle photo check](vehicle-photo-checks.md) now reads a rider's
+photo and compares the plate and visible attributes with the assigned record.
+It requires configured server credentials and does not prove physical presence,
+image freshness, plate authenticity or safety. GPS locates a phone rather than
+identifying a car. Generated category images are not reference evidence.
 The preview does not provide staffed emergency response.
 
 ## Verification and remaining acceptance

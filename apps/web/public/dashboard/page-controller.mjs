@@ -9,9 +9,9 @@ const identity = (session) => session.user ? `${session.user.id}:${session.user.
 
 /** Session identity owns media. A separate, per-window mode owns workspace data. */
 export function createPageController({ client, activityClient = client, view, modeView, preferences,
-  conversation, conversationView, calls, sharing, availability, planner, payments, onboarding, safety, authForm, feedback }) {
+  conversation, conversationView, calls, sharing, availability, planner, payments, onboarding, safety, vehicleCheck, authForm, feedback }) {
   let state = emptyState(), sessionKey = null, generation = 0, refreshing = null, busy = false;
-  const workspace = [conversation, planner, payments, ...[onboarding, safety].filter(Boolean)];
+  const workspace = [conversation, planner, payments, ...[onboarding, safety, vehicleCheck].filter(Boolean)];
   const features = [...workspace, calls, sharing, availability];
   function render() { view.render(state); modeView?.render(state, busy); }
   function setBusy(value) { busy = value; view.setBusy(value); conversationView.setBusy(value); modeView?.render(state, value); }
@@ -61,8 +61,8 @@ export function createPageController({ client, activityClient = client, view, mo
   }
   function selection(ride) {
     activityContext(ride);
-    payments.context(state.user, ride); safety?.context(state.user, ride);
-    void conversation.show(ride, state.user); void payments.poll(); void safety?.poll();
+    payments.context(state.user, ride); safety?.context(state.user, ride); vehicleCheck?.context(state.user,ride);
+    void conversation.show(ride, state.user); void payments.poll(); void safety?.poll(); void vehicleCheck?.poll();
   }
   const scoped = (path, before = null) => `${path}?mode=${state.mode}${before ? `&before=${encodeURIComponent(before)}` : ''}`;
   function refresh() {
@@ -100,10 +100,10 @@ export function createPageController({ client, activityClient = client, view, mo
         }
         state = next; render();
         const selected = view.selected(), occupied = state.activeElsewhere.length > 0 || state.rides.some((ride) => isActiveRide(ride.status));
-        activityContext(selected); onboarding?.context(state.user); safety?.context(state.user, selected);
+        activityContext(selected); onboarding?.context(state.user); safety?.context(state.user, selected); vehicleCheck?.context(state.user,selected);
         payments.context(state.user, selected); availability.context(state.user, occupied);
         void planner.setContext(state.user, occupied);
-        await Promise.all([payments.poll(), availability.poll(), conversation.show(selected, state.user), onboarding?.poll(), safety?.poll()]);
+        await Promise.all([payments.poll(), availability.poll(), conversation.show(selected, state.user), onboarding?.poll(), safety?.poll(),vehicleCheck?.poll()]);
         if (epoch === generation) feedback.synced();
       } catch (error) {
         if ([401, 403].includes(error.status)) clear();
@@ -187,7 +187,7 @@ export function createPageController({ client, activityClient = client, view, mo
       const result = await client.request(path, { method: 'POST', data }); session(result); authForm.reset();
     }),
     logout: () => runAction(async () => {
-      onboarding?.reset(); safety?.reset(); calls.reset(); payments.reset(); void availability.stop(); availability.reset();
+      onboarding?.reset(); safety?.reset(); vehicleCheck?.reset(); calls.reset(); payments.reset(); void availability.stop(); availability.reset();
       sharing.shutdown(); sharing.reset(); planner.reset();
       await client.request('/api/auth/logout', { method: 'POST' });
       if (state.account) preferences?.clear(state.account.id);

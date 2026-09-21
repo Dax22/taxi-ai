@@ -15,7 +15,6 @@
       "package": "com.taxiai.app",
       "blockedPermissions": [
         "android.permission.RECORD_AUDIO",
-        "android.permission.CAMERA",
         "android.permission.ACCESS_BACKGROUND_LOCATION"
       ]
     },
@@ -36,7 +35,12 @@
           "isAndroidForegroundServiceEnabled": false
         }
       ],
-      "expo-notifications"
+      "expo-notifications",
+      ["expo-image-picker", {
+        "cameraPermission": "Allow Taxi Ai to take a vehicle photo when you choose to check your pickup car.",
+        "photosPermission": "Allow Taxi Ai to use the vehicle photo you select for a pickup check.",
+        "microphonePermission": false
+      }]
     ],
     "experiments": {
       "typedRoutes": true

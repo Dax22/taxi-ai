@@ -103,6 +103,7 @@ const source = (await readFile(new URL('../public/dashboard/safety-view.mjs', im
   .replace("'./dom.mjs'", `'${new URL('../public/dashboard/dom.mjs', import.meta.url)}'`)
   .replace("'./safety-format.mjs'", `'${new URL('../public/dashboard/safety-format.mjs', import.meta.url)}'`)
   .replace("'/shared/safety.mjs'", `'${new URL('../../../packages/shared/src/safety.mjs', import.meta.url)}'`)
+  .replace("'/shared/vehicle-checks.mjs'", `'${new URL('../../../packages/shared/src/vehicle-checks.mjs', import.meta.url)}'`)
   .replace("'/shared/pickup-identity.mjs'", `'${new URL('../../../packages/shared/src/pickup-identity.mjs', import.meta.url)}'`);
 const { createSafetyView } = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
 const html = await readFile(new URL('../public/dashboard.html', import.meta.url), 'utf8');

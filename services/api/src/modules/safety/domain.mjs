@@ -21,12 +21,13 @@ export function noteText(value, required = false) {
   return value.trim();
 }
 export function incidentData(data) {
-  fields(data, ['kind', 'note', 'contactIds']);
+  fields(data, ['kind', 'note', 'contactIds', 'vehicleCheckId'], ['kind', 'note', 'contactIds']);
+  check(data.vehicleCheckId === undefined || identifier(data.vehicleCheckId),'INVALID_INPUT','Use a valid vehicle check reference.');
   check(typeof data.kind === 'string' && Object.hasOwn(SAFETY_KINDS, data.kind), 'INVALID_INPUT', 'Choose a concern type.');
   const note = noteText(data.note);
   check(Array.isArray(data.contactIds) && data.contactIds.length <= 3 && data.contactIds.every(identifier)
     && new Set(data.contactIds).size === data.contactIds.length, 'INVALID_CONTACTS', 'Choose up to three different saved contacts.');
-  return { kind: data.kind, note, contactIds: [...data.contactIds].sort() };
+  return { kind: data.kind, note, contactIds: [...data.contactIds].sort(),...(data.vehicleCheckId ? {vehicleCheckId:data.vehicleCheckId} : {}) };
 }
 export function canonical(value) {
   if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;

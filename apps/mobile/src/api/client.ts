@@ -1,5 +1,7 @@
 import { readContacts, readSafety, readSafetyResult } from '../safety/contracts.ts';
 import { readTracking, readTrackingResult } from '../tracking/contracts.ts';
+import { readVehicleCheck,readVehicleChecks } from '../../../../packages/shared/src/vehicle-checks.mjs';
+import type { VehiclePhoto } from '../../../../packages/shared/src/vehicle-checks.mjs';
 import { envelope, parseAccount, parseSignIn, parseActivity, parseDevices, parseOnboarding, parseEmailStatus } from '../../../../packages/shared/src/mobile-contracts.mjs';
 import type { VehicleCategoryId } from '../../../../packages/shared/src/vehicle-categories.mjs';
 import type { Account, Credentials, DriverCommands, DriverDetails, Mode, SignIn } from '../../../../packages/shared/src/mobile-contracts.mjs';
@@ -57,7 +59,7 @@ export class MobileClient {
   }
   private async send(path: string, { data, token, preview = this.saved?.previewAccess ?? '', key }: { data?: unknown; token?: string; preview?: string; key?: string } = {}) {
     if (!/^\/[a-z0-9/?=&_-]+$/i.test(path)) throw new Error('Invalid mobile API path.');
-    const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), path === '/driver/application/upload' ? 45_000 : 12_000);
+    const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), path === '/driver/application/upload' ? 45_000 : path.startsWith('/vehicle-checks/') ? 35_000 : 12_000);
     try {
       const response = await this.fetchImpl(`${this.origin}/api/mobile/v1${path}`, { method: data === undefined ? 'GET' : 'POST',
         credentials: 'omit', redirect: 'error', signal: controller.signal,
@@ -179,6 +181,10 @@ export class MobileClient {
     return parseBookingRide(await this.request(`/booking/requests/${id}/cancel`, { expectedVersion, reason: 'plans_changed' }, key));
   }
   async safetyContacts() { return readContacts(await this.request('/safety/contacts')); }
+  async vehicleChecks(id:string) { return readVehicleChecks(await this.request(`/vehicle-checks/rides/${id}`),id); }
+  async checkVehicle(id:string,data:{image:VehiclePhoto;consentVersion:string},key:string) {
+    const body=await this.request(`/vehicle-checks/rides/${id}`,data,key);return {check:readVehicleCheck(body.check,id)};
+  }
   async tracking(id: string, clientId: string) { return readTracking(await this.request(`/tracking/rides/${id}?clientId=${clientId}`), id); }
   async startTracking(id: string, clientId: string, key: string) {
     return readTrackingResult(await this.request(`/tracking/rides/${id}/start?clientId=${clientId}`, {}, key), { rideId: id });
