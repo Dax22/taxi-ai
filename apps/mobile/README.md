@@ -33,6 +33,7 @@ app, including pickup and drop-off verification. Updates has a durable inbox and
 optional configured Expo phone alerts. See [native journeys and push setup](../../docs/mobile-journeys.md).
 Native Safety / SOS now opens trusted contacts, revocable trip links and private test incident records. See [mobile safety](../../docs/mobile-safety.md).
 The driver can explicitly share foreground trip GPS from Journey or Safety; the customer and active trip links receive the latest position. See [native trip location](../../docs/mobile-trip-location.md).
+Booking and shared-driver-location views can show Google Maps on Android and Apple Maps on iOS. Android signed builds need the restricted Maps SDK key; see [native maps](../../docs/mobile-maps.md).
 Native calls, payment controls, live trip maps, automatic crash detection, restaurant
 ordering and staff tools remain separate milestones.
 This is a connected foundation, not a store-ready transport service.
