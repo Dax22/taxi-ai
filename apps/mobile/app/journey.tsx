@@ -2,6 +2,7 @@ import { Alert, Text } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useJourney } from '../src/journeys/provider';
 import { JourneyChat } from '../src/journeys/chat';
+import { TripLocationCard } from '../src/tracking/view';
 import { Button, Card, Field, Heading, Loading, Notice, Pill, Screen, fare, styles } from '../src/ui/components';
 import { VehicleCard } from '../src/ui/vehicle-card';
 import { bookingStatusLabel } from '../../../packages/shared/src/mobile-booking.mjs';
@@ -34,6 +35,7 @@ function JourneyScreen({id}:{id:string}){
         {r.allowedActions.filter((a)=>labels[a]).map((a)=><Button key={a} title={labels[a]!} disabled={locked} onPress={()=>confirm(a,labels[a]!,a==='complete'?'Confirm that the journey and handover are complete.':'Update this journey to the next stage?')}/>)}
       </Card>}
       {r.status==='completed'&&<Card><Text style={styles.h2}>{r.delivery?'Delivery complete.':'You have arrived.'}</Text><Text style={styles.body}>Your journey is saved in Activity.</Text></Card>}
+      <TripLocationCard id={r.id}/>
       <JourneyChat state={s} controller={c}/>
       {r.allowedActions.includes('cancel')&&<Button title="Cancel journey" secondary disabled={locked} onPress={()=>confirm('cancel','Cancel journey','Cancel this request or booking?')}/>}
       <Text style={styles.small}>Development preview · no live transport or real payment.</Text>

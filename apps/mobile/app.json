@@ -30,7 +30,7 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Allow Taxi Ai to use your location while you are online to find nearby jobs.",
+          "locationWhenInUsePermission": "Allow Taxi Ai to find nearby jobs and, when you choose to share, show your trip location while the app is open.",
           "isIosBackgroundLocationEnabled": false,
           "isAndroidBackgroundLocationEnabled": false,
           "isAndroidForegroundServiceEnabled": false

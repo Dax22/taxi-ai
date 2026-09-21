@@ -1,4 +1,5 @@
 import { readContacts, readSafety, readSafetyResult } from '../safety/contracts.ts';
+import { readTracking, readTrackingResult } from '../tracking/contracts.ts';
 import { envelope, parseAccount, parseSignIn, parseActivity, parseDevices, parseOnboarding, parseEmailStatus } from '../../../../packages/shared/src/mobile-contracts.mjs';
 import type { VehicleCategoryId } from '../../../../packages/shared/src/vehicle-categories.mjs';
 import type { Account, Credentials, DriverCommands, DriverDetails, Mode, SignIn } from '../../../../packages/shared/src/mobile-contracts.mjs';
@@ -178,6 +179,16 @@ export class MobileClient {
     return parseBookingRide(await this.request(`/booking/requests/${id}/cancel`, { expectedVersion, reason: 'plans_changed' }, key));
   }
   async safetyContacts() { return readContacts(await this.request('/safety/contacts')); }
+  async tracking(id: string, clientId: string) { return readTracking(await this.request(`/tracking/rides/${id}?clientId=${clientId}`), id); }
+  async startTracking(id: string, clientId: string, key: string) {
+    return readTrackingResult(await this.request(`/tracking/rides/${id}/start?clientId=${clientId}`, {}, key), { rideId: id });
+  }
+  async stopTracking(id: string, clientId: string, key: string) {
+    return readTrackingResult(await this.request(`/tracking/shares/${id}/stop?clientId=${clientId}`, {}, key), { shareId: id, stopped: true });
+  }
+  async trackingPosition(id: string, clientId: string, sequence: number, position: Position) {
+    return readTrackingResult(await this.request(`/tracking/shares/${id}/position?clientId=${clientId}`, { sequence, ...position }), { shareId: id });
+  }
   async safetyTrip(id: string) { return readSafety(await this.request(`/safety/rides/${id}`)); }
   async safetyCommand(path: string, data: Record<string, unknown>, key: string) { return readSafetyResult(await this.request(`/safety/${path}`, data, key),path); }
   safetyLink(token: string) { if (!/^[a-f0-9]{64}$/.test(token)) throw new Error('Invalid share link.'); return `${this.origin}/trip-share#${token}`; }

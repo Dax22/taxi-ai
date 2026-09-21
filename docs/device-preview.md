@@ -84,6 +84,8 @@ passed based on JavaScript bundle exports or mocked provider tests.
 | All five category journeys | Eligible driver, explicit fare acceptance, customer confirmation, completion and saved history | API tests only |
 | Delivery codes, cancellation, stale offers | Wrong codes cannot complete; invalid transitions rejected | API tests only |
 | Background, permission denial, reconnect, account switch | No hidden tracking, private data cleared, uncertain commands retry unchanged | Controller tests only |
+| Native trip GPS and private trip link | Driver explicitly shares; customer and authorized link viewer see matching position/age; stopping removes it | API/controller fixtures only |
+| GPS interruption and session lifecycle | Navigation keeps foreground sharing; background stops it; no auto-resume; revoked/closed/expired trips cannot publish | API/controller fixtures only |
 | Push opt-in and opt-out | Correct project registers; opt-out stops future delivery | Mocked provider tests only |
 | Foreground/background/closed-app alert tap | Own update opens for review without automatic booking actions | Not run on devices |
 | Cross-account and revoked-device alerts | No private content leak or unauthorized journey access | API tests only |
@@ -99,3 +101,15 @@ recreate the app container, then choose **Updates → Enable phone alerts** on
 each test phone. Generate an ordinary test offer/message from the other account
 and verify inbox, receipt and visible phone delivery. Keep push off until the
 matching project and provider credentials are configured.
+
+For trip GPS acceptance, use two physical phones within the Abuja preview area.
+Book and confirm a trip, then choose **Share my location** on the driver's
+Journey screen. Confirm an actual moving GPS fix and its timestamp on the customer
+phone and private trip link. Navigate to Safety and back without stopping updates.
+Test denied/approximate permission, Stop during permission or GPS acquisition,
+network loss, background/lock and return, opening the OS trip-link share sheet
+and returning (restart sharing explicitly if the app lost foreground), another driver's-device Stop, device
+revocation, completion and cancellation. Confirm old fixes become stale at 30
+seconds and unavailable by the 60-second lease deadline if server cleanup cannot
+be delivered. Record actual device/build evidence; mock coordinates do not pass
+the real-GPS row. See [mobile-trip-location.md](mobile-trip-location.md).
