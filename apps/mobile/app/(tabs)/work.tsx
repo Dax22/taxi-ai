@@ -16,7 +16,7 @@ export default function Work(){
   return <Screen><Pill>WORK</Pill><Heading title="Ready when you are." subtitle="Choose when to receive nearby requests."/><Notice message={s.error}/>
     {!user?.driver?<Card><Text style={styles.h2}>Drive or deliver with Taxi Ai.</Text><Button title="Start driver application" onPress={()=>router.push('/driver-application')}/></Card>:<>
       <VehicleCard vehicle={user.driver.vehicle} compact/>
-      <Button title="View driver application" secondary onPress={()=>router.push('/driver-application')}/>
+      <Button title="Manage vehicle and documents" secondary onPress={()=>router.push('/driver-application')}/>
       <Card><Pill>{online?(s.availability?.owned?'ONLINE ON THIS PHONE':'ONLINE ON ANOTHER DEVICE'):'OFFLINE'}</Pill>
         <Text style={styles.body}>{eligible?'Keep Taxi Ai open to receive requests. Leaving the app stops location updates and takes you offline.':'Complete your application and approval before taking new jobs.'}</Text>
         <Text style={styles.small}>Your precise location is used to find nearby work. Customers do not see your availability location.</Text>

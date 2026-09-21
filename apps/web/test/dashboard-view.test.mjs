@@ -41,9 +41,9 @@ function setup(t) {
     querySelectorAll(selector) { const all = [...nodes.values(), ...created]; return selector === 'button'
       ? all.filter((value) => value.tag === 'button') : all.filter((value) => value.dataset.requestExpires); } };
   t.after(() => { globalThis.document = old; });
-  const commands = [];
-  const view = createDashboardView({ serverNow: () => 1000, onCommand: (...args) => commands.push(args), onReview() {}, onReportReview() {}, onSelectionChange() {}, onHistory() {} });
-  return { view, node, commands };
+  const commands = [], mismatches = [];
+  const view = createDashboardView({ serverNow: () => 1000, onCommand: (...args) => commands.push(args), onVehicleMismatch: (id) => mismatches.push(id), onReview() {}, onReportReview() {}, onSelectionChange() {}, onHistory() {} });
+  return { view, node, commands, mismatches };
 }
 const customer = { id: 'customer', name: 'Passenger', role: 'customer' };
 const driver = { id: 'driver', name: 'Driver', role: 'driver', driver: { status: 'approved', eligibility: { eligible: true, reviewStatus: 'approved' }, vehicle: { model: 'Toyota', plate: 'TEST-001' } } };
@@ -106,6 +106,19 @@ test('dashboard reset removes trip identities, fare, plate, history and PIN befo
   h.view.reset(); h.view.render(state({ id: 'admin', role: 'admin', name: 'Operator' }, []));
   assert.equal(h.node('admin-dashboard').hidden, false); assert.equal(h.node('ride-dashboard').hidden, true);
   assert.equal(h.node('driver-vehicle').textContent, '');
+});
+
+test('arrival identity belongs to the selected rider journey and mismatch shortcuts cannot act for the driver or after closure', (t) => {
+  const h = setup(t), arrived = { ...ride, status: 'arrived', driver: { ...ride.driver, vehicle: { ...ride.driver.vehicle, colour: 'Silver', category: 'suv' } } };
+  h.view.render(state(customer, [arrived]));
+  assert.equal(h.node('pickup-identity').hidden, false); assert.equal(h.node('arrival-title').textContent, 'Driver has arrived');
+  for (const value of ['Driver', 'Toyota', 'TEST-001', 'Silver', 'SUV']) assert.ok(h.node('arrival-body').textContent.includes(value));
+  h.node('vehicle-mismatch-report').handlers.click(); assert.deepEqual(h.mismatches, [ride.id]);
+  h.view.setBusy(true); h.node('vehicle-mismatch-report').handlers.click(); assert.equal(h.mismatches.length, 1); h.view.setBusy(false);
+  h.view.render(state(driver, [arrived])); assert.equal(h.node('pickup-identity').hidden, true);
+  h.node('vehicle-mismatch-report').handlers.click(); assert.equal(h.mismatches.length, 1);
+  h.view.render(state(customer, [{ ...arrived, status: 'completed' }])); assert.equal(h.node('pickup-identity').hidden, true);
+  h.view.reset(); assert.equal(h.node('arrival-body').textContent, '');
 });
 
 test('fare buttons retain the displayed offer version and never accept a newer price implicitly', (t) => {

@@ -13,13 +13,13 @@ import { createVehicleCategoryPicker } from './vehicle-categories.mjs';
 
 
 /** DOM rendering and UI events. No network, session storage or backend imports. */
-export function createDashboardView({ onCommand, onReview, onReportReview, onSelectionChange, onHistory, serverNow, onCategoryChange = () => {} }) {
+export function createDashboardView({ onCommand, onReview, onReportReview, onSelectionChange, onHistory, serverNow, onCategoryChange = () => {}, onVehicleMismatch = () => {} }) {
   let state = { user: null, rides: [], available: [], drivers: [] };
   let selectedId = null, detailId = null;
   let renderedLists = '', renderedDetail = '';
   let busy = false;
   let initialCategory = typeof location === 'undefined' ? null : new URLSearchParams(location.search).get('category');
-  const tripView = createTripView({ onCommand, serverNow });
+  const tripView = createTripView({ onCommand, serverNow, onVehicleMismatch });
   const categories = createVehicleCategoryPicker($('account-vehicle-categories'), { onSelect() { updateCategoryVisibility(); updateButtons(); } });
   function updateCategoryVisibility() {
     const customer = state.user?.role === 'customer';

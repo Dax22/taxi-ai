@@ -52,7 +52,9 @@ export function parseNotifications(v) {
     && (v.nextBefore === null || positive(v.nextBefore)) && object(v.push) && typeof v.push.enabled === 'boolean' && typeof v.push.registered === 'boolean'
     && (v.push.projectId === null || uuid(v.push.projectId)));
   expect(v.notifications.every((n) => object(n) && positive(n.id) && uuid(n.rideId) && mode(n.mode) && Object.hasOwn(NOTIFICATION_LABELS,n.kind)
-    && n.title === NOTIFICATION_LABELS[n.kind] && integer(n.createdAt) && nullableTime(n.readAt))); return v;
+    && n.title === NOTIFICATION_LABELS[n.kind] && integer(n.createdAt) && nullableTime(n.readAt)
+    && (n.body === undefined && n.arrivalActive === undefined
+      || n.kind === 'arrive' && n.mode === 'customer' && text(n.body,500) && typeof n.arrivalActive === 'boolean'))); return v;
 }
 export function parseNotificationTarget(v) { envelope(v); expect(object(v.target) && uuid(v.target.rideId) && mode(v.target.mode) && ['work','journey'].includes(v.target.screen)); return v; }
 

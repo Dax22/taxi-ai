@@ -5,17 +5,69 @@ import { createApplication } from '../src/application.mjs';
 import { createPushProvider } from '../src/infrastructure/push-provider.mjs';
 import { createNotificationsRepository } from '../src/modules/notifications/repository.mjs';
 import { transaction } from '../src/infrastructure/database.mjs';
+import { randomUUID } from 'node:crypto';
+import { DETAILS, fixtureApi, submitApplication, approveApplication } from './driver-fixtures.mjs';
 const projectId='00000000-0000-4000-8000-000000000001',token='ExpoPushToken[fixture_no_real_destination]';
 async function fixture(t){
-  const h=await harness(t),{customer,driver}=await participants(h);
+  const h=await harness(t),{customer,driver,admin}=await participants(h);
   const sent=[],receipts=[];
   const provider={enabled:true,projectId,send:async(data)=>{sent.push(data);return{status:'ticket',ticket:'fixture-ticket'};},receipt:async(ticket)=>{receipts.push(ticket);return{status:'ok'};}};
   const app=createApplication({db:h.db,clock:()=>h.now,allowSimulation:true,pushProvider:provider});
   const credentials=app.devices.issue(customer.user.id,'Test device').credentials;
   app.notifications.register(customer.user.id,credentials.sessionId,{token,projectId});
   const ride=await claimRide(driver,await requestRide(customer));
-  return{h,customer,driver,app,credentials,provider,ride,sent,receipts};
+  return{h,customer,driver,admin,app,credentials,provider,ride,sent,receipts};
 }
+async function step(who, ride, action, data = {}, key = randomUUID()) {
+  const result = await who.post(`/api/rides/${ride.id}/${action}`, { expectedVersion: ride.version, ...data }, key);
+  assert.equal(result.status, 200, JSON.stringify(result.body)); return result.body.ride;
+}
+async function arrival(f) {
+  let ride = await step(f.driver, f.ride, 'offers', { amountKobo: 470000 });
+  ride = await step(f.customer, ride, 'accept', { offerId: ride.negotiation.currentOffer.id });
+  ride = await step(f.customer, ride, 'confirm'); ride = await step(f.driver, ride, 'depart');
+  const key = randomUUID(), before = ride;
+  ride = await step(f.driver, before, 'arrive', {}, key);
+  await step(f.driver, before, 'arrive', {}, key); // A lost-reply retry must not duplicate the alert.
+  return ride;
+}
+
+test('arrival details and phone alerts belong to the rider and retain the assigned vehicle snapshot after later edits', async (t) => {
+  const f = await fixture(t), ride = await arrival(f);
+  const notices = () => f.app.notifications.list(f.customer.user.id, null, f.credentials.sessionId).notifications.filter(n => n.kind === 'arrive');
+  assert.equal(notices().length, 1); const saved = notices()[0]; assert.equal(saved.arrivalActive, true);
+  for (const expected of ['driver0', 'Toyota Corolla', 'Yellow', 'Standard', 'TEST-DRIVER']) assert.ok(saved.body.includes(expected), expected);
+  for (const privateValue of [DETAILS.phone, DETAILS.licenceNumber, ride.pickup.name, ride.destination.name]) assert.ok(!saved.body.includes(privateValue));
+  const outsider = f.h.client(); await outsider.register('unrelated');
+  assert.throws(() => f.app.notifications.open(outsider.user.id, saved.id), { code: 'NOT_FOUND' });
+  assert.equal(f.app.notifications.list(f.driver.user.id, null, null).notifications.some(n => n.body), false);
+  await f.app.notifications.deliverPending();
+  assert.equal(f.sent.filter(n => n.arrivalBody).length, 1); assert.equal(f.sent.find(n => n.arrivalBody).arrivalBody, saved.body);
+  const customerView = (await f.customer.send(`/api/rides/${ride.id}`)).body.ride;
+  assert.ok(!saved.body.includes(customerView.trip.pickupPin));
+  await step(f.customer, customerView, 'cancel', { reason: 'other' });
+  const application = (await f.driver.send('/api/driver/application')).body.application;
+  await f.driver.post('/api/driver/application/reopen', { expectedVersion: application.version });
+  await submitApplication(fixtureApi(f.driver), '2099-12-31', { ...DETAILS, vehicle: { ...DETAILS.vehicle, make: 'Honda', model: 'Civic', colour: 'Blue', plate: 'NEW-TEST' } });
+  await approveApplication(fixtureApi(f.admin), f.driver.user.id);
+  assert.equal(f.app.accounts.profile(f.driver.user.id).driver.vehicle.plate, 'NEW-TEST');
+  assert.equal(notices()[0].body, saved.body); assert.equal(notices()[0].arrivalActive, false);
+});
+
+test('unsent arrival alerts expire and are discarded after pickup or cancellation', async (t) => {
+  for (const outcome of ['start', 'cancel', 'expired']) {
+    const f = await fixture(t), ride = await arrival(f);
+    const id = f.app.notifications.list(f.customer.user.id, null, f.credentials.sessionId).notifications.find(n => n.kind === 'arrive').id;
+    if (outcome === 'start') {
+      const current = (await f.customer.send(`/api/rides/${ride.id}`)).body.ride;
+      await step(f.driver, ride, 'start', { pickupPin: current.trip.pickupPin });
+    } else if (outcome === 'cancel') await step(f.customer, ride, 'cancel', { reason: 'other' });
+    else f.h.advance(300_000);
+    await f.app.notifications.deliverPending();
+    assert.equal(f.sent.some(n => n.notificationId === id), false, outcome);
+    assert.equal(f.h.db.prepare('SELECT status FROM push_jobs WHERE notification_id=?').get(id).status, 'dead');
+  }
+});
 test('push jobs persist separately from transactions, await receipts and contain no journey or message contents',async(t)=>{
   const f=await fixture(t);assert.equal(f.sent.length,0);
   const row=f.h.db.prepare('SELECT status FROM push_jobs').get();assert.equal(row.status,'pending');
@@ -81,4 +133,15 @@ test('Expo adapter uses generic bounded payloads, fixed HTTPS endpoints, tickets
   const body=JSON.parse(requests[0].body);assert.deepEqual(body.data,{notificationId:1});assert.equal(body.ttl,300);assert.equal(requests[0].redirect,'error');
   let called=false;const off=createPushProvider({fetchImpl:async()=>{called=true;throw new Error('No external contact expected');}});await off.send({token,notificationId:1});assert.equal(called,false);
   assert.throws(()=>createPushProvider({env:{TAXI_AI_PUSH_ENABLED:'true'}}),/project/i);
+});
+
+test('Expo arrival text contains the requested identity while routing data remains an inbox ID only', async () => {
+  const requests = [], arrivalBody = 'Tunde has arrived. Number plate: TEST-123. Toyota Corolla · Standard · Silver.';
+  const provider = createPushProvider({ env: { TAXI_AI_PUSH_ENABLED:'true', TAXI_AI_EXPO_PROJECT_ID:projectId },
+    fetchImpl: async (_url,options) => { requests.push(JSON.parse(options.body)); return Response.json({ data: { status:'ok',id:'fixture-ticket' } }); } });
+  await provider.send({ token,notificationId:3,arrivalBody });
+  assert.equal(requests[0].title, 'Taxi Ai · Driver has arrived'); assert.equal(requests[0].body, arrivalBody);
+  assert.deepEqual(requests[0].data, { notificationId:3 }); assert.equal(requests[0].ttl, 300);
+  await provider.send({ token,notificationId:4,arrivalBody:'x'.repeat(501) });
+  assert.equal(requests[1].title, 'Taxi Ai'); assert.match(requests[1].body, /new journey update/);
 });

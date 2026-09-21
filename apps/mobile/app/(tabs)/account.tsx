@@ -1,5 +1,7 @@
 import { useCallback, useState } from 'react';
 import { Alert, Text } from 'react-native';
+import { router } from 'expo-router';
+import { VehicleCard } from '../../src/ui/vehicle-card';
 import { useSession } from '../../src/session/provider';
 import { useResource } from '../../src/ui/use-resource';
 import { EmailVerification } from '../../src/ui/email-verification';
@@ -16,6 +18,9 @@ export default function Account() {
   }
   return <Screen><Heading title="Your account." subtitle="One profile. Every service."/><Notice message={error || resource.error}/>
     <Card><Text style={styles.h2}>{user?.name}</Text><Text style={styles.body}>{user?.email}</Text><Text style={styles.small}>Customer{user?.driver ? ' · Driver profile' : ''}</Text><Button title="Open web account" secondary onPress={() => void openWebsite(client.origin).catch(() => setError('Could not open the website.'))}/></Card>
+    {user?.driver && <Card><Text style={styles.h2}>Your vehicle</Text><VehicleCard vehicle={user.driver.vehicle} compact/>
+      <Text style={styles.body}>Update your make, model, year, colour, number plate and documents. Changes need approval before you can accept new jobs. Finish assigned work first.</Text>
+      <Button title="Manage vehicle and documents" onPress={() => router.push('/driver-application')}/></Card>}
     <EmailVerification client={client}/>
     <Text style={styles.h2}>Signed-in devices</Text><Text style={styles.body}>Device names are labels you chose. Sign out anything you no longer use.</Text>
     {resource.busy ? <Loading/> : <Button title="Refresh devices" secondary onPress={resource.reload}/>}

@@ -50,7 +50,10 @@ test('native passenger and delivery journeys complete across all vehicle categor
     assert.equal(ok(await d.send(`/journeys/${r.id}/chat/read`,{throughSequence:sent.sequence})).unread,0);
     ok(await d.send(`/journeys/${r.id}/chat/messages/${sent.id}/report`,{reason:'other'}));
     assert.equal(parseThread(ok(await d.send(`/journeys/${r.id}/chat`))).reportedMessageIds[0],sent.id);
-    r=await act(d,r,'depart');assert.equal(r.pickupPin,null);r=await act(d,r,'arrive');r=await act(d,r,'start',{pickupPin:pickup});
+    r=await act(d,r,'depart');assert.equal(r.pickupPin,null);r=await act(d,r,'arrive');
+    const arrival=parseNotifications(ok(await c.send('/notifications'))).notifications.find((n)=>n.rideId===r.id&&n.kind==='arrive');
+    assert.equal(arrival.arrivalActive,true);assert.match(arrival.body,/TEST-DRIVER/);assert.match(arrival.body,/Toyota Corolla/);assert.match(arrival.body,/Yellow/);
+    r=await act(d,r,'start',{pickupPin:pickup});
     const sender=parseJourney(ok(await c.send(`/journeys/${r.id}`))).ride;
     assert.equal(r.delivery?.dropoffPin,undefined);
     r=await act(d,r,'complete',policy.service==='delivery'?{deliveryPin:sender.delivery.dropoffPin}:{});
@@ -61,7 +64,12 @@ test('native passenger and delivery journeys complete across all vehicle categor
     const updates=parseNotifications(ok(await c.send('/notifications'))).notifications;
     assert.equal(updates.filter((n)=>n.rideId===r.id&&n.kind==='claim').length,1);
     assert.equal(updates.filter((n)=>n.rideId===r.id&&n.kind==='complete').length,1);
-    for(const field of ['pickupPin','dropoffPin','description','body','accessToken'])assert.equal(JSON.stringify(updates).includes(`"${field}"`),false);
+    for(const field of ['pickupPin','dropoffPin','description','accessToken'])assert.equal(JSON.stringify(updates).includes(`"${field}"`),false);
+    assert.equal(JSON.stringify(updates).includes(body.body),false,'chat text must stay out of notification bodies');
+    for(const notice of updates){
+      if(notice.kind==='arrive'){assert.equal(notice.arrivalActive,false);assert.match(notice.body,/Number plate: TEST-DRIVER/);}
+      else assert.equal(notice.body,undefined,'only arrival notices include a body');
+    }
   }
 });
 

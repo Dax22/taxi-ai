@@ -1,5 +1,8 @@
 # Vehicle identity and guided registration
 
+For the current account edit entry points, arrival identity notices and different
+vehicle reporting, see [pickup identity](pickup-identity.md).
+
 Release 0.17.0 / mobile 0.2.2 adds schema 12 to save the initial vehicle selection
 before a driver's personal details are complete. It preserves existing records and
 approvals. The web and native app use one driver application and the same

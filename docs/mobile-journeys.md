@@ -81,8 +81,12 @@ from Updates or revoke the signed-in device. Re-enable to renew a changed token.
 The provider uses fixed HTTPS Expo send/receipt endpoints and bounded timeouts.
 [Expo delivery semantics](https://docs.expo.dev/push-notifications/sending-notifications/)
 mean a ticket is only acceptance by Expo; a successful receipt is acceptance by the
-platform provider, not proof that a person saw it. Generic phone text contains no
-names, route, parcel, chat text or PIN. Its data contains only an inbox event ID.
+platform provider, not proof that a person saw it. Most alerts remain generic.
+Rider arrival alerts include the assigned driver's name, vehicle make/model,
+category, colour and number plate; Updates discloses lock-screen visibility.
+They exclude routes, contact numbers, parcel/chat text and PINs. Routing data
+contains only an inbox event ID. See [pickup identity](pickup-identity.md) for
+vehicle changes, in-app notices and suppression of stale arrival jobs.
 
 Notifications and delivery jobs commit in the same SQLite transaction as their
 ride/chat event; replaying a business command does not duplicate the inbox event.
