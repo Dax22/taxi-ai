@@ -9,6 +9,7 @@
   <link rel="icon" href="/favicon.svg?v=amber" type="image/svg+xml">
   <link rel="stylesheet" href="/styles.css">
   <link rel="stylesheet" href="/homepage.css">
+  <link rel="stylesheet" href="/vehicle-categories.css">
   <script type="module" src="/app.mjs"></script>
   <script type="module" src="/download.mjs"></script>
 </head>
@@ -43,12 +44,13 @@
         </figure>
         <div class="booking-card" id="book">
           <div class="service-tabs" role="tablist" aria-label="Choose a service">
-            <button id="tab-ride" type="button" role="tab" aria-selected="true" aria-controls="panel-ride" data-tab="ride">Ride <span aria-hidden="true">↗</span></button>
+            <button id="tab-ride" type="button" role="tab" aria-selected="true" aria-controls="panel-ride" data-tab="ride"><img class="service-vehicle-icon" src="/assets/vehicles/sedan-white.png" width="42" height="32" alt="">Ride</button>
             <button id="tab-eats" type="button" role="tab" aria-selected="false" aria-controls="panel-eats" tabindex="-1" data-tab="eats">Eats</button>
             <button id="tab-courier" type="button" role="tab" aria-selected="false" aria-controls="panel-courier" tabindex="-1" data-tab="courier">Courier</button>
           </div>
           <div id="panel-ride" role="tabpanel" aria-labelledby="tab-ride">
             <div class="card-heading"><h2>Where are we going?</h2><p>A little freedom in every fare.</p></div>
+            <p class="vehicle-categories-heading">Choose your vehicle</p><div id="home-vehicle-categories"></div>
             <form id="trip-form">
               <div class="location-fields">
                 <div class="field location-field"><span class="route-dot" aria-hidden="true"></span><label for="pickup">Pickup area</label><select id="pickup" name="pickup" required><option value="">Choose a sample area</option></select></div>
@@ -58,7 +60,7 @@
               <p id="trip-error" class="error-text" role="alert"></p>
               <button class="button button-primary button-full" type="submit">See suggested fare <span aria-hidden="true">↗</span></button>
             </form>
-            <p class="booking-footnote">Sample Abuja areas · Prices are illustrative</p>
+            <p id="standard-fare-note" class="booking-footnote">Standard car preview · Sample Abuja areas · Prices are illustrative</p>
           </div>
           <div id="panel-eats" class="planned-panel" role="tabpanel" aria-labelledby="tab-eats" hidden>
             <span class="status-pill">IN THE WORKS</span><h2>Good food.<br>Great company.</h2><p>Taxi Ai Eats will connect your favourite local kitchens with your doorstep, with motorcycle delivery.</p><p class="small-note">Vendor ordering and food delivery are planned. No orders are available in this preview.</p><button class="text-link" type="button" data-switch="ride">Try the ride demo <span aria-hidden="true">↗</span></button>

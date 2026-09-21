@@ -6,6 +6,7 @@ import { RIDE_STATUS_LABELS as statuses, isActiveRide } from '/shared/trip-lifec
 import { searchRadius } from '/shared/matching.mjs';
 import { createTripView } from './trip-view.mjs';
 import { renderVehicleCard } from './vehicle-card.mjs';
+import { createVehicleCategoryPicker } from './vehicle-categories.mjs';
 
 
 /** DOM rendering and UI events. No network, session storage or backend imports. */
@@ -15,9 +16,17 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
   let renderedLists = '', renderedDetail = '';
   let busy = false;
   const tripView = createTripView({ onCommand, serverNow });
+  const categories = createVehicleCategoryPicker($('account-vehicle-categories'), { onSelect: updateCategoryVisibility });
+  function updateCategoryVisibility() {
+    const customer = state.user?.role === 'customer';
+    $('vehicle-categories-panel').hidden = !customer;
+    $('standard-ride-planner').hidden = !customer || !categories.selected().ridePreview;
+    $('customer-panel').hidden = !customer || !categories.selected().ridePreview;
+  }
   function selectedRide() { return state.rides.find((ride) => ride.id === selectedId) ?? state.history?.find((ride) => ride.id === selectedId); }
 
   function updateButtons() {
+    categories.setDisabled(busy);
     const ride = selectedRide();
     const offer = ride?.negotiation?.currentOffer;
     const remaining = offer ? offer.expiresAt - serverNow() : 0;
@@ -35,7 +44,7 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
         || (state.activeElsewhere?.length > 0 || state.rides.some((item) => isActiveRide(item.status))));
     }
     for (const button of document.querySelectorAll('button')) {
-      if (button.closest('#google-auth, #account-modes, #calls-panel, #location-planner, #location-tracking, #availability-panel, #payment-panel, #earnings-panel, #payments-admin-panel, #onboarding-panel, #trusted-contacts-panel, #safety-panel, #safety-admin-panel')) continue; // Feature controllers own their controls.
+      if (button.closest('#vehicle-categories-panel, #google-auth, #account-modes, #calls-panel, #location-planner, #location-tracking, #availability-panel, #payment-panel, #earnings-panel, #payments-admin-panel, #onboarding-panel, #trusted-contacts-panel, #safety-panel, #safety-admin-panel')) continue; // Feature controllers own their controls.
       button.disabled = busy || button.dataset.locked === 'true';
     }
     $('request-fields').disabled = busy || (state.activeElsewhere?.length > 0 || state.rides.some((item) => isActiveRide(item.status)));
@@ -49,15 +58,14 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
     $('dashboard').hidden = !user;
     $('logout').hidden = !user;
     $('account-identity').textContent = user?.name ?? '';
+    updateCategoryVisibility();
     if (!user) { updateButtons(); return; }
-    const customer = user.role === 'customer';
     const driver = user.role === 'driver';
     const admin = user.role === 'admin';
     $('dashboard-role').textContent = `TAXI AI / ${driver ? 'WORK' : user.role.toUpperCase()}`;
     $('dashboard-title').textContent = admin ? 'Keep the city moving.' : driver ? 'Your next connection.' : 'Where will today take you?';
     $('dashboard-description').textContent = admin ? 'Review driver applications for the development preview.'
       : driver ? 'Go online to find nearby requests and agree a fare with the customer.' : 'Request a journey and agree a fare with your driver.';
-    $('customer-panel').hidden = !customer;
     $('request-form').hidden = !state.sampleMatchingEnabled;
     $('sample-disabled-note').hidden = Boolean(state.sampleMatchingEnabled);
     $('driver-panel').hidden = !driver;
@@ -219,6 +227,7 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
   }
   $('request-form').addEventListener('submit', (event) => {
     event.preventDefault();
+    if (busy || state.user?.role !== 'customer' || !categories.selected().ridePreview) return;
     const data = { pickupId: $('request-pickup').value, destinationId: $('request-destination').value };
     onCommand('/api/rides', data, 'Your test request is saved. Looking for online drivers in the same sample area.');
   });
@@ -244,6 +253,7 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
     selected: selectedRide,
     reset() {
       state = { user: null, rides: [], available: [], drivers: [], reports: [], history: [] };
+      categories.reset();
       selectedId = null; detailId = null; renderedLists = ''; renderedDetail = '';
       $('ride-detail').hidden = true;
       for (const id of ['detail-title', 'detail-person', 'detail-reference', 'detail-status', 'fare-value', 'fare-label',

@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="/styles.css">
   <link rel="stylesheet" href="/dashboard.css">
   <link rel="stylesheet" href="/vehicle.css">
+  <link rel="stylesheet" href="/vehicle-categories.css">
   <script type="module" src="/dashboard.mjs"></script>
 </head>
 <body class="account-page">
@@ -123,6 +124,11 @@
         <audio id="call-audio" autoplay></audio>
         <details id="call-history-section" class="call-history-section" hidden><summary>Recent calls</summary><ol id="call-history" class="call-history"></ol></details>
       </section>
+      <section id="vehicle-categories-panel" class="account-card" hidden aria-labelledby="vehicle-categories-title">
+        <p class="eyebrow">RIDES & DELIVERIES</p><h2 id="vehicle-categories-title">Choose your vehicle</h2>
+        <div id="account-vehicle-categories"></div>
+      </section>
+      <div id="standard-ride-planner" hidden>
       <section id="location-planner" class="account-card location-panel" hidden aria-labelledby="location-planner-title">
         <div class="card-topline"><div><p class="eyebrow">ABUJA / PLAN YOUR ROUTE</p><h2 id="location-planner-title">Choose your pickup and destination.</h2></div><button id="planner-online" class="button button-outline button-small" type="button">Enable online maps</button></div>
         <p id="planner-provider-note" class="small-note"></p><p id="planner-error" class="error-text" role="alert"></p><p id="planner-blocked" class="small-note" hidden>Finish or cancel your open request or trip before requesting another.</p>
@@ -139,6 +145,7 @@
           <section id="location-quote" class="location-quote" hidden aria-label="Route preview"><div class="route-metrics"><div><span>Road distance</span><strong id="location-distance"></strong></div><div><span>Estimated driving time</span><strong id="location-duration"></strong></div><div><span>Suggested test fare</span><strong id="location-price"></strong></div></div><p class="small-note">Travel time excludes live traffic and driver arrival. This is an illustrative fare, not an AI estimate or a verified market price. No vehicle is dispatched.</p><p id="location-formula" class="small-note"></p><p id="location-expiry" class="small-note" role="status"></p><button id="location-book" type="button" class="button button-primary">Request this test ride ↗</button></section>
         </div>
       </section>
+      </div>
       <div class="dashboard-layout" id="ride-dashboard">
         <aside class="dashboard-sidebar">
           <section id="trusted-contacts-panel" class="account-card" hidden aria-labelledby="contacts-title">

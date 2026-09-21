@@ -8,10 +8,14 @@ import { RequestCard } from '../src/booking/request-card';
 import { SelectField } from '../src/ui/select-field';
 import { Button, Card, Heading, Loading, Notice, Pill, Screen, openWebsite, styles } from '../src/ui/components';
 import type { BookingRide } from '../../../packages/shared/src/mobile-booking.mjs';
+import { VehicleCategories } from '../src/ui/vehicle-categories';
+import { vehicleCategory } from '../../../packages/shared/src/vehicle-categories.mjs';
+import type { VehicleCategoryId } from '../../../packages/shared/src/vehicle-categories.mjs';
 
 function BookingScreen() {
   const { client } = useSession(), { state: s, controller: c } = useBooking(), { width, fontScale } = useWindowDimensions();
   const [linkError, setLinkError] = useState('');
+  const [categoryId, setCategoryId] = useState<VehicleCategoryId>('standard');
   const settings = s.settings, locked = !!s.busy || !!s.uncertain, disabled = locked || s.stale;
   const wide = width >= 820 && fontScale <= 1.3;
   const open = () => { setLinkError(''); void openWebsite(client.origin).catch(() => setLinkError('Could not open the website. Please try again.')); };
@@ -29,7 +33,8 @@ function BookingScreen() {
     {shown.map((ride) => <RequestCard key={ride.id} ride={ride} now={s.now} disabled={disabled} onCancel={() => cancel(ride)} onWebsite={open}/>)}
     {settings?.blockedBy && <Card><Text style={styles.h2}>{settings.blockedBy === 'online' ? 'You’re online as a driver.' : 'You have active driver work.'}</Text>
       <Text style={styles.body}>{settings.blockedBy === 'online' ? 'Go offline on the website before requesting your own ride.' : 'Finish or cancel your driver journey before requesting your own ride.'}</Text><Button title="Open website" secondary onPress={open}/></Card>}
-    {settings && !settings.current.length && !settings.blockedBy && <>
+    {settings && !settings.current.length && !settings.blockedBy && <VehicleCategories value={categoryId} onChange={setCategoryId} disabled={locked}/>}
+    {settings && !settings.current.length && !settings.blockedBy && vehicleCategory(categoryId)?.ridePreview && <>
       {!s.mode ? <Card><Text style={styles.h2}>Route planning is unavailable.</Text><Text style={styles.body}>Address search and sample routes are disabled in this environment. Please check again later.</Text></Card> : <>
         <View style={styles.row}>{settings.online.enabled && <Button title="Abuja address" secondary={s.mode !== 'route'} disabled={locked} onPress={() => c.chooseMode('route')}/>}
           {settings.allowSample && <Button title="Sample journey" secondary={s.mode !== 'sample'} disabled={locked} onPress={() => c.chooseMode('sample')}/>}</View>

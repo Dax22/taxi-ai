@@ -15,7 +15,7 @@ async function moduleUrl(name, dependencies = {}) {
 }
 const tripModel = await moduleUrl('trip-model.mjs');
 const tripView = await moduleUrl('trip-view.mjs', { './trip-model.mjs': tripModel });
-const { createDashboardView } = await import(await moduleUrl('views.mjs', { './trip-view.mjs': tripView, './vehicle-card.mjs': await moduleUrl('vehicle-card.mjs') }));
+const { createDashboardView } = await import(await moduleUrl('views.mjs', { './trip-view.mjs': tripView, './vehicle-card.mjs': await moduleUrl('vehicle-card.mjs'), './vehicle-categories.mjs': await moduleUrl('vehicle-categories.mjs') }));
 const { createAccountModeView, modePreferences } = await import(await moduleUrl('account-mode-view.mjs', {
   './vehicle-fields.mjs': await moduleUrl('vehicle-fields.mjs'), './vehicle-card.mjs': await moduleUrl('vehicle-card.mjs'),
 }));
@@ -51,6 +51,42 @@ const ride = { id: 'ride-one', status: 'booked', version: 4, createdAt: 1000, su
   pickup: { name: 'Wuse' }, destination: { name: 'Maitama' }, customer, driver: { id: driver.id, name: driver.name, vehicle: driver.driver.vehicle },
   negotiation: { agreement: { amountKobo: 470001 } }, trip: { pickupPin: '123456' }, activity: [] };
 const state = (user, rides = [ride]) => ({ user, rides, history: [], drivers: [], available: [], reports: [], chatUnread: {}, historyCursor: null });
+
+test('planned categories cannot submit a Standard ride and selection survives refresh until account reset', (t) => {
+  const h = setup(t); h.view.render({ ...state(customer, []), sampleMatchingEnabled: true });
+  const group = h.node('account-vehicle-categories').children[0];
+  const category = (id) => group.children.find((button) => button.dataset.category === id);
+  for (const id of ['suv', 'van', 'truck', 'motorcycle']) {
+    category(id).handlers.click();
+    h.view.render({ ...state(customer, []), sampleMatchingEnabled: true });
+    assert.equal(h.node('standard-ride-planner').hidden, true);
+    assert.equal(h.node('customer-panel').hidden, true);
+    assert.equal(category(id)['aria-checked'], 'true');
+    h.node('request-form').handlers.submit({ preventDefault() {} });
+    assert.deepEqual(h.commands, []);
+  }
+  category('standard').handlers.click();
+  assert.equal(h.node('standard-ride-planner').hidden, false);
+  assert.equal(h.node('customer-panel').hidden, false);
+  h.node('request-form').handlers.submit({ preventDefault() {} });
+  assert.equal(h.commands.length, 1);
+  category('suv').handlers.click(); h.view.reset(); h.view.render(state(driver, []));
+  assert.equal(category('standard')['aria-checked'], 'true');
+  assert.equal(h.node('vehicle-categories-panel').hidden, true);
+  assert.equal(h.node('standard-ride-planner').hidden, true);
+});
+
+test('category keyboard navigation keeps focus and blocks switching while a command is pending', (t) => {
+  const h = setup(t); h.view.render(state(customer, []));
+  const buttons = h.node('account-vehicle-categories').children[0].children;
+  buttons[0].handlers.keydown({ key: 'ArrowRight', preventDefault() {} });
+  assert.equal(buttons[1]['aria-checked'], 'true'); assert.equal(buttons[1].focused, true);
+  assert.equal(buttons[0].tabIndex, -1); assert.equal(buttons[1].tabIndex, 0);
+  h.view.setBusy(true); buttons[1].handlers.keydown({ key: 'End', preventDefault() {} });
+  assert.equal(buttons[1]['aria-checked'], 'true');
+  h.view.setBusy(false); buttons[1].handlers.keydown({ key: 'Home', preventDefault() {} });
+  assert.equal(buttons[0]['aria-checked'], 'true'); assert.equal(buttons[0].focused, true);
+});
 
 test('dashboard reset removes trip identities, fare, plate, history and PIN before a different account renders', (t) => {
   const h = setup(t); h.view.render(state(customer));

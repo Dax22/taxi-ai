@@ -1,5 +1,6 @@
 import { FareNegotiation } from '/shared/fare-negotiation.mjs';
 import { DEMO_AREAS, createDemoQuote, nairaToKobo, formatNaira } from '/shared/demo-booking.mjs';
+import { createVehicleCategoryPicker } from './dashboard/vehicle-categories.mjs';
 
 const $ = (id) => document.getElementById(id);
 const roles = { customer: 'Customer', driver: 'Driver' };
@@ -8,6 +9,11 @@ const dialog = $('booking-dialog');
 let negotiation = null;
 let role = 'customer';
 let timer = null;
+const categories = createVehicleCategoryPicker($('home-vehicle-categories'), { onSelect(category) {
+  $('trip-form').hidden = !category.ridePreview;
+  $('standard-fare-note').hidden = !category.ridePreview;
+  $('trip-error').textContent = '';
+} });
 
 function selectService(service, focus = false) {
   for (const name of ['ride', 'eats', 'courier']) {
@@ -57,6 +63,7 @@ $('swap-locations').addEventListener('click', () => {
 
 $('trip-form').addEventListener('submit', (event) => {
   event.preventDefault();
+  if (!categories.selected().ridePreview) return;
   try {
     const quote = createDemoQuote($('pickup').value, $('destination').value);
     negotiation = new FareNegotiation({

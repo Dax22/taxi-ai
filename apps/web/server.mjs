@@ -13,6 +13,7 @@ import { createRuntimeConfig } from '../../services/api/src/infrastructure/runti
 import { createHealth } from '../../services/api/src/infrastructure/health.mjs';
 import { createTelemetry } from '../../services/api/src/infrastructure/telemetry.mjs';
 import { VEHICLE_COLOURS } from '../../packages/shared/src/vehicle-profile.mjs';
+import { VEHICLE_CATEGORIES } from '../../packages/shared/src/vehicle-categories.mjs';
 import { check } from '../../services/api/src/shared/errors.mjs';
 import { createGoogleConfig } from '../../services/api/src/infrastructure/google-config.mjs';
 import { createGoogleProvider } from '../../services/api/src/infrastructure/google-provider.mjs';
@@ -46,6 +47,10 @@ const routes = new Map([
   ['/dashboard/trip-share-controller.mjs', ['public/dashboard/trip-share-controller.mjs', 'text/javascript; charset=utf-8']],
   ['/shared/safety.mjs', ['../../packages/shared/src/safety.mjs', 'text/javascript; charset=utf-8']],
   ['/vehicle.css', ['public/vehicle.css', 'text/css; charset=utf-8']],
+  ['/vehicle-categories.css', ['public/vehicle-categories.css', 'text/css; charset=utf-8']],
+  ['/dashboard/vehicle-categories.mjs', ['public/dashboard/vehicle-categories.mjs', 'text/javascript; charset=utf-8']],
+  ['/shared/vehicle-categories.mjs', ['../../packages/shared/src/vehicle-categories.mjs', 'text/javascript; charset=utf-8']],
+  ...VEHICLE_CATEGORIES.filter((category) => category.id !== 'standard').map((category) => [category.assetPath, [`public${category.assetPath}`, 'image/png']]),
   ['/dashboard/vehicle-card.mjs', ['public/dashboard/vehicle-card.mjs', 'text/javascript; charset=utf-8']],
   ['/shared/vehicle-profile.mjs', ['../../packages/shared/src/vehicle-profile.mjs', 'text/javascript; charset=utf-8']],
   ['/shared/vehicle-registration.mjs', ['../../packages/shared/src/vehicle-registration.mjs', 'text/javascript; charset=utf-8']],
