@@ -1,5 +1,5 @@
 import { Alert, Text } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useJourney } from '../src/journeys/provider';
 import { JourneyChat } from '../src/journeys/chat';
 import { Button, Card, Field, Heading, Loading, Notice, Pill, Screen, fare, styles } from '../src/ui/components';
@@ -13,7 +13,7 @@ function JourneyScreen({id}:{id:string}){
   const labels:Partial<Record<JourneyAction,string>>={depart:'On my way',arrive:'I have arrived',start:r?.delivery?'Verify pickup and collect parcel':'Verify pickup and start trip',complete:r?.delivery?'Verify drop-off and complete delivery':'Complete trip'};
   return <Screen><Notice message={s.error}/>{!r&&s.loading&&<Loading/>}<Button title="Refresh journey" secondary busy={s.loading} disabled={s.busy} onPress={()=>void c.refresh()}/>
     {s.uncertain&&<Button title="Retry the same action" busy={s.busy} onPress={()=>void c.retry()}/>}
-    {r&&<><Pill>{bookingStatusLabel(r.status).toUpperCase()}</Pill><Heading title={`${r.pickup} → ${r.destination}`} subtitle={`${vehicleCategory(r.vehicleCategory??'standard')?.name} · ${r.mode==='work'?'Work':'Customer'}`}/>
+    {r&&<><Button title="Safety / SOS" secondary onPress={()=>router.push({pathname:'/safety',params:{id:r.id}})}/><Pill>{bookingStatusLabel(r.status).toUpperCase()}</Pill><Heading title={`${r.pickup} → ${r.destination}`} subtitle={`${vehicleCategory(r.vehicleCategory??'standard')?.name} · ${r.mode==='work'?'Work':'Customer'}`}/>
       <Card><Text style={styles.h2}>{r.fareKobo===null?'Suggested fare':'Agreed fare'} · {fare(r.fareKobo??r.suggestedFareKobo)}</Text>
         <Text style={styles.body}>{r.mode==='work'?`Customer · ${r.customerName}`:r.driver?`Driver · ${r.driver.name}`:'Waiting for a driver to take your request.'}</Text>
         {r.driver&&<VehicleCard vehicle={r.driver.vehicle} label="VEHICLE FOR THIS JOURNEY" compact/>}

@@ -31,7 +31,8 @@ Native Work now supports foreground location, online/offline availability and jo
 claiming. Both participants negotiate fares, chat and finish rides/deliveries in the
 app, including pickup and drop-off verification. Updates has a durable inbox and
 optional configured Expo phone alerts. See [native journeys and push setup](../../docs/mobile-journeys.md).
-Native calls, payment controls, live trip maps, SOS/crash detection, restaurant
+Native Safety / SOS now opens trusted contacts, revocable trip links and private test incident records. See [mobile safety](../../docs/mobile-safety.md).
+Native calls, payment controls, live trip maps, automatic crash detection, restaurant
 ordering and staff tools remain separate milestones.
 This is a connected foundation, not a store-ready transport service.
 

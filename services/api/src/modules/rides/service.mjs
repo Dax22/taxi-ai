@@ -3,6 +3,7 @@ import { TRIP_TRANSITIONS, CANCELLATION_REASONS, canCancelRide } from '../../../
 import { distanceMeters } from '../../../../../packages/shared/src/locations.mjs';
 import { transportCategory, categoryFare } from '../../../../../packages/shared/src/transport-categories.mjs';
 import { REQUEST_MS, EXPAND_MS, searchRadius } from '../../../../../packages/shared/src/matching.mjs';
+import { rankEligibleMatches } from '../../../../../packages/shared/src/smart-matching.mjs';
 import { check } from '../../shared/errors.mjs';
 import { fields } from '../../shared/validation.mjs';
 import { hasCapability, requireRole, requireEligibleDriver } from '../../shared/policies.mjs';
@@ -77,20 +78,24 @@ export function createRidesService({ repository, deliveries, getAccount, unitOfW
   function list(user, mode = null) {
     requireMode(user, mode);
     sweep();
-    const position = mode !== 'customer' && hasCapability(user, 'driver') && user.driver?.status === 'approved' ? availabilityFor(user.id, clock()) : null;
-    const available = position ? repository.listAvailable().filter((ride) => ride.customerId !== user.id && deliveries.matches(ride, user.driver.vehicle)).map((ride) => ({ ride, metres: matchDistance(ride, position, clock()) }))
-      .filter((item) => item.metres !== null).sort((a, b) => a.metres - b.metres || a.ride.createdAt - b.ride.createdAt || a.ride.id.localeCompare(b.ride.id)).slice(0, 50) : [];
+    const now = clock();
+    const position = mode !== 'customer' && hasCapability(user, 'driver') && user.driver?.status === 'approved' ? availabilityFor(user.id, now) : null;
+    const candidates = position ? repository.listAvailable().filter((ride) => ride.customerId !== user.id && deliveries.matches(ride, user.driver.vehicle))
+      .map((ride) => ({ ride, metres: matchDistance(ride, position, now) })).filter((item) => item.metres !== null)
+      .map(({ ride, metres }) => ({ ride, id: ride.id, createdAt: ride.createdAt, expiresAt: ride.requestExpiresAt,
+        distanceMeters: position.mode === 'sample' ? null : metres })) : [];
+    const available = rankEligibleMatches(candidates, now).slice(0, 50);
     return { matchingSettings: { allowSimulation },
       activeElsewhere: repository.activeFor(user.id).filter((ride) => !inMode(ride, user, mode)).map((ride) => ({
         id: ride.id, mode: ride.customerId === user.id ? 'customer' : 'work', status: repository.findTrip(ride.id)?.status ?? ride.status })),
-      rides: repository.listFor(user.id, mode).map((ride) => view(ride, user)), available: available.map(({ ride, metres }) => {
+      rides: repository.listFor(user.id, mode).map((ride) => view(ride, user)), available: available.map(({ ride, distanceMeters, recommendation }) => {
       const route = routeForRide(ride.id);
       const area = (point) => ({ name: `Near ${point.lat.toFixed(2)}, ${point.lng.toFixed(2)} (approximate area)` });
       const quote = route ? { pickup: area(route.pickup), destination: area(route.destination) }
         : createDemoQuote(ride.pickupId, ride.destinationId);
       return { id: ride.id, version: ride.version, vehicleCategory: ride.vehicleCategory, service: transportCategory(ride.vehicleCategory).service, pickup: quote.pickup, destination: quote.destination,
         suggestedFareKobo: ride.suggestedFareKobo, currency: 'NGN', isDemo: true, hasRoute: Boolean(route), createdAt: ride.createdAt,
-        expiresAt: ride.requestExpiresAt, approximateDistanceKm: route ? Math.ceil(metres / 1000) : null };
+        expiresAt: ride.requestExpiresAt, approximateDistanceKm: route ? Math.ceil(distanceMeters / 1000) : null, recommendation };
     }) };
   }
 

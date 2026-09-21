@@ -12,6 +12,7 @@ export function createSafetyRepository(db) {
     contacts: (owner) => db.prepare(`SELECT ${contacts} FROM trusted_contacts WHERE owner_id=? AND active=1 ORDER BY created_at,id`).all(owner),
     contact: (id) => db.prepare(`SELECT ${contacts} FROM trusted_contacts WHERE id=?`).get(id) ?? null,
     addContact(id, owner, data, now) { db.prepare('INSERT INTO trusted_contacts(id,owner_id,name,phone,created_at) VALUES (?,?,?,?,?)').run(id, owner, data.name, data.phone, now); },
+    editContact(id, value) { db.prepare('UPDATE trusted_contacts SET name=?,phone=?,version=version+1 WHERE id=? AND active=1').run(value.name, value.phone, id); },
     removeContact(id, now) { db.prepare('UPDATE trusted_contacts SET active=0,name=NULL,phone=NULL,version=version+1,removed_at=? WHERE id=?').run(now, id); },
     incident: (id) => db.prepare(`SELECT ${incidents} FROM safety_incidents WHERE id=?`).get(id) ?? null,
     rideIncidents: (rideId, reporterId) => db.prepare(`SELECT ${incidents} FROM safety_incidents WHERE ride_id=? AND reporter_id=? ORDER BY created_at DESC,id DESC LIMIT 20`).all(rideId, reporterId),

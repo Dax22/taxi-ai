@@ -2,6 +2,7 @@ import { envelope } from './mobile-contracts.mjs';
 import { parseBookingRide } from './mobile-booking.mjs';
 import { transportCategory } from './transport-categories.mjs';
 import { NOTIFICATION_LABELS } from './notification-labels.mjs';
+import { validMatchRecommendation } from './smart-matching.mjs';
 const object = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const text = (v,max=240) => typeof v === 'string' && v.length > 0 && v.length <= max;
 const integer = (v) => Number.isSafeInteger(v) && v >= 0;
@@ -35,7 +36,8 @@ export function parseWork(v) {
     && Array.isArray(v.activeElsewhere) && v.activeElsewhere.length <= 50 && v.activeElsewhere.every((a) => uuid(a.id) && mode(a.mode) && text(a.status,50)));
   v.current.forEach((r) => journey(r,v));
   expect(v.available.every((r) => object(r) && uuid(r.id) && integer(r.version) && transportCategory(r.vehicleCategory) && text(r.pickup) && text(r.destination)
-    && positive(r.suggestedFareKobo) && integer(r.expiresAt) && (r.approximateDistanceKm === null || integer(r.approximateDistanceKm)))); return v;
+    && positive(r.suggestedFareKobo) && integer(r.expiresAt) && (r.approximateDistanceKm === null || integer(r.approximateDistanceKm))
+    && (r.recommendation === undefined || validMatchRecommendation(r.recommendation)))); return v;
 }
 function message(m) { expect(object(m) && uuid(m.id) && positive(m.sequence) && text(m.body,2000) && integer(m.createdAt) && typeof m.fromYou === 'boolean'); }
 export function parseThread(v) {

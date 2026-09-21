@@ -105,6 +105,7 @@ const routes = new Map([
   ['/shared/chat-safety.mjs', ['../../packages/shared/src/chat-safety.mjs', 'text/javascript; charset=utf-8']],
   ['/shared/call-lifecycle.mjs', ['../../packages/shared/src/call-lifecycle.mjs', 'text/javascript; charset=utf-8']],
   ['/shared/matching.mjs', ['../../packages/shared/src/matching.mjs', 'text/javascript; charset=utf-8']],
+  ['/shared/smart-matching.mjs', ['../../packages/shared/src/smart-matching.mjs', 'text/javascript; charset=utf-8']],
   ['/shared/payments.mjs', ['../../packages/shared/src/payments.mjs', 'text/javascript; charset=utf-8']],
   ['/shared/locations.mjs', ['../../packages/shared/src/locations.mjs', 'text/javascript; charset=utf-8']],
 ]);

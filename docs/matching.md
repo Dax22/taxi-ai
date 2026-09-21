@@ -52,7 +52,7 @@ No cloud resource or paid service is required for the local sample journey.
 | Initial search | Within 5 km of the pickup in a straight line |
 | Expanded search | Within 10 km from exactly 60 seconds after request creation |
 | Request deadline | Unclaimed requests expire at exactly five minutes |
-| Ordering | Nearest first, then oldest request and ID; up to 50 eligible requests |
+| Ordering | Weighted pickup proximity and customer waiting time, then oldest request and ID; up to 50 eligible requests. See [ranking policy](smart-matching.md). |
 | GPS freshness | Captured less than 30 seconds ago; at most 5 seconds of future clock skew |
 | GPS quality | Inside the Abuja preview rectangle; reported accuracy at most 200 metres |
 | Availability lease | Last accepted heartbeat less than 60 seconds ago; GPS freshness also applies |
