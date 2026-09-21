@@ -17,6 +17,8 @@ import { check } from '../../services/api/src/shared/errors.mjs';
 import { createGoogleConfig } from '../../services/api/src/infrastructure/google-config.mjs';
 import { createGoogleProvider } from '../../services/api/src/infrastructure/google-provider.mjs';
 import { createGoogleCallback } from '../../services/api/src/modules/google-auth/routes.mjs';
+import { createEmailConfig } from '../../services/api/src/infrastructure/email-config.mjs';
+import { createAccountMail } from '../../services/api/src/infrastructure/account-mail.mjs';
 
 // Explicit allowlist: never serve the repository root or arbitrary disk paths.
 const routes = new Map([
@@ -31,6 +33,9 @@ const routes = new Map([
   ['/app', ['public/dashboard.html', 'text/html; charset=utf-8']],
   ['/account-access', ['public/account-access.html', 'text/html; charset=utf-8']],
   ['/account-access.mjs', ['public/account-access.mjs', 'text/javascript; charset=utf-8']],
+  ['/account-recovery', ['public/account-recovery.html', 'text/html; charset=utf-8']],
+  ['/account-recovery.mjs', ['public/account-recovery.mjs', 'text/javascript; charset=utf-8']],
+  ['/dashboard/account-recovery-controller.mjs', ['public/dashboard/account-recovery-controller.mjs', 'text/javascript; charset=utf-8']],
   ['/dashboard/google-auth.mjs', ['public/dashboard/google-auth.mjs', 'text/javascript; charset=utf-8']],
   ['/dashboard/sign-in-methods.mjs', ['public/dashboard/sign-in-methods.mjs', 'text/javascript; charset=utf-8']],
   ['/trip-share', ['public/trip-share.html', 'text/html; charset=utf-8']],
@@ -100,9 +105,10 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
   clock = Date.now, callConfig = createCallConfig({ ...process.env, TAXI_AI_CALLS_MODE: process.env.TAXI_AI_CALLS_MODE ?? (runtime.mode === 'staging' ? 'off' : 'local') }),
   mapProvider = createMapProvider({ env: { ...process.env, TAXI_AI_MAPS_MODE: process.env.TAXI_AI_MAPS_MODE ?? (runtime.mode === 'staging' ? 'off' : 'community') } }),
   telemetry = createTelemetry({ enabled: runtime.mode === 'staging' }),
+  accountMail = createAccountMail({ config: createEmailConfig(process.env,runtime) }),
   googleProvider = createGoogleProvider({ config: createGoogleConfig(process.env, runtime), clock }) } = {}) {
   if (runtime.mode === 'staging' && callConfig.mode === 'local') throw new Error('Staging calls require off or a configured relay.');
-  const application = createApplication({ db, clock, callConfig, mapProvider, googleProvider, allowSimulation: runtime.mode === 'local' });
+  const application = createApplication({ db, clock, callConfig, mapProvider, googleProvider, accountMail, allowSimulation: runtime.mode === 'local' });
   const handleApi = createApiRouter(application, { secure: runtime.mode === 'staging' });
   const handleMobile = createMobileRouter(application);
   const handleGoogleCallback = createGoogleCallback(application, runtime.mode === 'staging');
@@ -110,6 +116,7 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
   const cleanup = setInterval(() => {
     try { application.rides.sweep(); application.availability.sweep(); application.calls.sweep(); application.locations.sweep(); application.safety.sweep(); application.devices.sweep(); application.googleAuth.sweep(); }
     catch { telemetry.event('maintenance_failed'); }
+    void application.accountEmail.deliverPending().catch(() => telemetry.event('maintenance_failed'));
   }, 5000);
   cleanup.unref();
   const server = createServer(async (request, response) => {
@@ -177,8 +184,8 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
   });
   server.requestTimeout = 15_000;
   server.headersTimeout = 10_000;
-  server.beginShutdown = () => { health.beginShutdown(); clearInterval(cleanup); };
-  server.on('close', () => { clearInterval(cleanup); db.close(); });
+  server.beginShutdown = () => { health.beginShutdown(); clearInterval(cleanup); application.accountEmail.stop(); };
+  server.on('close', () => { clearInterval(cleanup); application.accountEmail.stop(); db.close(); });
   return server;
 }
 

@@ -6,13 +6,19 @@ with shared accounts and Customer, Drive & deliver and My store modes. The
 moves the mobile foundation earlier. Completed milestones below describe the
 prototype; planned milestones do not claim shipped features.
 
-## Current account milestone — Google sign-in (implemented; configuration/device acceptance pending)
+## Current account milestone — verification and recovery (implemented; delivery/device acceptance pending)
+
+Release 0.20 / mobile 0.4 adds mailbox verification, password recovery requests,
+responsive email-link completion, durable email intentions and session revocation.
+SMTP remains off until the owner configures a sender. Schema 15 preserves existing
+accounts and journeys. Follow [account email setup](account-email.md).
 
 Release 0.19 / mobile 0.3 adds Google sign-up and login, safe existing-account
 linking, staff isolation and schema-14 identity storage. Credentials belong to the
 owner's Google Cloud project. Follow [Google setup](google-sign-in.md).
-Next: activate/test Google; add verification, recovery and deletion; complete the
-native ride lifecycle with the same APIs. Keep Eats, vendors and courier modules
+Next: configure/test account email and Google, then complete the
+native ride lifecycle with the same APIs. Phone verification, staff recovery/MFA
+and account deletion remain before-launch work. Keep Eats, vendors and courier modules
 independent, and add Sign in with Apple before consumer iOS store submission.
 
 ## 0 — Repository foundation (implemented)

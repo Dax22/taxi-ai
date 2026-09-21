@@ -54,9 +54,11 @@ At the staging URL, the browser first asks for the tester alias and access key.
 After that, the tester registers/signs into their normal customer or driver
 account. This gate limits access to the whole preview, including HTML/assets;
 account sessions still enforce roles, driver approval and participant ownership.
-The administrator bootstrap command remains operator-only. Registration does not
-verify email ownership or send mail; business email setup is not required for
-these test accounts.
+The administrator bootstrap command remains operator-only. Email delivery defaults
+off, so a business sender is not required for preview accounts. Optional
+[SMTP setup](account-email.md) enables verification and customer/driver password
+recovery. Verification is informational in this invited preview; live-service
+verification requirements still need to be enforced before launch.
 
 Staging account cookies use `__Host-taxi_ai_session`, Secure, HttpOnly,
 SameSite=Strict and Path=/, with no Domain. Local cookie names are not accepted.
@@ -180,6 +182,8 @@ chat and consumed route history are preserved. Trusted contacts, frozen incident
 locations, recipient names/numbers, notes and review/delivery history are also
 retained; snapshots contain private data and are not anonymised or app-encrypted. Sessions, active call setup/locks,
 shared live GPS positions/ownership and unused quotes are removed from the copy.
+Pending Google attempts, email tokens and queued emails are also removed; verified
+mailbox records are preserved. Restores cannot replay old account emails.
 All active private trip links are revoked and both token/session hashes cleared.
 Active calls are marked ended with `snapshot_reset`; active trips are retained for
 operator review. Restoring repeats the cleanup, requires everyone to sign in and

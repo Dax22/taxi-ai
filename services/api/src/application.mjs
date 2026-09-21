@@ -35,24 +35,30 @@ import { createGoogleAuthRepository } from './modules/google-auth/repository.mjs
 import { createGoogleAuthService } from './modules/google-auth/service.mjs';
 import { createGoogleProvider } from './infrastructure/google-provider.mjs';
 import { createGoogleConfig } from './infrastructure/google-config.mjs';
+import { createAccountMail } from './infrastructure/account-mail.mjs';
+import { createAccountEmailRepository } from './modules/account-email/repository.mjs';
+import { createAccountEmailService } from './modules/account-email/service.mjs';
 
 /** Composition root: the only place that wires business modules to adapters. */
 export function createApplication({ db, clock = Date.now, callConfig = createCallConfig(), mapProvider = createMapProvider(), allowSimulation = false,
+  accountMail = createAccountMail(),
   googleProvider = createGoogleProvider({ config: createGoogleConfig({}), clock }) }) {
   const unitOfWork = (run) => transaction(db, run);
   const audit = createAudit(db);
   const accountRepository = createAccountsRepository(db);
   const driverRepository = createDriversRepository(db);
   const rideRepository = createRidesRepository(db);
-  let drivers, devices;
+  let drivers, devices, accountEmail;
   const accounts = createAccountsService({ repository: accountRepository,
     driverProfiles: { insert: driverRepository.insert, validateVehicle: (data) => vehicleDetails(data, clock()), find: (id) => {
       const driver = driverRepository.find(id);
       return driver ? { ...driver, eligibility: drivers.eligibilityFor(id) } : null;
     } },
-    passwords, tokens, unitOfWork, audit, revokeDevices: (id) => devices.revokeUser(id), hasRideHistory: rideRepository.hasHistory, clock });
+    passwords, tokens, unitOfWork, audit, revokeDevices: (id) => devices.revokeUser(id),
+    onRegistered: (id) => accountEmail.onRegistered(id), hasRideHistory: rideRepository.hasHistory, clock });
   devices = createDeviceSessionsService({ repository: createDeviceSessionsRepository(db),
-    authenticate: accounts.login, getAccount: accounts.profile, tokens, unitOfWork, audit, clock });
+    authenticate: accounts.login, validatePasswordLogin: accounts.validatePasswordLogin,
+    getAccount: accounts.profile, tokens, unitOfWork, audit, clock });
   drivers = createDriversService({ repository: driverRepository,
     getAccount: accounts.profile, hasDriverWork: rideRepository.hasDriverWork, codec: createDriverDocumentCodec(MAX_DRIVER_FILE_BYTES),
     tokens, unitOfWork, audit, clock });
@@ -71,6 +77,8 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
   const chat = createChatService({ repository: createChatRepository(db), getAccount: accounts.profile,
     getRideContext: rides.conversationContext, listConversationIds: rides.conversationIds, unitOfWork, audit, tokens, clock });
   const rateLimiter = createRateLimiter({ db, unitOfWork, digest: tokens.digest });
+  accountEmail = createAccountEmailService({ repository: createAccountEmailRepository(db), accounts, mail: accountMail,
+    passwords, tokens, unitOfWork, rateLimiter, audit, clock });
   calls = createCallsService({ repository: createCallsRepository(db), getAccount: accounts.profile,
     sessionOwner: accounts.sessionOwner, getRideContext: rides.conversationContext, unitOfWork, audit, tokens, clock, config: callConfig });
   locations = createLocationsService({ repository: createLocationsRepository(db), provider: mapProvider,
@@ -82,5 +90,5 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
   const adminConsole = createAdminConsoleService({ repository: createAdminConsoleRepository(db), audit, clock, unitOfWork });
   const googleAuth = createGoogleAuthService({ repository: createGoogleAuthRepository(db), provider: googleProvider,
     accounts, devices, tokens, unitOfWork, clock });
-  return Object.freeze({ accounts, devices, drivers, rides, chat, calls, locations, availability, payments, safety, adminConsole, googleAuth, rateLimiter, clock });
+  return Object.freeze({ accounts, devices, drivers, rides, chat, calls, locations, availability, payments, safety, adminConsole, googleAuth, accountEmail, rateLimiter, clock });
 }

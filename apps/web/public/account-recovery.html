@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#F4B400"><meta name="referrer" content="no-referrer">
+<title>Account help — Taxi Ai</title><link rel="icon" href="/favicon.svg"><link rel="stylesheet" href="/styles.css"><link rel="stylesheet" href="/dashboard.css"><script type="module" src="/account-recovery.mjs"></script></head>
+<body class="account-page"><a class="skip-link" href="#recovery-main">Skip to account help</a>
+<header class="site-header shell"><a class="brand" href="/" aria-label="Taxi Ai home"><img src="/assets/taxi-ai-mark.svg" class="brand-mark" width="48" height="36" alt=""><span>Taxi Ai</span></a><a class="text-link" href="/app">Sign in ↗</a></header>
+<main id="recovery-main" class="shell account-shell"><section class="account-card access-card" aria-labelledby="recovery-title"><p class="eyebrow">YOUR ACCOUNT</p><h1 id="recovery-title" tabindex="-1">Let’s get you back in.</h1>
+<p id="recovery-description" class="supporting-copy">Request a password reset email for your Taxi Ai account.</p><p id="recovery-error" class="error-text page-message" role="alert"></p><p id="recovery-status" class="page-message" role="status"></p>
+<form id="recovery-form" class="stack-form" hidden>
+<div id="recovery-email-fields"><label for="recovery-email">Email address</label><input id="recovery-email" type="email" autocomplete="email" maxlength="254" required></div>
+<div id="recovery-password-fields" hidden><label for="recovery-password">New password</label><input id="recovery-password" type="password" autocomplete="new-password" minlength="12" maxlength="128" aria-describedby="recovery-help" disabled required><p id="recovery-help" class="small-note">Use 12–128 characters. Resetting signs out your existing sessions on every device.</p>
+<label for="recovery-confirm">Confirm new password</label><input id="recovery-confirm" type="password" autocomplete="new-password" minlength="12" maxlength="128" disabled required></div>
+<button id="recovery-submit" class="button button-full" type="submit">Send reset email</button></form>
+<p id="recovery-google" class="small-note">Joined with Google? Choose Sign in with Google on the sign-in screen.</p>
+<p id="recovery-new" hidden><a class="text-link" href="/account-recovery">Request a new reset email ↗</a> · <a class="text-link" href="/account-access">Resend verification ↗</a></p>
+<p><a class="text-link" href="/app">Return to Taxi Ai ↗</a></p><p class="small-note">Using the mobile app? Complete this step here, then return to the app.</p></section></main>
+<noscript>Enable JavaScript to verify your email or reset your password.</noscript></body></html>

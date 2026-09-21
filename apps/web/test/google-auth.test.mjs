@@ -31,6 +31,7 @@ test('sign-in methods never show a profile or redirect after account switching o
   let userNow = user, reads = 0, rendered = null, redirect = '', finish;
   const client = { reset() {}, setCsrf() {}, async request(path) {
     if (path === '/api/session') return { user: userNow, csrfToken: 'session' };
+    if (path === '/api/account/email') return { enabled: true, verified: false, email: userNow.email };
     if (path === '/api/account/sign-in-methods') { reads++; return { methods: { google: false, password: true }, google: { enabled: true } }; }
     return new Promise((resolve) => { finish = resolve; });
   } };

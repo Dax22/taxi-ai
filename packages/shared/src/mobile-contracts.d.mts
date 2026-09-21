@@ -2,7 +2,7 @@ export const MOBILE_API_VERSION: 1;
 export type Mode = 'customer' | 'work';
 export interface Eligibility { eligible: boolean; missing: string[]; expired: string[] }
 export interface Vehicle { model: string; plate: string; make?: string; modelName?: string; year?: number; colour?: string }
-export interface Account { id: string; name: string; email: string; capabilities: ('customer' | 'driver')[];
+export interface Account { id: string; name: string; email: string; emailVerified?: boolean; capabilities: ('customer' | 'driver')[];
   driver: { status: string; vehicle: Vehicle; eligibility: Eligibility } | null }
 export interface Credentials { sessionId: string; accessToken: string; refreshToken: string; accessExpiresAt: number; refreshExpiresAt: number }
 export interface Envelope { apiVersion: 1; serverNow: number; [key: string]: unknown }
@@ -30,6 +30,8 @@ export interface DriverCommands {
 }
 export function envelope(value: unknown): Envelope;
 export function parseAccount(value: unknown): Account;
+export interface EmailStatus { enabled: boolean; verified: boolean; email: string }
+export function parseEmailStatus(value: unknown): EmailStatus;
 export function parseSignIn(value: unknown): SignIn;
 export function parseActivity(value: unknown): Activity;
 export function parseDevices(value: unknown): Device[];

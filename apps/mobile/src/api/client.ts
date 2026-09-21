@@ -1,4 +1,4 @@
-import { envelope, parseAccount, parseSignIn, parseActivity, parseDevices, parseOnboarding } from '../../../../packages/shared/src/mobile-contracts.mjs';
+import { envelope, parseAccount, parseSignIn, parseActivity, parseDevices, parseOnboarding, parseEmailStatus } from '../../../../packages/shared/src/mobile-contracts.mjs';
 import type { Account, Credentials, DriverCommands, DriverDetails, Mode, SignIn } from '../../../../packages/shared/src/mobile-contracts.mjs';
 
 export interface Vault { read(): Promise<string | null>; write(value: string): Promise<void>; clear(): Promise<void> }
@@ -167,6 +167,17 @@ export class MobileClient {
     return this.ownApplication(await this.request(`/driver/application/${action}`, data, key));
   }
   async devices() { return parseDevices(await this.request('/devices')); }
+  async emailStatus() { return parseEmailStatus(await this.request('/account/email')); }
+  private accepted(body: Record<string, unknown>) {
+    if (body.accepted !== true) throw new ApiError('Taxi Ai returned an incompatible response. Try again later.', 'INVALID_RESPONSE');
+  }
+  async requestVerification() { this.accepted(await this.request('/account/email/request', {})); }
+  async requestPasswordReset(email: string, preview = '') {
+    const epoch = this.epoch;
+    const result = await this.send('/auth/password/request', { data: { email }, preview });
+    if (epoch !== this.epoch) throw changed();
+    this.accepted(result);
+  }
   async revoke(id: string) { return this.request(`/devices/${id}/revoke`, {}); }
   async addDriver(vehicle: DriverDetails['vehicle'], key: string) {
     const epoch = this.epoch, body = await this.request('/account/driver-profile', { vehicle }, key); if (epoch !== this.epoch) throw changed(); const user = parseAccount(body.user); this.publish(user); return user;

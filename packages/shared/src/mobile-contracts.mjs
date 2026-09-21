@@ -15,11 +15,17 @@ export function envelope(value) {
 }
 export function parseAccount(value) {
   expect(record(value) && text(value.id) && text(value.name) && text(value.email)
+    && (value.emailVerified === undefined || typeof value.emailVerified === 'boolean')
     && value.role !== 'admin' && texts(value.capabilities) && value.capabilities.includes('customer')
     && value.capabilities.every((c) => ['customer','driver'].includes(c))
     && (value.driver === null || (record(value.driver) && text(value.driver.status) && vehicle(value.driver.vehicle) && eligibility(value.driver.eligibility)))
     && value.capabilities.includes('driver') === (value.driver !== null));
   return value;
+}
+export function parseEmailStatus(value) {
+  envelope(value);
+  expect(typeof value.enabled === 'boolean' && typeof value.verified === 'boolean' && text(value.email));
+  return { enabled: value.enabled, verified: value.verified, email: value.email };
 }
 export function parseSignIn(value) {
   envelope(value); parseAccount(value.user);

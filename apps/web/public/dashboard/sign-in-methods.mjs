@@ -10,11 +10,11 @@ export function createSignInMethods({ client, view, navigate }) {
       const first = await client.request('/api/session');
       if (epoch !== generation) return;
       if (!first.user || first.user.role === 'admin') { view.status('Sign in to your customer or driver account to manage sign-in methods.'); return; }
-      const result = await client.request('/api/account/sign-in-methods'), last = await client.request('/api/session');
+      const result = await client.request('/api/account/sign-in-methods'), email = await client.request('/api/account/email'), last = await client.request('/api/session');
       if (epoch !== generation) return;
       if (first.user.id !== last.user?.id || first.csrfToken !== last.csrfToken) { clear(); view.error('Your account changed. Refresh to continue.'); return; }
       account = first.user; connected = result.methods.google; client.setCsrf(last.csrfToken);
-      view.render(account, result.methods, result.google.enabled);
+      view.render(account, result.methods, result.google.enabled, email);
     } catch (error) { if (epoch === generation) { clear(); view.error(error.message); } }
   }
   async function submit(password) {
@@ -28,5 +28,14 @@ export function createSignInMethods({ client, view, navigate }) {
     } catch (error) { if (epoch === generation) view.error(error.message); }
     finally { busy = false; view.busy(false); }
   }
-  return Object.freeze({ load, submit, clear });
+  async function verify() {
+    if (busy || !account) return;
+    busy = true; view.busy(true); view.error(''); const epoch = generation;
+    try {
+      await client.request('/api/account/email/request', { method: 'POST', data: {} });
+      if (epoch === generation) view.notice('Request received. Check your inbox and spam for a verification link. Wait a minute before requesting another.');
+    } catch (error) { if (epoch === generation) view.error(error.message); }
+    finally { busy = false; view.busy(false); }
+  }
+  return Object.freeze({ load, submit, verify, clear });
 }

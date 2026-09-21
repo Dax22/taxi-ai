@@ -8,7 +8,7 @@ export function accountRoutes(accounts, cookie = sessionCookie) {
       method: 'POST', path: new RegExp(`^/api/auth/${action}$`), access: 'auth',
       async handle({ data, token }) {
         const user = await accounts[action](data);
-        const session = accounts.issueSession(user.id, token);
+        const session = accounts.issueSession(user.id, token, action === 'login' ? user : null);
         return { status: action === 'register' ? 201 : 200,
           cookie: cookie(session.token, session.maxAgeSeconds), body: { user, csrfToken: session.csrfToken } };
       },

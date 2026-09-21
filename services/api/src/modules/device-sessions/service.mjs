@@ -8,7 +8,7 @@ export const DEVICE_MS = 30 * 24 * 60 * 60_000;
 const validToken = (value) => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
 
 /** Native sessions are separate from cookies and never authorize staff access. */
-export function createDeviceSessionsService({ repository, authenticate, getAccount, tokens, unitOfWork, audit, clock }) {
+export function createDeviceSessionsService({ repository, authenticate, validatePasswordLogin, getAccount, tokens, unitOfWork, audit, clock }) {
   const active = (s, now) => s && s.revokedAt === null && s.expiresAt > now && s.idleExpiresAt > now;
   function credentials(s, accessToken, refreshToken) {
     return { sessionId: s.id, accessToken, refreshToken, accessExpiresAt: s.accessExpiresAt,
@@ -18,12 +18,13 @@ export function createDeviceSessionsService({ repository, authenticate, getAccou
     fields(data, ['email', 'password', 'deviceName']);
     const name = label(data.deviceName, 'Device name', 2, 60);
     const authenticated = await authenticate({ email: data.email, password: data.password });
-    return issue(authenticated.id, name);
+    return issue(authenticated.id, name, authenticated);
   }
   // Internal port called only after password or Google authentication succeeds.
-  function issue(userId, deviceName) {
+  function issue(userId, deviceName, passwordLogin = null) {
     const name = label(deviceName, 'Device name', 2, 60);
     return unitOfWork(() => {
+      if (passwordLogin) { check(passwordLogin.id === userId, 'INVALID_CREDENTIALS', 'Sign in again.'); validatePasswordLogin(passwordLogin); }
       const user = getAccount(userId); requireRole(user, 'customer');
       const now = clock(); repository.purge(now);
       check(repository.list(user.id).filter((s) => active(s, now)).length < 5,

@@ -9,13 +9,14 @@ export const SESSION_MS = 12 * 60 * 60 * 1000;
  * repository, driverProfiles {find, insert, validateVehicle}, passwords {hash, verify}, tokens
  * {id, generate, digest}, unitOfWork, audit, hasRideHistory and clock.
  */
-export function createAccountsService({ repository, driverProfiles, passwords, tokens, unitOfWork, audit, hasRideHistory, clock, revokeDevices = () => {} }) {
+export function createAccountsService({ repository, driverProfiles, passwords, tokens, unitOfWork, audit, hasRideHistory, clock, revokeDevices = () => {}, onRegistered = () => {} }) {
+  const passwordProofs = new WeakMap();
   function profile(id) {
     const user = repository.findById(id);
     if (!user) return null;
     const capabilities = repository.capabilities(id);
     const driver = capabilities.includes('driver') ? driverProfiles.find(id) : null;
-    return { ...user, capabilities, driver: driver ? { status: driver.status, vehicle: driver.vehicle, eligibility: driver.eligibility } : null };
+    return { ...user, emailVerified: Boolean(user.emailVerified), capabilities, driver: driver ? { status: driver.status, vehicle: driver.vehicle, eligibility: driver.eligibility } : null };
   }
 
   function vehicleInput(data) {
@@ -44,7 +45,7 @@ export function createAccountsService({ repository, driverProfiles, passwords, t
     else check(!Object.hasOwn(data, 'vehicle'), 'INVALID_FIELDS', 'Add a driver profile after creating your account.');
     // Hash outside the short synchronous database transaction.
     const passwordHash = await passwords.hash(password);
-    return unitOfWork(() => {
+    const user = unitOfWork(() => {
       check(!repository.findByEmail(email), 'EMAIL_IN_USE', 'An account already uses this email address. Try signing in.');
       const id = tokens.id();
       const now = clock();
@@ -54,6 +55,8 @@ export function createAccountsService({ repository, driverProfiles, passwords, t
       audit.record(id, 'account.created', id, now);
       return profile(id);
     });
+    onRegistered(user.id);
+    return user;
   }
 
   function addDriverProfile(userId, data, key) {
@@ -85,7 +88,43 @@ export function createAccountsService({ repository, driverProfiles, passwords, t
     const record = repository.findByEmail(emailAddress(data.email));
     const valid = await passwords.verify(passwordInput(data.password), record?.passwordEnabled ? record.passwordHash : undefined);
     check(record?.passwordEnabled && valid, 'INVALID_CREDENTIALS', 'Email or password is incorrect.');
-    return profile(record.id);
+    const current = repository.findByEmail(emailAddress(data.email));
+    check(current?.id === record.id && current.passwordEnabled && current.passwordHash === record.passwordHash,
+      'INVALID_CREDENTIALS', 'Email or password is incorrect.');
+    const user = profile(record.id);
+    passwordProofs.set(user,record.passwordHash);
+    return user;
+  }
+
+  // An in-memory proof, never part of the public profile. Recheck at issuance as
+  // well as after hashing: a reset can win between two async continuations.
+  function validatePasswordLogin(user) {
+    const hash = passwordProofs.get(user), current = repository.findByEmail(user.email);
+    check(hash && current?.id === user.id && current.passwordEnabled && current.passwordHash === hash,
+      'INVALID_CREDENTIALS', 'Email or password is incorrect.');
+    passwordProofs.delete(user);
+  }
+
+  // Internal ports: never serialize password state into an HTTP response.
+  function emailState(userId) {
+    const user = profile(userId);
+    if (!user?.capabilities.includes('customer')) return null;
+    const credential = repository.findByEmail(user.email);
+    return { id: user.id, email: user.email, verified: user.emailVerified,
+      passwordEnabled: Boolean(credential.passwordEnabled), passwordHash: credential.passwordHash };
+  }
+  function emailStateForAddress(email) { const row = repository.findByEmail(email); return row ? emailState(row.id) : null; }
+  // These synchronous commands share the email action's atomic transaction.
+  function confirmEmail(userId,email) {
+    check(emailState(userId)?.email === email, 'INVALID_EMAIL_LINK', 'Request a new email link.');
+    repository.confirmEmail(userId,email,clock());
+  }
+  function replacePassword(userId,email,expectedHash,hash) {
+    const state = emailState(userId);
+    check(state?.passwordEnabled && state.email === email && state.passwordHash === expectedHash,
+      'INVALID_EMAIL_LINK', 'Request a new password reset link.');
+    repository.replacePassword(userId,hash);
+    repository.deleteUserSessions(userId); revokeDevices(userId);
   }
 
   // Only a verified provider adapter can reach this port; HTTP accepts no claims.
@@ -145,11 +184,12 @@ export function createAccountsService({ repository, driverProfiles, passwords, t
     if (token) repository.deleteSession(tokens.digest(token));
   }
 
-  function issueSession(userId, previousToken) {
+  function issueSession(userId, previousToken, passwordLogin = null) {
     const token = tokens.generate();
     const csrfToken = tokens.generate();
     const now = clock();
     unitOfWork(() => {
+      if (passwordLogin) { check(passwordLogin.id === userId, 'INVALID_CREDENTIALS', 'Sign in again.'); validatePasswordLogin(passwordLogin); }
       revokeSession(previousToken);
       repository.deleteExpiredSessions(now);
       repository.insertSession({ tokenHash: tokens.digest(token), userId, csrfToken, expiresAt: now + SESSION_MS });
@@ -183,5 +223,6 @@ export function createAccountsService({ repository, driverProfiles, passwords, t
   }
 
   return Object.freeze({ profile, register, login, resolveGoogle, signInMethods, unlinkGoogle, addDriverProfile, issueSession, sessionFor, revokeSession, bootstrapAdmin,
+    emailState, emailStateForAddress, confirmEmail, replacePassword, validatePasswordLogin,
     sessionOwner: (hash) => repository.findSession(hash, clock())?.userId ?? null });
 }

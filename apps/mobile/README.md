@@ -95,6 +95,13 @@ root to npm workspaces or hoisting dependencies.
 
 ## Google sign-up and sign-in
 
+Mobile 0.4.0 also adds **Forgot password?** and **Account → Your email**.
+Both reuse the backend's [account email module](../../docs/account-email.md).
+Recovery/verification requests start in the app; emailed links open the responsive
+website to finish, then users return to the app. No recovery token is stored in
+the native vault or passed through an unverified custom URL scheme. On phones,
+use a reachable HTTPS staging origin; localhost links only work on the same computer.
+
 Mobile 0.3.0 adds Google login to configured development builds. It uses a server
 nonce and verified Google identity before adopting the existing Taxi Ai device
 session. Expo Go keeps password login; its runtime has no Google native module.
@@ -141,7 +148,7 @@ Read [vehicle identity and acceptance](../../docs/vehicle-identity.md),
 6. Check that there are no unexpected GPS/microphone/camera prompts, credentials
    in logs or success messages after failed network/storage operations.
 
-Before public downloads: finish native ride workflows/account recovery, test signed
+Before public downloads: finish native ride workflows and validate live recovery email delivery, test signed
 apps, complete store artwork/privacy listings, verify app IDs and the owned domain,
 connect a production backend and meet pilot gates. Developer accounts/signing are
 not configured here. `com.taxiai.app` is provisional; confirm before registration.

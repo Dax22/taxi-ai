@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { harness, PASSWORD, bootstrapAdmin } from './helpers.mjs';
+import { SCHEMA_VERSION } from '../src/infrastructure/database.mjs';
 
 const identity = { subject: 'google-customer-1', email: 'google@example.test', name: 'Google Customer' };
 async function fixture(t, options = {}) {
@@ -164,7 +165,7 @@ test('schema 13 upgrades preserve existing records and all Google pages are expl
   h.db.exec('DROP TABLE account_identities; DROP TABLE account_password_settings; DROP TABLE google_auth_attempts; PRAGMA user_version=13');
   await h.restart();
   assert.deepEqual(h.db.prepare('SELECT * FROM users').all(), before);
-  assert.equal(h.db.prepare('PRAGMA user_version').get().user_version, 14);
+  assert.equal(h.db.prepare('PRAGMA user_version').get().user_version, SCHEMA_VERSION);
   assert.equal((await web.send('/api/auth/login', { email: 'old-account@example.test', password: PASSWORD })).status, 200);
   for (const path of ['/account-access', '/account-access.mjs', '/dashboard/google-auth.mjs', '/dashboard/sign-in-methods.mjs']) {
     const r = await web.send(path); assert.equal(r.status, 200); assert.equal(r.headers.get('cache-control'), 'no-store');
