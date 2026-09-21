@@ -146,6 +146,10 @@ are in the [booking guide](../../docs/mobile-booking.md).
 
 ## Device review before the next milestone
 
+Use [the signed preview setup and acceptance record](../../docs/device-preview.md)
+for installable APK/ad hoc builds, Firebase client configuration, push credentials
+and the remaining live-host/device checks.
+
 1. Sign in with the same web account on iOS/Android. Confirm customer/work activity,
    application status and pagination agree with web.
 2. Close/reopen, lock/unlock, lose network during refresh, background/foreground,

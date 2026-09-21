@@ -1,4 +1,8 @@
 module.exports = ({ config }) => {
+  // EAS file environment variable, or a local ignored client configuration file.
+  // This is google-services.json, never a Firebase service-account private key.
+  const googleServicesFile = process.env.GOOGLE_SERVICES_JSON;
+  if (googleServicesFile) config = { ...config, android: { ...config.android, googleServicesFile } };
   const projectId = process.env.EXPO_PUBLIC_EXPO_PROJECT_ID;
   if (projectId) {
     if (!/^[a-f0-9-]{36}$/.test(projectId)) throw new Error('Use a valid Expo project ID.');
