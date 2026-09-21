@@ -29,6 +29,7 @@ export interface DriverCommands {
   reopen: { expectedVersion: number };
 }
 export function envelope(value: unknown): Envelope;
+export function parseVehicle(value: unknown): Vehicle;
 export function parseAccount(value: unknown): Account;
 export interface EmailStatus { enabled: boolean; verified: boolean; email: string }
 export function parseEmailStatus(value: unknown): EmailStatus;

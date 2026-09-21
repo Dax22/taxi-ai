@@ -1,5 +1,7 @@
 import { envelope, parseAccount, parseSignIn, parseActivity, parseDevices, parseOnboarding, parseEmailStatus } from '../../../../packages/shared/src/mobile-contracts.mjs';
 import type { Account, Credentials, DriverCommands, DriverDetails, Mode, SignIn } from '../../../../packages/shared/src/mobile-contracts.mjs';
+import { parseBooking, parsePlaces, parsePreview, parseBookingRide } from '../../../../packages/shared/src/mobile-booking.mjs';
+import type { Place, RequestData } from '../../../../packages/shared/src/mobile-booking.mjs';
 
 export interface Vault { read(): Promise<string | null>; write(value: string): Promise<void>; clear(): Promise<void> }
 export interface SavedSession { origin: string; refreshToken: string; sessionId: string; previewAccess: string }
@@ -157,6 +159,20 @@ export class MobileClient {
   }
   async session() { const epoch = this.epoch, body = await this.request('/session'); if (epoch !== this.epoch) throw changed(); const user = parseAccount(body.user); this.publish(user); return user; }
   async activity(mode: Mode, before?: string | null) { return parseActivity(await this.request(`/activity?mode=${mode}${before ? `&before=${encodeURIComponent(before)}` : ''}`)); }
+  async booking() { return parseBooking(await this.request('/booking')); }
+  async searchPlaces(query: string) { return parsePlaces(await this.request('/booking/search', { query })); }
+  async routePreview(pickup: Place, destination: Place, key: string) {
+    const point = ({ name, lat, lng }: Place) => ({ name, lat, lng });
+    return parsePreview(await this.request('/booking/quotes', { pickup: point(pickup), destination: point(destination) }, key));
+  }
+  async samplePreview(pickupId: string, destinationId: string) {
+    return parsePreview(await this.request('/booking/sample', { pickupId, destinationId }));
+  }
+  async requestRide(data: RequestData, key: string) { return parseBookingRide(await this.request('/booking/requests', data, key)); }
+  async bookingRide(id: string) { return parseBookingRide(await this.request(`/booking/requests/${id}`)); }
+  async cancelRide(id: string, expectedVersion: number, key: string) {
+    return parseBookingRide(await this.request(`/booking/requests/${id}/cancel`, { expectedVersion, reason: 'plans_changed' }, key));
+  }
   private ownApplication(body: unknown) {
     const application = parseOnboarding(body);
     if (application.driverId !== this.user?.id) throw changed();

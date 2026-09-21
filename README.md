@@ -7,8 +7,8 @@ and Customer, Drive & deliver and My store modes. A person can have multiple
 approved capabilities. This direction is documented in the
 [unified platform plan](docs/unified-platform.md). The first milestone is implemented:
 one website account with Customer and Work modes for rides. The first iOS/Android
-foundation now shares sign-in, profiles and saved activity; native booking, Eats,
-courier and My store remain planned. See [unified accounts](docs/unified-accounts.md)
+app now shares sign-in, profiles, saved activity and ride requests; native
+negotiation/trip controls, Eats, courier and My store remain planned. See [unified accounts](docs/unified-accounts.md)
 and [mobile setup](apps/mobile/README.md).
 
 ## What works today
@@ -34,6 +34,8 @@ is not connected. Use fictional details and documents.
 
 - One personal login, Customer/Work mode switching and optional driver enrollment.
 - Native sign-in, Home/Activity/Work/Account navigation and device revocation.
+- Native **Book a ride**: Abuja address search, route/fare review, shared ride requests,
+  status recovery and pre-start cancellation. See [mobile booking](docs/mobile-booking.md).
 - Optional Google sign-up/sign-in for web and native development builds, with
   explicit password-confirmed linking for existing accounts. Configure your own
   OAuth clients using [Google setup](docs/google-sign-in.md); it stays off until configured.
@@ -282,7 +284,7 @@ review a deployment; the Docker image deliberately refuses an incomplete setup.
 | `scripts/database-snapshot.mjs` | Checked backups/restores into new files |
 | `scripts/staging-access.mjs` | Add/remove invited tester access keys |
 | `.github/workflows/ci.yml` | Automated verification on Node 22.12.0 and 24 |
-| `apps/mobile/` | Runnable Expo iOS/Android foundation, accounts and driver onboarding |
+| `apps/mobile/` | Expo iOS/Android accounts, driver onboarding and customer ride requests |
 | `docs/` | Requirements, architecture, roadmap and approved brand |
 
 The backend is a **modular monolith**: business modules share one process/database
@@ -295,11 +297,12 @@ The terminal example runs with `npm run demo`. Read [the architecture](docs/arch
 
 ## Development and review
 
-The latest development branch is `feat/unified-accounts`. Version 0.14.0 adds
-Customer/Work modes, same-login driver enrollment and schema-10 capabilities
-while preserving the Trip Safety and light 3D homepage work. Full native ride workflows, Eats,
-courier and vendor workflows remain planned. Follow [the upgrade and acceptance
-guide](docs/unified-accounts.md) before switching a saved database to this release.
+The latest development branch is `feat/mobile-booking`. Version 0.21.0 / mobile
+0.5.0 adds native customer ride requests over the same services and preserves
+schema 15. Native negotiation/trip controls, Eats, courier and vendor workflows
+remain planned. Follow [mobile booking and acceptance](docs/mobile-booking.md) and
+[mobile setup](apps/mobile/README.md). Back up the database before changing branches;
+older releases may not support the existing schema.
 Read [CONTRIBUTING.md](CONTRIBUTING.md) for the GitHub/VS Code workflow and where
 new code belongs. `npm run check` validates syntax and module conventions;
 `npm test` checks behaviour; `npm run verify` runs both. GitHub Actions is configured

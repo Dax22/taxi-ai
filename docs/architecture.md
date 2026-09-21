@@ -195,16 +195,13 @@ after a second session check. Queued actions cannot run under a replacement
 session; responses from an earlier API-client generation cannot update the clock
 or erase current retry keys. See [journey verification](pilot-readiness.md).
 
-One native Taxi Ai app for iOS/Android, including tablets, is planned in
-`apps/mobile/`. React Native + Expo + TypeScript is the proposed mobile stack;
-the current website/backend remain JavaScript ESM. Both clients will expose
-Customer, Drive & deliver and My store modes over shared server use cases and
-reviewed API contracts. Native views and device adapters will be platform-aware.
-
-The current browser-cookie transport is not a completed native authentication
-design. Define device sessions, secure credential storage, expiry/revocation,
-API schemas and compatibility before connecting the app. Public capabilities
-are implemented; scoped store memberships remain part of the later Eats module.
+One native Taxi Ai app for iOS/Android, including tablets, lives in `apps/mobile/`
+using React Native + Expo + TypeScript. The website/backend remain JavaScript ESM.
+Customer/Work modes share account use cases and versioned API contracts; delivery
+and My store remain planned. Device sessions, secure credential storage and
+expiry/revocation are implemented separately from browser cookies. Native views
+and device adapters remain platform-aware. Scoped store memberships remain part
+of the later Eats module.
 Mode selection remains per client; authorization, ownership and worker capacity
 remain server-side. Workspace resets and retry keys are now scoped to account
 and Customer/Work mode. Calls/GPS/availability use a separate session client and
@@ -415,6 +412,16 @@ form drafts, exact displayed review versions and text-only rendering. The separa
 trip-share controller clears details on hidden pages, errors and link expiry.
 All browser requests use the existing API client. No AI agent or notification
 provider operates on these records in this milestone.
+
+## Native customer booking
+
+Release 0.21 / mobile 0.5 connects a protected booking screen to existing location
+and ride services through `http/mobile-booking.mjs`. It adds no persistence or
+second booking engine. Planning alone can validate native sessions through the
+injected device-access owner port; live location-sharing authorization stays
+unchanged. Controller, typed wire readers, API transport and native views remain
+separate. No provider SDK or database access reaches the app. See
+[booking contracts and recovery](mobile-booking.md).
 
 ## Native foundation and future staff application
 

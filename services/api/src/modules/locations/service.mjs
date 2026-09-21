@@ -4,23 +4,25 @@ import { requireRole } from '../../shared/policies.mjs';
 import { ABUJA_BOUNDS, insideAbuja, canShareLocation } from '../../../../../packages/shared/src/locations.mjs';
 import { key, clientIdentity, endpoints, point, checkedRoute, position, QUOTE_MS, FRESH_MS, SHARE_MS } from './domain.mjs';
 
-export function createLocationsService({ repository, provider, getAccount, sessionOwner, getRideContext, unitOfWork, tokens, audit, clock }) {
-  function context(input, clientRequired = false) {
+export function createLocationsService({ repository, provider, getAccount, sessionOwner, nativeSessionOwner = () => null, getRideContext, unitOfWork, tokens, audit, clock }) {
+  function context(input, clientRequired = false, planning = false) {
     const user = getAccount(input.userId);
     check(user && typeof input.sessionToken === 'string', 'UNAUTHENTICATED', 'Sign in to use locations.');
     requireRole(user, 'customer');
     const sessionHash = tokens.digest(input.sessionToken);
-    check(sessionOwner(sessionHash) === user.id, 'UNAUTHENTICATED', 'This location session has expired.');
+    const owner = planning && input.native === true ? nativeSessionOwner : sessionOwner;
+    check(owner(sessionHash) === user.id, 'UNAUTHENTICATED', 'This location session has expired.');
     const clientHash = input.clientId ? tokens.digest(clientIdentity(input.clientId)) : null;
     check(!clientRequired || clientHash, 'INVALID_LOCATION_CLIENT', 'Use location controls in this window.');
     return { user, userId: user.id, sessionHash, clientHash };
   }
-  function settings(input) { context(input); return { ...provider.describe(), bounds: ABUJA_BOUNDS, quoteSeconds: QUOTE_MS / 1000 }; }
+  const planningContext = (input) => context(input, false, true);
+  function settings(input) { planningContext(input); return { ...provider.describe(), bounds: ABUJA_BOUNDS, quoteSeconds: QUOTE_MS / 1000 }; }
   async function search(input, data) {
-    context(input); fields(data, ['query']);
+    planningContext(input); fields(data, ['query']);
     const query = label(data.query, 'Address search', 3, 160);
     const found = await provider.search(query, ABUJA_BOUNDS);
-    context(input); // A logout during provider I/O must not deliver a stale account result.
+    planningContext(input); // A logout during provider I/O must not deliver a stale account result.
     const places = found.filter((item) => insideAbuja(item) && typeof item.name === 'string' && item.name.trim().length >= 2
       && !/[\u0000-\u001f\u007f]/u.test(item.name)).map(point);
     return { places, attribution: '© OpenStreetMap contributors · Photon search' };
@@ -38,7 +40,7 @@ export function createLocationsService({ repository, provider, getAccount, sessi
     return { quote: quoteView(ownedQuote(userId, saved.id)), replayed: true };
   }
   async function quote(input, data, commandKey) {
-    const ctx = context(input); requireRole(ctx.user, 'customer'); key(commandKey);
+    const ctx = planningContext(input); requireRole(ctx.user, 'customer'); key(commandKey);
     const points = endpoints(data), fingerprint = tokens.digest(JSON.stringify(points));
     const replay = quoteReplay(ctx.userId, commandKey, fingerprint);
     if (replay) return replay;
@@ -47,7 +49,7 @@ export function createLocationsService({ repository, provider, getAccount, sessi
     // Provider I/O is outside the synchronous transaction. Recheck authorization,
     // retry key and limits inside it before committing the server-owned quote.
     return unitOfWork(() => {
-      const fresh = context(input); requireRole(fresh.user, 'customer');
+      const fresh = planningContext(input); requireRole(fresh.user, 'customer');
       const previous = quoteReplay(fresh.userId, commandKey, fingerprint); if (previous) return previous;
       const now = clock();
       check(repository.recentQuotes(fresh.userId, now - 60_000) < 10, 'RATE_LIMITED', 'Wait before requesting more route previews.');

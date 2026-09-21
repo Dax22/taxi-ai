@@ -31,6 +31,27 @@ async function setup(t, options = {}) {
   return { h, runtime, logs };
 }
 
+test('hosted native booking preserves the tester gate and cannot enable sample requests', async (t) => {
+  const { h } = await setup(t), web = h.client(); await web.register('nativebooking');
+  const basic = gatewayHeaders.Authorization;
+  async function native(path, data, token) {
+    const result = await httpFetch(h.base + '/api/mobile/v1' + path, { method: data === undefined ? 'GET' : 'POST',
+      headers: { ...gatewayHeaders, Authorization: token ? `Bearer ${token}` : '', 'X-Taxi-Ai-Preview-Access': basic,
+        'Content-Type': 'application/json', 'Idempotency-Key': randomUUID() }, ...(data === undefined ? {} : { body: JSON.stringify(data) }) });
+    return { status: result.status, body: await result.json() };
+  }
+  const auth = await native('/auth/login', { email: web.user.email, password: PASSWORD, deviceName: 'Hosted test phone' });
+  assert.equal(auth.status, 200); const token = auth.body.credentials.accessToken;
+  const settings = await native('/booking', undefined, token);
+  assert.equal(settings.status, 200); assert.equal(settings.body.allowSample, false); assert.deepEqual(settings.body.areas, []);
+  const sample = { pickupId: 'wuse-ii', destinationId: 'maitama' };
+  assert.equal((await native('/booking/sample', sample, token)).status, 403);
+  assert.equal((await native('/booking/requests', sample, token)).status, 403);
+  const forbidden = await httpFetch(h.base + '/api/mobile/v1/booking', { headers: { ...gatewayHeaders, Authorization: `Bearer ${token}` } });
+  assert.equal(forbidden.status, 401);
+  assert.equal(h.db.prepare('SELECT count(*) AS n FROM rides').get().n, 0);
+});
+
 test('staging fails closed for incomplete configuration; local mode keeps loopback defaults', (t) => {
   const { env, file } = configuration(t);
   assert.equal(createRuntimeConfig({}).host, '127.0.0.1');

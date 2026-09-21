@@ -6,7 +6,16 @@ with shared accounts and Customer, Drive & deliver and My store modes. The
 moves the mobile foundation earlier. Completed milestones below describe the
 prototype; planned milestones do not claim shipped features.
 
-## Current account milestone — verification and recovery (implemented; delivery/device acceptance pending)
+## Current mobile milestone — customer ride requests (implemented; device acceptance pending)
+
+Release 0.21 / mobile 0.5 adds native route search/review, server fare suggestions,
+shared customer requests, status recovery, assigned vehicles and pre-start cancellation.
+No schema change: schema 15 and existing business services are reused.
+See [native booking](mobile-booking.md). Next: native driver availability/acceptance,
+then fare negotiation/chat and the remaining trip lifecycle. Provider/device review
+and signed app testing remain outstanding.
+
+## Account milestone — verification and recovery (implemented; delivery/device acceptance pending)
 
 Release 0.20 / mobile 0.4 adds mailbox verification, password recovery requests,
 responsive email-link completion, durable email intentions and session revocation.
@@ -248,7 +257,7 @@ enrollment/status and device revocation. Both platform bundles are compiled;
 actual simulator/device and signed native build testing are pending. Website
 download links remain Coming soon until real listings exist.
 
-Next: native ride booking/negotiation through trip completion, then native
+Next: native driver requests and fare negotiation through trip completion, then native
 communication/location/safety integrations. The separate [staff dashboard](admin-dashboard.md)
 now has audited account/trip views and analytics. Extend it with dedicated staff
 sessions, MFA and granular permissions. Real providers and staffed operations
