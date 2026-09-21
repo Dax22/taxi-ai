@@ -21,6 +21,7 @@ import { createGeolocation } from './dashboard/geolocation.mjs';
 import { createPageController } from './dashboard/page-controller.mjs';
 import { createSafetyController } from './dashboard/safety-controller.mjs';
 import { createSafetyView } from './dashboard/safety-view.mjs';
+import { createVehiclePhotoCheck } from './dashboard/vehicle-checks.mjs';
 import { createAccountModeView, modePreferences } from './dashboard/account-mode-view.mjs';
 import { createGoogleSignIn, consumeGoogleOutcome } from './dashboard/google-auth.mjs';
 
@@ -76,6 +77,7 @@ const safetyView = createSafetyView({ onAdd: (data) => safety.add(data), onRemov
   onReview: (...args) => safety.review(...args), onSimulate: (...args) => safety.simulate(...args) });
 const safety = createSafetyController({ client, view: safetyView, origin: location.origin,
   copy: (value) => navigator.clipboard.writeText(value) });
+const vehicleCheck = createVehiclePhotoCheck({client,onReport:(id,checkId)=>safetyView.vehicleMismatch(id,checkId)});
 const view = createDashboardView({
   onVehicleMismatch: (id) => safetyView.vehicleMismatch(id),
   onCategoryChange: (id) => planner.setCategory(id),
@@ -104,7 +106,7 @@ let storage;
 try { storage = window.sessionStorage; } catch { /* Mode selection remains usable without storage. */ }
 const page = createPageController({ client, activityClient, view, modeView, preferences: modePreferences(storage),
   conversation, conversationView, calls, sharing, availability,
-  planner, payments, onboarding, safety, authForm, feedback: {
+  planner, payments, onboarding, safety, vehicleCheck, authForm, feedback: {
     clear() { $('page-error').textContent = ''; $('page-notice').textContent = ''; },
     error(message) { $('page-error').textContent = message; },
     notice(message) { $('page-notice').textContent = message; },
@@ -121,7 +123,7 @@ const poll = () => { if (!document.hidden) void page.poll(); };
 $('logout').addEventListener('click', () => page.logout());
 $('refresh').addEventListener('click', () => page.poll());
 document.addEventListener('visibilitychange', () => { if (document.hidden) availability.shutdown(); else poll(); });
-window.addEventListener('pagehide', () => { calls.shutdown(); sharing.shutdown(); availability.shutdown(); safety.reset(); });
+window.addEventListener('pagehide', () => { calls.shutdown(); sharing.shutdown(); availability.shutdown(); safety.reset(); vehicleCheck.reset(); });
 window.addEventListener('afterprint', () => document.body.classList.remove('print-receipt'));
 setInterval(() => { view.tick(); conversationView.tick(); calls.tick(); planner.tick(); sharing.tick(); availability.tick(); }, 1000);
 setInterval(() => { if (!document.hidden || calls.hasMedia()) void calls.poll(); }, 2000);

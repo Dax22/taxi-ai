@@ -333,3 +333,4 @@
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
+.vehicle-check-photo { width: 100%; height: auto; max-height: 240px; object-fit: contain; }

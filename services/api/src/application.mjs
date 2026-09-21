@@ -44,10 +44,14 @@ import { createAccountEmailService } from './modules/account-email/service.mjs';
 import { createNotificationsRepository } from './modules/notifications/repository.mjs';
 import { createNotificationsService } from './modules/notifications/service.mjs';
 import { createPushProvider } from './infrastructure/push-provider.mjs';
+import { createVehicleVisionProvider } from './infrastructure/vehicle-vision-provider.mjs';
+import { createVehiclePhotoCodec } from './infrastructure/vehicle-photo-codec.mjs';
+import { createVehicleChecksRepository } from './modules/vehicle-checks/repository.mjs';
+import { createVehicleChecksService } from './modules/vehicle-checks/service.mjs';
 
 /** Composition root: the only place that wires business modules to adapters. */
 export function createApplication({ db, clock = Date.now, callConfig = createCallConfig(), mapProvider = createMapProvider(), allowSimulation = false,
-  accountMail = createAccountMail(), pushProvider = createPushProvider(),
+  accountMail = createAccountMail(), pushProvider = createPushProvider(), vehicleVisionProvider = createVehicleVisionProvider(),
   googleProvider = createGoogleProvider({ config: createGoogleConfig({}), clock }) }) {
   const unitOfWork = (run) => transaction(db, run);
   const audit = createAudit(db);
@@ -115,10 +119,14 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
     getRideContext: rides.conversationContext, unitOfWork, tokens, audit, clock });
   payments = createPaymentsService({ repository: createPaymentsRepository(db), getAccount: accounts.profile,
     tripForPayment: rides.paymentContext, simulate: simulatePayment, unitOfWork, tokens, audit, clock, allowSimulation });
+  const vehicleChecks = createVehicleChecksService({ repository:createVehicleChecksRepository(db),provider:vehicleVisionProvider,
+    codec:createVehiclePhotoCodec(),getAccount:accounts.profile,getTrip:rides.safetyContext,sessionOwner:accounts.sessionOwner,
+    nativeSessionOwner:devices.sessionOwner,unitOfWork,tokens,clock });
   safety = createSafetyService({ repository: createSafetyRepository(db), getAccount: accounts.profile, getTrip: rides.safetyContext,
+    vehicleCheckEvidence:vehicleChecks.evidence,
     locationForTrip: locations.safetyPosition, sessionOwner: accounts.sessionOwner, nativeSessionOwner: devices.sessionOwner, unitOfWork, tokens, audit, clock, allowSimulation });
   const adminConsole = createAdminConsoleService({ repository: createAdminConsoleRepository(db), audit, clock, unitOfWork });
   const googleAuth = createGoogleAuthService({ repository: createGoogleAuthRepository(db), provider: googleProvider,
     accounts, devices, tokens, unitOfWork, clock });
-  return Object.freeze({ accounts, devices, drivers, rides, chat, calls, locations, availability, payments, safety, adminConsole, googleAuth, accountEmail, notifications, rateLimiter, clock });
+  return Object.freeze({ accounts, devices, drivers, rides, chat, calls, locations, availability, payments, safety, vehicleChecks, adminConsole, googleAuth, accountEmail, notifications, rateLimiter, clock });
 }

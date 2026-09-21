@@ -20,6 +20,7 @@ import { createGoogleProvider } from '../../services/api/src/infrastructure/goog
 import { createGoogleCallback } from '../../services/api/src/modules/google-auth/routes.mjs';
 import { createEmailConfig } from '../../services/api/src/infrastructure/email-config.mjs';
 import { createPushProvider } from '../../services/api/src/infrastructure/push-provider.mjs';
+import { createVehicleVisionProvider } from '../../services/api/src/infrastructure/vehicle-vision-provider.mjs';
 import { createAccountMail } from '../../services/api/src/infrastructure/account-mail.mjs';
 
 // Explicit allowlist: never serve the repository root or arbitrary disk paths.
@@ -44,6 +45,10 @@ const routes = new Map([
   ['/trip-share.mjs', ['public/trip-share.mjs', 'text/javascript; charset=utf-8']],
   ['/dashboard/safety-controller.mjs', ['public/dashboard/safety-controller.mjs', 'text/javascript; charset=utf-8']],
   ['/dashboard/safety-view.mjs', ['public/dashboard/safety-view.mjs', 'text/javascript; charset=utf-8']],
+  ['/dashboard/vehicle-checks.mjs', ['public/dashboard/vehicle-checks.mjs', 'text/javascript; charset=utf-8']],
+  ['/dashboard/vehicle-photo.mjs', ['public/dashboard/vehicle-photo.mjs', 'text/javascript; charset=utf-8']],
+  ['/shared/vehicle-checks.mjs', ['../../packages/shared/src/vehicle-checks.mjs', 'text/javascript; charset=utf-8']],
+  ['/shared/vehicle-check-controller.mjs', ['../../packages/shared/src/vehicle-check-controller.mjs', 'text/javascript; charset=utf-8']],
   ['/dashboard/safety-format.mjs', ['public/dashboard/safety-format.mjs', 'text/javascript; charset=utf-8']],
   ['/dashboard/trip-share-controller.mjs', ['public/dashboard/trip-share-controller.mjs', 'text/javascript; charset=utf-8']],
   ['/shared/safety.mjs', ['../../packages/shared/src/safety.mjs', 'text/javascript; charset=utf-8']],
@@ -117,15 +122,16 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
   telemetry = createTelemetry({ enabled: runtime.mode === 'staging' }),
   accountMail = createAccountMail({ config: createEmailConfig(process.env,runtime) }),
   pushProvider = createPushProvider({ env: process.env }),
+  vehicleVisionProvider = createVehicleVisionProvider({ env:process.env }),
   googleProvider = createGoogleProvider({ config: createGoogleConfig(process.env, runtime), clock }) } = {}) {
   if (runtime.mode === 'staging' && callConfig.mode === 'local') throw new Error('Staging calls require off or a configured relay.');
-  const application = createApplication({ db, clock, callConfig, mapProvider, googleProvider, accountMail, pushProvider, allowSimulation: runtime.mode === 'local' });
+  const application = createApplication({ db, clock, callConfig, mapProvider, googleProvider, accountMail, pushProvider, vehicleVisionProvider, allowSimulation: runtime.mode === 'local' });
   const handleApi = createApiRouter(application, { secure: runtime.mode === 'staging' });
   const handleMobile = createMobileRouter(application);
   const handleGoogleCallback = createGoogleCallback(application, runtime.mode === 'staging');
   const health = createHealth(db);
   const cleanup = setInterval(() => {
-    try { application.rides.sweep(); application.availability.sweep(); application.calls.sweep(); application.locations.sweep(); application.safety.sweep(); application.devices.sweep(); application.googleAuth.sweep(); }
+    try { application.rides.sweep(); application.availability.sweep(); application.calls.sweep(); application.locations.sweep(); application.safety.sweep(); application.vehicleChecks.sweep(); application.devices.sweep(); application.googleAuth.sweep(); }
     catch { telemetry.event('maintenance_failed'); }
     void application.accountEmail.deliverPending().catch(() => telemetry.event('maintenance_failed'));
     void application.notifications.deliverPending().catch(() => telemetry.event('maintenance_failed'));
@@ -143,7 +149,7 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
     try {
       pathname = new URL(request.url, 'http://localhost').pathname;
       if (pathname === '/app' && mapProvider.mode !== 'off') response.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-      response.setHeader('Permissions-Policy', `camera=(), microphone=${pathname === '/app' && callConfig.mode !== 'off' ? '(self)' : '()'}, geolocation=${pathname === '/app' ? '(self)' : '()'}`);
+      response.setHeader('Permissions-Policy', `camera=${pathname === '/app' ? '(self)' : '()'}, microphone=${pathname === '/app' && callConfig.mode !== 'off' ? '(self)' : '()'}, geolocation=${pathname === '/app' ? '(self)' : '()'}`);
     } catch {
       response.writeHead(400);
       response.end('Bad request');

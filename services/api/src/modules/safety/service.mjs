@@ -5,7 +5,7 @@ import { MAX_CONTACTS, SHARE_MINUTES, canUseTripSafety } from '../../../../../pa
 import { commandKey, version, identifier, contactData, incidentData, noteText, canonical, notificationTransition } from './domain.mjs';
 
 /** Safety records are private; notification actions are an explicit local simulator. */
-export function createSafetyService({ repository, getAccount, getTrip, locationForTrip, sessionOwner, nativeSessionOwner = () => null, unitOfWork, tokens, audit, clock, allowSimulation = false }) {
+export function createSafetyService({ repository, getAccount, getTrip, locationForTrip, sessionOwner, nativeSessionOwner = () => null, vehicleCheckEvidence, unitOfWork, tokens, audit, clock, allowSimulation = false }) {
   const settings = Object.freeze({ mode: 'simulation', canSimulate: allowSimulation, localOnly: allowSimulation, maxContacts: MAX_CONTACTS, shareMinutes: SHARE_MINUTES });
   function actor(id) { const user = getAccount(id); check(user, 'UNAUTHENTICATED', 'Sign in to continue.'); return user; }
   function participant(user) { requireRole(user, 'customer'); }
@@ -111,6 +111,7 @@ export function createSafetyService({ repository, getAccount, getTrip, locationF
         resourceId = tokens.id();
         const snapshot = { rideId: id, tripStatus: ride.status, pickup: ride.pickup, destination: ride.destination, driver: ride.driver,
           reporter: { id: user.id, name: user.name, role: ride.customerId === user.id ? 'customer' : 'driver' }, location: locationForTrip(id), recordedAt: now };
+        if (value.vehicleCheckId) snapshot.vehicleCheck = vehicleCheckEvidence(user.id,id,value.vehicleCheckId);
         repository.addIncident({ id: resourceId, rideId: id, reporterId: user.id, ...value, snapshot, now });
         repository.incidentEvent(resourceId, user.id, 'created', '', 0, now);
         for (const contact of recipients) {

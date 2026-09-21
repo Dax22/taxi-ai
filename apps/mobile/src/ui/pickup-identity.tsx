@@ -3,6 +3,7 @@ import { router } from 'expo-router';
 import type { Journey } from '../../../../packages/shared/src/mobile-journeys.mjs';
 import { arrivalNotice } from '../../../../packages/shared/src/pickup-identity.mjs';
 import { Button, Card, styles } from './components';
+import { VehiclePhotoCheck } from '../vehicle-checks/card';
 
 export function PickupIdentity({ ride }: { ride: Journey }) {
   if (ride.mode !== 'customer' || !ride.driver || !['booked','on_way','arrived'].includes(ride.status)) return null;
@@ -12,5 +13,6 @@ export function PickupIdentity({ ride }: { ride: Journey }) {
     <Text style={styles.body}>Compare the number plate, make/model and colour with the vehicle in front of you. If anything differs, do not board, hand over a parcel or share your pickup PIN.</Text>
     <Text style={styles.small}>Arrival is reported by the driver. The example image does not verify the physical vehicle.</Text>
     <Button title="Vehicle doesn’t match?" secondary onPress={() => router.push({ pathname: '/safety', params: { id: ride.id, concern: 'vehicle_mismatch' } })}/>
+    <VehiclePhotoCheck rideId={ride.id}/>
   </Card>;
 }

@@ -145,7 +145,7 @@ test('schema twelve gains reporting indexes without changing identities, session
   await requestRide(customer);
   const tables = h.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all().map((row) => row.name).filter((name) => !['account_notifications','push_registrations','push_jobs'].includes(name));
   const before = new Map(tables.map((name) => [name, h.db.prepare(`SELECT * FROM ${name}`).all()]));
-  h.db.exec('DROP TABLE push_jobs; DROP TABLE push_registrations; DROP TABLE account_notifications; ALTER TABLE driver_availability DROP COLUMN native_session_id; DROP TABLE delivery_orders; ALTER TABLE rides DROP COLUMN vehicle_category; DROP INDEX admin_accounts_created; DROP INDEX admin_rides_created; DROP INDEX admin_customer_trips; PRAGMA user_version=12;');
+  h.db.exec('DROP TABLE vehicle_photo_checks; DROP TABLE push_jobs; DROP TABLE push_registrations; DROP TABLE account_notifications; ALTER TABLE driver_availability DROP COLUMN native_session_id; DROP TABLE delivery_orders; ALTER TABLE rides DROP COLUMN vehicle_category; DROP INDEX admin_accounts_created; DROP INDEX admin_rides_created; DROP INDEX admin_customer_trips; PRAGMA user_version=12;');
   await h.restart();
   for (const name of tables) assert.deepEqual(h.db.prepare(`SELECT * FROM ${name}`).all(), before.get(name), name);
   assert.equal(h.db.prepare('PRAGMA user_version').get().user_version, SCHEMA_VERSION);

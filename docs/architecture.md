@@ -39,6 +39,12 @@ See [native journeys](mobile-journeys.md) for ownership, retries and device gate
 
 ## Implemented modules
 
+Schema 18 adds `vehicle-checks`: consented, rider-owned photo analysis and temporary
+comparison results. Image decoding and OpenAI vision are injected infrastructure
+adapters; deterministic comparison rules use the approved journey snapshot.
+An explicit safety report can attach the result through an injected evidence port.
+See [vehicle photo checks](vehicle-photo-checks.md) for configuration and limits.
+
 | Module | Responsibility | Owns |
 | --- | --- | --- |
 | Accounts | Registration, authentication, sessions, first-admin setup, own profile and driver enrollment | `users`, `sessions`, `account_capabilities`, `account_commands`, `account_identities`, `account_password_settings`, `account_email_verifications` |
@@ -47,6 +53,7 @@ See [native journeys](mobile-journeys.md) for ownership, retries and device gate
 | Rides | Requests, fares, bookings, pickup verification, progress, cancellation and history | `rides`, `fare_events`, `idempotency`, `ride_trips`, `ride_activity` |
 | Deliveries | Parcel validation, category/capacity eligibility and drop-off verification | `delivery_orders` |
 | Notifications | Account-scoped inbox, device opt-in and durable push/receipt retries | `account_notifications`, `push_registrations`, `push_jobs` |
+| Vehicle checks | Optional photo observations, comparison, retry reservation and expiry | `vehicle_photo_checks` |
 | Chat | Participant messages, read markers, retries and reports | `chat_messages`, `chat_reads`, `chat_commands`, `chat_reports` |
 | Calls | Audio invitations, session/window ownership, signaling, expiry and history | `voice_calls`, `voice_participants`, `voice_commands` |
 | Locations | Provider-backed route quotes, fare suggestions, driver sharing and expiry | `location_quotes`, `location_quote_commands`, `location_shares`, `location_share_commands` |

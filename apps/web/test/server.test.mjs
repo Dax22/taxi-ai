@@ -51,12 +51,12 @@ test('the local site serves HTML, modules and artwork with correct content types
   });
 });
 
-test('microphone and geolocation permissions are scoped to the account page; only configured tiles can load externally', async () => {
+test('camera, microphone and geolocation permissions are scoped to the account page; only configured tiles can load externally', async () => {
   for (const mode of ['local', 'off']) await withServer(async (base) => {
     for (const path of ['/', '/app', '/app?preview=1', '/api/session', '/trip-share']) {
       const result = await fetch(base + path);
       const policy = result.headers.get('permissions-policy');
-      assert.equal(policy, `camera=(), microphone=${path.startsWith('/app') && mode !== 'off' ? '(self)' : '()'}, geolocation=${path.startsWith('/app') ? '(self)' : '()'}`);
+      assert.equal(policy, `camera=${path.startsWith('/app') ? '(self)' : '()'}, microphone=${path.startsWith('/app') && mode !== 'off' ? '(self)' : '()'}, geolocation=${path.startsWith('/app') ? '(self)' : '()'}`);
       assert.match(result.headers.get('content-security-policy'), /media-src 'self' blob:/);
       assert.match(result.headers.get('content-security-policy'), /img-src 'self' https:\/\/tile.openstreetmap.org/);
       assert.match(result.headers.get('content-security-policy'), /connect-src 'self'/);
