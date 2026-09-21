@@ -102,6 +102,7 @@ const routes = new Map([
   ['/shared/fare-negotiation.mjs', ['../../packages/shared/src/fare-negotiation.mjs', 'text/javascript; charset=utf-8']],
   ['/shared/demo-booking.mjs', ['../../packages/shared/src/demo-booking.mjs', 'text/javascript; charset=utf-8']],
   ['/shared/trip-lifecycle.mjs', ['../../packages/shared/src/trip-lifecycle.mjs', 'text/javascript; charset=utf-8']],
+  ['/shared/chat-safety.mjs', ['../../packages/shared/src/chat-safety.mjs', 'text/javascript; charset=utf-8']],
   ['/shared/call-lifecycle.mjs', ['../../packages/shared/src/call-lifecycle.mjs', 'text/javascript; charset=utf-8']],
   ['/shared/matching.mjs', ['../../packages/shared/src/matching.mjs', 'text/javascript; charset=utf-8']],
   ['/shared/payments.mjs', ['../../packages/shared/src/payments.mjs', 'text/javascript; charset=utf-8']],

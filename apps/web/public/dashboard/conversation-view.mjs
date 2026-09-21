@@ -1,5 +1,6 @@
 import { formatNaira } from '/shared/demo-booking.mjs';
 import { canChatDuringRide } from '/shared/trip-lifecycle.mjs';
+import { chatSafetyHints, CHAT_SAFETY_NOTICE } from '/shared/chat-safety.mjs';
 import { $, element } from './dom.mjs';
 import { conversationItems, offerState } from './conversation-model.mjs';
 
@@ -59,6 +60,7 @@ export function createConversationView({ onSend, onReport, onAccept, onRead, ser
       ? 'This trip has ended. You can still read and report saved messages.'
       : !canSend ? 'This test conversation has reached its 500-message limit.'
         : 'Messages stay in Taxi Ai. Sending a message does not agree a fare.';
+    $('chat-compose-note').textContent += ` ${CHAT_SAFETY_NOTICE}`;
     const key = JSON.stringify([keyFor(context), context.ride.version, context.messages.at(-1)?.sequence,
       context.thread.reportedMessageIds]);
     if (rendered !== key) {
@@ -86,6 +88,7 @@ export function createConversationView({ onSend, onReport, onAccept, onRead, ser
       const header = element('div', undefined, 'chat-meta'); header.append(element('strong', author), at);
       node.append(header, element('p', message.body, 'chat-body'));
       if (!own) {
+        for (const hint of chatSafetyHints(message.body)) node.append(element('p', `Safety hint · ${hint.message}`, 'chat-safety-hint'));
         const reported = thread.reportedMessageIds.includes(message.id);
         const button = element('button', reported ? 'Reported' : 'Report message', 'chat-report-button');
         button.type = 'button'; button.dataset.locked = String(reported);
