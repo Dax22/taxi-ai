@@ -6,9 +6,10 @@ import { readBody } from './body.mjs';
 import { json } from './responses.mjs';
 import { createMobileJourneys, mobileNotifications } from './mobile-journeys.mjs';
 import { createMobileBooking } from './mobile-booking.mjs';
+import { mobileSafety } from './mobile-safety.mjs';
 
 /** Versioned native surface. Cookie identity and browser CSRF are never reused. */
-export function createMobileRouter({ devices, accounts, drivers, rides, locations, availability, chat, notifications, clock, rateLimiter, googleAuth, accountEmail }) {
+export function createMobileRouter({ devices, accounts, drivers, rides, locations, availability, chat, notifications, safety, clock, rateLimiter, googleAuth, accountEmail }) {
   const booking = createMobileBooking({ rides, locations, availability, clock });
   const journeys = createMobileJourneys({ rides, availability, chat, clock });
   function summary(ride) {
@@ -17,7 +18,6 @@ export function createMobileRouter({ devices, accounts, drivers, rides, location
       vehicleCategory: ride.vehicleCategory, suggestedFareKobo: ride.suggestedFareKobo, createdAt: ride.createdAt, isDemo: ride.isDemo,
       driver: ride.driver ? { id: ride.driver.id, name: ride.driver.name, vehicle: ride.driver.vehicle } : null };
   }
-  // An explicit owner-only projection keeps reviewer identities, hashes and audit internals off native clients.
   function onboarding(user, application) {
     return { driverId: application.driverId, status: application.status, version: application.version,
       details: application.details, busy: application.busy, eligibility: application.eligibility,
@@ -54,6 +54,7 @@ export function createMobileRouter({ devices, accounts, drivers, rides, location
       accessToken, data, key: request.headers['idempotency-key'] });
     else if (path === '/work' || path.startsWith('/work/') || path.startsWith('/journeys/')) body = journeys({ path, write, user: session.user,
       accessToken, query, data, key: request.headers['idempotency-key'] });
+    else if (path.startsWith('/safety/')) body = mobileSafety({ safety, user: session.user, accessToken, path, write, data, key: request.headers['idempotency-key'] });
     else if (path === '/notifications' || path.startsWith('/notifications/')) body = mobileNotifications({ notifications, user: session.user, sessionId: session.id, path, write, query, data });
     else if (!write && path === '/activity') {
       const mode = query.get('mode'); check(['customer','work'].includes(mode), 'INVALID_MODE', 'Choose Customer or Work.');

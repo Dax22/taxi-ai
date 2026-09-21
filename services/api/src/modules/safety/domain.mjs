@@ -21,12 +21,17 @@ export function noteText(value, required = false) {
   return value.trim();
 }
 export function incidentData(data) {
-  fields(data, ['kind', 'note', 'contactIds']);
+  fields(data, ['kind', 'note', 'contactIds', 'contactVersions'], ['kind', 'note', 'contactIds']);
   check(typeof data.kind === 'string' && Object.hasOwn(SAFETY_KINDS, data.kind), 'INVALID_INPUT', 'Choose a concern type.');
   const note = noteText(data.note);
   check(Array.isArray(data.contactIds) && data.contactIds.length <= 3 && data.contactIds.every(identifier)
     && new Set(data.contactIds).size === data.contactIds.length, 'INVALID_CONTACTS', 'Choose up to three different saved contacts.');
-  return { kind: data.kind, note, contactIds: [...data.contactIds].sort() };
+  const versions = data.contactVersions;
+  if (versions !== undefined) check(versions !== null && typeof versions === 'object' && !Array.isArray(versions)
+    && Object.keys(versions).length === data.contactIds.length
+    && data.contactIds.every((id) => Object.hasOwn(versions, id) && Number.isSafeInteger(versions[id]) && versions[id] >= 0),
+    'INVALID_CONTACTS', 'Review the displayed version of each selected contact.');
+  return { kind: data.kind, note, contactIds: [...data.contactIds].sort(), ...(versions === undefined ? {} : { contactVersions: { ...versions } }) };
 }
 export function canonical(value) {
   if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;

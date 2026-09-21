@@ -25,7 +25,7 @@ function clearTransientState(db, now) {
       client_hash = NULL, stopped_at = COALESCE(stopped_at, ?)`).run(now);
     db.prepare(`UPDATE driver_availability SET active = 0, area_id = NULL, position_json = NULL,
       native_session_id = NULL, session_hash = NULL, client_hash = NULL, stopped_at = COALESCE(stopped_at, ?), reason = COALESCE(reason, 'snapshot_reset')`).run(now);
-    db.prepare(`UPDATE trip_share_links SET active=0,token_hash=NULL,session_hash=NULL,version=version+1,
+    db.prepare(`UPDATE trip_share_links SET active=0,token_hash=NULL,session_hash=NULL,native_session_id=NULL,version=version+1,
       ended_at=?,reason='snapshot_reset' WHERE active=1`).run(now);
     db.exec('DELETE FROM location_quotes WHERE ride_id IS NULL;');
   });
@@ -45,8 +45,6 @@ export function saveSnapshot(sourcePath, destinationPath, { now = Date.now() } =
   const working = join(temporary, 'working.sqlite'), clean = join(temporary, 'clean.sqlite');
   let input, snapshot;
   try {
-    // Empty, private files are accepted by VACUUM INTO. The final hard link fails
-    // atomically if another process creates the requested destination first.
     for (const path of [working, clean]) closeSync(openSync(path, 'wx', 0o600));
     input = new DatabaseSync(source, { readOnly: true });
     input.exec('PRAGMA busy_timeout = 5000; PRAGMA synchronous = FULL;');

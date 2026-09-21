@@ -1,5 +1,5 @@
 import { Alert, Text } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useJourney } from '../src/journeys/provider';
 import { JourneyChat } from '../src/journeys/chat';
 import { Button, Card, Field, Heading, Loading, Notice, Pill, Screen, fare, styles } from '../src/ui/components';
@@ -11,7 +11,7 @@ function JourneyScreen({id}:{id:string}){
   const {state:s,controller:c}=useJourney(id),r=s.ride,locked=s.busy||s.uncertain||s.stale;
   function confirm(action:JourneyAction,title:string,detail:string){const shown=r!;Alert.alert(title,detail,[{text:'Back',style:'cancel'},{text:title,onPress:()=>void c.act(action,shown)}]);}
   const labels:Partial<Record<JourneyAction,string>>={depart:'On my way',arrive:'I have arrived',start:r?.delivery?'Verify pickup and collect parcel':'Verify pickup and start trip',complete:r?.delivery?'Verify drop-off and complete delivery':'Complete trip'};
-  return <Screen><Notice message={s.error}/>{!r&&s.loading&&<Loading/>}<Button title="Refresh journey" secondary busy={s.loading} disabled={s.busy} onPress={()=>void c.refresh()}/>
+  return <Screen><Button title="Safety & trip sharing" secondary onPress={()=>router.push({pathname:'/safety',params:{rideId:id}})}/><Notice message={s.error}/>{!r&&s.loading&&<Loading/>}<Button title="Refresh journey" secondary busy={s.loading} disabled={s.busy} onPress={()=>void c.refresh()}/>
     {s.uncertain&&<Button title="Retry the same action" busy={s.busy} onPress={()=>void c.retry()}/>}
     {r&&<><Pill>{bookingStatusLabel(r.status).toUpperCase()}</Pill><Heading title={`${r.pickup} → ${r.destination}`} subtitle={`${vehicleCategory(r.vehicleCategory??'standard')?.name} · ${r.mode==='work'?'Work':'Customer'}`}/>
       <Card><Text style={styles.h2}>{r.fareKobo===null?'Suggested fare':'Agreed fare'} · {fare(r.fareKobo??r.suggestedFareKobo)}</Text>
