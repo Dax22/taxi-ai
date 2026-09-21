@@ -12,7 +12,7 @@ export function adminConsoleRoutes(console, accounts, cookie) {
     { method: 'POST', path: /^\/api\/admin\/console\/login$/, access: 'auth',
       async handle({ data, token }) {
         const user = await accounts.login(data); requireRole(user, 'admin');
-        const session = accounts.issueSession(user.id, token);
+        const session = accounts.issueSession(user.id, token, user);
         return { cookie: cookie(session.token, session.maxAgeSeconds), body: { user: staff(user), csrfToken: session.csrfToken } };
       } },
     { method: 'GET', path: /^\/api\/admin\/console\/session$/, access: 'read', role: 'admin',

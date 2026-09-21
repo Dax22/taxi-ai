@@ -20,11 +20,18 @@ an infrastructure adapter. Web sessions and native credentials keep their
 existing transports. See [Google authentication](google-sign-in.md) for module
 responsibilities, configured activation, threat controls and acceptance limits.
 
+Release 0.20 adds a separate `account-email` module (schema 15), shared by web
+and native transports. It owns single-use actions and delivery scheduling; accounts
+owns password changes, mailbox confirmation and session revocation. SMTP is an
+infrastructure adapter. See [account emails](account-email.md) for retry, expiry,
+recovery boundaries and remaining launch work.
+
 ## Implemented modules
 
 | Module | Responsibility | Owns |
 | --- | --- | --- |
-| Accounts | Registration, authentication, sessions, first-admin setup, own profile and driver enrollment | `users`, `sessions`, `account_capabilities`, `account_commands` |
+| Accounts | Registration, authentication, sessions, first-admin setup, own profile and driver enrollment | `users`, `sessions`, `account_capabilities`, `account_commands`, `account_identities`, `account_password_settings`, `account_email_verifications` |
+| Account email | Verification and recovery actions, durable delivery intentions and bounded retries | `account_email_tokens`, `account_email_jobs` |
 | Drivers | Private applications, documents, manual review and expiry eligibility | `drivers`, `driver_applications`, `driver_documents`, `driver_document_reads`, `driver_application_events`, `driver_application_commands` |
 | Rides | Requests, fares, bookings, pickup verification, progress, cancellation and history | `rides`, `fare_events`, `idempotency`, `ride_trips`, `ride_activity` |
 | Chat | Participant messages, read markers, retries and reports | `chat_messages`, `chat_reads`, `chat_commands`, `chat_reports` |

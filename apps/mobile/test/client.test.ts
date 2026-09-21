@@ -20,6 +20,27 @@ function vault() {
 function client(fetcher: (url: string, options: RequestInit) => Promise<Response>, v = vault()) {
   return { app: new MobileClient({ origin: 'https://taxi.example.test', vault: v.port, fetchImpl: ((url, options) => fetcher(String(url), options ?? {})) as typeof fetch }), ...v };
 }
+test('native password recovery is public, uses preview access and never creates or persists credentials', async () => {
+  let sent: RequestInit = {}, path = '';
+  const { app,storage }=client(async(url,options)=>{path=url;sent=options;return ok({accepted:true});});
+  const preview=previewHeader('tester','a'.repeat(64));
+  await app.requestPasswordReset('fixture@example.test',preview);
+  assert.ok(path.endsWith('/auth/password/request')); assert.equal(new Headers(sent.headers).get('Authorization'),null);
+  assert.equal(new Headers(sent.headers).get('X-Taxi-Ai-Preview-Access'),preview);
+  assert.deepEqual(JSON.parse(String(sent.body)),{email:'fixture@example.test'}); assert.equal(storage.value,null); assert.equal(app.account(),null);
+});
+test('native verification belongs to the signed-in account and rejects stale responses after sign-out', async () => {
+  let finish: (value: Response) => void = () => {};
+  const {app}=client(async(url,options)=>{
+    if(url.endsWith('/auth/login')) return response(auth());
+    if(url.endsWith('/account/email')) { assert.ok(new Headers(options.headers).get('Authorization')); return ok({enabled:true,verified:false,email:user.email}); }
+    if(url.endsWith('/account/email/request')) return new Promise(resolve=>{finish=resolve;});
+    return ok();
+  });
+  await app.login(user.email,'Fixture password','Phone'); assert.equal((await app.emailStatus()).verified,false);
+  const request=app.requestVerification(), rejected=assert.rejects(request,{code:'SESSION_CHANGED'});
+  await app.logout(); finish(ok({accepted:true})); await rejected; assert.equal(app.account(),null);
+});
 test('native credentials use the secure vault without persisting access tokens, accounts or passwords', async () => {
   const requests: RequestInit[] = [];
   const { app, storage } = client(async (_url, options) => { requests.push(options); return response(auth()); });

@@ -19,7 +19,8 @@ client credentials or deployed service is created by this repository.
   Google email change does not create another user or silently change contact email.
 - **Disconnect Google** requires a working Taxi Ai password, removes the connection
   and signs out all existing web/device sessions. A sole Google method cannot be
-  disconnected and strand the user. Password creation/recovery is a later milestone.
+  disconnected and strand the user. Release 0.20 adds [recovery](account-email.md)
+  for existing password accounts; it does not add a password to Google-only accounts.
 - Staff access remains a separate password account. Google cannot grant admin
   capabilities, authenticate an administrator, or bypass driver application review.
 
@@ -162,7 +163,7 @@ and [server verification guidance](https://developers.google.com/identity/gsi/we
 Back up with the previous release before starting schema 14 on saved data. The
 migration adds identity, password-setting and temporary-attempt tables without
 rewriting existing users, passwords, journeys or approvals. Current backups require
-schema 14, retain identity mappings and clear pending Google challenges as well as
+schema 15, retain identity mappings and clear pending Google challenges and account-email actions as well as
 web/native sessions. Older branches require their own compatible backup/test DB.
 
 Automated tests cover real RSA verification with local keys, expired/mismatched
@@ -179,7 +180,8 @@ Before iOS store submission, add an equivalent privacy-preserving sign-in option
 applies to consumer apps using third-party primary login, subject to its listed
 exceptions. Google integration alone is not App Store readiness.
 
-After activation, the next account milestone is verified email/phone, recovery
-and account deletion; then complete the native ride request → fare agreement →
+Release 0.20 implements mailbox verification and customer/driver password recovery.
+Phone verification, account deletion and staff recovery/MFA remain future work.
+The next app milestone is the native ride request → fare agreement →
 trip → simulated receipt journey against the existing backend. Eats/vendor/courier
 modules remain separate product milestones.

@@ -1,6 +1,6 @@
 {
   "name": "taxi-ai",
-  "version": "0.19.0",
+  "version": "0.20.0",
   "private": true,
   "description": "Taxi Ai project foundation for Abuja rides, food and courier delivery",
   "type": "module",
@@ -25,6 +25,7 @@
     "mobile:verify": "npm --prefix apps/mobile run verify"
   },
   "dependencies": {
-    "google-auth-library": "11.1.0"
+    "google-auth-library": "11.1.0",
+    "nodemailer": "10.0.10"
   }
 }

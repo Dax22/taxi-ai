@@ -37,6 +37,9 @@ is not connected. Use fictional details and documents.
 - Optional Google sign-up/sign-in for web and native development builds, with
   explicit password-confirmed linking for existing accounts. Configure your own
   OAuth clients using [Google setup](docs/google-sign-in.md); it stays off until configured.
+- Email verification and password reset requests on web/mobile; secure email links
+  complete on the responsive website. Delivery stays off until SMTP is configured.
+  See [account email setup](docs/account-email.md).
 - Web/mobile vehicle registration with make/year/model/colour dropdowns, years from
   2000 onwards, dependent models and custom entries for unlisted vehicles.
 - Dropdowns start at **Apply to drive** on web. The chosen car and colour preview
@@ -88,8 +91,8 @@ is not connected. Use fictional details and documents.
 - The original in-browser fare demo and terminal example remain available.
 
 **Still planned:** production calling, verified identity and driver
-documents, production mapping/tracking, actual dispatch, real payment-provider integration and payouts, password
-recovery, live safety notifications and staffed emergency response, food/vendor
+documents, production mapping/tracking, actual dispatch, real payment-provider integration and payouts,
+staff recovery/MFA, live safety notifications and staffed emergency response, food/vendor
 ordering, motorcycle courier delivery, AI estimators and
 complete native ride workflows and store releases. Autonomous taxis remain **Coming soon**, with no launch date.
 
@@ -154,7 +157,8 @@ test driver approval and a full customer/driver negotiation.
    See [the onboarding guide](docs/driver-onboarding.md) for corrections and renewals.
 
 The administrator role cannot be selected during registration or granted through
-an HTTP endpoint. Additional administrators and account recovery are not built yet.
+an HTTP endpoint. Additional administrators and staff account recovery are not built yet.
+Customer/driver password recovery is available once [email delivery](docs/account-email.md) is configured.
 
 ## Try a complete customer/driver journey
 
@@ -225,14 +229,16 @@ automatically at startup. `npm run backup -- /absolute/new-backup.sqlite` makes 
 validated copy without changing the source. See [staging and recovery](docs/staging.md)
 for restore, transient-data removal, scheduling and off-host backup requirements.
 
-The current schema is **14**: Trip Safety added schema 9, unified accounts added
+The current schema is **15**: Trip Safety added schema 9, unified accounts added
 schema 10, native device sessions added schema 11 and initial vehicle selections
 add schema 12 in 0.17. This new table preserves the car chosen before full driver
 details are complete without changing existing applications or approvals. Release
 0.18 adds reporting indexes in schema 13 without rewriting records. Release 0.19
 adds Google identity mappings, password eligibility and expiring login attempts
-in schema 14. Backups retain private contact/incident data and identity mappings
-while revoking trip links, sessions and pending Google attempts.
+in schema 14. Release 0.20 adds email verification records, hashed action tokens
+and durable email intentions in schema 15. Backups retain private contact/incident
+data, identity mappings and verification records while revoking trip links, sessions,
+pending Google attempts, email links and queued mail. Restored backups never send old emails.
 
 The earlier payment milestone upgrades schema 1–6 to 7 without resetting existing records
 or automatically booking old agreements. Completed trips receive unpaid simulation

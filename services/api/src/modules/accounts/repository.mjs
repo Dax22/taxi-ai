@@ -1,7 +1,9 @@
 /** SQLite adapter. Services consume these operations without receiving a DB. */
 export function createAccountsRepository(db) {
   return Object.freeze({
-    findById: (id) => db.prepare('SELECT id, email, name, role, created_at AS createdAt FROM users WHERE id = ?').get(id) ?? null,
+    findById: (id) => db.prepare(`SELECT id, email, name, role, created_at AS createdAt,
+      EXISTS(SELECT 1 FROM account_email_verifications v WHERE v.user_id=users.id AND v.email=users.email) AS emailVerified
+      FROM users WHERE id = ?`).get(id) ?? null,
     findByEmail: (email) => db.prepare(`SELECT id, role, password_hash AS passwordHash,
       COALESCE((SELECT enabled FROM account_password_settings WHERE user_id=users.id),1) AS passwordEnabled FROM users WHERE email = ?`).get(email) ?? null,
     googleOwner: (subject) => db.prepare("SELECT user_id AS userId FROM account_identities WHERE provider='google' AND subject=?").get(subject)?.userId ?? null,
@@ -30,5 +32,8 @@ export function createAccountsRepository(db) {
     deleteSession: (hash) => db.prepare('DELETE FROM sessions WHERE token_hash = ?').run(hash),
     deleteUserSessions: (id) => db.prepare('DELETE FROM sessions WHERE user_id = ?').run(id),
     deleteExpiredSessions: (now) => db.prepare('DELETE FROM sessions WHERE expires_at <= ?').run(now),
+    confirmEmail: (id,email,now) => db.prepare(`INSERT INTO account_email_verifications(user_id,email,verified_at) VALUES (?,?,?)
+      ON CONFLICT(user_id) DO UPDATE SET email=excluded.email,verified_at=excluded.verified_at`).run(id,email,now),
+    replacePassword: (id,hash) => db.prepare('UPDATE users SET password_hash=? WHERE id=?').run(hash,id),
   });
 }

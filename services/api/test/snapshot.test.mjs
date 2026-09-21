@@ -39,6 +39,9 @@ test('a live WAL snapshot preserves rides and chat, clears transient data only i
   h.db.prepare("INSERT INTO account_identities VALUES ('google','snapshot-subject',?,?)").run(customer.user.id, TEST_NOW);
   h.db.prepare(`INSERT INTO google_auth_attempts(state_hash,binding_hash,nonce,verifier,channel,intent,expires_at)
     VALUES ('snapshot-state','snapshot-binding','snapshot-nonce','private-pkce-verifier','web','login',?)`).run(TEST_NOW + 600_000);
+  h.db.prepare('INSERT INTO account_email_verifications VALUES (?,?,?)').run(customer.user.id,customer.user.email,TEST_NOW);
+  h.db.prepare("INSERT INTO account_email_tokens VALUES ('private-email-digest',?,'reset',?,'private-credential-binding',?)").run(customer.user.id,customer.user.email,TEST_NOW+600_000);
+  h.db.prepare("INSERT INTO account_email_jobs(id,user_id,purpose,email,created_at,next_attempt_at) VALUES ('pending-email',?,'reset',?,?,?)").run(customer.user.id,customer.user.email,TEST_NOW,TEST_NOW);
   await submitApplication(fixtureApi(spare));
   await approveApplication(fixtureApi(admin), spare.user.id);
   const available = await spare.online({ mode: 'gps', lat: 9.087654, lng: 7.412345 });
@@ -52,7 +55,8 @@ test('a live WAL snapshot preserves rides and chat, clears transient data only i
     for (const name of ['users', 'drivers', 'rides', 'ride_trips', 'ride_activity', 'fare_events', 'chat_messages', 'idempotency', 'audit_events', 'driver_applications', 'driver_documents', 'driver_document_reads', 'driver_application_events', 'driver_application_commands']) {
       assert.equal(JSON.stringify(copy.prepare(`SELECT * FROM ${name}`).all()), sourceRows.get(name), name);
     }
-    for (const name of ['sessions', 'device_sessions', 'device_refresh_tokens', 'voice_participants', 'google_auth_attempts']) assert.equal(copy.prepare(`SELECT count(*) AS n FROM ${name}`).get().n, 0);
+    for (const name of ['sessions', 'device_sessions', 'device_refresh_tokens', 'voice_participants', 'google_auth_attempts', 'account_email_tokens', 'account_email_jobs']) assert.equal(copy.prepare(`SELECT count(*) AS n FROM ${name}`).get().n, 0);
+    assert.equal(copy.prepare('SELECT verified_at FROM account_email_verifications').get().verified_at,TEST_NOW);
     assert.equal(copy.prepare('SELECT subject FROM account_identities').get().subject, 'snapshot-subject');
     const call = copy.prepare('SELECT * FROM voice_calls').get();
     assert.equal(call.status, 'ended'); assert.equal(call.reason, 'snapshot_reset'); assert.equal(call.offer_sdp, null); assert.equal(call.caller_session, '');
@@ -67,6 +71,8 @@ test('a live WAL snapshot preserves rides and chat, clears transient data only i
   } finally { copy.close(); }
   assert.ok(!readFileSync(path).includes(Buffer.from('sdp-sensitive')));
   assert.ok(!readFileSync(path).includes(Buffer.from('private-pkce-verifier')));
+  assert.ok(!readFileSync(path).includes(Buffer.from('private-email-digest')));
+  assert.ok(!readFileSync(path).includes(Buffer.from('private-credential-binding')));
   assert.ok(!readFileSync(path).includes(Buffer.from('9.087654')));
   const restoredPath = join(dir, 'restored.sqlite'); saveSnapshot(path, restoredPath);
   const restored = openDatabase(restoredPath);

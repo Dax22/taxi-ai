@@ -10,6 +10,7 @@ export function bindAuthForm({ onSubmit }) {
     $('account-name').disabled = !create;
     $('account-name').required = create;
     $('account-password').autocomplete = create ? 'new-password' : 'current-password';
+    $('forgot-password').hidden = create;
     $('auth-title').textContent = create ? 'Make your next move.' : 'Welcome back.';
     $('auth-description').textContent = create ? 'Your account, your way to move.' : 'Sign in to pick up where you left off.';
     $('auth-submit').textContent = create ? 'Create account ↗' : 'Sign in ↗';

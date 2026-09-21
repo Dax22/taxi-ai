@@ -1,4 +1,8 @@
 @layer components {
+  .email-verification { padding: 20px 0; margin: 20px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .email-verification h2 { font-size: 22px; margin: 0 0 10px; }
+  #recovery-email-fields, #recovery-password-fields { display: grid; gap: 12px; }
+  #recovery-email-fields[hidden], #recovery-password-fields[hidden] { display: none; }
   .account-page { min-height: 100dvh; }
   .account-page .site-header { height: 86px; }
   .account-header-actions { display: flex; align-items: center; gap: 20px; }
