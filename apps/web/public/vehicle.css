@@ -16,3 +16,5 @@
 .onboarding-progress a:hover, .onboarding-progress a:focus-visible { background: var(--brand); }
 .onboarding-panel .stack-form { scroll-margin-top: 24px; }
 @media (max-width: 600px) { .vehicle-card { grid-template-columns: 1fr; }.vehicle-card-art img { max-width: 336px; }.vehicle-card-info { padding: 20px; }.onboarding-progress a { padding-inline: 14px; } }
+
+.vehicle-category-art img { object-fit: contain; }

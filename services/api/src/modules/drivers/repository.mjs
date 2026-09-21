@@ -4,7 +4,7 @@ function profile(row) {
   const approved = row?.status === 'approved' && row.approved_details ? JSON.parse(row.approved_details).vehicle : null;
   return row ? { id: row.user_id, status: row.status,
     vehicle: { model: row.vehicle_model, plate: row.vehicle_plate,
-      ...(approved ? { make: approved.make, modelName: approved.model, year: approved.year, colour: approved.colour } : {}) } } : null;
+      ...(approved ? { make: approved.make, modelName: approved.model, year: approved.year, colour: approved.colour, category: approved.category ?? 'standard', payloadKg: approved.payloadKg ?? null } : {}) } } : null;
 }
 function application(row) {
   return row ? { driverId: row.driver_id, status: row.status, version: row.version,

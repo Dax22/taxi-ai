@@ -1,8 +1,9 @@
 import { check } from '../../shared/errors.mjs';
 import { fields, label } from '../../shared/validation.mjs';
 import { requireRole } from '../../shared/policies.mjs';
+import { transportCategory } from '../../../../../packages/shared/src/transport-categories.mjs';
 import { ABUJA_BOUNDS, insideAbuja, canShareLocation } from '../../../../../packages/shared/src/locations.mjs';
-import { key, clientIdentity, endpoints, point, checkedRoute, position, QUOTE_MS, FRESH_MS, SHARE_MS } from './domain.mjs';
+import { key, clientIdentity, endpoints, point, checkedRoute, directQuote, position, QUOTE_MS, FRESH_MS, SHARE_MS } from './domain.mjs';
 
 export function createLocationsService({ repository, provider, getAccount, sessionOwner, nativeSessionOwner = () => null, getRideContext, unitOfWork, tokens, audit, clock }) {
   function context(input, clientRequired = false, planning = false) {
@@ -45,7 +46,8 @@ export function createLocationsService({ repository, provider, getAccount, sessi
     const replay = quoteReplay(ctx.userId, commandKey, fingerprint);
     if (replay) return replay;
     check(repository.recentQuotes(ctx.userId, clock() - 60_000) < 10, 'RATE_LIMITED', 'Wait before requesting more route previews.');
-    const route = checkedRoute(await provider.route(points.pickup, points.destination), points);
+    const route = transportCategory(points.vehicleCategory).service === 'delivery'
+      ? directQuote(points) : checkedRoute(await provider.route(points.pickup, points.destination), points);
     // Provider I/O is outside the synchronous transaction. Recheck authorization,
     // retry key and limits inside it before committing the server-owned quote.
     return unitOfWork(() => {

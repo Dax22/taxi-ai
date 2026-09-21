@@ -1,3 +1,4 @@
+import { vehicleCategory } from '../../../../packages/shared/src/vehicle-categories.mjs';
 import { Text } from 'react-native';
 import type { BookingRide } from '../../../../packages/shared/src/mobile-booking.mjs';
 import { bookingStatusLabel, isRequestOpen } from '../../../../packages/shared/src/mobile-booking.mjs';
@@ -9,6 +10,8 @@ export function RequestCard({ ride, now, disabled, onCancel, onWebsite }: {
 }) {
   const waiting = ride.status === 'requested', open = isRequestOpen(ride.status);
   return <Card><Pill>{bookingStatusLabel(ride.status).toUpperCase()}</Pill>
+    <Text style={styles.small}>{vehicleCategory(ride.vehicleCategory ?? 'standard')?.name}{ride.delivery ? ' delivery' : ' ride'}</Text>
+    {ride.delivery && <><Text style={styles.body}>{ride.delivery.description} · {ride.delivery.weightKg} kg · Recipient: {ride.delivery.recipientName}</Text>{ride.delivery.dropoffPin && <><Text style={styles.label}>RECIPIENT’S DROP-OFF CODE</Text><Text selectable style={styles.title}>{ride.delivery.dropoffPin}</Text><Text style={styles.small}>Share privately with your recipient. They give it to the driver only at handover.</Text></>}</>}
     <Text style={styles.h2}>{ride.pickup} → {ride.destination}</Text>
     <Text style={styles.body}>{ride.fareKobo === null ? 'Suggested fare' : 'Agreed fare'} · {fare(ride.fareKobo ?? ride.suggestedFareKobo)}</Text>
     {waiting && <Text style={styles.body}>Your preview request is available to eligible drivers. A fare still needs to be agreed before booking.</Text>}

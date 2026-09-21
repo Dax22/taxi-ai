@@ -162,7 +162,7 @@ test('schema 13 upgrades preserve existing records and all Google pages are expl
   const h = await harness(t, { persistent: true }), web = browser(h);
   await web.register('old-account@example.test');
   const before = h.db.prepare('SELECT * FROM users').all();
-  h.db.exec('DROP TABLE account_identities; DROP TABLE account_password_settings; DROP TABLE google_auth_attempts; PRAGMA user_version=13');
+  h.db.exec('DROP TABLE delivery_orders; ALTER TABLE rides DROP COLUMN vehicle_category; DROP TABLE account_identities; DROP TABLE account_password_settings; DROP TABLE google_auth_attempts; PRAGMA user_version=13');
   await h.restart();
   assert.deepEqual(h.db.prepare('SELECT * FROM users').all(), before);
   assert.equal(h.db.prepare('PRAGMA user_version').get().user_version, SCHEMA_VERSION);

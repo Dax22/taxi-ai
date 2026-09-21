@@ -1,19 +1,21 @@
+import { transportCategory } from '/shared/transport-categories.mjs';
 import { insideAbuja } from '/shared/locations.mjs';
 
 /** Draft coordinates and quotes are isolated by account and selection revision. */
 export function createLocationPlanner({ client, view, onBook, onOnline, serverNow = Date.now }) {
+  let vehicleCategory = 'standard';
   let user = null, settings = null, online = false, blocked = false, generation = 0, revision = 0;
   let pickup = null, destination = null, quote = null, target = 'pickup', error = '', quoting = false, booking = false;
   let results = { pickup: [], destination: [] }, searching = { pickup: false, destination: false }, searches = { pickup: 0, destination: 0 };
-  function render() { view.renderPlanner({ user, settings, online, blocked, pickup, destination, quote, target, error, results, searching, quoting, booking,
+  function render() { view.renderPlanner({ user, settings, online, blocked, pickup, destination, quote, target, error, results, searching, quoting, booking, vehicleCategory,
     expired: Boolean(quote && serverNow() >= quote.expiresAt) }); }
   function reset() {
-    generation++; revision++; user = null; settings = null; online = false; blocked = false; pickup = destination = quote = null;
+    generation++; revision++; vehicleCategory = 'standard'; user = null; settings = null; online = false; blocked = false; pickup = destination = quote = null;
     target = 'pickup'; error = ''; quoting = booking = false; results = { pickup: [], destination: [] }; searching = { pickup: false, destination: false }; searches = { pickup: 0, destination: 0 };
     view.resetPlanner(); onOnline(false, null);
   }
   async function setContext(account, hasOpenRide) {
-    if (user?.id !== account?.id) reset();
+    if (user?.id !== account?.id) { const category = user ? 'standard' : vehicleCategory; reset(); vehicleCategory = category; }
     user = account && ['customer', 'driver'].includes(account.role) ? account : null;
     blocked = hasOpenRide;
     render();
@@ -51,7 +53,7 @@ export function createLocationPlanner({ client, view, onBook, onOnline, serverNo
     if (!online || !pickup || !destination || blocked || quoting || user?.role !== 'customer') return;
     const epoch = generation, version = revision; quoting = true; quote = null; error = ''; render();
     try {
-      const response = await client.command('/api/locations/quotes', { pickup, destination });
+      const response = await client.command('/api/locations/quotes', { pickup, destination, vehicleCategory });
       if (generation === epoch && revision === version) quote = response.quote;
     } catch (cause) { if (generation === epoch && revision === version) error = cause.message; }
     finally { if (generation === epoch && revision === version) { quoting = false; render(); } }
@@ -65,9 +67,9 @@ export function createLocationPlanner({ client, view, onBook, onOnline, serverNo
     } catch (cause) { if (generation === epoch) error = cause.message; }
     finally { if (generation === epoch) { booking = false; render(); } }
   }
-  return Object.freeze({ setContext, reset, enable, clear, select, search, preview, book,
+  return Object.freeze({ setCategory(id) { if (!booking && transportCategory(id) && id !== vehicleCategory) { vehicleCategory = id; revision++; quote = null; quoting = false; error = ''; render(); } }, setContext, reset, enable, clear, select, search, preview, book,
     setTarget(value) { if (['pickup', 'destination'].includes(value)) { target = value; render(); } },
     pick(value) { select(target, value); }, tick: render,
-    snapshot: () => ({ pickup, destination, quote, online, results, error }),
+    snapshot: () => ({ pickup, destination, quote, online, results, error, vehicleCategory }),
   });
 }

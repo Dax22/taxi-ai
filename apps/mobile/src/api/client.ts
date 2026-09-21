@@ -1,4 +1,5 @@
 import { envelope, parseAccount, parseSignIn, parseActivity, parseDevices, parseOnboarding, parseEmailStatus } from '../../../../packages/shared/src/mobile-contracts.mjs';
+import type { VehicleCategoryId } from '../../../../packages/shared/src/vehicle-categories.mjs';
 import type { Account, Credentials, DriverCommands, DriverDetails, Mode, SignIn } from '../../../../packages/shared/src/mobile-contracts.mjs';
 import { parseBooking, parsePlaces, parsePreview, parseBookingRide } from '../../../../packages/shared/src/mobile-booking.mjs';
 import type { Place, RequestData } from '../../../../packages/shared/src/mobile-booking.mjs';
@@ -161,12 +162,12 @@ export class MobileClient {
   async activity(mode: Mode, before?: string | null) { return parseActivity(await this.request(`/activity?mode=${mode}${before ? `&before=${encodeURIComponent(before)}` : ''}`)); }
   async booking() { return parseBooking(await this.request('/booking')); }
   async searchPlaces(query: string) { return parsePlaces(await this.request('/booking/search', { query })); }
-  async routePreview(pickup: Place, destination: Place, key: string) {
+  async routePreview(pickup: Place, destination: Place, key: string, vehicleCategory: VehicleCategoryId = 'standard') {
     const point = ({ name, lat, lng }: Place) => ({ name, lat, lng });
-    return parsePreview(await this.request('/booking/quotes', { pickup: point(pickup), destination: point(destination) }, key));
+    return parsePreview(await this.request('/booking/quotes', { pickup: point(pickup), destination: point(destination), vehicleCategory }, key));
   }
-  async samplePreview(pickupId: string, destinationId: string) {
-    return parsePreview(await this.request('/booking/sample', { pickupId, destinationId }));
+  async samplePreview(pickupId: string, destinationId: string, vehicleCategory: VehicleCategoryId = 'standard') {
+    return parsePreview(await this.request('/booking/sample', { pickupId, destinationId, vehicleCategory }));
   }
   async requestRide(data: RequestData, key: string) { return parseBookingRide(await this.request('/booking/requests', data, key)); }
   async bookingRide(id: string) { return parseBookingRide(await this.request(`/booking/requests/${id}`)); }

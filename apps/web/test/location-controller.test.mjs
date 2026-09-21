@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { createGeolocation } from '../public/dashboard/geolocation.mjs';
 async function browser(name) {
   const source = (await readFile(new URL(`../public/dashboard/${name}.mjs`, import.meta.url), 'utf8'))
+    .replaceAll("'/shared/transport-categories.mjs'", `'${new URL('../../../packages/shared/src/transport-categories.mjs', import.meta.url)}'`)
     .replaceAll("'/shared/locations.mjs'", `'${new URL('../../../packages/shared/src/locations.mjs', import.meta.url)}'`);
   return import(`data:text/javascript,${encodeURIComponent(source)}`);
 }
@@ -59,7 +60,7 @@ test('late searches and quotes are discarded after input changes, map opt-out or
 
 test('booking submits only the saved quote ID and rejects expired quotes or an existing open journey', async () => {
   const f = plannerSetup(); await enabled(f); await f.c.preview();
-  assert.deepEqual(f.commands[0].data, { pickup, destination });
+  assert.deepEqual(f.commands[0].data, { pickup, destination, vehicleCategory: 'standard' });
   f.time = 2000; await f.c.book(); assert.equal(f.books.length, 0);
   f.time = 1999; await f.c.book(); assert.deepEqual(f.books, ['quote-one']); assert.equal(f.c.snapshot().quote, null);
   await f.c.setContext(customer, true); await f.c.preview(); assert.equal(f.commands.length, 1);
@@ -158,4 +159,16 @@ test('a synchronously revoked watch is cleaned up, and browser geolocation adapt
   assert.equal(await gps.locate(), 'fix'); const clear = gps.watch(() => {}, () => {}); clear();
   assert.equal(calls.at(-1), 0); assert.equal(calls[0].maximumAge, 5000); assert.equal(calls[0].timeout, 10000);
   assert.equal(createGeolocation({ device, secure: false }).supported(), false);
+});
+
+test('category changes invalidate both saved and in-flight quotes, including a selection before account load', async () => {
+  const f = plannerSetup(); f.c.setCategory('suv'); await f.c.setContext(customer, false); f.c.enable();
+  f.c.select('pickup', pickup); f.c.select('destination', destination);
+  const pending = deferred(); f.commandHook = () => pending.promise;
+  const first = f.c.preview(); assert.equal(f.commands[0].data.vehicleCategory, 'suv');
+  f.c.setCategory('truck'); pending.resolve({ quote: { id: 'old-suv-quote', expiresAt: 2000 } }); await first;
+  assert.equal(f.c.snapshot().quote, null); await f.c.book(); assert.deepEqual(f.books, []);
+  f.commandHook = null; await f.c.preview(); assert.equal(f.commands.at(-1).data.vehicleCategory, 'truck');
+  assert.ok(f.c.snapshot().quote); f.c.setCategory('motorcycle'); assert.equal(f.c.snapshot().quote, null);
+  f.c.reset(); assert.equal(f.c.snapshot().vehicleCategory, 'standard');
 });

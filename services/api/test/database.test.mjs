@@ -12,7 +12,7 @@ import { canonical } from '../src/modules/rides/domain.mjs';
 // Compare every pre-existing column while allowing the schema-six additions.
 function legacyRows(db, table) {
   return db.prepare(`SELECT * FROM ${table}`).all().map((row) => {
-    if (table === 'rides') { delete row.request_expires_at; delete row.closed_reason; delete row.driver_snapshot_json; }
+    if (table === 'rides') { delete row.request_expires_at; delete row.closed_reason; delete row.driver_snapshot_json; delete row.vehicle_category; }
     return row;
   });
 }

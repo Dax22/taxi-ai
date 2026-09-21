@@ -66,6 +66,8 @@ const vehicleModule = `data:text/javascript;base64,${Buffer.from(vehicleSource).
 const fieldsSource = (await readFile(new URL('../public/dashboard/vehicle-fields.mjs', import.meta.url), 'utf8'))
   .replace("'./dom.mjs'", `'${new URL('../public/dashboard/dom.mjs', import.meta.url)}'`)
   .replace("'/shared/vehicle-profile.mjs'", `'${new URL('../../../packages/shared/src/vehicle-profile.mjs', import.meta.url)}'`)
+  .replace("'/shared/transport-categories.mjs'", `'${new URL('../../../packages/shared/src/transport-categories.mjs', import.meta.url)}'`)
+  .replace("'/shared/vehicle-categories.mjs'", `'${new URL('../../../packages/shared/src/vehicle-categories.mjs', import.meta.url)}'`)
   .replace("'/shared/vehicle-registration.mjs'", `'${new URL('../../../packages/shared/src/vehicle-registration.mjs', import.meta.url)}'`);
 const fieldsModule = `data:text/javascript;base64,${Buffer.from(fieldsSource).toString('base64')}`;
 const source = (await readFile(new URL('../public/dashboard/onboarding-view.mjs', import.meta.url), 'utf8'))
@@ -184,7 +186,7 @@ test('vehicle dropdowns reset the previous model on make changes and send explic
     f.node('onboarding-' + name + '-other').value = text; f.node('onboarding-' + name + '-other').handlers.input();
   }
   f.node('onboarding-details-form').handlers.submit(f.event);
-  assert.deepEqual(f.actions.at(-1)[1].details.vehicle,{ make:'Unlisted make',model:'Unlisted model',year:2020,colour:'Blue and white',plate:'TEST-123' });
+  assert.deepEqual(f.actions.at(-1)[1].details.vehicle,{ make:'Unlisted make',model:'Unlisted model',year:2020,colour:'Blue and white',plate:'TEST-123',category:'standard',payloadKg:null });
   assert.equal(f.actions.at(-1)[1].expectedVersion,7);
   f.view.reset();
   for (const name of ['make','model','colour']) {
@@ -214,5 +216,5 @@ test('a first application carries the initial vehicle selection into the full fo
   assert.equal(f.node('onboarding-vehicle-preview').children[0].children[0].children[0].src, '/assets/vehicles/sedan-blue.png');
   for (const name of ['legalName', 'phone', 'licenceNumber']) f.node('onboarding-' + name).value = application.details[name];
   f.node('onboarding-details-form').handlers.submit(f.event);
-  assert.deepEqual(f.actions.at(-1), ['save', { expectedVersion: 0, details: { ...application.details, vehicle: selected } }]);
+  assert.deepEqual(f.actions.at(-1), ['save', { expectedVersion: 0, details: { ...application.details, vehicle: { ...selected, category: 'standard', payloadKg: null } } }]);
 });

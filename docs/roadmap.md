@@ -6,7 +6,14 @@ with shared accounts and Customer, Drive & deliver and My store modes. The
 moves the mobile foundation earlier. Completed milestones below describe the
 prototype; planned milestones do not claim shipped features.
 
-## Current mobile milestone — customer ride requests (implemented; device acceptance pending)
+## Category milestone — rides and deliveries (implemented; device acceptance pending)
+
+Release 0.22 / mobile 0.6 enables SUV, van, truck and motorcycle booking, approved
+vehicle/capacity matching, delivery details and verified handover. Schema 16 retains
+existing accounts, approvals, histories and retry records. Delivery previews use
+direct distance without a driving ETA. See [category workflows](vehicle-categories.md).
+
+## Previous mobile milestone — customer ride requests (implemented; device acceptance pending)
 
 Release 0.21 / mobile 0.5 adds native route search/review, server fare suggestions,
 shared customer requests, status recovery, assigned vehicles and pre-start cancellation.

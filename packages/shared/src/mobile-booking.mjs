@@ -1,3 +1,4 @@
+import { transportCategory, deliveryDetails } from './transport-categories.mjs';
 import { envelope, parseVehicle } from './mobile-contracts.mjs';
 import { insideAbuja } from './locations.mjs';
 import { RIDE_STATUS_LABELS, canCancelRide } from './trip-lifecycle.mjs';
@@ -17,6 +18,14 @@ function ride(r) {
     && text(r.pickup) && text(r.destination) && positive(r.suggestedFareKobo) && (r.fareKobo === null || positive(r.fareKobo))
     && (r.expiresAt === null || number(r.expiresAt)) && r.canCancel === canCancelRide(r.status));
   expect(r.driver === null || (record(r.driver) && text(r.driver.name)));
+  expect(transportCategory(r.vehicleCategory));
+  if (transportCategory(r.vehicleCategory).service === 'delivery') {
+    expect(record(r.delivery));
+    const { verifiedAt, pinBlockedUntil, dropoffPin, ...details } = r.delivery;
+    deliveryDetails(r.vehicleCategory, details);
+    expect((verifiedAt === null || number(verifiedAt)) && (pinBlockedUntil === null || number(pinBlockedUntil))
+      && (dropoffPin === undefined || (r.status === 'in_progress' && /^\d{6}$/.test(dropoffPin))));
+  } else expect(r.delivery == null);
   if (r.driver) parseVehicle(r.driver.vehicle);
   return r;
 }
@@ -37,11 +46,15 @@ export function parsePreview(value) {
   envelope(value); const p = value.preview;
   expect(record(p) && ['route','sample'].includes(p.kind) && text(p.pickup) && text(p.destination)
     && positive(p.suggestedFareKobo) && record(p.request));
+  const category = p.vehicleCategory ?? 'standard';
+  expect(transportCategory(category) && (p.request.vehicleCategory ?? 'standard') === category);
   if (p.kind === 'sample') expect(p.expiresAt === null && p.route === null
     && text(p.request.pickupId, 50) && text(p.request.destinationId, 50) && p.request.pickupId !== p.request.destinationId
-    && only(p.request, ['pickupId','destinationId']));
-  else expect(number(p.expiresAt) && uuid(p.request.quoteId) && only(p.request, ['quoteId']) && record(p.route)
-    && positive(p.route.distanceMeters) && p.route.distanceMeters <= 300_000 && positive(p.route.durationSeconds) && p.route.durationSeconds <= 28_800
+    && only(p.request, ['pickupId','destinationId','vehicleCategory']));
+  else expect(number(p.expiresAt) && uuid(p.request.quoteId) && only(p.request, ['quoteId','vehicleCategory']) && record(p.route)
+    && positive(p.route.distanceMeters) && p.route.distanceMeters <= 300_000 && (transportCategory(category).service === 'delivery'
+      ? p.route.distanceKind === 'straight_line' && p.route.durationSeconds === null
+      : (p.route.distanceKind === undefined || p.route.distanceKind === 'road') && positive(p.route.durationSeconds) && p.route.durationSeconds <= 28_800)
     && Array.isArray(p.route.coordinates) && p.route.coordinates.length >= 2 && p.route.coordinates.length <= 1201
     && p.route.coordinates.every((c) => Array.isArray(c) && c.length === 2 && insideAbuja({ lng: c[0], lat: c[1] })));
   return value;

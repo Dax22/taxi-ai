@@ -62,7 +62,7 @@ test('native onboarding completes the same application, rejects cross-device sta
   for (const field of ['events','verification','reviewedBy']) assert.equal(app[field],undefined);
   for (const doc of app.documents) for (const field of ['base64','content','sha256','driverId','readByReviewer']) assert.equal(doc[field],undefined);
   const account = (await api.send('/session')).body.user;
-  assert.deepEqual(account.driver.vehicle,{ model:'Toyota Corolla',plate:DETAILS.vehicle.plate,make:'Toyota',modelName:'Corolla',year:2020,colour:'Yellow' });
+  assert.deepEqual(account.driver.vehicle,{ model:'Toyota Corolla',plate:DETAILS.vehicle.plate,make:'Toyota',modelName:'Corolla',year:2020,colour:'Yellow',category:'standard',payloadKg:null });
   for (const value of [DETAILS.phone,'UPDATED-ON-WEB',IMAGE.base64]) assert.ok(!JSON.stringify(account).includes(value));
   app = parseOnboarding((await api.send('/driver/application/reopen',{ expectedVersion:app.version })).body);
   assert.equal(app.eligibility.eligible,false);

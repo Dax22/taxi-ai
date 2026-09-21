@@ -7,7 +7,7 @@ export const DRIVER_DOCUMENTS = Object.freeze({
 });
 export const DRIVER_REVIEW_CHECKS = Object.freeze({
   identity: 'Identity and driver photo checked', licence: 'Licence details and validity checked',
-  vehicle: 'Vehicle, number plate and documents checked', insurance: 'Insurance details and validity checked',
+  vehicle: 'Vehicle category, load capacity (for deliveries), number plate and documents checked', insurance: 'Insurance details and validity checked',
 });
 export const DRIVER_APPLICATION_LABELS = Object.freeze({ draft: 'Draft', submitted: 'Awaiting review',
   changes_requested: 'Corrections requested', rejected: 'Rejected', approved: 'Review approved' });

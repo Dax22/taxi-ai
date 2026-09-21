@@ -49,6 +49,7 @@ const routes = new Map([
   ['/vehicle.css', ['public/vehicle.css', 'text/css; charset=utf-8']],
   ['/vehicle-categories.css', ['public/vehicle-categories.css', 'text/css; charset=utf-8']],
   ['/dashboard/vehicle-categories.mjs', ['public/dashboard/vehicle-categories.mjs', 'text/javascript; charset=utf-8']],
+  ['/shared/transport-categories.mjs', ['../../packages/shared/src/transport-categories.mjs', 'text/javascript; charset=utf-8']],
   ['/shared/vehicle-categories.mjs', ['../../packages/shared/src/vehicle-categories.mjs', 'text/javascript; charset=utf-8']],
   ...VEHICLE_CATEGORIES.filter((category) => category.id !== 'standard').map((category) => [category.assetPath, [`public${category.assetPath}`, 'image/png']]),
   ['/dashboard/vehicle-card.mjs', ['public/dashboard/vehicle-card.mjs', 'text/javascript; charset=utf-8']],

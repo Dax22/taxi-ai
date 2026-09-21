@@ -145,7 +145,7 @@ test('schema twelve gains reporting indexes without changing identities, session
   await requestRide(customer);
   const tables = h.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all().map((row) => row.name);
   const before = new Map(tables.map((name) => [name, h.db.prepare(`SELECT * FROM ${name}`).all()]));
-  h.db.exec('DROP INDEX admin_accounts_created; DROP INDEX admin_rides_created; DROP INDEX admin_customer_trips; PRAGMA user_version=12;');
+  h.db.exec('DROP TABLE delivery_orders; ALTER TABLE rides DROP COLUMN vehicle_category; DROP INDEX admin_accounts_created; DROP INDEX admin_rides_created; DROP INDEX admin_customer_trips; PRAGMA user_version=12;');
   await h.restart();
   for (const name of tables) assert.deepEqual(h.db.prepare(`SELECT * FROM ${name}`).all(), before.get(name), name);
   assert.equal(h.db.prepare('PRAGMA user_version').get().user_version, SCHEMA_VERSION);

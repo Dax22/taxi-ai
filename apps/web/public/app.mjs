@@ -1,3 +1,4 @@
+import { categoryFare } from '/shared/transport-categories.mjs';
 import { FareNegotiation } from '/shared/fare-negotiation.mjs';
 import { DEMO_AREAS, createDemoQuote, nairaToKobo, formatNaira } from '/shared/demo-booking.mjs';
 import { createVehicleCategoryPicker } from './dashboard/vehicle-categories.mjs';
@@ -11,7 +12,9 @@ let role = 'customer';
 let timer = null;
 const categories = createVehicleCategoryPicker($('home-vehicle-categories'), { onSelect(category) {
   $('trip-form').hidden = !category.ridePreview;
-  $('standard-fare-note').hidden = !category.ridePreview;
+  $('standard-fare-note').textContent = `${category.name} preview · Sample Abuja areas · Prices are illustrative`;
+  $('category-booking-link').href = `/app?category=${category.id}`;
+  $('category-booking-link').textContent = `Book ${category.name} in your account ↗`;
   $('trip-error').textContent = '';
 } });
 
@@ -66,6 +69,7 @@ $('trip-form').addEventListener('submit', (event) => {
   if (!categories.selected().ridePreview) return;
   try {
     const quote = createDemoQuote($('pickup').value, $('destination').value);
+    quote.suggestedFareKobo = categoryFare(quote.suggestedFareKobo, categories.selected().id);
     negotiation = new FareNegotiation({
       id: crypto.randomUUID(), customerId: actorIds.customer, driverId: actorIds.driver,
       suggestedFareKobo: quote.suggestedFareKobo,

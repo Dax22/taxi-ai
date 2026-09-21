@@ -40,7 +40,7 @@ const locationView = createLocationView({ onEnable: () => planner.enable(), onSe
 const planner = createLocationPlanner({ client, view: locationView,
   serverNow: () => serverTime.now + performance.now() - serverTime.received,
   onOnline: (enabled, settings) => locationView.setOnline(enabled, settings),
-  onBook: (quoteId) => page.rideCommand('/api/rides', { quoteId },
+  onBook: (quoteId) => page.rideCommand('/api/rides', { quoteId, ...view.requestOptions() },
     'Your route and suggested fare are saved. An approved driver can start negotiation.'),
 });
 const sharing = createLocationSharing({ client: activityClient, device: createGeolocation(), view: locationView,
@@ -77,6 +77,7 @@ const safetyView = createSafetyView({ onAdd: (data) => safety.add(data), onRemov
 const safety = createSafetyController({ client, view: safetyView, origin: location.origin,
   copy: (value) => navigator.clipboard.writeText(value) });
 const view = createDashboardView({
+  onCategoryChange: (id) => planner.setCategory(id),
   serverNow: () => serverTime.now + performance.now() - serverTime.received,
   onCommand: (...args) => page.rideCommand(...args),
   onSelectionChange: (ride) => page.selection(ride),

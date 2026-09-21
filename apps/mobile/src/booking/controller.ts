@@ -1,3 +1,5 @@
+import { transportCategory, deliveryDetails } from '../../../../packages/shared/src/transport-categories.mjs';
+import type { VehicleCategoryId } from '../../../../packages/shared/src/vehicle-categories.mjs';
 import { isRequestOpen } from '../../../../packages/shared/src/mobile-booking.mjs';
 import type { Booking, BookingPreview, BookingRide, BookingRideResult, Place, RequestData } from '../../../../packages/shared/src/mobile-booking.mjs';
 import type { MobileClient } from '../api/client.ts';
@@ -6,7 +8,10 @@ type Api = Pick<MobileClient, 'booking' | 'bookingRide' | 'searchPlaces' | 'rout
 type Endpoint = 'pickup' | 'destination';
 interface Search { query: string; selected: Place | null; results: Place[]; searching: boolean; searched: boolean; attribution: string }
 type Command = { kind: 'request'; key: string; data: RequestData } | { kind: 'cancel'; key: string; id: string; version: number };
+export interface DeliveryDraft { description: string; weightKg: string; recipientName: string; pickupInstructions: string; dropoffInstructions: string }
+const emptyDelivery = (): DeliveryDraft => ({ description: '', weightKg: '', recipientName: '', pickupInstructions: '', dropoffInstructions: '' });
 export interface BookingState {
+  category: VehicleCategoryId; delivery: DeliveryDraft;
   settings: Booking | null; mode: 'route' | 'sample' | null; consent: boolean; pickup: Search; destination: Search;
   pickupId: string; destinationId: string; preview: BookingPreview | null; lastRide: BookingRide | null;
   loading: boolean; busy: 'preview' | 'request' | 'cancel' | null; uncertain: 'request' | 'cancel' | null;
@@ -28,7 +33,7 @@ export class BookingController {
   private searches = { pickup: 0, destination: 0 };
   private command: Command | null = null;
   private anchor = { server: 0, local: 0 };
-  private state: BookingState = { settings: null, mode: null, consent: false, pickup: emptySearch(), destination: emptySearch(),
+  private state: BookingState = { category: 'standard', delivery: emptyDelivery(), settings: null, mode: null, consent: false, pickup: emptySearch(), destination: emptySearch(),
     pickupId: '', destinationId: '', preview: null, lastRide: null, loading: false, busy: null, uncertain: null, error: '', stale: true, now: 0 };
   constructor(api: Api, key: () => string, clock: () => number = () => performance.now()) { this.api = api; this.key = key; this.clock = clock; }
   snapshot = () => this.state;
@@ -65,6 +70,14 @@ export class BookingController {
   }
   private locked() { return !!this.state.busy || !!this.command; }
   private canPlan() { return this.active && !!this.state.settings && !this.state.stale && !this.state.settings.current.length && !this.state.settings.blockedBy; }
+  chooseCategory(category: VehicleCategoryId) {
+    if (this.locked() || !transportCategory(category) || category === this.state.category) return;
+    this.patch({ category, preview: null, error: '' });
+  }
+  editDelivery(field: keyof DeliveryDraft, value: string) {
+    if (this.locked()) return;
+    this.patch({ delivery: { ...this.state.delivery, [field]: value }, error: '' });
+  }
   chooseMode(mode: 'route' | 'sample') {
     if (this.locked() || (mode === 'route' ? !this.state.settings?.online.enabled : !this.state.settings?.allowSample)) return;
     ++this.searches.pickup; ++this.searches.destination;
@@ -95,13 +108,13 @@ export class BookingController {
   }
   async preview() {
     if (!this.canPlan() || this.locked()) return;
-    const { mode, consent, pickup, destination, pickupId, destinationId } = this.state;
+    const { mode, consent, pickup, destination, pickupId, destinationId, category } = this.state;
     if (mode === 'route' && (!consent || !pickup.selected || !destination.selected)) { this.patch({ error: 'Search and select both addresses before previewing the route.' }); return; }
     if (mode === 'sample' && (!pickupId || !destinationId || pickupId === destinationId)) { this.patch({ error: 'Choose two different sample areas.' }); return; }
     if (!mode) return;
     ++this.reads; this.patch({ busy: 'preview', loading: false, error: '', preview: null });
     try {
-      const result = mode === 'route' ? await this.api.routePreview(pickup.selected!, destination.selected!, this.key()) : await this.api.samplePreview(pickupId, destinationId);
+      const result = mode === 'route' ? await this.api.routePreview(pickup.selected!, destination.selected!, this.key(), category) : await this.api.samplePreview(pickupId, destinationId, category);
       this.patch({ preview: result.preview, now: this.serverTime(result.serverNow) });
     } catch (e) { this.patch({ error: message(e) }); }
     finally { this.patch({ busy: null }); if (this.state.stale && this.active) void this.refresh(); }
@@ -110,7 +123,12 @@ export class BookingController {
     if (!this.canPlan() || this.locked() || !this.state.preview) return;
     const preview = this.state.preview;
     if (preview.expiresAt !== null && this.now() >= preview.expiresAt) { this.patch({ error: 'This route preview has expired. Preview the route again.', preview: null }); return; }
-    this.command = { kind: 'request', key: this.key(), data: { ...preview.request } }; await this.runCommand();
+    let delivery;
+    try { delivery = deliveryDetails(this.state.category, transportCategory(this.state.category)?.service === 'delivery'
+      ? { ...this.state.delivery, weightKg: Number(this.state.delivery.weightKg) } : undefined); }
+    catch (e) { this.patch({ error: message(e) }); return; }
+    if ((preview.vehicleCategory ?? 'standard') !== this.state.category) { this.patch({ preview: null, error: 'Preview this category again.' }); return; }
+    this.command = { kind: 'request', key: this.key(), data: { ...preview.request, vehicleCategory: this.state.category, ...(delivery ? { delivery } : {}) } }; await this.runCommand();
   }
   async cancel(ride: BookingRide) {
     if (!this.active || this.locked() || this.state.stale || !ride.canCancel) return;
@@ -128,7 +146,7 @@ export class BookingController {
       if (isRequestOpen(result.ride.status)) current.unshift(result.ride);
       this.command = null;
       completed = true;
-      this.patch({ settings: { ...this.state.settings!, current }, lastRide: result.ride, preview: null, uncertain: null, now: this.serverTime(result.serverNow) });
+      this.patch({ settings: { ...this.state.settings!, current }, lastRide: result.ride, preview: null, delivery: emptyDelivery(), uncertain: null, now: this.serverTime(result.serverNow) });
     } catch (e) {
       const failure = code(e), definite = typeof failure.status === 'number' && failure.status >= 400 && failure.status < 500;
       if (definite || ['SESSION_CHANGED','UNAUTHENTICATED'].includes(failure.code ?? '')) {

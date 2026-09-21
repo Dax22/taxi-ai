@@ -3,8 +3,9 @@
 Taxi Ai uses a **modular monolith**: one backend process and database, with
 separate business modules and explicit dependencies. The current code implements
 accounts, driver review, ride/fare negotiation, trip lifecycle, participant chat
-and audio calling, route quotes, driver location sharing, availability/nearby matching and simulated payments/receipts/earnings. The structure supports adding Eats and courier workflows
-without mixing their rules into ride logic.
+and audio calling, route quotes, driver location sharing, availability/nearby matching and simulated payments/receipts/earnings. Category-aware bookings use the shared
+journey engine; a deliveries module owns parcel details and handover verification.
+Eats restaurant and vendor ordering remain separate planned modules.
 See [ADR 0001](decisions/0001-modular-monolith.md) for the decision and tradeoffs.
 
 The target product is now one app and website with Customer, Drive & deliver
@@ -26,6 +27,10 @@ owns password changes, mailbox confirmation and session revocation. SMTP is an
 infrastructure adapter. See [account emails](account-email.md) for retry, expiry,
 recovery boundaries and remaining launch work.
 
+Release 0.22 adds schema 16 vehicle categories and delivery handover state.
+See [category workflows](vehicle-categories.md) for matching, quoting and migration
+boundaries. Rides uses an injected deliveries port inside its existing transaction.
+
 ## Implemented modules
 
 | Module | Responsibility | Owns |
@@ -34,6 +39,7 @@ recovery boundaries and remaining launch work.
 | Account email | Verification and recovery actions, durable delivery intentions and bounded retries | `account_email_tokens`, `account_email_jobs` |
 | Drivers | Private applications, documents, manual review and expiry eligibility | `drivers`, `driver_applications`, `driver_documents`, `driver_document_reads`, `driver_application_events`, `driver_application_commands` |
 | Rides | Requests, fares, bookings, pickup verification, progress, cancellation and history | `rides`, `fare_events`, `idempotency`, `ride_trips`, `ride_activity` |
+| Deliveries | Parcel validation, category/capacity eligibility and drop-off verification | `delivery_orders` |
 | Chat | Participant messages, read markers, retries and reports | `chat_messages`, `chat_reads`, `chat_commands`, `chat_reports` |
 | Calls | Audio invitations, session/window ownership, signaling, expiry and history | `voice_calls`, `voice_participants`, `voice_commands` |
 | Locations | Provider-backed route quotes, fare suggestions, driver sharing and expiry | `location_quotes`, `location_quote_commands`, `location_shares`, `location_share_commands` |

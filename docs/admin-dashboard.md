@@ -51,7 +51,7 @@ sign-out or backgrounding. Dashboard filters use bound SQL parameters.
 
 Schema 13 adds account/trip reporting indexes only. Back up existing data with
 the previous release before upgrading; no identities, approvals, sessions or
-historical records are rewritten. Current backup/restore requires schema 15.
+historical records are rewritten. Current backup/restore requires schema 16.
 
 Automated checks cover role/session isolation, audited reads, exact money,
 retried payments, dual-role totals, over a thousand historical records, cursor

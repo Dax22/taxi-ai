@@ -1,6 +1,6 @@
 const columns = `id, customer_id AS customerId, driver_id AS driverId,
   pickup_id AS pickupId, destination_id AS destinationId,
-  suggested_fare_kobo AS suggestedFareKobo, status, version,
+  suggested_fare_kobo AS suggestedFareKobo, vehicle_category AS vehicleCategory, status, version,
   created_at AS createdAt, matched_at AS matchedAt, updated_at AS updatedAt,
   driver_snapshot_json AS driverSnapshotJson, request_expires_at AS requestExpiresAt, closed_reason AS closedReason`;
 
@@ -38,9 +38,9 @@ export function createRidesRepository(db) {
     hasDriverWork: (id) => Boolean(db.prepare(`SELECT id FROM rides WHERE driver_id=? AND
       (status='negotiating' OR (status='agreed' AND (NOT EXISTS (SELECT 1 FROM ride_trips t WHERE t.ride_id=rides.id)
         OR EXISTS (${activeTrip}))))`).get(id)),
-    insert({ id, customerId, pickupId, destinationId, suggestedFareKobo, now, expiresAt }) {
-      db.prepare(`INSERT INTO rides (id, customer_id, pickup_id, destination_id, suggested_fare_kobo, created_at, updated_at, request_expires_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(id, customerId, pickupId, destinationId, suggestedFareKobo, now, now, expiresAt);
+    insert({ id, customerId, pickupId, destinationId, suggestedFareKobo, vehicleCategory = 'standard', now, expiresAt }) {
+      db.prepare(`INSERT INTO rides (id, customer_id, pickup_id, destination_id, suggested_fare_kobo, created_at, updated_at, request_expires_at, vehicle_category)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(id, customerId, pickupId, destinationId, suggestedFareKobo, now, now, expiresAt, vehicleCategory);
     },
     claim({ id, driverId, driverSnapshot, expectedVersion, now }) {
       return db.prepare(`UPDATE rides SET driver_id = ?, driver_snapshot_json = ?, matched_at = ?, updated_at = ?, status = 'negotiating',

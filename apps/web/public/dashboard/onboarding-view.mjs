@@ -28,7 +28,7 @@ export function createOnboardingView({ onAction, onDownload, onClose }) {
     event.preventDefault(); if (!current) return;
     const values = { ...Object.fromEntries(detailFields.map((name) => [name, input(name).value])), ...vehicleFields.values() };
     onAction('save', { expectedVersion: formVersion, details: { legalName: values.legalName, phone: values.phone, licenceNumber: values.licenceNumber,
-      vehicle: { make: values.make, model: values.model, year: Number(values.year), colour: values.colour, plate: values.plate } } });
+      vehicle: { make: values.make, model: values.model, year: Number(values.year), colour: values.colour, plate: values.plate, category: values.category, payloadKg: values.payloadKg } } });
   });
   $('onboarding-upload-form').addEventListener('submit', (event) => {
     event.preventDefault(); if (!current) return;
@@ -92,6 +92,7 @@ export function createOnboardingView({ onAction, onDownload, onClose }) {
     input('summary').replaceChildren();
     if (!owner && app.details) {
       for (const [term, value] of [['Legal name', app.details.legalName], ['Contact', app.details.phone], ['Licence', app.details.licenceNumber],
+        ['Category / capacity', `${app.details.vehicle.category ?? 'standard'}${app.details.vehicle.payloadKg ? ` · ${app.details.vehicle.payloadKg} kg` : ''}`],
         ['Vehicle', `${app.details.vehicle.year} ${app.details.vehicle.make} ${app.details.vehicle.model} · ${app.details.vehicle.colour} · ${app.details.vehicle.plate}`]]) {
         input('summary').append(element('dt', term), element('dd', value));
       }

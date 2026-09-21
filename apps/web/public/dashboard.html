@@ -58,6 +58,8 @@
             <p class="supporting-copy">Choose your make, year, model and colour, then add your number plate. We’ll save these details for your driver application.</p>
             <p class="small-note">Keep your current login and Customer access. Document review is required before you can accept rides. Use fictional details in this preview.</p>
             <div class="onboarding-grid">
+              <div><label for="driver-profile-category">Vehicle category</label><select id="driver-profile-category" required></select></div>
+              <div id="driver-profile-payload-row" hidden><label for="driver-profile-payloadKg">Verified load capacity (kg)</label><input id="driver-profile-payloadKg" type="number" min="0.001" step="0.001" disabled><p id="driver-profile-payload-hint" class="small-note"></p></div>
               <div><label for="driver-profile-make">Vehicle make</label><select id="driver-profile-make" required><option value="">Select make</option></select></div>
               <div id="driver-profile-make-other-row" hidden><label for="driver-profile-make-other">Enter vehicle make</label><input id="driver-profile-make-other" minlength="2" maxlength="40" disabled></div>
               <div><label for="driver-profile-year">Vehicle year</label><select id="driver-profile-year" aria-describedby="driver-profile-year-hint" required><option value="">Select year</option></select><p id="driver-profile-year-hint" class="small-note">Choose a year from 2000 onwards.</p></div>
@@ -89,6 +91,8 @@
               <div><label for="onboarding-legalName">Full legal name</label><input id="onboarding-legalName" minlength="2" maxlength="100" required></div>
               <div><label for="onboarding-phone">Contact number (private)</label><input id="onboarding-phone" type="tel" placeholder="+234…" pattern="\+[1-9][0-9]{7,14}" maxlength="16" required></div>
               <div><label for="onboarding-licenceNumber">Driving licence number</label><input id="onboarding-licenceNumber" minlength="3" maxlength="40" required></div>
+              <div><label for="onboarding-category">Vehicle category</label><select id="onboarding-category" required></select></div>
+              <div id="onboarding-payload-row" hidden><label for="onboarding-payloadKg">Verified load capacity (kg)</label><input id="onboarding-payloadKg" type="number" min="0.001" step="0.001" disabled><p id="onboarding-payload-hint" class="small-note"></p></div>
               <div><label for="onboarding-make">Vehicle make</label><select id="onboarding-make" required><option value="">Select make</option></select></div>
               <div id="onboarding-make-other-row" hidden><label for="onboarding-make-other">Enter vehicle make</label><input id="onboarding-make-other" minlength="2" maxlength="40" disabled></div>
               <div><label for="onboarding-year">Vehicle year</label><select id="onboarding-year" aria-describedby="onboarding-year-hint" required><option value="">Select year</option></select><p id="onboarding-year-hint" class="small-note">Choose a year from 2000 onwards.</p></div>
@@ -127,6 +131,15 @@
       <section id="vehicle-categories-panel" class="account-card" hidden aria-labelledby="vehicle-categories-title">
         <p class="eyebrow">RIDES & DELIVERIES</p><h2 id="vehicle-categories-title">Choose your vehicle</h2>
         <div id="account-vehicle-categories"></div>
+        <form id="delivery-details-form" class="stack-form" hidden><fieldset id="delivery-details-fields"><legend>Delivery details</legend>
+          <div class="onboarding-grid">
+            <div><label for="delivery-description">What are you sending?</label><input id="delivery-description" minlength="2" maxlength="240" required placeholder="Item, quantity and approximate size"></div>
+            <div><label for="delivery-weight">Total weight (kg)</label><input id="delivery-weight" type="number" min="0.001" step="0.001" required></div>
+            <div><label for="delivery-recipient">Recipient name</label><input id="delivery-recipient" minlength="2" maxlength="100" required autocomplete="off"></div>
+            <div><label for="delivery-pickup">Pickup instructions (optional)</label><input id="delivery-pickup" maxlength="240"></div>
+            <div><label for="delivery-dropoff">Drop-off instructions (optional)</label><input id="delivery-dropoff" maxlength="240"></div>
+          </div><p id="delivery-load-hint" class="small-note"></p><p class="small-note">Confirm the load fits with the driver before collection. Share the drop-off code privately with your recipient after pickup. This preview does not contact the recipient.</p>
+        </fieldset></form>
       </section>
       <div id="standard-ride-planner" hidden>
       <section id="location-planner" class="account-card location-panel" hidden aria-labelledby="location-planner-title">
@@ -160,7 +173,7 @@
             </fieldset></form>
             <p id="contact-privacy" class="small-note">Removing a contact cancels unsent test alerts. Details already attached to a saved incident stay in its private records.</p>
           </section>
-          <section class="account-card" id="customer-panel" hidden aria-labelledby="request-title"><p class="eyebrow">YOUR NEXT JOURNEY</p><h2 id="request-title">Sample-area demo.</h2><p id="sample-disabled-note" class="small-note" hidden>For hosted testing, use a route preview above. Sample-area requests are available in local development.</p><form id="request-form" class="stack-form"><fieldset id="request-fields"><legend class="visually-hidden">Choose your journey</legend><label for="request-pickup">Pickup area</label><select id="request-pickup" required></select><label for="request-destination">Destination</label><select id="request-destination" required></select><div class="quote-preview"><span>Suggested fare</span><strong id="request-quote"></strong><p class="small-note">Sample price, not a live quote or AI estimate. You and the driver agree the final fare.</p></div><button class="button button-primary button-full" type="submit">Request a test ride <span aria-hidden="true">↗</span></button></fieldset></form><p id="open-request-note" class="small-note" hidden>Finish or cancel your open request before creating another.</p></section>
+          <section class="account-card" id="customer-panel" hidden aria-labelledby="request-title"><p class="eyebrow">YOUR NEXT JOURNEY</p><h2 id="request-title">Sample-area demo.</h2><p id="sample-disabled-note" class="small-note" hidden>For hosted testing, use a route preview above. Sample-area requests are available in local development.</p><form id="request-form" class="stack-form"><fieldset id="request-fields"><legend class="visually-hidden">Choose your journey</legend><label for="request-pickup">Pickup area</label><select id="request-pickup" required></select><label for="request-destination">Destination</label><select id="request-destination" required></select><div class="quote-preview"><span>Suggested fare</span><strong id="request-quote"></strong><p class="small-note">Sample price, not a live quote or AI estimate. You and the driver agree the final fare.</p></div><button id="request-submit" class="button button-primary button-full" type="submit">Request a test ride <span aria-hidden="true">↗</span></button></fieldset></form><p id="open-request-note" class="small-note" hidden>Finish or cancel your open request before creating another.</p></section>
           <section id="driver-panel" class="account-card" hidden aria-labelledby="driver-title"><p class="eyebrow">DRIVE WITH TAXI AI</p><h2 id="driver-title">Your driver profile.</h2><p id="driver-status" class="status-badge"></p><p id="driver-vehicle"></p><div id="driver-vehicle-card"></div><p id="driver-guidance" class="supporting-copy"></p></section>
           <section class="sidebar-note"><p class="eyebrow">A CLEAR AGREEMENT</p><p>Either person can make an offer. The other person must accept that exact price before the fare is agreed.</p><p class="small-note">Chat and audio calls stay in Taxi Ai. Phone numbers are not exchanged. Discussing a price by voice still needs an accepted offer in the app.</p></section>
         </aside>
@@ -193,7 +206,7 @@
             <div class="review-actions"><button id="tracking-start" type="button" class="button button-primary button-small" hidden>Share my location</button><button id="tracking-stop" type="button" class="button button-outline button-small" hidden>Stop sharing</button></div>
           </section>
           <section id="ride-detail" class="account-card detail-card" hidden aria-labelledby="detail-title">
-            <div class="card-topline"><p class="eyebrow">JOURNEY DETAILS</p><span id="detail-status" class="status-badge"></span></div><h2 id="detail-title"></h2><div id="detail-vehicle-card"></div><p id="detail-person" class="supporting-copy"></p><p id="detail-reference" class="small-note"></p>
+            <div class="card-topline"><p class="eyebrow">JOURNEY DETAILS</p><span id="detail-status" class="status-badge"></span></div><h2 id="detail-title"></h2><div id="detail-vehicle-card"></div><p id="detail-person" class="supporting-copy"></p><p id="detail-delivery" class="small-note" hidden></p><p id="detail-reference" class="small-note"></p>
             <div class="fare-display" aria-live="polite" aria-atomic="true"><p id="fare-label" class="eyebrow"></p><strong id="fare-value"></strong><p id="fare-guidance"></p></div>
             <p id="matching-status" class="small-note"></p>
             <p id="fare-expiry" class="small-note"></p>
@@ -205,6 +218,8 @@
               <button id="trip-confirm" class="button button-primary button-full" type="button" hidden>Confirm test booking</button>
               <button id="trip-action" class="button button-primary button-full" type="button" hidden></button>
               <div id="pickup-pin-panel" class="pickup-pin-panel" hidden><p class="eyebrow">YOUR PICKUP PIN</p><output id="pickup-pin-value" aria-label="Your six-digit pickup PIN"></output><p class="small-note">Share this with your driver in person after checking the vehicle. Keep it private until pickup.</p></div>
+              <div id="delivery-pin-panel" class="quote-preview" hidden><span>Recipient’s drop-off code</span><strong id="delivery-pin-value"></strong><p class="small-note">Share this code privately with the recipient. They give it to the driver only when the parcel is handed over.</p></div>
+              <form id="delivery-pin-form" class="stack-form" hidden><fieldset id="delivery-pin-fields"><legend>Verify delivery</legend><label for="driver-delivery-pin">Recipient’s six-digit code</label><input id="driver-delivery-pin" type="password" inputmode="numeric" pattern="[0-9]{6}" minlength="6" maxlength="6" autocomplete="off" required><p id="delivery-pin-lock" class="error-text" role="status"></p><button id="delivery-complete" class="button button-primary button-full" type="submit">Verify code and complete delivery</button></fieldset></form>
               <form id="pickup-pin-form" class="stack-form" hidden><fieldset id="pickup-pin-fields"><legend>Verify pickup</legend><label for="driver-pickup-pin">Customer’s six-digit PIN</label><input id="driver-pickup-pin" type="password" inputmode="numeric" pattern="[0-9]{6}" minlength="6" maxlength="6" autocomplete="off" required aria-describedby="pickup-pin-help pickup-pin-lock"><p id="pickup-pin-help" class="small-note">Ask the customer for their PIN when they are at the vehicle.</p><p id="pickup-pin-lock" class="error-text" role="status"></p><button id="trip-start" class="button button-primary button-full" type="submit">Verify PIN and start trip</button></fieldset></form>
             </section>
             <button id="cancel-request" class="text-link cancel-link" type="button" hidden>Cancel request</button>

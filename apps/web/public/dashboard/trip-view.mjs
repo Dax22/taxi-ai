@@ -8,6 +8,11 @@ export function createTripView({ onCommand, serverNow }) {
 
   function tick() {
     const controls = tripControls(current?.ride, current?.user, serverNow());
+    const delivery = current?.ride.delivery, completing = delivery && controls.next?.action === 'complete';
+    const deliveryLocked = Boolean(delivery?.pinBlockedUntil > serverNow());
+    $('delivery-pin-fields').disabled = busy || !completing || deliveryLocked;
+    $('delivery-complete').dataset.locked = String(!completing || deliveryLocked);
+    $('delivery-pin-lock').textContent = deliveryLocked ? `Code verification is paused. Try again in ${Math.ceil((delivery.pinBlockedUntil - serverNow()) / 1000)} seconds.` : '';
     $('trip-confirm').dataset.locked = String(!controls.confirm);
     $('trip-action').dataset.locked = String(!controls.next || controls.next.action === 'start');
     $('trip-start').dataset.locked = String(controls.next?.action !== 'start' || controls.pinLocked);
@@ -17,7 +22,7 @@ export function createTripView({ onCommand, serverNow }) {
     $('trip-cancel-fields').disabled = busy || !controls.cancel;
     $('pickup-pin-lock').textContent = controls.pinLocked
       ? `PIN verification is paused. Try again in ${Math.ceil((current.ride.trip.pinBlockedUntil - serverNow()) / 1000)} seconds.` : '';
-    for (const id of ['trip-confirm', 'trip-action', 'trip-start', 'cancel-request', 'trip-cancel-submit']) {
+    for (const id of ['trip-confirm', 'trip-action', 'trip-start', 'delivery-complete', 'cancel-request', 'trip-cancel-submit']) {
       const button = $(id); button.disabled = busy || button.dataset.locked === 'true';
     }
   }
@@ -26,13 +31,13 @@ export function createTripView({ onCommand, serverNow }) {
     const changed = current?.ride.id !== ride?.id || current?.user.id !== user?.id;
     current = ride && user ? { ride, user } : null;
     if (changed) {
-      $('driver-pickup-pin').value = ''; $('trip-cancel-form').hidden = true;
+      $('driver-pickup-pin').value = ''; $('driver-delivery-pin').value = ''; $('trip-cancel-form').hidden = true;
       $('trip-cancel-reason').value = 'plans_changed'; rendered = '';
     }
     if (!current) { reset(); return; }
     const controls = tripControls(ride, user, serverNow());
     $('trip-panel').hidden = !ride.trip && ride.status !== 'agreed';
-    $('trip-title').textContent = RIDE_STATUS_LABELS[ride.status];
+    $('trip-title').textContent = ride.delivery && ride.status === 'completed' ? 'Delivered' : RIDE_STATUS_LABELS[ride.status];
     const hints = {
       agreed: user.role === 'customer'
         ? 'Review the fare and driver above, then confirm your test booking. Availability is checked when you confirm.'
@@ -44,12 +49,19 @@ export function createTripView({ onCommand, serverNow }) {
       completed: 'Trip completed. Your fare and journey record are saved. No payment has been taken in this preview.',
       cancelled: 'This booking was cancelled. Its record and conversation remain available.',
     };
-    $('trip-guidance').textContent = hints[ride.status] ?? '';
+    $('trip-guidance').textContent = ride.delivery && ride.status === 'in_progress' ? 'Parcel collected. The sender shares the drop-off code with the recipient; the driver verifies it at handover.'
+      : ride.delivery && ride.status === 'completed' ? 'Delivery verified. The agreed fare and handover record are saved.' : hints[ride.status] ?? '';
+    $('pickup-pin-help').textContent = ride.delivery ? 'Ask the sender for the pickup PIN only after confirming the parcel fits your vehicle and you have collected it.' : 'Ask the customer for their PIN when they are at the vehicle.';
+    $('trip-start').textContent = ride.delivery ? 'Verify PIN and collect parcel' : 'Verify PIN and start trip';
+    $('delivery-pin-panel').hidden = !ride.delivery?.dropoffPin;
+    $('delivery-pin-value').textContent = ride.delivery?.dropoffPin ?? '';
+    $('delivery-pin-form').hidden = !ride.delivery || controls.next?.action !== 'complete';
+    if (!ride.delivery || controls.next?.action !== 'complete') $('driver-delivery-pin').value = '';
     $('trip-confirm').hidden = !controls.confirm;
     $('trip-confirm').textContent = ride.negotiation?.agreement
       ? `Confirm test booking · ${formatNaira(ride.negotiation.agreement.amountKobo)}` : 'Confirm booking';
     $('trip-confirm').onclick = () => onCommand(`/api/rides/${ride.id}/confirm`, { expectedVersion: ride.version }, 'Your test booking is confirmed.');
-    $('trip-action').hidden = !controls.next || controls.next.action === 'start';
+    $('trip-action').hidden = !controls.next || controls.next.action === 'start' || (ride.delivery && controls.next.action === 'complete');
     $('trip-action').textContent = controls.next?.label ?? '';
     $('trip-action').onclick = controls.next ? () => onCommand(`/api/rides/${ride.id}/${controls.next.action}`,
       { expectedVersion: ride.version }, controls.next.to === 'completed' ? 'Trip completed. Your trip history is saved.' : 'Trip progress updated.') : null;
@@ -87,6 +99,13 @@ export function createTripView({ onCommand, serverNow }) {
     if (controls.next?.action !== 'start' || controls.pinLocked) return;
     onCommand(`/api/rides/${ride.id}/start`, { expectedVersion: ride.version, pickupPin: $('driver-pickup-pin').value }, 'Pickup verified. Trip started.');
   });
+  $('delivery-pin-form').addEventListener('submit', (event) => {
+    event.preventDefault();
+    if (!current || busy || !current.ride.delivery) return;
+    const { ride, user } = current;
+    if (tripControls(ride, user, serverNow()).next?.action !== 'complete' || ride.delivery.pinBlockedUntil > serverNow()) return;
+    onCommand(`/api/rides/${ride.id}/complete`, { expectedVersion: ride.version, deliveryPin: $('driver-delivery-pin').value }, 'Delivery verified and completed.');
+  });
   $('cancel-request').addEventListener('click', () => {
     if (!current || busy || !tripControls(current.ride, current.user, serverNow()).cancel) return;
     $('trip-cancel-form').hidden = false; $('trip-cancel-reason').focus();
@@ -102,6 +121,8 @@ export function createTripView({ onCommand, serverNow }) {
 
   function reset() {
     current = null; rendered = '';
+    $('delivery-pin-value').textContent = ''; $('driver-delivery-pin').value = ''; $('delivery-pin-lock').textContent = '';
+    $('delivery-pin-panel').hidden = true; $('delivery-pin-form').hidden = true;
     $('pickup-pin-value').textContent = ''; $('driver-pickup-pin').value = '';
     $('pickup-pin-lock').textContent = ''; $('trip-timeline').replaceChildren();
     $('trip-panel').hidden = true; $('trip-activity').hidden = true; $('trip-cancel-form').hidden = true;

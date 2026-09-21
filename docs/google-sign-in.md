@@ -163,7 +163,7 @@ and [server verification guidance](https://developers.google.com/identity/gsi/we
 Back up with the previous release before starting schema 14 on saved data. The
 migration adds identity, password-setting and temporary-attempt tables without
 rewriting existing users, passwords, journeys or approvals. Current backups require
-schema 15, retain identity mappings and clear pending Google challenges and account-email actions as well as
+schema 16, retain identity mappings and clear pending Google challenges and account-email actions as well as
 web/native sessions. Older branches require their own compatible backup/test DB.
 
 Automated tests cover real RSA verification with local keys, expired/mismatched
