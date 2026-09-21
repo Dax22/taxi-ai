@@ -5,7 +5,8 @@ import { MAX_CONTACTS, SHARE_MINUTES, canUseTripSafety } from '../../../../../pa
 import { commandKey, version, identifier, contactData, incidentData, noteText, canonical, notificationTransition } from './domain.mjs';
 
 /** Safety records are private; notification actions are an explicit local simulator. */
-export function createSafetyService({ repository, getAccount, getTrip, locationForTrip, sessionOwner, unitOfWork, tokens, audit, clock, allowSimulation = false }) {
+export function createSafetyService({ repository, getAccount, getTrip, locationForTrip, sessionOwner,
+  nativeSessionFor = () => null, nativeSessionOwner = () => null, unitOfWork, tokens, audit, clock, allowSimulation = false }) {
   const settings = Object.freeze({ mode: 'simulation', canSimulate: allowSimulation, localOnly: allowSimulation, maxContacts: MAX_CONTACTS, shareMinutes: SHARE_MINUTES });
   function actor(id) { const user = getAccount(id); check(user, 'UNAUTHENTICATED', 'Sign in to continue.'); return user; }
   function participant(user) { requireRole(user, 'customer'); }
@@ -39,7 +40,8 @@ export function createSafetyService({ repository, getAccount, getTrip, locationF
   }
   function invalidLink(row, now) {
     if (now >= row.expiresAt) return 'expired';
-    if (sessionOwner(row.sessionHash) !== row.ownerId) return 'session_ended';
+    const owner = row.nativeSessionId ? nativeSessionOwner(row.nativeSessionId) : sessionOwner(row.sessionHash);
+    if (owner !== row.ownerId) return 'session_ended';
     if (!canUseTripSafety(getTrip(actor(row.ownerId), row.rideId).status)) return 'trip_ended';
     return null;
   }
@@ -47,7 +49,7 @@ export function createSafetyService({ repository, getAccount, getTrip, locationF
   function contacts(userId) { const user = actor(userId); participant(user); return envelope(user, { contacts: repository.contacts(user.id).map(contactView) }); }
   function trip(userId, rideId) {
     const user = actor(userId); participant(user); const ride = getTrip(user, rideId); sweep();
-    return envelope(user, { rideId, canRaise: canUseTripSafety(ride.status),
+    return envelope(user, { rideId, canRaise: canUseTripSafety(ride.status), location: locationForTrip(rideId),
       incidents: repository.rideIncidents(rideId, user.id).map(incidentView), share: linkView(repository.currentLink(user.id, rideId)) });
   }
   function get(userId, id) { const user = actor(userId); return envelope(user, { incident: incidentView(incident(user, id)) }); }
@@ -73,10 +75,13 @@ export function createSafetyService({ repository, getAccount, getTrip, locationF
     }
     return { incident: incidentView(incident(user, id)) };
   }
-  function command({ userId, sessionToken, action, id = null, data, key }) {
+  function command({ userId, sessionToken, nativeAccessToken, action, id = null, data, key }) {
     commandKey(key); const fingerprint = tokens.digest(canonical({ action, id, data })); sweep();
     return unitOfWork(() => {
       const user = actor(userId), now = clock();
+      // Recheck native credentials inside the write transaction, including replay.
+      const native = nativeAccessToken === undefined ? null : nativeSessionFor(nativeAccessToken);
+      if (nativeAccessToken !== undefined) check(native?.user.id === user.id && sessionToken === undefined, 'UNAUTHENTICATED', 'This device session ended. Sign in again.');
       if (['incident.review', 'notification.simulate'].includes(action)) requireRole(user, 'admin'); else participant(user);
       if (action === 'notification.simulate') check(allowSimulation, 'FORBIDDEN', 'Notification simulation is available only in local development.');
       const previous = repository.command(user.id, key);
@@ -90,6 +95,14 @@ export function createSafetyService({ repository, getAccount, getTrip, locationF
         check(saved.length < MAX_CONTACTS, 'CONTACT_LIMIT', 'You can save up to three trusted contacts.');
         check(!saved.some((row) => row.phone === value.phone), 'CONTACT_EXISTS', 'That number is already saved.');
         resourceId = tokens.id(); repository.addContact(resourceId, user.id, value, now);
+      } else if (action === 'contact.edit') {
+        fields(data, ['name', 'phone', 'expectedVersion']);
+        const value = contactData({ name: data.name, phone: data.phone }), row = ownContact(user, id, true);
+        version(row, data.expectedVersion);
+        check(!repository.contacts(user.id).some((other) => other.id !== id && other.phone === value.phone), 'CONTACT_EXISTS', 'That number is already saved.');
+        repository.editContact(id, value);
+        // Frozen recipient evidence never changes. Cancel unsent intentions to the old number.
+        if (row.phone !== value.phone) for (const notice of repository.pendingForContact(id)) noticeState(notice, 'cancelled', notice.attempts, user, now);
       } else if (action === 'contact.remove') {
         fields(data, ['expectedVersion']); const row = ownContact(user, id, true); version(row, data.expectedVersion);
         repository.removeContact(id, now);
@@ -99,7 +112,12 @@ export function createSafetyService({ repository, getAccount, getTrip, locationF
         check(canUseTripSafety(ride.status), 'SAFETY_UNAVAILABLE', 'Test SOS is available on a confirmed trip until it ends.');
         check(!repository.openIncident(id, user.id), 'INCIDENT_OPEN', 'You already have an open incident for this trip. Open its saved record.');
         check(repository.incidentCount(id, user.id) < 20, 'INCIDENT_LIMIT', 'This test trip has reached its incident limit.');
-        const recipients = value.contactIds.map((contactId) => ownContact(user, contactId, true));
+        if (native) check(value.contactVersions !== undefined, 'INVALID_CONTACTS', 'Review the selected contacts before saving a native safety report.');
+        const recipients = value.contactIds.map((contactId) => {
+          const contact = ownContact(user, contactId, true);
+          if (value.contactVersions) version(contact, value.contactVersions[contactId]);
+          return contact;
+        });
         resourceId = tokens.id();
         const snapshot = { rideId: id, tripStatus: ride.status, pickup: ride.pickup, destination: ride.destination, driver: ride.driver,
           reporter: { id: user.id, name: user.name, role: ride.customerId === user.id ? 'customer' : 'driver' }, location: locationForTrip(id), recordedAt: now };
@@ -122,19 +140,24 @@ export function createSafetyService({ repository, getAccount, getTrip, locationF
       } else if (action === 'notification.simulate') {
         fields(data, ['expectedVersion', 'outcome']); const notice = repository.notification(id);
         check(notice, 'NOT_FOUND', 'Test notification not found.'); const row = incident(user, notice.incidentId); version(notice, data.expectedVersion);
-        const next = notificationTransition(notice, data.outcome, row.status !== 'resolved', Boolean(repository.contact(notice.contactId)?.active));
+        const contact = repository.contact(notice.contactId);
+        const next = notificationTransition(notice, data.outcome, row.status !== 'resolved', Boolean(contact?.active && contact.phone === notice.recipientPhone));
         noticeState(notice, next.status, next.attempts, user, now);
       } else if (action === 'link.create') {
         fields(data, ['minutes', 'expectedShareId']);
         check(SHARE_MINUTES.includes(data.minutes) && (data.expectedShareId === null || identifier(data.expectedShareId)), 'INVALID_INPUT', 'Choose a 15, 30 or 60 minute link and its current reference.');
         const ride = getTrip(user, id); check(canUseTripSafety(ride.status), 'SAFETY_UNAVAILABLE', 'Share links are available only during a confirmed trip.');
-        check(typeof sessionToken === 'string', 'UNAUTHENTICATED', 'Sign in to share a trip.');
-        const sessionHash = tokens.digest(sessionToken); check(sessionOwner(sessionHash) === user.id, 'UNAUTHENTICATED', 'The sharing session expired.');
+        let sessionHash = null, nativeSessionId = null;
+        if (native) nativeSessionId = native.id;
+        else {
+          check(typeof sessionToken === 'string', 'UNAUTHENTICATED', 'Sign in to share a trip.');
+          sessionHash = tokens.digest(sessionToken); check(sessionOwner(sessionHash) === user.id, 'UNAUTHENTICATED', 'The sharing session expired.');
+        }
         const current = repository.currentLink(user.id, id);
         check((current?.id ?? null) === data.expectedShareId, 'STALE_VERSION', 'The trip link changed. Refresh before replacing it.');
         check(repository.linkCount(user.id, id) < 30, 'LINK_LIMIT', 'This trip has reached its test link limit.');
         endLink(current, now, 'replaced'); resourceId = tokens.id(); const token = tokens.generate();
-        repository.addLink({ id: resourceId, rideId: id, ownerId: user.id, tokenHash: tokens.digest(token), sessionHash, now, expiresAt: now + data.minutes * 60_000 });
+        repository.addLink({ id: resourceId, rideId: id, ownerId: user.id, tokenHash: tokens.digest(token), sessionHash, nativeSessionId, now, expiresAt: now + data.minutes * 60_000 });
         extra = { token }; // Returned once; only its hash is stored. Lost replies require explicit replacement.
       } else if (action === 'link.revoke') {
         fields(data, ['expectedVersion']); const row = ownLink(user, id); version(row, data.expectedVersion);

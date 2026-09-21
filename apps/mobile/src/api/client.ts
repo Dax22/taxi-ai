@@ -5,6 +5,8 @@ import { parseBooking, parsePlaces, parsePreview, parseBookingRide } from '../..
 import { parseJourney, parseWork, parseAvailability, parseThread, parseSentMessage, parseReadMessages, parseNotifications, parseNotificationTarget } from '../../../../packages/shared/src/mobile-journeys.mjs';
 import type { JourneyAction, JourneyData, OnlineData, Position } from '../../../../packages/shared/src/mobile-journeys.mjs';
 import type { Place, RequestData } from '../../../../packages/shared/src/mobile-booking.mjs';
+import { parseSafetyContacts, parseTripSafety, parseSafetyMutation, safetyCommandPath } from '../../../../packages/shared/src/mobile-safety.mjs';
+import type { SafetyCommand, SafetyEnvelope } from '../../../../packages/shared/src/mobile-safety.mjs';
 
 export interface Vault { read(): Promise<string | null>; write(value: string): Promise<void>; clear(): Promise<void> }
 export interface SavedSession { origin: string; refreshToken: string; sessionId: string; previewAccess: string }
@@ -60,7 +62,7 @@ export class MobileClient {
       const response = await this.fetchImpl(`${this.origin}/api/mobile/v1${path}`, { method: data === undefined ? 'GET' : 'POST',
         credentials: 'omit', redirect: 'error', signal: controller.signal,
         headers: { Accept: 'application/json', ...(data === undefined ? {} : { 'Content-Type': 'application/json' }),
-          ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(preview ? { 'X-Taxi-Ai-Preview-Access': preview } : {}),
+          ...(token ? { Authorization: `Bearer ${token}`} : {}), ...(preview ? { 'X-Taxi-Ai-Preview-Access': preview } : {}),
           ...(key ? { 'Idempotency-Key': key } : {}) }, ...(data === undefined ? {} : { body: JSON.stringify(data) }) });
       const body = await response.json();
       if (!response.ok) throw new ApiError(body?.error?.message ?? 'Taxi Ai could not complete this request.', body?.error?.code ?? 'REQUEST_FAILED', response.status);
@@ -191,6 +193,15 @@ export class MobileClient {
   async readNotification(id: number) { return this.request(`/notifications/${id}/read`,{}); }
   async registerPush(token: string, projectId: string) { return this.request('/notifications/push',{ token,projectId }); }
   async disablePush() { return this.request('/notifications/push/disable',{}); }
+  private ownSafety<T extends SafetyEnvelope>(body: T): T {
+    if (body.viewerId !== this.user?.id) throw changed();
+    return body;
+  }
+  async safetyContacts() { return this.ownSafety(parseSafetyContacts(await this.request('/safety/contacts'))); }
+  async tripSafety(id: string) { return this.ownSafety(parseTripSafety(await this.request(`/safety/rides/${id}`))); }
+  async safetyCommand(command: SafetyCommand, key: string) {
+    return this.ownSafety(parseSafetyMutation(await this.request(safetyCommandPath(command), command.data, key)));
+  }
   private ownApplication(body: unknown) {
     const application = parseOnboarding(body);
     if (application.driverId !== this.user?.id) throw changed();

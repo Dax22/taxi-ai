@@ -111,7 +111,8 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
   payments = createPaymentsService({ repository: createPaymentsRepository(db), getAccount: accounts.profile,
     tripForPayment: rides.paymentContext, simulate: simulatePayment, unitOfWork, tokens, audit, clock, allowSimulation });
   safety = createSafetyService({ repository: createSafetyRepository(db), getAccount: accounts.profile, getTrip: rides.safetyContext,
-    locationForTrip: locations.safetyPosition, sessionOwner: accounts.sessionOwner, unitOfWork, tokens, audit, clock, allowSimulation });
+    locationForTrip: locations.safetyPosition, sessionOwner: accounts.sessionOwner,
+    nativeSessionFor: devices.sessionFor, nativeSessionOwner: devices.sessionOwner, unitOfWork, tokens, audit, clock, allowSimulation });
   const adminConsole = createAdminConsoleService({ repository: createAdminConsoleRepository(db), audit, clock, unitOfWork });
   const googleAuth = createGoogleAuthService({ repository: createGoogleAuthRepository(db), provider: googleProvider,
     accounts, devices, tokens, unitOfWork, clock });
