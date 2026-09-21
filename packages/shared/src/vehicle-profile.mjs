@@ -1,3 +1,4 @@
+import { vehicleCategory } from './vehicle-categories.mjs';
 /** Shared presentation only. Registration and approval remain server decisions. */
 export const VEHICLE_MAKES = Object.freeze({
   Toyota: Object.freeze(['Camry', 'Corolla', 'Highlander', 'RAV4', 'Yaris']),
@@ -32,12 +33,13 @@ export function vehicleColour(value) {
 export function vehiclePresentation(vehicle = {}) {
   const make = vehicle.make?.trim() ?? '', model = (vehicle.modelName ?? vehicle.model)?.trim() ?? '';
   const title = !make || model.toLowerCase().startsWith(make.toLowerCase() + ' ') ? model : `${make} ${model}`.trim();
+  const category = vehicleCategory(vehicle.category ?? 'standard');
   const colour = vehicleColour(vehicle.colour), year = Number.isInteger(vehicle.year) ? String(vehicle.year) : '';
   return Object.freeze({ title: title || 'Your vehicle', plate: vehicle.plate?.trim().toUpperCase() || 'NUMBER PLATE',
-    description: [year, vehicle.colour?.trim()].filter(Boolean).join(' · ') || 'Add your year and colour',
+    description: [category && category.id !== 'standard' ? category.name : '', year, vehicle.colour?.trim(), vehicle.payloadKg ? `${vehicle.payloadKg} kg capacity` : ''].filter(Boolean).join(' · ') || 'Add your year and colour',
     colourId: colour?.id ?? 'neutral', paint: colour?.hex ?? '#AAB2BA',
-    illustrationNote: colour ? 'Illustration, not an exact model. Check the vehicle and plate.'
+    illustrationNote: category && category.id !== 'standard' ? 'Category illustration; check the actual vehicle, load capacity and plate.' : colour ? 'Illustration, not an exact model. Check the vehicle and plate.'
       : 'Illustration only; model and colour are not represented.',
     // No exact-model claim until an asset has been licensed and checked against its generation/trim.
-    visualMatch: 'illustration', assetPath: `/assets/vehicles/sedan-${colour?.id ?? 'neutral'}.png` });
+    visualMatch: 'illustration', assetPath: category && category.id !== 'standard' ? category.assetPath : `/assets/vehicles/sedan-${colour?.id ?? 'neutral'}.png` });
 }

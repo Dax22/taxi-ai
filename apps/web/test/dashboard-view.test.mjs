@@ -15,7 +15,7 @@ async function moduleUrl(name, dependencies = {}) {
 }
 const tripModel = await moduleUrl('trip-model.mjs');
 const tripView = await moduleUrl('trip-view.mjs', { './trip-model.mjs': tripModel });
-const { createDashboardView } = await import(await moduleUrl('views.mjs', { './trip-view.mjs': tripView, './vehicle-card.mjs': await moduleUrl('vehicle-card.mjs') }));
+const { createDashboardView } = await import(await moduleUrl('views.mjs', { './trip-view.mjs': tripView, './vehicle-card.mjs': await moduleUrl('vehicle-card.mjs'), './vehicle-categories.mjs': await moduleUrl('vehicle-categories.mjs') }));
 const { createAccountModeView, modePreferences } = await import(await moduleUrl('account-mode-view.mjs', {
   './vehicle-fields.mjs': await moduleUrl('vehicle-fields.mjs'), './vehicle-card.mjs': await moduleUrl('vehicle-card.mjs'),
 }));
@@ -51,6 +51,46 @@ const ride = { id: 'ride-one', status: 'booked', version: 4, createdAt: 1000, su
   pickup: { name: 'Wuse' }, destination: { name: 'Maitama' }, customer, driver: { id: driver.id, name: driver.name, vehicle: driver.driver.vehicle },
   negotiation: { agreement: { amountKobo: 470001 } }, trip: { pickupPin: '123456' }, activity: [] };
 const state = (user, rides = [ride]) => ({ user, rides, history: [], drivers: [], available: [], reports: [], chatUnread: {}, historyCursor: null });
+
+test('all categories book the selected service and delivery drafts clear at account boundaries', (t) => {
+  const h = setup(t); h.view.render({ ...state(customer, []), sampleMatchingEnabled: true });
+  const group = h.node('account-vehicle-categories').children[0];
+  const category = (id) => group.children.find((button) => button.dataset.category === id);
+  for (const id of ['standard', 'suv', 'van', 'truck', 'motorcycle']) {
+    category(id).handlers.click(); h.view.render({ ...state(customer, []), sampleMatchingEnabled: true });
+    assert.equal(h.node('standard-ride-planner').hidden, false); assert.equal(h.node('customer-panel').hidden, false);
+    assert.equal(category(id)['aria-checked'], 'true');
+    const delivery = !['standard', 'suv'].includes(id);
+    assert.equal(h.node('delivery-details-form').hidden, !delivery);
+    if (delivery) {
+      const before = h.commands.length;
+      h.node('request-form').handlers.submit({ preventDefault() {} });
+      assert.equal(h.commands.length, before, 'required parcel details gate submission');
+      h.node('delivery-description').value = 'A small test parcel'; h.node('delivery-weight').value = '2';
+      h.node('delivery-recipient').value = 'Test recipient';
+    }
+    h.node('request-form').handlers.submit({ preventDefault() {} });
+    assert.equal(h.commands.at(-1)[1].vehicleCategory, id);
+    assert.equal(Boolean(h.commands.at(-1)[1].delivery), delivery);
+    h.node('delivery-description').value = ''; h.node('delivery-weight').value = ''; h.node('delivery-recipient').value = '';
+  }
+  h.node('delivery-recipient').value = 'Private draft';
+  category('suv').handlers.click(); h.view.reset(); h.view.render(state(driver, []));
+  assert.equal(category('standard')['aria-checked'], 'true'); assert.equal(h.node('delivery-recipient').value, '');
+  assert.equal(h.node('vehicle-categories-panel').hidden, true); assert.equal(h.node('standard-ride-planner').hidden, true);
+});
+
+test('category keyboard navigation keeps focus and blocks switching while a command is pending', (t) => {
+  const h = setup(t); h.view.render(state(customer, []));
+  const buttons = h.node('account-vehicle-categories').children[0].children;
+  buttons[0].handlers.keydown({ key: 'ArrowRight', preventDefault() {} });
+  assert.equal(buttons[1]['aria-checked'], 'true'); assert.equal(buttons[1].focused, true);
+  assert.equal(buttons[0].tabIndex, -1); assert.equal(buttons[1].tabIndex, 0);
+  h.view.setBusy(true); buttons[1].handlers.keydown({ key: 'End', preventDefault() {} });
+  assert.equal(buttons[1]['aria-checked'], 'true');
+  h.view.setBusy(false); buttons[1].handlers.keydown({ key: 'Home', preventDefault() {} });
+  assert.equal(buttons[0]['aria-checked'], 'true'); assert.equal(buttons[0].focused, true);
+});
 
 test('dashboard reset removes trip identities, fare, plate, history and PIN before a different account renders', (t) => {
   const h = setup(t); h.view.render(state(customer));
@@ -115,7 +155,7 @@ test('mode controls use actual HTML, keep enrollment separate from approval and 
   assert.equal(h.node('driver-profile-model').value, 'Corolla', 'polling keeps the chosen model');
   assert.equal(h.node('driver-profile-colour').value, 'Blue');
   h.node('driver-enrollment').handlers.submit({ preventDefault() {} });
-  assert.deepEqual(applications, [{ make: 'Toyota', model: 'Corolla', year: 2020, colour: 'Blue', plate: 'TEST-001' }]);
+  assert.deepEqual(applications, [{ make: 'Toyota', model: 'Corolla', year: 2020, colour: 'Blue', plate: 'TEST-001', category: 'standard', payloadKg: null }]);
   h.node('driver-profile-make').value = 'Honda'; h.node('driver-profile-make').handlers.change();
   assert.equal(h.node('driver-profile-model').value, ''); assert.ok(values('model').includes('Civic'));
   h.node('driver-enrollment-cancel').handlers.click();
@@ -149,4 +189,21 @@ test('journey cards use the selected trip snapshot and clear the vehicle when no
   assert.equal(details.children[1].textContent,'Honda Accord'); assert.equal(details.children[3].textContent,'OLD-123');
   h.view.render(state(customer,[])); assert.equal(h.node('detail-vehicle-card').hidden,true); assert.deepEqual(h.node('detail-vehicle-card').children,[]);
   h.view.reset(); assert.deepEqual(h.node('driver-vehicle-card').children,[]);
+});
+
+test('delivery handover controls require the code, respect lockout, and erase it on account reset', (t) => {
+  const h = setup(t), delivery = { ...ride, status: 'in_progress', vehicleCategory: 'van',
+    trip: { status: 'in_progress' }, delivery: { description: 'A test parcel', weightKg: 3, recipientName: 'Private recipient',
+      pickupInstructions: '', dropoffInstructions: '', pinBlockedUntil: null, dropoffPin: '654321' } };
+  h.view.render(state(customer, [delivery])); assert.equal(h.node('delivery-pin-value').textContent, '654321');
+  assert.equal(h.node('delivery-pin-panel').hidden, false); assert.equal(h.node('delivery-pin-form').hidden, true);
+  h.view.reset(); assert.equal(h.node('delivery-pin-value').textContent, '');
+  h.view.render(state(driver, [{ ...delivery, delivery: { ...delivery.delivery, dropoffPin: undefined } }]));
+  assert.equal(h.node('delivery-pin-form').hidden, false); assert.equal(h.node('trip-action').hidden, true);
+  h.node('driver-delivery-pin').value = '654321'; h.node('delivery-pin-form').handlers.submit({ preventDefault() {} });
+  assert.deepEqual(h.commands.at(-1).slice(0, 2), ['/api/rides/ride-one/complete', { expectedVersion: 4, deliveryPin: '654321' }]);
+  h.view.render(state(driver, [{ ...delivery, delivery: { ...delivery.delivery, dropoffPin: undefined, pinBlockedUntil: 10000 } }]));
+  assert.equal(h.node('delivery-complete').disabled, true);
+  h.node('delivery-pin-form').handlers.submit({ preventDefault() {} }); assert.equal(h.commands.length, 1);
+  h.view.reset(); assert.equal(h.node('driver-delivery-pin').value, ''); assert.equal(h.node('detail-delivery').textContent, '');
 });

@@ -231,14 +231,16 @@ automatically at startup. `npm run backup -- /absolute/new-backup.sqlite` makes 
 validated copy without changing the source. See [staging and recovery](docs/staging.md)
 for restore, transient-data removal, scheduling and off-host backup requirements.
 
-The current schema is **15**: Trip Safety added schema 9, unified accounts added
+The current schema is **16**: Trip Safety added schema 9, unified accounts added
 schema 10, native device sessions added schema 11 and initial vehicle selections
 add schema 12 in 0.17. This new table preserves the car chosen before full driver
 details are complete without changing existing applications or approvals. Release
 0.18 adds reporting indexes in schema 13 without rewriting records. Release 0.19
 adds Google identity mappings, password eligibility and expiring login attempts
 in schema 14. Release 0.20 adds email verification records, hashed action tokens
-and durable email intentions in schema 15. Backups retain private contact/incident
+and durable email intentions in schema 15. Release 0.22 adds persisted vehicle
+categories and delivery handover state in schema 16, preserving previous records
+and command retry outcomes. Backups retain private contact/incident
 data, identity mappings and verification records while revoking trip links, sessions,
 pending Google attempts, email links and queued mail. Restored backups never send old emails.
 
@@ -297,12 +299,14 @@ The terminal example runs with `npm run demo`. Read [the architecture](docs/arch
 
 ## Development and review
 
-The latest development branch is `feat/mobile-booking`. Version 0.21.0 / mobile
-0.5.0 adds native customer ride requests over the same services and preserves
-schema 15. Native negotiation/trip controls, Eats, courier and vendor workflows
-remain planned. Follow [mobile booking and acceptance](docs/mobile-booking.md) and
-[mobile setup](apps/mobile/README.md). Back up the database before changing branches;
-older releases may not support the existing schema.
+The latest development branch is `feat/vehicle-categories`. Version 0.22.0 / mobile
+0.6.0 enables Standard/SUV passenger booking and van/truck/motorcycle delivery
+requests, with approved vehicle matching, parcel details and verified handover.
+Schema 16 preserves existing accounts and journeys. See [vehicle category workflows](docs/vehicle-categories.md).
+Native negotiation and driver trip controls continue on the website. Eats restaurant
+ordering and vendor tools remain planned. Follow [mobile booking and acceptance](docs/mobile-booking.md)
+and [mobile setup](apps/mobile/README.md). Back up the database before changing
+branches; older releases may not support the existing schema.
 Read [CONTRIBUTING.md](CONTRIBUTING.md) for the GitHub/VS Code workflow and where
 new code belongs. `npm run check` validates syntax and module conventions;
 `npm test` checks behaviour; `npm run verify` runs both. GitHub Actions is configured

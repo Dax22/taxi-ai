@@ -20,8 +20,8 @@ export function createAccountsService({ repository, driverProfiles, passwords, t
   }
 
   function vehicleInput(data) {
-    fields(data, ['model', 'plate', 'make', 'year', 'colour'], ['model', 'plate']);
-    if (['make', 'year', 'colour'].some((field) => Object.hasOwn(data, field))) {
+    fields(data, ['model', 'plate', 'make', 'year', 'colour', 'category', 'payloadKg'], ['model', 'plate']);
+    if (['make', 'year', 'colour', 'category', 'payloadKg'].some((field) => Object.hasOwn(data, field))) {
       const selection = driverProfiles.validateVehicle(data);
       return { model: `${selection.make} ${selection.model}`, plate: selection.plate, selection };
     }

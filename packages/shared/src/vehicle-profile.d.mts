@@ -1,4 +1,5 @@
-export interface VehicleIdentity { model: string; plate: string; make?: string; modelName?: string; year?: number; colour?: string }
+import type { VehicleCategoryId } from './vehicle-categories.mjs';
+export interface VehicleIdentity { model: string; plate: string; make?: string; modelName?: string; year?: number; colour?: string; category?: VehicleCategoryId; payloadKg?: number | null }
 export interface VehicleColour { readonly id: string; readonly name: string; readonly hex: string }
 export const VEHICLE_MAKES: Readonly<Record<string, readonly string[]>>;
 export const VEHICLE_COLOURS: readonly VehicleColour[];

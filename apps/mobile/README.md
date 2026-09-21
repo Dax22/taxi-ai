@@ -10,13 +10,14 @@ keyboard, accessibility and tablet QA remain pending.
 
 - Existing-account sign-in, secure session restore and per-device sign-out.
 - Home, Activity, Work and Account tabs; driver application and booking screens.
-- **Book a ride**: explicit Abuja search, route/fare review, shared ride requests,
+- **Book a ride or delivery**: Standard/SUV passenger trips and van/truck/motorcycle
+  parcels with recipient details, category pricing and approved capacity matching; explicit Abuja search, route/fare review, shared ride requests,
   same-command retries, current status, registered vehicle and pre-start cancellation.
   Local sample journeys work without live providers. [Booking guide](../../docs/mobile-booking.md).
 - Separate customer/work activity with current and paginated past journeys.
 - Complete driver applications: guided make/year/model/colour dropdowns, years from
   2000 through the current year, Other fields for unlisted values,
-  number plate, private PNG/JPEG uploads, expiry dates, review, corrections and resubmission.
+  number plate, vehicle category, delivery load capacity, private PNG/JPEG uploads, expiry dates, review, corrections and resubmission.
 - Resume the car chosen during website **Apply to drive**, including its year and
   colour, before completing personal details. Native enrollment saves the same
   structured fields so interrupted applications can continue on either interface.
@@ -24,10 +25,10 @@ keyboard, accessibility and tablet QA remain pending.
   Illustrations are labelled; exact-model 3D assets are not included.
 - The same manual approval workflow as the web. Administrators review on the web.
 - Native device list and remote sign-out; web recovery at `/devices`.
-- Clear planned-service labels for Eats, courier and vendor work.
+- Delivery requests and recipient drop-off codes; restaurant/vendor ordering remains planned.
 
 Native driver availability/acceptance, fare negotiation, chat/calls, trip progress,
-payments, live GPS, push notifications, SOS, crash detection, food/courier orders
+payments, live GPS, push notifications, SOS, crash detection, restaurant ordering
 and admin tools are not implemented in this app yet. Continue negotiation and trip
 controls on the website using the same account.
 This is a connected foundation, not a store-ready transport service.

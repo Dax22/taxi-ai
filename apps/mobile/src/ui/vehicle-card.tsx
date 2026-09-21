@@ -1,6 +1,7 @@
 import { Image, StyleSheet, Text, View } from 'react-native';
 import type { VehicleIdentity } from '../../../../packages/shared/src/vehicle-profile.mjs';
 import { vehiclePresentation } from '../../../../packages/shared/src/vehicle-profile.mjs';
+import { categoryImages } from './vehicle-category-images';
 import { vehicleImage } from './vehicle-images';
 import { colors, styles } from './components';
 
@@ -8,7 +9,7 @@ export function VehicleCard({ vehicle, label = 'YOUR VEHICLE', compact = false }
   const value = vehiclePresentation(vehicle);
   return <View style={card.container}>
     <View style={card.art} accessible={false} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-      <Image source={vehicleImage(value.colourId)} resizeMode="cover" style={[card.image, compact && card.compactImage]}/>
+      <Image source={vehicle.category && vehicle.category !== 'standard' ? categoryImages[vehicle.category] : vehicleImage(value.colourId)} resizeMode={vehicle.category && vehicle.category !== 'standard' ? 'contain' : 'cover'} style={[card.image, compact && card.compactImage]}/>
     </View>
     <View style={card.info}><Text style={styles.label}>{label}</Text><Text style={styles.h2}>{value.title}</Text>
       <Text style={styles.body}>{value.description}</Text>

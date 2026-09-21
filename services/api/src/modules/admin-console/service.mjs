@@ -25,7 +25,7 @@ export function createAdminConsoleService({ repository, audit, clock, unitOfWork
     trip: (user, id) => withStaff(user, (now) => {
       const row = repository.trip(recordId(id), now); check(row, 'NOT_FOUND', 'Trip not found.');
       const snapshot = row.driverSnapshotJson ? JSON.parse(row.driverSnapshotJson) : null;
-      const vehicle = snapshot?.vehicle ? Object.fromEntries(['model', 'plate', 'make', 'modelName', 'year', 'colour']
+      const vehicle = snapshot?.vehicle ? Object.fromEntries(['model', 'plate', 'make', 'modelName', 'year', 'colour', 'category', 'payloadKg']
         .filter((key) => snapshot.vehicle[key] !== undefined).map((key) => [key, snapshot.vehicle[key]])) : null;
       audit.record(user.id, 'admin.trip_viewed', id, now);
       return { trip: { ...tripSummary(row), vehicle, matchedAt: row.matchedAt, bookedAt: row.bookedAt,

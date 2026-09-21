@@ -17,7 +17,7 @@ function Application() {
   const reopen = () => Alert.alert('Reopen your application?', 'This pauses new rides until your details and documents receive a new approval.', [
     { text: 'Keep current application', style: 'cancel' }, { text: 'Reopen application', onPress: () => void f.change('reopen') },
   ]);
-  return <Screen key={f.step}><Pill>DRIVE WITH TAXI AI</Pill><Heading title="Your car. Your next chapter." subtitle="A guided application, saved to the same account on your phone and the web."/>
+  return <Screen key={f.step}><Pill>DRIVE WITH TAXI AI</Pill><Heading title="Your vehicle. Your next chapter." subtitle="A guided application, saved to the same account on your phone and the web."/>
     <Text style={styles.small}>Development preview · use fictional details and test documents.</Text><Notice message={f.error}/>
     {!!f.notice && <Text accessibilityLiveRegion="polite" style={styles.body}>{f.notice}</Text>}
     {f.loading ? <Loading/> : <>

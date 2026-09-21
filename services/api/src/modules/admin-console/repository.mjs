@@ -5,7 +5,7 @@ const journey = `WITH journey AS (
     r.created_at AS createdAt, r.updated_at AS updatedAt, r.matched_at AS matchedAt,
     CASE WHEN r.closed_reason='request_expired' OR (r.status='requested' AND r.request_expires_at <= $now)
       THEN 'expired' ELSE COALESCE(t.status,r.status) END AS status,
-    r.pickup_id AS pickupId, r.destination_id AS destinationId,
+    r.vehicle_category AS vehicleCategory, r.pickup_id AS pickupId, r.destination_id AS destinationId,
     json_extract(q.route_json,'$.pickup.name') AS pickupName, json_extract(q.route_json,'$.destination.name') AS destinationName,
     c.name AS customerName, COALESCE(json_extract(r.driver_snapshot_json,'$.name'),d.name) AS driverName,
     r.driver_snapshot_json AS driverSnapshotJson,

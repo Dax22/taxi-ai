@@ -1,5 +1,6 @@
 import { check } from '../../shared/errors.mjs';
 import { fields, label } from '../../shared/validation.mjs';
+import { transportCategory, categoryFare } from '../../../../../packages/shared/src/transport-categories.mjs';
 import { insideAbuja, distanceMeters } from '../../../../../packages/shared/src/locations.mjs';
 
 export const QUOTE_MS = 15 * 60_000, FRESH_MS = 30_000, SHARE_MS = 60_000;
@@ -18,10 +19,12 @@ export function point(value) {
   return { id: `point:${lat},${lng}`, lat, lng, name: label(value.name, 'Place name', 2, 160) };
 }
 export function endpoints(data) {
-  fields(data, ['pickup', 'destination']);
+  fields(data, ['pickup', 'destination', 'vehicleCategory'], ['pickup', 'destination']);
+  const vehicleCategory = data.vehicleCategory === undefined ? 'standard' : data.vehicleCategory;
+  check(transportCategory(vehicleCategory), 'INVALID_CATEGORY', 'Choose a vehicle category.');
   const pickup = point(data.pickup), destination = point(data.destination);
   check(distanceMeters(pickup, destination) >= 100, 'INVALID_ROUTE', 'Choose points at least 100 metres apart.');
-  return { pickup, destination };
+  return { pickup, destination, vehicleCategory };
 }
 export function checkedRoute(raw, points) {
   const { distanceMeters: metres, durationSeconds: seconds, coordinates } = raw ?? {};
@@ -46,8 +49,20 @@ export function checkedRoute(raw, points) {
   const distanceKobo = Math.ceil(distance * pricing.perKmKobo / 1000), timeKobo = Math.ceil(duration * pricing.perMinuteKobo / 60);
   const amount = Math.max(pricing.minimumKobo, Math.ceil((pricing.baseKobo + distanceKobo + timeKobo) / pricing.incrementKobo) * pricing.incrementKobo);
   return { ...points, distanceMeters: distance, durationSeconds: duration, coordinates: geometry,
-    source: 'osrm', trafficAware: false, suggestedFareKobo: amount, currency: 'NGN',
-    pricing: { ...pricing, distanceKobo, timeKobo, illustrative: true } };
+    source: 'osrm', distanceKind: 'road', trafficAware: false, suggestedFareKobo: categoryFare(amount, points.vehicleCategory), currency: 'NGN',
+    pricing: { ...pricing, categoryMultiplier: transportCategory(points.vehicleCategory).multiplier / 100, distanceKobo, timeKobo, illustrative: true } };
+}
+export function directQuote(points) {
+  const distance = Math.ceil(distanceMeters(points.pickup, points.destination));
+  const distanceKobo = Math.ceil(distance * 20_000 / 1000);
+  const amount = Math.max(100_000, Math.ceil((50_000 + distanceKobo) / 5000) * 5000);
+  return { ...points, distanceMeters: distance, durationSeconds: null,
+    coordinates: [[points.pickup.lng, points.pickup.lat], [points.destination.lng, points.destination.lat]],
+    source: 'direct', distanceKind: 'straight_line', trafficAware: false, currency: 'NGN',
+    suggestedFareKobo: categoryFare(amount, points.vehicleCategory),
+    pricing: { policy: 'delivery-direct-preview-v1', baseKobo: 50_000, perKmKobo: 20_000, perMinuteKobo: 0,
+      minimumKobo: 100_000, incrementKobo: 5000, distanceKobo, timeKobo: 0, illustrative: true,
+      categoryMultiplier: transportCategory(points.vehicleCategory).multiplier / 100 } };
 }
 export function position(data, now) {
   fields(data, ['sequence', 'lat', 'lng', 'accuracy', 'capturedAt']);

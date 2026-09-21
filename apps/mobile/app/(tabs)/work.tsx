@@ -14,6 +14,6 @@ export default function Work() {
       {user.driver && <><Pill>{readable(user.driver.status).toUpperCase()}</Pill><Text style={styles.body}>{user.driver.eligibility.eligible ? 'Your documents and approval are current. Native job controls are coming in the next mobile milestone.' : 'Complete your application and receive approval before taking jobs.'}</Text></>}
       <Button title={user.driver ? 'View driver application' : 'Start driver application'} onPress={() => router.push('/driver-application')}/>
       {user.driver && <Button title="View work activity" secondary onPress={() => { setMode('work'); router.push('/activity'); }}/>}</Card>}</>}
-    <Card><Pill>COMING SOON</Pill><Text style={styles.h2}>Deliver or run a kitchen.</Text><Text style={styles.body}>Motorcycle and car delivery profiles, plus a Taxi Ai Eats vendor workspace, will join this account.</Text></Card>
+    <Card><Pill>DELIVERIES</Pill><Text style={styles.h2}>Apply to deliver.</Text><Text style={styles.body}>Choose a motorcycle, van or truck in your driver application to deliver parcels. Restaurant vendor tools are still planned.</Text></Card>
   </Screen>;
 }

@@ -1,17 +1,21 @@
 # Native ride requests
 
-Release 0.21 / mobile 0.5 adds **Home → Book a ride** and **Activity → Manage ride
-requests**. Schema stays at 15; existing accounts, approved vehicles, route quotes,
-ride commands and histories are reused. No new database or service provider is
-required. This is a development preview with no live transport or payment.
+Release 0.22 / mobile 0.6 extends native requests to Standard/SUV rides and
+van/truck/motorcycle deliveries. Schema 16 preserves accounts and saved journeys;
+[category workflows](vehicle-categories.md) describes parcel fields, category-bound
+quotes, approved capacity matching and recipient codes. Driver negotiation and trip
+controls continue on the website. No new routing provider is required: delivery
+estimates use direct distance without a driving ETA. This is a development preview
+with no live transport or payment.
 
 ## Customer flow
 
-1. Choose **Abuja address**, enable search after reading its provider disclosure,
+1. Select a vehicle category and add parcel/recipient details for deliveries.
+   Choose **Abuja address**, enable search after reading its provider disclosure,
    then explicitly search/select both addresses. Merely typing sends nothing.
    The screen does not request GPS permissions or track the phone.
-2. Preview the road route, distance, non-traffic driving time and illustrative
-   suggested fare. A proportion-preserving SVG outline uses returned geometry
+2. Review the category fare and endpoints. Passenger trips show road distance and
+   non-traffic driving time; deliveries show direct distance and no driving ETA. A proportion-preserving SVG outline uses returned geometry
    over a decorative grid, not street tiles or live tracking. No third-party
    requests run from the native view; existing server provider adapters do that.
 3. Tap **Request a driver · preview** after reviewing the endpoints and fare.

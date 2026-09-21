@@ -128,3 +128,33 @@ test('route drawing preserves equal axes, fits endpoints and never invents a str
   const expected = (0.03 * Math.PI / 180) / Math.abs(mercatorLat(9.1) - mercatorLat(9.08));
   assert.ok(Math.abs(Math.abs((points[1][0] - points[0][0]) / (points[2][1] - points[1][1])) - expected) < 0.00001);
 });
+
+test('delivery requests retain their reviewed category, parcel and retry key; category edits invalidate pricing', async () => {
+  const f = fixture(); await start(f); const c = f.controller;
+  await sample(f); c.chooseCategory('van'); assert.equal(c.snapshot().preview, null);
+  f.api.samplePreview = async (_from, _to, category) => ({ ...envelope, preview: { ...preview, vehicleCategory: category,
+    request: { ...preview.request, vehicleCategory: category } } });
+  await c.preview(); await c.submit(); assert.match(c.snapshot().error, /weight|description/);
+  c.editDelivery('description', 'One test parcel'); c.editDelivery('weightKg', '4'); c.editDelivery('recipientName', 'Test recipient');
+  const calls: Array<{ data: unknown; key: string }> = [];
+  f.api.requestRide = async (data, key) => { calls.push(structuredClone({ data, key })); throw new Error('Lost response'); };
+  await c.submit(); assert.equal(c.snapshot().uncertain, 'request');
+  c.chooseCategory('truck'); c.editDelivery('recipientName', 'Another person');
+  assert.equal(c.snapshot().category, 'van'); assert.equal(c.snapshot().delivery.recipientName, 'Test recipient');
+  await c.retry(); assert.deepEqual(calls[0], calls[1]);
+  assert.deepEqual(calls[0].data, { ...preview.request, vehicleCategory: 'van', delivery: {
+    description: 'One test parcel', weightKg: 4, recipientName: 'Test recipient', pickupInstructions: '', dropoffInstructions: '',
+  } });
+  c.dispose(); const next = new BookingController(f.api, () => 'new-account-command');
+  assert.equal(next.snapshot().category, 'standard'); assert.equal(next.snapshot().delivery.recipientName, ''); next.dispose();
+});
+
+test('native contracts distinguish direct delivery estimates from passenger routing and reject mismatched quote categories', () => {
+  const direct = { ...envelope, preview: { ...preview, kind: 'route', vehicleCategory: 'truck',
+    request: { quoteId: ride.id, vehicleCategory: 'truck' }, expiresAt: envelope.serverNow + 900000,
+    route: { distanceMeters: 5000, durationSeconds: null, distanceKind: 'straight_line', coordinates: [[7.4,9.08],[7.45,9.1]] } } };
+  assert.equal(parsePreview(direct).preview.route?.durationSeconds, null);
+  assert.throws(() => parsePreview({ ...direct, preview: { ...direct.preview, request: { quoteId: ride.id, vehicleCategory: 'suv' } } }));
+  assert.throws(() => parsePreview({ ...direct, preview: { ...direct.preview, route: { ...direct.preview.route, durationSeconds: 600 } } }));
+  assert.throws(() => parseBookingRide({ ...envelope, ride: { ...ride, vehicleCategory: 'motorcycle', delivery: null } }));
+});

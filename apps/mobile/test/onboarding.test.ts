@@ -11,15 +11,15 @@ const application = { driverId: 'driver',status:'draft',version:1,busy:false,det
 
 test('a form preserves structured model identity, accepts unlisted vehicles and never submits a preview asset or approval', () => {
   const draft = draftFromDetails(details);
-  assert.deepEqual(detailsFromDraft(draft),details);
+  assert.deepEqual(detailsFromDraft(draft), { ...details, vehicle: { ...details.vehicle, category: 'standard', payloadKg: null } });
   assert.deepEqual(detailsFromDraft({ ...draft,make:'Other make',model:'Unlisted model',colour:'Blue and white',plate:' new-456 ' }).vehicle,
-    { make:'Other make',model:'Unlisted model',year:2020,colour:'Blue and white',plate:'NEW-456' });
+    { make:'Other make',model:'Unlisted model',year:2020,colour:'Blue and white',plate:'NEW-456',category:'standard',payloadKg:null });
   for (const input of [{ year:'2020.5' },{ year:'' },{ phone:'08000000000' },{ plate:'<script>' },{ licenceNumber:'' }]) {
     assert.throws(() => detailsFromDraft({ ...draft,...input }));
   }
   assert.equal(draftFromDetails(null,{ ...details.vehicle,model:'Toyota Corolla',modelName:'Corolla' }).model,'Corolla');
   const continued = draftFromDetails(null,details.vehicle);
-  assert.deepEqual(detailsFromDraft({ ...continued,legalName:details.legalName,phone:details.phone,licenceNumber:details.licenceNumber }).vehicle,details.vehicle);
+  assert.deepEqual(detailsFromDraft({ ...continued,legalName:details.legalName,phone:details.phone,licenceNumber:details.licenceNumber }).vehicle,{ ...details.vehicle, category: 'standard', payloadKg: null });
 });
 
 test('native private application contracts reject malformed evidence, duplicate documents and invented approval states', () => {
@@ -56,4 +56,11 @@ test('selected image reads are bounded, filenames are portable and cache copies 
   assert.equal(read,1); assert.equal(removed,4);
   await assert.rejects(readDriverFile({ ...selected,uri:'file:///app/cache-original/photo.jpg' },file,'file:///app/cache'));
   assert.equal(read,1); assert.equal(removed,4,'never delete an original outside the cache directory');
+});
+
+test('native vehicle applications retain category and require a bounded delivery capacity', () => {
+  const draft = { ...draftFromDetails(details), category: 'motorcycle' as const, payloadKg: '10' };
+  assert.equal(detailsFromDraft(draft).vehicle.payloadKg, 10); assert.equal(detailsFromDraft(draft).vehicle.category, 'motorcycle');
+  for (const payloadKg of ['', '0', '21', 'abc']) assert.throws(() => detailsFromDraft({ ...draft, payloadKg }));
+  assert.equal(draftFromDetails({ ...details, vehicle: detailsFromDraft(draft).vehicle }).payloadKg, '10');
 });

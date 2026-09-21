@@ -15,6 +15,8 @@ import { createDriversRepository } from './modules/drivers/repository.mjs';
 import { createDriversService } from './modules/drivers/service.mjs';
 import { vehicleDetails } from './modules/drivers/domain.mjs';
 import { createRidesRepository } from './modules/rides/repository.mjs';
+import { createDeliveriesRepository } from './modules/deliveries/repository.mjs';
+import { createDeliveriesService } from './modules/deliveries/service.mjs';
 import { createRidesService } from './modules/rides/service.mjs';
 import { createChatRepository } from './modules/chat/repository.mjs';
 import { createChatService } from './modules/chat/service.mjs';
@@ -68,6 +70,7 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
     unitOfWork, tokens, audit, clock, allowSimulation });
   const rides = createRidesService({ repository: rideRepository,
     getAccount: accounts.profile, unitOfWork, audit, tokens, clock,
+    deliveries: createDeliveriesService({ repository: createDeliveriesRepository(db), tokens }),
     routeForRide: (id) => locations.routeForRide(id),
     quoteForRide: (userId, id, now) => locations.quoteForRide(userId, id, now),
     bindQuote: (userId, id, rideId, now) => locations.bindQuote(userId, id, rideId, now),

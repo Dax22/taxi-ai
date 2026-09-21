@@ -1,3 +1,4 @@
+import { transportCategory, validPayload } from './transport-categories.mjs';
 /** Additive v1 wire contracts shared by HTTP contract tests and native clients. */
 export const MOBILE_API_VERSION = 1;
 const record = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -5,7 +6,8 @@ const text = (v) => typeof v === 'string';
 const integer = (v) => Number.isSafeInteger(v) && v >= 0;
 const texts = (v) => Array.isArray(v) && v.every(text);
 const nullableText = (v) => v === null || text(v);
-const vehicle = (v) => record(v) && text(v.model) && text(v.plate)
+const vehicle = (v) => record(v) && text(v.model) && text(v.plate) && transportCategory(v.category)
+  && (transportCategory(v.category).service === 'delivery' ? validPayload(v.category, v.payloadKg) : v.payloadKg == null)
   && ['make','modelName','colour'].every((key) => v[key] === undefined || text(v[key]))
   && (v.year === undefined || (integer(v.year) && v.year >= 1980 && v.year <= 2100));
 const eligibility = (v) => record(v) && typeof v.eligible === 'boolean' && texts(v.missing) && texts(v.expired);
@@ -38,7 +40,7 @@ export function parseSignIn(value) {
 }
 export function parseActivity(value) {
   envelope(value);
-  const ride = (r) => record(r) && text(r.id) && text(r.status) && text(r.pickup) && text(r.destination)
+  const ride = (r) => record(r) && transportCategory(r.vehicleCategory) && text(r.id) && text(r.status) && text(r.pickup) && text(r.destination)
     && (r.fareKobo === null || integer(r.fareKobo)) && integer(r.suggestedFareKobo) && integer(r.createdAt) && typeof r.isDemo === 'boolean'
     && (r.driver === undefined || r.driver === null || (record(r.driver) && text(r.driver.id) && text(r.driver.name) && vehicle(r.driver.vehicle)));
   expect(Array.isArray(value.current) && value.current.every(ride) && Array.isArray(value.history) && value.history.every(ride)

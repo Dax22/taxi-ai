@@ -1,13 +1,14 @@
+import type { VehicleCategoryId } from './vehicle-categories.mjs';
 export const MOBILE_API_VERSION: 1;
 export type Mode = 'customer' | 'work';
 export interface Eligibility { eligible: boolean; missing: string[]; expired: string[] }
-export interface Vehicle { model: string; plate: string; make?: string; modelName?: string; year?: number; colour?: string }
+export interface Vehicle { model: string; plate: string; make?: string; modelName?: string; year?: number; colour?: string; category?: VehicleCategoryId; payloadKg?: number | null }
 export interface Account { id: string; name: string; email: string; emailVerified?: boolean; capabilities: ('customer' | 'driver')[];
   driver: { status: string; vehicle: Vehicle; eligibility: Eligibility } | null }
 export interface Credentials { sessionId: string; accessToken: string; refreshToken: string; accessExpiresAt: number; refreshExpiresAt: number }
 export interface Envelope { apiVersion: 1; serverNow: number; [key: string]: unknown }
 export interface SignIn extends Envelope { user: Account; credentials: Credentials }
-export interface RideSummary { id: string; status: string; pickup: string; destination: string;
+export interface RideSummary { vehicleCategory?: VehicleCategoryId; id: string; status: string; pickup: string; destination: string;
   fareKobo: number | null; suggestedFareKobo: number; createdAt: number; isDemo: boolean;
   driver?: { id: string; name: string; vehicle: Vehicle } | null }
 export interface Activity extends Envelope { current: RideSummary[]; history: RideSummary[];
@@ -16,7 +17,7 @@ export interface Device { id: string; name: string; createdAt: number; refreshed
 export interface DriverApplication { status: string; eligibility: Eligibility; documentCount: number; vehicle: Vehicle }
 export type DocumentKind = 'profile_photo' | 'driving_licence' | 'vehicle_registration' | 'insurance' | 'vehicle_photo';
 export interface DriverDetails { legalName: string; phone: string; licenceNumber: string;
-  vehicle: { make: string; model: string; year: number; colour: string; plate: string } }
+  vehicle: { make: string; model: string; year: number; colour: string; plate: string; category?: VehicleCategoryId; payloadKg?: number | null } }
 export interface DriverDocument { id: string; kind: DocumentKind; name: string; mimeType: 'image/png' | 'image/jpeg'; sizeBytes: number; expiresOn: string | null }
 export interface DriverOnboarding { driverId: string; status: 'draft' | 'submitted' | 'changes_requested' | 'rejected' | 'approved';
   version: number; details: DriverDetails | null; documents: DriverDocument[]; busy: boolean;

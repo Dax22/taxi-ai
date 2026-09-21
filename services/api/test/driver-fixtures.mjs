@@ -7,9 +7,9 @@ export const DETAILS = { legalName: 'Fictional Test Driver', phone: '+2348000000
   vehicle: { make: 'Toyota', model: 'Corolla', year: 2020, colour: 'Yellow', plate: 'TEST-DRIVER' } };
 export const CHECKS = { identity: true, licence: true, vehicle: true, insurance: true };
 export const KINDS = ['profile_photo', 'driving_licence', 'vehicle_registration', 'insurance', 'vehicle_photo'];
-export async function submitApplication(api, expiresOn = '2099-12-31') {
+export async function submitApplication(api, expiresOn = '2099-12-31', details = DETAILS) {
   let { application } = await api.request('/api/driver/application');
-  ({ application } = await api.command('/api/driver/application/save', { expectedVersion: application.version, details: DETAILS }));
+  ({ application } = await api.command('/api/driver/application/save', { expectedVersion: application.version, details }));
   for (const kind of KINDS) {
     ({ application } = await api.command('/api/driver/application/upload', { expectedVersion: application.version, kind, ...IMAGE,
       expiresOn: kind.endsWith('photo') ? null : expiresOn }));

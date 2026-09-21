@@ -1,6 +1,7 @@
 import { el, link, badge, avatar, panel, cards, table, empty, pagination, filterForm, detailsList, person, money, count, percent, date } from './ui.mjs';
 import { trend, statuses } from './charts.mjs';
 import { RIDE_STATUS_LABELS } from '/shared/trip-lifecycle.mjs';
+import { vehicleCategory } from '/shared/vehicle-categories.mjs';
 import { vehiclePresentation } from '/shared/vehicle-profile.mjs';
 
 const dates = [{ name: 'from', label: 'From · Abuja date', type: 'date' }, { name: 'to', label: 'To · Abuja date', type: 'date' }];
@@ -103,7 +104,7 @@ function trip(data) {
     if (index) route.append(el('span', '→', '', { 'aria-hidden': 'true' }));
     const point = el('div'); point.append(el('small', label), el('strong', text)); route.append(point);
   }
-  box.append(route, detailsList([['Status', badge(item.status)], ['Agreed fare', money(item.fareKobo)], ['Passenger', person(item.customer)], ['Driver', person(item.driver)],
+  box.append(route, detailsList([['Category', vehicleCategory(item.vehicleCategory ?? 'standard')?.name ?? 'Standard'], ['Status', badge(item.status)], ['Agreed fare', money(item.fareKobo)], ['Passenger', person(item.customer)], ['Driver', person(item.driver)],
     ['Requested', date(item.createdAt)], ['Completed', date(item.completedAt)], ['Payment status', badge(item.paymentStatus)], ['Payment reference', item.paymentReference ?? 'Not available']]));
   box.append(el('p', 'An agreed fare is not proof of payment. Payment status on this preview is simulated.', 'definition-note'));
   fragment.append(box);

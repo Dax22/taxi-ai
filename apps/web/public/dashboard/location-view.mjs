@@ -37,15 +37,15 @@ export function createLocationView({ onEnable, onSearch, onClear, onSelect, onPi
     }
     $('location-coordinate-fields').disabled = !state.online || state.blocked || state.booking;
     locked('location-preview', !state.pickup || !state.destination || state.blocked || state.quoting || state.booking || !state.online);
-    $('location-preview').textContent = state.quoting ? 'Finding a road route…' : 'Preview route and suggested fare';
+    $('location-preview').textContent = state.quoting ? 'Preparing your preview…' : 'Preview route and suggested fare';
     locked('location-book', !state.quote || state.expired || state.blocked || state.quoting || state.booking);
     $('location-quote').hidden = !state.quote;
     if (state.quote) {
       const route = state.quote.route, pricing = route.pricing;
-      $('location-distance').textContent = `${(route.distanceMeters / 1000).toFixed(1)} km`;
-      $('location-duration').textContent = `${Math.ceil(route.durationSeconds / 60)} min`;
+      $('location-distance').textContent = `${(route.distanceMeters / 1000).toFixed(1)} km${route.distanceKind === 'straight_line' ? ' direct' : ''}`;
+      $('location-duration').textContent = route.durationSeconds === null ? 'No driving ETA' : `${Math.ceil(route.durationSeconds / 60)} min`;
       $('location-price').textContent = formatNaira(route.suggestedFareKobo);
-      $('location-formula').textContent = `Illustrative formula: ${formatNaira(pricing.baseKobo)} base + ${formatNaira(pricing.perKmKobo)}/km + ${formatNaira(pricing.perMinuteKobo)}/min. Minimum ${formatNaira(pricing.minimumKobo)}, rounded up to ${formatNaira(pricing.incrementKobo)}.`;
+      $('location-formula').textContent = `${route.distanceKind === 'straight_line' ? 'Direct-distance delivery estimate, not a road route. Confirm access and timing with the driver. ' : ''}Illustrative formula (${pricing.categoryMultiplier ?? 1}× category factor): ${formatNaira(pricing.baseKobo)} base + ${formatNaira(pricing.perKmKobo)}/km + ${formatNaira(pricing.perMinuteKobo)}/min. Minimum ${formatNaira(pricing.minimumKobo)}, rounded up to ${formatNaira(pricing.incrementKobo)}.`;
       $('location-expiry').textContent = state.expired ? 'This route quote expired. Preview the route again.' : 'Quote valid for 15 minutes after preview. Both people can negotiate the fare.';
     }
     plannerMap.render({ enabled: state.online && Boolean(state.settings?.tiles), tiles: state.settings?.tiles,
@@ -75,7 +75,7 @@ export function createLocationView({ onEnable, onSearch, onClear, onSelect, onPi
         : 'Share only when you choose. Your assigned customer can see your latest position. Use Stop sharing to end GPS updates. Switching account modes keeps active trip sharing running.'
       : 'The driver chooses when to share. Positions are browser-reported and may be inaccurate. Stale positions are marked as last known.';
     const route = state.ride.route;
-    $('tracking-route-summary').textContent = `Journey ${state.ride.id.slice(0, 8).toUpperCase()} · ${state.ride.pickup?.name ?? 'Pickup'} → ${state.ride.destination?.name ?? 'Destination'} · ` + (route ? `${(route.distanceMeters / 1000).toFixed(1)} km · estimated ${Math.ceil(route.durationSeconds / 60)} min driving · excludes live traffic and pickup arrival time`
+    $('tracking-route-summary').textContent = `Journey ${state.ride.id.slice(0, 8).toUpperCase()} · ${state.ride.pickup?.name ?? 'Pickup'} → ${state.ride.destination?.name ?? 'Destination'} · ` + (route?.distanceKind === 'straight_line' ? `${(route.distanceMeters / 1000).toFixed(1)} km in a straight line · no driving route or ETA` : route ? `${(route.distanceMeters / 1000).toFixed(1)} km · estimated ${Math.ceil(route.durationSeconds / 60)} min driving · excludes live traffic and pickup arrival time`
       : 'Sample-area journey; no saved road route.');
     $('tracking-provider-note').textContent = settings?.enabled ? `Online maps load the visible area via ${settings.tileHost}. GPS updates are shared through Taxi Ai; they are not sent to the route or search service.` : 'Online street maps are currently unavailable.';
     trackingMap.render({ enabled: online && Boolean(settings?.tiles), tiles: settings?.tiles,

@@ -1,4 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useLocalSearchParams } from 'expo-router';
+import { transportCategory } from '../../../packages/shared/src/transport-categories.mjs';
+import type { DeliveryDraft } from '../src/booking/controller';
 import { Alert, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSession } from '../src/session/provider';
 import { useBooking } from '../src/booking/use-booking';
@@ -6,12 +9,18 @@ import { PlaceSearch } from '../src/booking/place-search';
 import { RoutePreview } from '../src/booking/route-preview';
 import { RequestCard } from '../src/booking/request-card';
 import { SelectField } from '../src/ui/select-field';
-import { Button, Card, Heading, Loading, Notice, Pill, Screen, openWebsite, styles } from '../src/ui/components';
+import { Button, Card, Field, Heading, Loading, Notice, Pill, Screen, openWebsite, styles } from '../src/ui/components';
 import type { BookingRide } from '../../../packages/shared/src/mobile-booking.mjs';
+import { VehicleCategories } from '../src/ui/vehicle-categories';
+import { vehicleCategory } from '../../../packages/shared/src/vehicle-categories.mjs';
+import type { VehicleCategoryId } from '../../../packages/shared/src/vehicle-categories.mjs';
 
 function BookingScreen() {
   const { client } = useSession(), { state: s, controller: c } = useBooking(), { width, fontScale } = useWindowDimensions();
   const [linkError, setLinkError] = useState('');
+  const { category: initialCategory } = useLocalSearchParams<{ category?: string }>();
+  useEffect(() => { if (vehicleCategory(initialCategory)) c.chooseCategory(initialCategory as VehicleCategoryId); }, [c, initialCategory]);
+  const policy = transportCategory(s.category), delivery = policy?.service === 'delivery';
   const settings = s.settings, locked = !!s.busy || !!s.uncertain, disabled = locked || s.stale;
   const wide = width >= 820 && fontScale <= 1.3;
   const open = () => { setLinkError(''); void openWebsite(client.origin).catch(() => setLinkError('Could not open the website. Please try again.')); };
@@ -19,7 +28,7 @@ function BookingScreen() {
     { text: 'Keep journey', style: 'cancel' }, { text: 'Cancel journey', style: 'destructive', onPress: () => void c.cancel(ride) },
   ]);
   const shown = settings?.current.length ? settings.current : s.lastRide ? [s.lastRide] : [];
-  return <Screen><Pill>RIDES · ABUJA</Pill><Heading title="Where to?" subtitle="Your route. Your choice. A fare you both agree."/>
+  return <Screen><Pill>RIDES & DELIVERIES · ABUJA</Pill><Heading title="Where to?" subtitle="Your route. Your choice. A fare you both agree."/>
     <Text style={styles.small}>Development preview · no live rides or payments.</Text><Notice message={s.error || linkError}/>
     {s.uncertain && <Card><Text style={styles.h2}>Let’s confirm that action.</Text><Text style={styles.body}>The connection ended before confirmation arrived. Retrying reuses the original action to avoid creating a duplicate request.</Text>
       <Button title={s.uncertain === 'request' ? 'Retry the same request' : 'Retry the same cancellation'} busy={!!s.busy} onPress={() => void c.retry()}/></Card>}
@@ -29,7 +38,12 @@ function BookingScreen() {
     {shown.map((ride) => <RequestCard key={ride.id} ride={ride} now={s.now} disabled={disabled} onCancel={() => cancel(ride)} onWebsite={open}/>)}
     {settings?.blockedBy && <Card><Text style={styles.h2}>{settings.blockedBy === 'online' ? 'You’re online as a driver.' : 'You have active driver work.'}</Text>
       <Text style={styles.body}>{settings.blockedBy === 'online' ? 'Go offline on the website before requesting your own ride.' : 'Finish or cancel your driver journey before requesting your own ride.'}</Text><Button title="Open website" secondary onPress={open}/></Card>}
+    {settings && !settings.current.length && !settings.blockedBy && <VehicleCategories value={s.category} onChange={(id) => c.chooseCategory(id)} disabled={locked}/>}
     {settings && !settings.current.length && !settings.blockedBy && <>
+      {delivery && <Card><Text style={styles.h2}>What are you sending?</Text>
+        {([['description', 'Parcel description and size'], ['weightKg', 'Total weight (kg)'], ['recipientName', 'Recipient name'], ['pickupInstructions', 'Pickup instructions (optional)'], ['dropoffInstructions', 'Drop-off instructions (optional)']] as [keyof DeliveryDraft, string][]).map(([field, label]) => <Field key={field} label={label} value={s.delivery[field]} editable={!disabled} keyboardType={field === 'weightKg' ? 'decimal-pad' : 'default'} maxLength={field === 'weightKg' ? 10 : field === 'recipientName' ? 100 : 240} onChangeText={(value) => c.editDelivery(field, value)}/>)}
+        <Text style={styles.small}>{vehicleCategory(s.category)?.name} preview limit: {policy?.maxLoadKg} kg. Matching also checks the driver’s approved load capacity. Confirm the load fits before collection.</Text><Text style={styles.small}>After pickup, share the drop-off code privately with your recipient. They give it to the driver at handover. This preview does not contact the recipient.</Text>
+      </Card>}
       {!s.mode ? <Card><Text style={styles.h2}>Route planning is unavailable.</Text><Text style={styles.body}>Address search and sample routes are disabled in this environment. Please check again later.</Text></Card> : <>
         <View style={styles.row}>{settings.online.enabled && <Button title="Abuja address" secondary={s.mode !== 'route'} disabled={locked} onPress={() => c.chooseMode('route')}/>}
           {settings.allowSample && <Button title="Sample journey" secondary={s.mode !== 'sample'} disabled={locked} onPress={() => c.chooseMode('sample')}/>}</View>

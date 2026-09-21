@@ -1,3 +1,4 @@
+import { vehicleCategory } from '../../../../packages/shared/src/vehicle-categories.mjs';
 import { StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Line, Polyline, Rect, Text as SvgText } from 'react-native-svg';
 import type { BookingPreview } from '../../../../packages/shared/src/mobile-booking.mjs';
@@ -9,7 +10,7 @@ export function RoutePreview({ preview, now, disabled, busy, onRequest, onPrevie
 }) {
   const expired = preview.expiresAt !== null && now >= preview.expiresAt;
   const drawing = preview.route ? routeDrawing(preview.route.coordinates) : null;
-  return <Card><Pill>REVIEW YOUR JOURNEY</Pill>
+  return <Card><Pill>{`${vehicleCategory(preview.vehicleCategory ?? 'standard')?.name.toUpperCase()} · REVIEW YOUR JOURNEY`}</Pill>
     {drawing && <View style={look.map} accessible accessibilityLabel={`Route preview from ${preview.pickup} to ${preview.destination}. This is not live tracking.`}>
       <Svg width="100%" height="100%" viewBox="0 0 360 220" preserveAspectRatio="xMidYMid meet" accessible={false}>
         <Rect width={360} height={220} fill="#f0f2e9"/>
@@ -22,7 +23,7 @@ export function RoutePreview({ preview, now, disabled, busy, onRequest, onPrevie
       </Svg>
     </View>}
     <View style={styles.stack}><Text style={styles.body}>A · {preview.pickup}</Text><Text style={styles.body}>B · {preview.destination}</Text></View>
-    {preview.route ? <><View style={styles.row}><Text style={styles.body}>{(preview.route.distanceMeters / 1000).toFixed(1)} km</Text><Text style={styles.body}>About {Math.ceil(preview.route.durationSeconds / 60)} min driving</Text></View>
+    {preview.route?.distanceKind === 'straight_line' ? <><Text style={styles.body}>{(preview.route.distanceMeters / 1000).toFixed(1)} km in a straight line</Text><Text style={styles.small}>Direct-distance delivery estimate, not a road route or driving ETA. Confirm access and timing with the driver.</Text></> : preview.route ? <><View style={styles.row}><Text style={styles.body}>{(preview.route.distanceMeters / 1000).toFixed(1)} km</Text><Text style={styles.body}>About {Math.ceil((preview.route.durationSeconds ?? 0) / 60)} min driving</Text></View>
       <Text style={styles.small}>Route outline on a decorative grid · not a street map. © OpenStreetMap contributors · OSRM. Travel time excludes traffic and driver arrival.</Text></>
       : <Text style={styles.small}>Sample areas for local testing. No road route or travel time is calculated.</Text>}
     <View style={look.fare}><Text style={styles.label}>SUGGESTED FARE</Text><Text style={styles.title}>{fare(preview.suggestedFareKobo)}</Text><Text style={styles.body}>You and the driver agree the final fare.</Text></View>

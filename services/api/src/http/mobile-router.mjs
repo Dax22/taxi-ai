@@ -12,7 +12,7 @@ export function createMobileRouter({ devices, accounts, drivers, rides, location
   function summary(ride) {
     return { id: ride.id, status: ride.status, pickup: ride.pickup.name, destination: ride.destination.name,
       fareKobo: ride.trip?.fareKobo ?? ride.negotiation?.agreement?.amountKobo ?? null,
-      suggestedFareKobo: ride.suggestedFareKobo, createdAt: ride.createdAt, isDemo: ride.isDemo,
+      vehicleCategory: ride.vehicleCategory, suggestedFareKobo: ride.suggestedFareKobo, createdAt: ride.createdAt, isDemo: ride.isDemo,
       driver: ride.driver ? { id: ride.driver.id, name: ride.driver.name, vehicle: ride.driver.vehicle } : null };
   }
   // An explicit owner-only projection keeps reviewer identities, hashes and audit internals off native clients.

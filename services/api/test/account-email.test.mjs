@@ -162,7 +162,7 @@ test('delivery intentions survive restarts; schema 14 upgrades preserve accounts
   assert.equal(h.db.prepare('SELECT count(*) AS n FROM account_email_jobs').get().n,1);
   const app=createApplication({ db:h.db,clock:()=>h.now,accountMail:mail }); await app.accountEmail.deliverPending();
   assert.equal(mail.messages.length,1); assert.deepEqual(app.accountEmail.verify({ token:mail.messages[0].token }),{ verified:true });
-  h.db.exec('DROP TABLE account_email_tokens; DROP TABLE account_email_jobs; DROP TABLE account_email_verifications; PRAGMA user_version=14;');
+  h.db.exec('DROP TABLE delivery_orders; ALTER TABLE rides DROP COLUMN vehicle_category; DROP TABLE account_email_tokens; DROP TABLE account_email_jobs; DROP TABLE account_email_verifications; PRAGMA user_version=14;');
   await h.restart(); assert.deepEqual(h.db.prepare('SELECT * FROM users').all(),before);
   assert.equal(h.db.prepare('PRAGMA user_version').get().user_version,SCHEMA_VERSION);
   assert.equal((await web.send('/api/session')).body.user.emailVerified,false);

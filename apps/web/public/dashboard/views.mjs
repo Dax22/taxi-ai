@@ -1,3 +1,5 @@
+import { categoryFare, deliveryDetails, transportCategory } from '/shared/transport-categories.mjs';
+import { vehicleCategory } from '/shared/vehicle-categories.mjs';
 import { DRIVER_APPLICATION_LABELS } from '/shared/driver-onboarding.mjs';
 import { DEMO_AREAS, createDemoQuote, formatNaira, nairaToKobo } from '/shared/demo-booking.mjs';
 import { $, element } from './dom.mjs';
@@ -6,18 +8,34 @@ import { RIDE_STATUS_LABELS as statuses, isActiveRide } from '/shared/trip-lifec
 import { searchRadius } from '/shared/matching.mjs';
 import { createTripView } from './trip-view.mjs';
 import { renderVehicleCard } from './vehicle-card.mjs';
+import { createVehicleCategoryPicker } from './vehicle-categories.mjs';
 
 
 /** DOM rendering and UI events. No network, session storage or backend imports. */
-export function createDashboardView({ onCommand, onReview, onReportReview, onSelectionChange, onHistory, serverNow }) {
+export function createDashboardView({ onCommand, onReview, onReportReview, onSelectionChange, onHistory, serverNow, onCategoryChange = () => {} }) {
   let state = { user: null, rides: [], available: [], drivers: [] };
   let selectedId = null, detailId = null;
   let renderedLists = '', renderedDetail = '';
   let busy = false;
+  let initialCategory = typeof location === 'undefined' ? null : new URLSearchParams(location.search).get('category');
   const tripView = createTripView({ onCommand, serverNow });
+  const categories = createVehicleCategoryPicker($('account-vehicle-categories'), { onSelect() { updateCategoryVisibility(); updateButtons(); } });
+  function updateCategoryVisibility() {
+    const customer = state.user?.role === 'customer';
+    $('vehicle-categories-panel').hidden = !customer;
+    $('standard-ride-planner').hidden = !customer || !categories.selected().ridePreview;
+    $('customer-panel').hidden = !customer;
+    const category = categories.selected(), policy = transportCategory(category.id);
+    $('delivery-details-form').hidden = !customer || policy.service !== 'delivery';
+    $('delivery-weight').max = String(policy.maxLoadKg ?? '');
+    $('delivery-load-hint').textContent = policy.maxLoadKg ? `${category.name} preview limit: ${policy.maxLoadKg} kg. Matching also respects the driver’s approved load capacity.` : '';
+    $('request-submit').textContent = `Request a test ${policy.service === 'delivery' ? 'delivery' : 'ride'}`;
+    onCategoryChange(category.id); updateQuote();
+  }
   function selectedRide() { return state.rides.find((ride) => ride.id === selectedId) ?? state.history?.find((ride) => ride.id === selectedId); }
 
   function updateButtons() {
+    categories.setDisabled(busy);
     const ride = selectedRide();
     const offer = ride?.negotiation?.currentOffer;
     const remaining = offer ? offer.expiresAt - serverNow() : 0;
@@ -35,29 +53,31 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
         || (state.activeElsewhere?.length > 0 || state.rides.some((item) => isActiveRide(item.status))));
     }
     for (const button of document.querySelectorAll('button')) {
-      if (button.closest('#google-auth, #account-modes, #calls-panel, #location-planner, #location-tracking, #availability-panel, #payment-panel, #earnings-panel, #payments-admin-panel, #onboarding-panel, #trusted-contacts-panel, #safety-panel, #safety-admin-panel')) continue; // Feature controllers own their controls.
+      if (button.closest('#vehicle-categories-panel, #google-auth, #account-modes, #calls-panel, #location-planner, #location-tracking, #availability-panel, #payment-panel, #earnings-panel, #payments-admin-panel, #onboarding-panel, #trusted-contacts-panel, #safety-panel, #safety-admin-panel')) continue; // Feature controllers own their controls.
       button.disabled = busy || button.dataset.locked === 'true';
     }
+    $('delivery-details-fields').disabled = busy || state.user?.role !== 'customer' || transportCategory(categories.selected().id).service !== 'delivery'
+      || state.activeElsewhere?.length > 0 || state.rides.some((item) => isActiveRide(item.status));
     $('request-fields').disabled = busy || (state.activeElsewhere?.length > 0 || state.rides.some((item) => isActiveRide(item.status)));
   }
 
   function render(nextState = state) {
     state = nextState;
     const user = state.user;
+    if (user?.role === 'customer' && initialCategory) { const id = initialCategory; initialCategory = null; categories.select(id); }
     $('loading').hidden = true;
     $('auth-panel').hidden = Boolean(user);
     $('dashboard').hidden = !user;
     $('logout').hidden = !user;
     $('account-identity').textContent = user?.name ?? '';
+    updateCategoryVisibility();
     if (!user) { updateButtons(); return; }
-    const customer = user.role === 'customer';
     const driver = user.role === 'driver';
     const admin = user.role === 'admin';
     $('dashboard-role').textContent = `TAXI AI / ${driver ? 'WORK' : user.role.toUpperCase()}`;
     $('dashboard-title').textContent = admin ? 'Keep the city moving.' : driver ? 'Your next connection.' : 'Where will today take you?';
     $('dashboard-description').textContent = admin ? 'Review driver applications for the development preview.'
       : driver ? 'Go online to find nearby requests and agree a fare with the customer.' : 'Request a journey and agree a fare with your driver.';
-    $('customer-panel').hidden = !customer;
     $('request-form').hidden = !state.sampleMatchingEnabled;
     $('sample-disabled-note').hidden = Boolean(state.sampleMatchingEnabled);
     $('driver-panel').hidden = !driver;
@@ -103,7 +123,7 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
       button.setAttribute('aria-pressed', String(ride.id === selectedId));
       const description = element('span');
       description.append(element('strong', `${ride.pickup.name} → ${ride.destination.name}`),
-        element('small', new Date(ride.createdAt).toLocaleString()));
+        element('small', `${vehicleCategory(ride.vehicleCategory ?? 'standard')?.name} · ${new Date(ride.createdAt).toLocaleString()}`));
       const unread = state.chatUnread?.[ride.id] ?? 0;
       if (unread) description.append(element('small', `${unread} unread message${unread === 1 ? '' : 's'}`, 'chat-unread-count'));
       button.append(description, element('span', statuses[ride.status], 'status-badge'));
@@ -117,7 +137,7 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
       const row = element('div', undefined, 'request-row');
       const description = element('div');
       description.append(element('strong', `${ride.pickup.name} → ${ride.destination.name}`),
-        element('small', `${ride.hasRoute ? 'Route suggestion' : 'Sample suggestion'} ${formatNaira(ride.suggestedFareKobo)}`));
+        element('small', `${vehicleCategory(ride.vehicleCategory ?? 'standard')?.name} · ${ride.hasRoute ? 'Route suggestion' : 'Sample suggestion'} ${formatNaira(ride.suggestedFareKobo)}`));
       description.append(element('small', ride.hasRoute ? `Within about ${Math.max(1, ride.approximateDistanceKm)} km in a straight line · driving time varies` : 'Local sample-area match'));
       const button = element('button', 'Start negotiation ↗', 'button button-primary button-small');
       button.type = 'button';
@@ -159,7 +179,9 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
     const agreement = ride.negotiation?.agreement;
     const isDriver = state.user.role === 'driver';
     $('detail-title').textContent = `${ride.pickup.name} → ${ride.destination.name}`;
-    $('detail-status').textContent = statuses[ride.status];
+    $('detail-status').textContent = `${vehicleCategory(ride.vehicleCategory ?? 'standard')?.name} · ${ride.delivery && ride.status === 'completed' ? 'Delivered' : statuses[ride.status]}`;
+    $('detail-delivery').hidden = !ride.delivery;
+    $('detail-delivery').textContent = ride.delivery ? `${ride.delivery.description} · ${ride.delivery.weightKg} kg · Recipient: ${ride.delivery.recipientName}. Pickup: ${ride.delivery.pickupInstructions || 'No instructions'}. Drop-off: ${ride.delivery.dropoffInstructions || 'No instructions'}.` : '';
     $('detail-person').textContent = isDriver ? `Customer: ${ride.customer.name}`
       : ride.driver ? `Driver: ${ride.driver.name} · ${ride.driver.vehicle.model} · ${ride.driver.vehicle.plate}` : ride.status === 'expired' ? 'No driver selected this request before it expired.' : 'Looking for an available driver near your pickup.';
     $('detail-reference').textContent = `Reference ${ride.id.slice(0, 8).toUpperCase()} · ${ride.route ? 'Route suggestion' : 'Sample suggestion'} ${formatNaira(ride.suggestedFareKobo)}`;
@@ -214,12 +236,23 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
   $('request-pickup').value = 'wuse-ii';
   $('request-destination').value = 'maitama';
   function updateQuote() {
-    try { $('request-quote').textContent = formatNaira(createDemoQuote($('request-pickup').value, $('request-destination').value).suggestedFareKobo); }
+    try { $('request-quote').textContent = formatNaira(categoryFare(createDemoQuote($('request-pickup').value, $('request-destination').value).suggestedFareKobo, categories.selected().id)); }
     catch { $('request-quote').textContent = 'Choose different areas'; }
   }
+  function requestOptions() {
+    const vehicleCategory = categories.selected().id;
+    if (transportCategory(vehicleCategory).service === 'ride') return { vehicleCategory };
+    const delivery = deliveryDetails(vehicleCategory, { description: $('delivery-description').value, weightKg: Number($('delivery-weight').value),
+      recipientName: $('delivery-recipient').value, pickupInstructions: $('delivery-pickup').value, dropoffInstructions: $('delivery-dropoff').value });
+    return { vehicleCategory, delivery };
+  }
+  $('delivery-details-form').addEventListener('submit', (event) => event.preventDefault());
   $('request-form').addEventListener('submit', (event) => {
     event.preventDefault();
-    const data = { pickupId: $('request-pickup').value, destinationId: $('request-destination').value };
+    if (busy || state.user?.role !== 'customer' || !categories.selected().ridePreview) return;
+    let options;
+    try { options = requestOptions(); } catch (error) { $('page-error').textContent = error.message; return; }
+    const data = { pickupId: $('request-pickup').value, destinationId: $('request-destination').value, ...options };
     onCommand('/api/rides', data, 'Your test request is saved. Looking for online drivers in the same sample area.');
   });
   $('live-offer-form').addEventListener('submit', (event) => {
@@ -237,13 +270,16 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
   $('history-refresh').addEventListener('click', () => onHistory(null));
   $('history-more').addEventListener('click', () => { if (state.historyCursor) onHistory(state.historyCursor); });
   return Object.freeze({
-    render,
+    render, requestOptions,
     tick: updateButtons,
     setBusy(value) { busy = value; tripView.setBusy(value); updateButtons(); },
     select(id) { selectedId = id; },
     selected: selectedRide,
     reset() {
       state = { user: null, rides: [], available: [], drivers: [], reports: [], history: [] };
+      categories.reset();
+      for (const id of ['delivery-description', 'delivery-weight', 'delivery-recipient', 'delivery-pickup', 'delivery-dropoff']) $(id).value = '';
+      $('detail-delivery').textContent = ''; $('detail-delivery').hidden = true;
       selectedId = null; detailId = null; renderedLists = ''; renderedDetail = '';
       $('ride-detail').hidden = true;
       for (const id of ['detail-title', 'detail-person', 'detail-reference', 'detail-status', 'fare-value', 'fare-label',

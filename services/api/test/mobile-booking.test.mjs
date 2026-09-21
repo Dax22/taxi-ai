@@ -144,3 +144,23 @@ test('driver work and online availability block personal native requests without
   assert.equal((await sendWorker('/booking/requests', sample)).body.error.code, 'DRIVER_BUSY');
   assert.equal((await mobile(`/booking/requests/${ride.id}/accept`, { expectedVersion: 1 })).status, 404);
 });
+
+test('native category requests retain parcel data in web journeys and parse direct delivery quotes', async (t) => {
+  const { mobile, customer } = await setup(t);
+  for (const vehicleCategory of ['suv', 'van', 'truck', 'motorcycle']) {
+    const delivery = vehicleCategory === 'suv' ? undefined : { description: 'Test parcel', weightKg: 2, recipientName: 'Test recipient' };
+    const preview = parsePreview((await mobile('/booking/sample', { ...sample, vehicleCategory })).body).preview;
+    assert.equal(preview.vehicleCategory, vehicleCategory); assert.equal(preview.request.vehicleCategory, vehicleCategory);
+    const response = await mobile('/booking/requests', { ...preview.request, ...(delivery ? { delivery } : {}) });
+    assert.equal(response.status, 200, JSON.stringify(response.body));
+    const ride = parseBookingRide(response.body).ride;
+    assert.equal(ride.vehicleCategory, vehicleCategory); assert.equal(ride.delivery?.recipientName, delivery?.recipientName);
+    const saved = (await customer.send(`/api/rides/${ride.id}`)).body.ride;
+    assert.equal(saved.vehicleCategory, vehicleCategory); assert.equal(saved.delivery?.weightKg, delivery?.weightKg);
+    assert.equal((await mobile(`/booking/requests/${ride.id}/cancel`, { expectedVersion: ride.version })).status, 200);
+    const direct = parsePreview((await mobile('/booking/quotes', { ...points, vehicleCategory })).body).preview;
+    assert.equal(direct.vehicleCategory, vehicleCategory);
+    assert.equal(direct.route.durationSeconds === null, Boolean(delivery));
+    assert.equal(direct.route.distanceKind, delivery ? 'straight_line' : 'road');
+  }
+});

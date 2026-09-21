@@ -65,7 +65,7 @@ export function accountSummary(row, detailed = false) {
 }
 function area(id, label) { return label || DEMO_AREAS.find((item) => item.id === id)?.name || 'Saved location'; }
 export function tripSummary(row) {
-  return { id: row.id, createdAt: row.createdAt, updatedAt: row.updatedAt, status: row.status,
+  return { id: row.id, vehicleCategory: row.vehicleCategory ?? 'standard', createdAt: row.createdAt, updatedAt: row.updatedAt, status: row.status,
     pickup: area(row.pickupId, row.pickupName), destination: area(row.destinationId, row.destinationName),
     customer: { id: row.customerId, name: row.customerName }, driver: row.driverId ? { id: row.driverId, name: row.driverName } : null,
     fareKobo: row.fareKobo == null ? null : String(row.fareKobo), paymentStatus: row.paymentStatus ?? 'not_due',

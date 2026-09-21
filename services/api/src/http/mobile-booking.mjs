@@ -1,13 +1,14 @@
 import { DEMO_AREAS, createDemoQuote } from '../../../../packages/shared/src/demo-booking.mjs';
+import { transportCategory, categoryFare } from '../../../../packages/shared/src/transport-categories.mjs';
 import { canCancelRide } from '../../../../packages/shared/src/trip-lifecycle.mjs';
 import { check } from '../shared/errors.mjs';
 import { fields } from '../shared/validation.mjs';
 
 const terminal = new Set(['completed', 'cancelled', 'expired']);
 const geometry = (route) => route ? { distanceMeters: route.distanceMeters, durationSeconds: route.durationSeconds,
-  coordinates: route.coordinates } : null;
+  coordinates: route.coordinates, distanceKind: route.distanceKind ?? 'road' } : null;
 function projection(ride) {
-  return { id: ride.id, version: ride.version, status: ride.status, pickup: ride.pickup.name, destination: ride.destination.name,
+  return { id: ride.id, version: ride.version, status: ride.status, vehicleCategory: ride.vehicleCategory, delivery: ride.delivery, pickup: ride.pickup.name, destination: ride.destination.name,
     suggestedFareKobo: ride.suggestedFareKobo, fareKobo: ride.trip?.fareKobo ?? ride.negotiation?.agreement?.amountKobo ?? null,
     expiresAt: ride.status === 'requested' ? ride.matching.expiresAt : null, canCancel: canCancelRide(ride.status),
     driver: ride.driver ? { name: ride.driver.name, vehicle: ride.driver.vehicle } : null };
@@ -33,16 +34,18 @@ export function createMobileBooking({ rides, locations, availability, clock }) {
       const { quote, replayed } = await locations.quote(context, data, key);
       return { preview: { kind: 'route', pickup: quote.route.pickup.name, destination: quote.route.destination.name,
         suggestedFareKobo: quote.route.suggestedFareKobo, expiresAt: quote.expiresAt,
-        request: { quoteId: quote.id }, route: geometry(quote.route) }, replayed };
+        vehicleCategory: quote.route.vehicleCategory ?? 'standard', request: { quoteId: quote.id, vehicleCategory: quote.route.vehicleCategory ?? 'standard' }, route: geometry(quote.route) }, replayed };
     }
     if (write && path === '/booking/sample') {
-      fields(data, ['pickupId', 'destinationId']);
+      fields(data, ['pickupId', 'destinationId', 'vehicleCategory'], ['pickupId', 'destinationId']);
+      const category = data.vehicleCategory === undefined ? 'standard' : data.vehicleCategory;
+      check(transportCategory(category), 'INVALID_CATEGORY', 'Choose a vehicle category.');
       check(rides.list(user, 'customer').matchingSettings.allowSimulation, 'FORBIDDEN', 'Sample journeys are disabled here.');
       check(DEMO_AREAS.some((a) => a.id === data.pickupId) && DEMO_AREAS.some((a) => a.id === data.destinationId)
         && data.pickupId !== data.destinationId, 'INVALID_LOCATION', 'Choose two different sample areas.');
       const quote = createDemoQuote(data.pickupId, data.destinationId);
       return { preview: { kind: 'sample', pickup: quote.pickup.name, destination: quote.destination.name,
-        suggestedFareKobo: quote.suggestedFareKobo, expiresAt: null, request: data, route: null } };
+        suggestedFareKobo: categoryFare(quote.suggestedFareKobo, category), vehicleCategory: category, expiresAt: null, request: { ...data, vehicleCategory: category }, route: null } };
     }
     if (write && path === '/booking/requests') {
       const result = rides.mutate({ userId: user.id, action: 'create', data, key });
