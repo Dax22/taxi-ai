@@ -7,8 +7,8 @@ and Customer, Drive & deliver and My store modes. A person can have multiple
 approved capabilities. This direction is documented in the
 [unified platform plan](docs/unified-platform.md). The first milestone is implemented:
 one website account with Customer and Work modes for rides. The first iOS/Android
-app now shares sign-in, profiles, saved activity and ride requests; native
-negotiation/trip controls, Eats, courier and My store remain planned. See [unified accounts](docs/unified-accounts.md)
+app now shares sign-in, profiles, booking, driver availability, fare negotiation,
+chat and complete ride/delivery journeys. Eats restaurant ordering and My store remain planned. See [unified accounts](docs/unified-accounts.md)
 and [mobile setup](apps/mobile/README.md).
 
 ## What works today
@@ -33,7 +33,9 @@ private documents and recorded manual checks; external identity/licence verifica
 is not connected. Use fictional details and documents.
 
 - One personal login, Customer/Work mode switching and optional driver enrollment.
-- Native sign-in, Home/Activity/Work/Account navigation and device revocation.
+- Native sign-in, Home/Activity/Work/Updates/Account navigation and device revocation.
+- Native driver availability, job claiming, fare consent, chat, pickup/drop-off verification
+  and a durable updates inbox, with optional Expo phone alerts. See [native journeys](docs/mobile-journeys.md).
 - Native **Book a ride**: Abuja address search, route/fare review, shared ride requests,
   status recovery and pre-start cancellation. See [mobile booking](docs/mobile-booking.md).
 - Optional Google sign-up/sign-in for web and native development builds, with
@@ -299,13 +301,13 @@ The terminal example runs with `npm run demo`. Read [the architecture](docs/arch
 
 ## Development and review
 
-The latest development branch is `feat/vehicle-categories`. Version 0.22.0 / mobile
-0.6.0 enables Standard/SUV passenger booking and van/truck/motorcycle delivery
-requests, with approved vehicle matching, parcel details and verified handover.
-Schema 16 preserves existing accounts and journeys. See [vehicle category workflows](docs/vehicle-categories.md).
-Native negotiation and driver trip controls continue on the website. Eats restaurant
-ordering and vendor tools remain planned. Follow [mobile booking and acceptance](docs/mobile-booking.md)
-and [mobile setup](apps/mobile/README.md). Back up the database before changing
+The latest development branch is `feat/mobile-trips`. Version 0.23.0 / mobile
+0.7.0 adds native driver availability, job claiming, fare negotiation, chat and
+complete ride/delivery controls for all five categories. Schema 17 preserves
+existing accounts and journeys, adds stable device lease bindings and a durable
+updates inbox with optional Expo push. See [native journeys and device acceptance](docs/mobile-journeys.md).
+Eats restaurant ordering and vendor tools remain planned. Follow
+[mobile setup](apps/mobile/README.md). Back up the database before changing
 branches; older releases may not support the existing schema.
 Read [CONTRIBUTING.md](CONTRIBUTING.md) for the GitHub/VS Code workflow and where
 new code belongs. `npm run check` validates syntax and module conventions;

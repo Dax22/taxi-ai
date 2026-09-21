@@ -19,6 +19,7 @@ import { createGoogleConfig } from '../../services/api/src/infrastructure/google
 import { createGoogleProvider } from '../../services/api/src/infrastructure/google-provider.mjs';
 import { createGoogleCallback } from '../../services/api/src/modules/google-auth/routes.mjs';
 import { createEmailConfig } from '../../services/api/src/infrastructure/email-config.mjs';
+import { createPushProvider } from '../../services/api/src/infrastructure/push-provider.mjs';
 import { createAccountMail } from '../../services/api/src/infrastructure/account-mail.mjs';
 
 // Explicit allowlist: never serve the repository root or arbitrary disk paths.
@@ -112,9 +113,10 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
   mapProvider = createMapProvider({ env: { ...process.env, TAXI_AI_MAPS_MODE: process.env.TAXI_AI_MAPS_MODE ?? (runtime.mode === 'staging' ? 'off' : 'community') } }),
   telemetry = createTelemetry({ enabled: runtime.mode === 'staging' }),
   accountMail = createAccountMail({ config: createEmailConfig(process.env,runtime) }),
+  pushProvider = createPushProvider({ env: process.env }),
   googleProvider = createGoogleProvider({ config: createGoogleConfig(process.env, runtime), clock }) } = {}) {
   if (runtime.mode === 'staging' && callConfig.mode === 'local') throw new Error('Staging calls require off or a configured relay.');
-  const application = createApplication({ db, clock, callConfig, mapProvider, googleProvider, accountMail, allowSimulation: runtime.mode === 'local' });
+  const application = createApplication({ db, clock, callConfig, mapProvider, googleProvider, accountMail, pushProvider, allowSimulation: runtime.mode === 'local' });
   const handleApi = createApiRouter(application, { secure: runtime.mode === 'staging' });
   const handleMobile = createMobileRouter(application);
   const handleGoogleCallback = createGoogleCallback(application, runtime.mode === 'staging');
@@ -123,6 +125,7 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
     try { application.rides.sweep(); application.availability.sweep(); application.calls.sweep(); application.locations.sweep(); application.safety.sweep(); application.devices.sweep(); application.googleAuth.sweep(); }
     catch { telemetry.event('maintenance_failed'); }
     void application.accountEmail.deliverPending().catch(() => telemetry.event('maintenance_failed'));
+    void application.notifications.deliverPending().catch(() => telemetry.event('maintenance_failed'));
   }, 5000);
   cleanup.unref();
   const server = createServer(async (request, response) => {
@@ -191,7 +194,7 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
   server.requestTimeout = 15_000;
   server.headersTimeout = 10_000;
   server.beginShutdown = () => { health.beginShutdown(); clearInterval(cleanup); application.accountEmail.stop(); };
-  server.on('close', () => { clearInterval(cleanup); application.accountEmail.stop(); db.close(); });
+  server.on('close', () => { clearInterval(cleanup); application.accountEmail.stop(); application.notifications.stop(); db.close(); });
   return server;
 }
 

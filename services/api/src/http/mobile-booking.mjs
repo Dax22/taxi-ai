@@ -7,7 +7,7 @@ import { fields } from '../shared/validation.mjs';
 const terminal = new Set(['completed', 'cancelled', 'expired']);
 const geometry = (route) => route ? { distanceMeters: route.distanceMeters, durationSeconds: route.durationSeconds,
   coordinates: route.coordinates, distanceKind: route.distanceKind ?? 'road' } : null;
-function projection(ride) {
+export function bookingProjection(ride) {
   return { id: ride.id, version: ride.version, status: ride.status, vehicleCategory: ride.vehicleCategory, delivery: ride.delivery, pickup: ride.pickup.name, destination: ride.destination.name,
     suggestedFareKobo: ride.suggestedFareKobo, fareKobo: ride.trip?.fareKobo ?? ride.negotiation?.agreement?.amountKobo ?? null,
     expiresAt: ride.status === 'requested' ? ride.matching.expiresAt : null, canCancel: canCancelRide(ride.status),
@@ -26,7 +26,7 @@ export function createMobileBooking({ rides, locations, availability, clock }) {
       const list = rides.list(user, 'customer'), maps = locations.settings(context);
       return { online: { enabled: maps.enabled, searchHost: maps.searchHost ?? null, routeHost: maps.routeHost ?? null },
         allowSample: list.matchingSettings.allowSimulation, areas: list.matchingSettings.allowSimulation ? DEMO_AREAS : [],
-        current: list.rides.filter((r) => !terminal.has(r.status)).map(projection),
+        current: list.rides.filter((r) => !terminal.has(r.status)).map(bookingProjection),
         blockedBy: list.activeElsewhere.length ? 'work' : availability.positionFor(user.id, clock()) ? 'online' : null };
     }
     if (write && path === '/booking/search') return locations.search(context, data);
@@ -49,14 +49,14 @@ export function createMobileBooking({ rides, locations, availability, clock }) {
     }
     if (write && path === '/booking/requests') {
       const result = rides.mutate({ userId: user.id, action: 'create', data, key });
-      return { ride: projection(result.ride), replayed: result.replayed };
+      return { ride: bookingProjection(result.ride), replayed: result.replayed };
     }
     const match = path.match(/^\/booking\/requests\/([a-f0-9-]{36})(\/cancel)?$/);
-    if (match && !write && !match[2]) return { ride: projection(own(user, match[1])) };
+    if (match && !write && !match[2]) return { ride: bookingProjection(own(user, match[1])) };
     if (match && write && match[2]) {
       own(user, match[1]);
       const result = rides.mutate({ userId: user.id, action: 'cancel', id: match[1], data, key });
-      return { ride: projection(result.ride), replayed: result.replayed };
+      return { ride: bookingProjection(result.ride), replayed: result.replayed };
     }
     check(false, 'NOT_FOUND', 'Mobile booking endpoint not found.');
   };

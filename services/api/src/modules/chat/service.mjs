@@ -5,7 +5,7 @@ import { messageBody, sequence, MESSAGE_LIMIT, PAGE_SIZE, REPORT_REASONS } from 
 import { canChatDuringRide } from '../../../../../packages/shared/src/trip-lifecycle.mjs';
 
 /** Participant-scoped communication. Fare decisions remain in the rides service. */
-export function createChatService({ repository, getAccount, getRideContext, listConversationIds, unitOfWork, audit, tokens, clock }) {
+export function createChatService({ repository, getAccount, getRideContext, listConversationIds, unitOfWork, audit, tokens, clock, onMessage = () => {} }) {
   function actor(userId) {
     const user = getAccount(userId);
     check(user, 'UNAUTHENTICATED', 'Sign in to continue.');
@@ -60,6 +60,7 @@ export function createChatService({ repository, getAccount, getRideContext, list
       repository.insertMessage(message);
       audit.record(userId, 'chat.message_sent', message.id, message.createdAt);
       repository.saveCommand(userId, key, fingerprint, message.id);
+      onMessage({ ride, message });
       return { message, replayed: false };
     });
   }

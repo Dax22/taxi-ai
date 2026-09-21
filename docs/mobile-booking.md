@@ -3,8 +3,7 @@
 Release 0.22 / mobile 0.6 extends native requests to Standard/SUV rides and
 van/truck/motorcycle deliveries. Schema 16 preserves accounts and saved journeys;
 [category workflows](vehicle-categories.md) describes parcel fields, category-bound
-quotes, approved capacity matching and recipient codes. Driver negotiation and trip
-controls continue on the website. No new routing provider is required: delivery
+quotes, approved capacity matching and recipient codes. Release 0.23 / mobile 0.7 adds [native driver, fare, chat and trip controls](mobile-journeys.md). No new routing provider is required: delivery
 estimates use direct distance without a driving ETA. This is a development preview
 with no live transport or payment.
 
@@ -22,8 +21,8 @@ with no live transport or payment.
    A suggestion never accepts a fare or confirms a booking. This creates the same
    request the web driver queue already understands.
 4. Monitor the current request and registered vehicle when a driver takes it.
-   Continue negotiation, chat, confirmation and trip controls on the website,
-   signing in there separately with the same account. No token goes in a URL.
+   Open the native journey to negotiate, chat, confirm and finish, or continue
+   on the website using the same account. No token goes in a URL.
 5. Cancel a permitted pre-start journey after confirming. Expiry/cancellation
    replace the waiting card when refreshed. Completed journeys remain in Activity.
 
@@ -51,7 +50,7 @@ The staging tester gate, native rate/body limits and cookie/origin isolation app
 
 The projection omits other customers, contacts, pickup PINs, chat, documents and
 staff internals. Even the assigned driver cannot use the customer-only detail or
-cancellation endpoints. Driver dispatch and native negotiation are later stages.
+cancellation endpoints. The separate native `/work` and `/journeys` adapters now expose driver dispatch and negotiation.
 
 `http/mobile-booking.mjs` is a transport adapter, not a second booking engine.
 It delegates to `rides` and `locations`. The locations planning port rechecks

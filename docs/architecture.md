@@ -31,6 +31,12 @@ Release 0.22 adds schema 16 vehicle categories and delivery handover state.
 See [category workflows](vehicle-categories.md) for matching, quoting and migration
 boundaries. Rides uses an injected deliveries port inside its existing transaction.
 
+Release 0.23 adds schema 17 native device-bound availability and account updates.
+The `notifications` module owns inbox events, opt-in device tokens and durable push
+jobs; injected ride/chat ports create events inside the existing transaction, while
+an Expo adapter sends generic alerts and checks receipts outside transactions.
+See [native journeys](mobile-journeys.md) for ownership, retries and device gates.
+
 ## Implemented modules
 
 | Module | Responsibility | Owns |
@@ -40,6 +46,7 @@ boundaries. Rides uses an injected deliveries port inside its existing transacti
 | Drivers | Private applications, documents, manual review and expiry eligibility | `drivers`, `driver_applications`, `driver_documents`, `driver_document_reads`, `driver_application_events`, `driver_application_commands` |
 | Rides | Requests, fares, bookings, pickup verification, progress, cancellation and history | `rides`, `fare_events`, `idempotency`, `ride_trips`, `ride_activity` |
 | Deliveries | Parcel validation, category/capacity eligibility and drop-off verification | `delivery_orders` |
+| Notifications | Account-scoped inbox, device opt-in and durable push/receipt retries | `account_notifications`, `push_registrations`, `push_jobs` |
 | Chat | Participant messages, read markers, retries and reports | `chat_messages`, `chat_reads`, `chat_commands`, `chat_reports` |
 | Calls | Audio invitations, session/window ownership, signaling, expiry and history | `voice_calls`, `voice_participants`, `voice_commands` |
 | Locations | Provider-backed route quotes, fare suggestions, driver sharing and expiry | `location_quotes`, `location_quote_commands`, `location_shares`, `location_share_commands` |

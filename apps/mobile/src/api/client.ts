@@ -2,6 +2,8 @@ import { envelope, parseAccount, parseSignIn, parseActivity, parseDevices, parse
 import type { VehicleCategoryId } from '../../../../packages/shared/src/vehicle-categories.mjs';
 import type { Account, Credentials, DriverCommands, DriverDetails, Mode, SignIn } from '../../../../packages/shared/src/mobile-contracts.mjs';
 import { parseBooking, parsePlaces, parsePreview, parseBookingRide } from '../../../../packages/shared/src/mobile-booking.mjs';
+import { parseJourney, parseWork, parseAvailability, parseThread, parseSentMessage, parseReadMessages, parseNotifications, parseNotificationTarget } from '../../../../packages/shared/src/mobile-journeys.mjs';
+import type { JourneyAction, JourneyData, OnlineData, Position } from '../../../../packages/shared/src/mobile-journeys.mjs';
 import type { Place, RequestData } from '../../../../packages/shared/src/mobile-booking.mjs';
 
 export interface Vault { read(): Promise<string | null>; write(value: string): Promise<void>; clear(): Promise<void> }
@@ -174,6 +176,21 @@ export class MobileClient {
   async cancelRide(id: string, expectedVersion: number, key: string) {
     return parseBookingRide(await this.request(`/booking/requests/${id}/cancel`, { expectedVersion, reason: 'plans_changed' }, key));
   }
+  async journey(id: string) { return parseJourney(await this.request(`/journeys/${id}`)); }
+  async journeyCommand(id: string, action: JourneyAction, data: JourneyData, key: string) { return parseJourney(await this.request(`/journeys/${id}/${action}`,data,key)); }
+  async work(clientId: string) { return parseWork(await this.request(`/work?clientId=${clientId}`)); }
+  async online(clientId: string, data: OnlineData, key: string) { return parseAvailability(await this.request(`/work/online?clientId=${clientId}`,data,key)); }
+  async offline(clientId: string, id: string, key: string) { return parseAvailability(await this.request(`/work/${id}/offline?clientId=${clientId}`,{},key)); }
+  async heartbeat(clientId: string, id: string, sequence: number, position?: Position) { return parseAvailability(await this.request(`/work/${id}/heartbeat?clientId=${clientId}`,{ sequence,...(position ? { position } : {}) })); }
+  async thread(id: string, after = 0) { return parseThread(await this.request(`/journeys/${id}/chat?after=${after}`)); }
+  async sendMessage(id: string, body: string, key: string) { return parseSentMessage(await this.request(`/journeys/${id}/chat/messages`,{ body },key)); }
+  async readMessages(id: string, throughSequence: number) { return parseReadMessages(await this.request(`/journeys/${id}/chat/read`,{ throughSequence })); }
+  async reportMessage(id: string, messageId: string, reason: string) { return this.request(`/journeys/${id}/chat/messages/${messageId}/report`,{ reason }); }
+  async notifications(before?: number | null) { return parseNotifications(await this.request(`/notifications${before ? `?before=${before}` : ''}`)); }
+  async openNotification(id: number) { return parseNotificationTarget(await this.request(`/notifications/${id}/open`,{})); }
+  async readNotification(id: number) { return this.request(`/notifications/${id}/read`,{}); }
+  async registerPush(token: string, projectId: string) { return this.request('/notifications/push',{ token,projectId }); }
+  async disablePush() { return this.request('/notifications/push/disable',{}); }
   private ownApplication(body: unknown) {
     const application = parseOnboarding(body);
     if (application.driverId !== this.user?.id) throw changed();

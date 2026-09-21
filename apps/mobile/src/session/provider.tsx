@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { PropsWithChildren } from 'react';
 import { AppState } from 'react-native';
 import { MobileClient, ApiError } from '../api/client.ts';
@@ -7,12 +7,14 @@ import type { Account, Mode } from '../../../../packages/shared/src/mobile-contr
 
 interface SessionContextValue {
   client: MobileClient; user: Account | null; ready: boolean; blocked: boolean; startupError: string;
-  notice: string; mode: Mode; setMode(mode: Mode): void; restore(): Promise<void>; logout(): Promise<void>;
+  notice: string; mode: Mode; setMode(mode: Mode): Promise<boolean>; registerModeGuard(guard: (mode: Mode) => Promise<boolean>): () => void; restore(): Promise<void>; logout(): Promise<void>;
 }
 const SessionContext = createContext<SessionContextValue | null>(null);
 export function SessionProvider({ children }: PropsWithChildren) {
   const client = useMemo(() => new MobileClient({ origin: process.env.EXPO_PUBLIC_API_ORIGIN ?? (__DEV__ ? 'http://127.0.0.1:3000' : ''), vault: secureVault, development: __DEV__ }), []);
   const [user, setUser] = useState<Account | null>(null), [mode, setMode] = useState<Mode>('customer');
+  const modeGuard = useRef<(mode: Mode) => Promise<boolean>>(async () => true);
+  const registerModeGuard = useCallback((guard: (mode: Mode) => Promise<boolean>) => { modeGuard.current=guard; return () => { if(modeGuard.current===guard)modeGuard.current=async()=>true; }; },[]);
   const [ready, setReady] = useState(false), [blocked, setBlocked] = useState(false);
   const [startupError, setStartupError] = useState(''), [notice, setNotice] = useState('');
   const restore = useCallback(async () => {
@@ -43,6 +45,11 @@ export function SessionProvider({ children }: PropsWithChildren) {
     const warning = await client.logout(); if (warning) setNotice(warning);
   }, [client]);
   return <SessionContext.Provider value={{ client, user, ready, blocked, startupError, notice, mode,
-    setMode: (next) => setMode(next === 'work' && !user?.driver ? 'customer' : next), restore, logout }}>{children}</SessionContext.Provider>;
+    registerModeGuard, setMode: async (next) => {
+      const target=next === 'work' && !user?.driver ? 'customer' : next;
+      if(target===mode && target!=='customer')return true;
+      if(!await modeGuard.current(target)||client.account()?.id!==user?.id)return false;
+      setMode(target); return true;
+    }, restore, logout }}>{children}</SessionContext.Provider>;
 }
 export function useSession() { const value = useContext(SessionContext); if (!value) throw new Error('Session provider is missing.'); return value; }

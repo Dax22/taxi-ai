@@ -36,8 +36,8 @@ rides and restaurant ordering are outside this workflow.
    do not contain parcel descriptions, recipient details or codes.
 5. Both participants explicitly agree a fare, then the customer confirms the
    booking. Category/capacity are checked again at confirmation and collection.
-   Native requests share the web queue; negotiation and driver trip controls
-   continue on the website with the same account.
+   Native requests share the web queue. Release 0.23 also supports negotiation and
+   complete trip controls in the app; see [native journeys](mobile-journeys.md).
 6. The driver marks departure/arrival and verifies the sender's pickup PIN after
    collection. The sender can then see a separate drop-off code and share it
    privately with the recipient. Only the assigned driver can complete delivery,

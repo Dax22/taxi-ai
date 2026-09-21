@@ -5,21 +5,24 @@ import { AVAILABILITY_MS, POSITION_MS } from '../../../../../packages/shared/src
 import { commandKey, clientIdentity, sequence, position, startData } from './domain.mjs';
 
 /** Availability location stays inside the matching service boundary, never in public projections. */
-export function createAvailabilityService({ repository, getAccount, sessionOwner, isBusy, unitOfWork, tokens, audit, clock, allowSimulation = false }) {
+export function createAvailabilityService({ repository, getAccount, sessionOwner, nativeSessionFor = () => null, nativeSessionOwner = () => null, isBusy, unitOfWork, tokens, audit, clock, allowSimulation = false }) {
   function context(input, clientRequired = false) {
     const user = getAccount(input.userId);
     check(user && typeof input.sessionToken === 'string', 'UNAUTHENTICATED', 'Sign in to change availability.');
     check(hasCapability(user, 'driver'), 'FORBIDDEN', 'Driver availability requires a driver account.');
-    const sessionHash = tokens.digest(input.sessionToken);
-    check(sessionOwner(sessionHash) === user.id, 'UNAUTHENTICATED', 'This session has expired.');
+    const native = input.native === true ? nativeSessionFor(input.sessionToken) : null;
+    check(input.native !== true || native?.user.id === user.id, 'UNAUTHENTICATED', 'This device session has expired.');
+    const nativeSessionId = native?.id ?? null;
+    const sessionHash = tokens.digest(nativeSessionId ? `native:${nativeSessionId}` : input.sessionToken);
+    check(nativeSessionId || sessionOwner(sessionHash) === user.id, 'UNAUTHENTICATED', 'This session has expired.');
     const clientHash = input.clientId ? tokens.digest(clientIdentity(input.clientId)) : null;
     check(!clientRequired || clientHash, 'INVALID_AVAILABILITY_CLIENT', 'Use availability controls in this window.');
-    return { user, userId: user.id, sessionHash, clientHash };
+    return { user, userId: user.id, sessionHash, nativeSessionId, clientHash };
   }
   function invalidReason(row, now) {
     const driver = getAccount(row.driverId)?.driver;
     if (driver?.status !== 'approved' || !driver.eligibility?.eligible) return 'approval_changed';
-    if (sessionOwner(row.sessionHash) !== row.driverId) return 'session_ended';
+    if ((row.nativeSessionId ? nativeSessionOwner(row.nativeSessionId) : sessionOwner(row.sessionHash)) !== row.driverId) return 'session_ended';
     if ((row.mode === 'sample' && !allowSimulation) || now >= row.seenAt + AVAILABILITY_MS
       || (row.mode === 'gps' && now >= JSON.parse(row.positionJson).capturedAt + POSITION_MS)) return 'expired';
     if (isBusy(row.driverId)) return 'claimed';
@@ -99,5 +102,6 @@ export function createAvailabilityService({ repository, getAccount, sessionOwner
       position: row.positionJson ? JSON.parse(row.positionJson) : null } : null;
   }
   return Object.freeze({ get, command, update, sweep, positionFor,
+    driverIds: () => repository.active().filter((r) => !invalidReason(r, clock())).map((r) => r.driverId),
     onClaim: (driverId, now) => close(repository.current(driverId), now, 'claimed') });
 }
