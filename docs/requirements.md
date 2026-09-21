@@ -41,7 +41,8 @@ active-activity navigation and clear private client state on context changes.
 See [the unified platform plan](unified-platform.md) for navigation, migration,
 reliability requirements, platform differences and delivery order. This is the
 target design. The current prototype implements Customer and Work for rides under
-one personal account; native mobile, delivery and store workflows remain planned.
+one personal account. Native accounts, driver onboarding and customer ride requests
+are implemented; native negotiation/trip controls, delivery and stores remain planned.
 See [unified accounts](unified-accounts.md) for implementation and migration.
 
 ## Fare agreement
@@ -99,6 +100,6 @@ enabled silently.
 - Fare estimator inputs, business limits, platform commission and cancellation rules.
 - Delivery rates, courier item/vehicle limits and vendor commercial arrangements.
 - Support operations, safety response, retention and access policies.
-- Exact mobile SDK/dependency versions and native authentication design. React
-  Native + Expo + TypeScript is the proposed stack for one mobile app; retain the
-  current web client. Alibaba Cloud is the selected host, with setup paused.
+- Native signing, physical-device acceptance and production identity hardening.
+  The Expo/React Native/TypeScript stack, locked dependencies and device sessions
+  are implemented alongside the web client. Alibaba Cloud hosting setup is paused.

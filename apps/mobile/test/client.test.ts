@@ -12,6 +12,8 @@ const auth = (version = 1) => ({ apiVersion: 1, serverNow: 1000, user, credentia
 const response = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 const ok = (body: object = {}) => response({ ...body, apiVersion: 1, serverNow: 1000 });
 const unauthorized = () => response({ error: { code: 'UNAUTHENTICATED', message: 'Sign in again.' } }, 401);
+const bookingRide = { id, version: 1, status: 'requested', pickup: 'Wuse II', destination: 'Maitama',
+  suggestedFareKobo: 450000, fareKobo: null, expiresAt: 301000, canCancel: true, driver: null };
 function vault() {
   const storage = { value: null as string | null, fail: false };
   const port: Vault = { read: async () => storage.value, write: async (value) => { if (storage.fail) throw new Error('Locked'); storage.value = value; }, clear: async () => { storage.value = null; } };
@@ -20,6 +22,32 @@ function vault() {
 function client(fetcher: (url: string, options: RequestInit) => Promise<Response>, v = vault()) {
   return { app: new MobileClient({ origin: 'https://taxi.example.test', vault: v.port, fetchImpl: ((url, options) => fetcher(String(url), options ?? {})) as typeof fetch }), ...v };
 }
+test('booking preserves the exact command through access refresh and keeps addresses and fares out of secure storage', async () => {
+  const attempts: RequestInit[] = [];
+  const { app, storage } = client(async (url, options) => {
+    if (url.endsWith('/auth/login')) return response(auth());
+    if (url.endsWith('/auth/refresh')) return response(auth(2));
+    attempts.push(options);
+    return new Headers(options.headers).get('Authorization') === `Bearer ${auth().credentials.accessToken}` ? unauthorized() : ok({ ride: bookingRide });
+  });
+  await app.login(user.email, 'Test password', 'Phone');
+  const data = { pickupId: 'wuse-ii', destinationId: 'maitama' };
+  assert.equal((await app.requestRide(data, 'original-booking-key')).ride.id, id);
+  assert.equal(attempts.length, 2); assert.equal(attempts[0].body, attempts[1].body);
+  for (const attempt of attempts) assert.equal(new Headers(attempt.headers).get('Idempotency-Key'), 'original-booking-key');
+  for (const value of ['maitama','450000','pickupId']) assert.ok(!storage.value!.includes(value));
+});
+test('a successful booking response arriving after sign-out cannot populate another account', async () => {
+  let finish!: (value: Response) => void;
+  const { app } = client(async (url) => {
+    if (url.endsWith('/auth/login')) return response(auth());
+    if (url.endsWith('/booking/requests')) return new Promise((resolve) => { finish = resolve; });
+    return ok();
+  });
+  await app.login(user.email, 'Test password', 'Phone');
+  const pending = app.requestRide({ quoteId: id }, 'original-booking-key'), rejected = assert.rejects(pending, { code: 'SESSION_CHANGED' });
+  await app.logout(); finish(ok({ ride: bookingRide })); await rejected; assert.equal(app.account(), null);
+});
 test('native password recovery is public, uses preview access and never creates or persists credentials', async () => {
   let sent: RequestInit = {}, path = '';
   const { app,storage }=client(async(url,options)=>{path=url;sent=options;return ok({accepted:true});});

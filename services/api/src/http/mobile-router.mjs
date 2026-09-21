@@ -4,9 +4,11 @@ import { fields } from '../shared/validation.mjs';
 import { hasCapability } from '../shared/policies.mjs';
 import { readBody } from './body.mjs';
 import { json } from './responses.mjs';
+import { createMobileBooking } from './mobile-booking.mjs';
 
 /** Versioned native surface. Cookie identity and browser CSRF are never reused. */
-export function createMobileRouter({ devices, accounts, drivers, rides, clock, rateLimiter, googleAuth, accountEmail }) {
+export function createMobileRouter({ devices, accounts, drivers, rides, locations, availability, clock, rateLimiter, googleAuth, accountEmail }) {
+  const booking = createMobileBooking({ rides, locations, availability, clock });
   function summary(ride) {
     return { id: ride.id, status: ride.status, pickup: ride.pickup.name, destination: ride.destination.name,
       fareKobo: ride.trip?.fareKobo ?? ride.negotiation?.agreement?.amountKobo ?? null,
@@ -46,6 +48,8 @@ export function createMobileRouter({ devices, accounts, drivers, rides, clock, r
     else if (!write && path === '/session') body = { user: session.user, sessionId: session.id };
     else if (!write && path === '/account/email') body = accountEmail.status(session.user.id);
     else if (write && path === '/account/email/request') body = accountEmail.requestVerification(session.user.id,data);
+    else if (path === '/booking' || path.startsWith('/booking/')) body = await booking({ path, write, user: session.user,
+      accessToken, data, key: request.headers['idempotency-key'] });
     else if (!write && path === '/activity') {
       const mode = query.get('mode'); check(['customer','work'].includes(mode), 'INVALID_MODE', 'Choose Customer or Work.');
       const current = rides.list(session.user, mode), history = rides.history(session.user, query.get('before'), mode);

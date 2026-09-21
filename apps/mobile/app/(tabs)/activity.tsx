@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { router } from 'expo-router';
 import { Text, View } from 'react-native';
 import { useSession } from '../../src/session/provider';
 import { useResource } from '../../src/ui/use-resource';
@@ -30,7 +31,7 @@ function Journeys({ mode }: { mode: Mode }) {
   return <><Notice message={resource.error || error}/>{resource.busy ? <Loading/> : <Button title="Refresh activity" secondary onPress={resource.reload}/>}
     {resource.value && <><Text style={styles.small}>Updated from your account. Refresh to see changes.</Text>
       {resource.value.activeElsewhere.map((r) => <Card key={r.id}><Text style={styles.body}>You also have an active journey in {r.mode === 'work' ? 'Work' : 'Customer'}.</Text><Button title={`Switch to ${r.mode === 'work' ? 'Work' : 'Customer'}`} secondary onPress={() => setMode(r.mode)}/></Card>)}
-      <Text style={styles.h2}>Current journeys</Text>{resource.value.current.length ? resource.value.current.map((r) => <RideCard key={r.id} ride={r}/>) : <Text style={styles.body}>No current journeys in this mode.</Text>}
+      <Text style={styles.h2}>Current journeys</Text>{mode === 'customer' && <Button title="Manage ride requests" secondary onPress={() => router.push('/book-ride')}/>}{resource.value.current.length ? resource.value.current.map((r) => <RideCard key={r.id} ride={r}/>) : <Text style={styles.body}>No current journeys in this mode.</Text>}
       <Text style={styles.h2}>Past journeys</Text>{resource.value.history.length || more.length ? [...resource.value.history, ...more].map((r) => <RideCard key={r.id} ride={r}/>) : <Text style={styles.body}>Your completed, cancelled and expired journeys will appear here.</Text>}
       {cursor && <Button title="Load older journeys" secondary busy={busy} onPress={() => void loadMore()}/>}</>}
   </>;

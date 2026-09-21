@@ -82,7 +82,8 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
   calls = createCallsService({ repository: createCallsRepository(db), getAccount: accounts.profile,
     sessionOwner: accounts.sessionOwner, getRideContext: rides.conversationContext, unitOfWork, audit, tokens, clock, config: callConfig });
   locations = createLocationsService({ repository: createLocationsRepository(db), provider: mapProvider,
-    getAccount: accounts.profile, sessionOwner: accounts.sessionOwner, getRideContext: rides.conversationContext, unitOfWork, tokens, audit, clock });
+    getAccount: accounts.profile, sessionOwner: accounts.sessionOwner, nativeSessionOwner: devices.accessOwner,
+    getRideContext: rides.conversationContext, unitOfWork, tokens, audit, clock });
   payments = createPaymentsService({ repository: createPaymentsRepository(db), getAccount: accounts.profile,
     tripForPayment: rides.paymentContext, simulate: simulatePayment, unitOfWork, tokens, audit, clock, allowSimulation });
   safety = createSafetyService({ repository: createSafetyRepository(db), getAccount: accounts.profile, getTrip: rides.safetyContext,

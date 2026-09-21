@@ -39,7 +39,10 @@ export function createDeviceSessionsService({ repository, authenticate, validate
   }
   function sessionFor(token) {
     if (!validToken(token)) return null;
-    const now = clock(), s = repository.access(tokens.digest(token));
+    return sessionForHash(tokens.digest(token));
+  }
+  function sessionForHash(hash) {
+    const now = clock(), s = repository.access(hash);
     if (!active(s, now) || s.accessExpiresAt <= now) return null;
     const user = getAccount(s.userId);
     return hasCapability(user, 'customer') ? { user, id: s.id } : null;
@@ -93,5 +96,7 @@ export function createDeviceSessionsService({ repository, authenticate, validate
     });
   }
   return Object.freeze({ login, issue, sessionFor, refresh, logout, list, revoke,
+    // Planning rechecks this internal port after provider I/O; it cannot authorize browser cookies.
+    accessOwner: (hash) => sessionForHash(hash)?.user.id ?? null,
     revokeUser: (id) => repository.revokeUser(id, clock()), sweep: () => unitOfWork(() => repository.purge(clock())) });
 }

@@ -8,7 +8,8 @@ leases without changing source data.
 
 One iOS/Android client serves Customer and Work. It signs in to an existing web
 account, displays saved activity, starts an optional driver profile and shows its
-application status. Document uploads/review stay on web. UI mode selection never
+application status. Native document uploads and customer ride requests are now
+implemented; administrators continue reviewing on web. See [native booking](mobile-booking.md). UI mode selection never
 grants privileges: the server reloads capabilities and enforces existing resource
 rules. Staff cannot use native sessions.
 
@@ -77,8 +78,9 @@ Web recovery uses cookie/CSRF-protected `/api/account/devices` and
 routes. Release 0.16 adds native onboarding writes, retaining the older summary route for
 0.1 clients. Uploads alone accept bodies up to 2,800,000 bytes; other native commands
 remain at 4,096 bytes. Device authorization is checked again after body parsing.
-No native admin, payment, trip mutation, calling, location, safety or document
-download endpoint is exposed. See [vehicle identity](vehicle-identity.md).
+Release 0.21 adds the [booking endpoints](mobile-booking.md): address search, route
+quotes, customer requests and pre-start cancellation. No native admin, payment,
+trip-progress, calling, GPS sharing, safety or document download endpoint is exposed. See [vehicle identity](vehicle-identity.md).
 
 Runtime contracts and TypeScript declarations live in
 `packages/shared/src/mobile-contracts.mjs` and `.d.mts`. Summaries omit contacts,
@@ -100,7 +102,8 @@ late reads/login, storage failure, offline logout/restore, origin binding and
 incompatible responses. CI type-checks and exports both platform bundles. No signed
 binary or simulator/device run is verified here; follow the mobile README checklist.
 
-Next: native booking through trip completion, negotiation, active-trip context,
-chat/calls and cancellation using existing server invariants. Add media/GPS/push
+Next: native driver availability/acceptance, negotiation, chat and trip completion
+using existing server invariants. Customer route review/request/cancellation is
+implemented in release 0.21 / mobile 0.5, with device acceptance pending. Add media/GPS/push
 permissions only when those features are implemented and device-tested. Real
 payments, staffed safety and separate admin access remain pilot gates.

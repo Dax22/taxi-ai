@@ -9,7 +9,10 @@ keyboard, accessibility and tablet QA remain pending.
 ## Included
 
 - Existing-account sign-in, secure session restore and per-device sign-out.
-- Home, Activity, Work and Account tabs; driver application screen.
+- Home, Activity, Work and Account tabs; driver application and booking screens.
+- **Book a ride**: explicit Abuja search, route/fare review, shared ride requests,
+  same-command retries, current status, registered vehicle and pre-start cancellation.
+  Local sample journeys work without live providers. [Booking guide](../../docs/mobile-booking.md).
 - Separate customer/work activity with current and paginated past journeys.
 - Complete driver applications: guided make/year/model/colour dropdowns, years from
   2000 through the current year, Other fields for unlisted values,
@@ -23,8 +26,10 @@ keyboard, accessibility and tablet QA remain pending.
 - Native device list and remote sign-out; web recovery at `/devices`.
 - Clear planned-service labels for Eats, courier and vendor work.
 
-Native booking, chat/calls, payments, location, push notifications, SOS, crash
-detection, food/courier orders and admin tools are not implemented in this app yet.
+Native driver availability/acceptance, fare negotiation, chat/calls, trip progress,
+payments, live GPS, push notifications, SOS, crash detection, food/courier orders
+and admin tools are not implemented in this app yet. Continue negotiation and trip
+controls on the website using the same account.
 This is a connected foundation, not a store-ready transport service.
 
 ## Run locally on your Mac
@@ -116,17 +121,24 @@ Native Google authentication is not activated by a bundle export alone.
 | `app/` | Protected routes, tabs and screens |
 | `src/session/` | Account lifecycle and native SecureStore adapter |
 | `src/api/client.ts` | HTTPS, bearer transport, one refresh at a time, stale-response rejection |
+| `src/booking/` | Ephemeral request controller, address search, route review and status cards |
 | `src/onboarding/` | Guided application, form conversion and user-selected file adapters |
 | `src/ui/` | Shared visual components and focus-scoped loading |
 | `src/assets/vehicles/` | Bundled colour variants; identical to the web icons |
 | `packages/shared/src/vehicle-registration.*` | Registration year policy and choice normalisation |
-| `packages/shared/src/mobile-contracts.*` | Versioned wire types and runtime readers |
+| `packages/shared/src/mobile-contracts.*` and `mobile-booking.*` | Versioned wire types and runtime readers |
 | `services/api/src/modules/device-sessions/` | Device token lifecycle and ownership |
 | `services/api/src/http/mobile-router.mjs` | Narrow native API surface |
 
 Read [vehicle identity and acceptance](../../docs/vehicle-identity.md),
 [the mobile contract](../../docs/mobile-foundation.md) and
 [the separate admin plan](../../docs/admin-dashboard.md) before adding workflows.
+
+For the new ride flow, open **Home → Book a ride → Sample journey** while the
+backend is running, choose two areas, preview and request. Use a separate approved
+web driver to take the request. Return to the app to see the registered vehicle,
+then continue negotiation on the website. Provider and device acceptance steps
+are in the [booking guide](../../docs/mobile-booking.md).
 
 ## Device review before the next milestone
 

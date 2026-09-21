@@ -10,6 +10,7 @@ const vehicle = (v) => record(v) && text(v.model) && text(v.plate)
   && (v.year === undefined || (integer(v.year) && v.year >= 1980 && v.year <= 2100));
 const eligibility = (v) => record(v) && typeof v.eligible === 'boolean' && texts(v.missing) && texts(v.expired);
 function expect(ok) { if (!ok) throw new Error('Taxi Ai returned an incompatible response. Update the app or try again later.'); }
+export function parseVehicle(value) { expect(vehicle(value)); return value; }
 export function envelope(value) {
   expect(record(value) && value.apiVersion === MOBILE_API_VERSION && integer(value.serverNow)); return value;
 }
