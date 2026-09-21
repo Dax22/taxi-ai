@@ -26,6 +26,7 @@ test('the local site serves HTML, modules and artwork with correct content types
       ['/dashboard/trip-model.mjs', 'text/javascript'], ['/dashboard/trip-view.mjs', 'text/javascript'],
       ['/shared/trip-lifecycle.mjs', 'text/javascript'],
       ['/shared/chat-safety.mjs', 'text/javascript'],
+      ['/shared/pickup-identity.mjs', 'text/javascript'],
       ['/shared/account-modes.mjs', 'text/javascript'], ['/dashboard/account-mode-view.mjs', 'text/javascript'],
       ['/dashboard/call-controller.mjs', 'text/javascript'], ['/dashboard/call-media.mjs', 'text/javascript'],
       ['/dashboard/call-view.mjs', 'text/javascript'], ['/shared/call-lifecycle.mjs', 'text/javascript'],

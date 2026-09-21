@@ -17,7 +17,7 @@ export async function notificationToken(projectId: string): Promise<string> {
   })])).data;}finally{clearTimeout(timeout);}
 }
 // A tap opens an explicit review prompt. The payload cannot choose an account or authorize a journey.
-export function listenForPush(onUpdate:(id:number)=>void){
+export function listenForPush(onUpdate:(id:number)=>void,onReceive:()=>void=()=>{}){
   if(!supported())return()=>{};
   const receive=(response:Notifications.NotificationResponse|null)=>{
     const id=response?.notification.request.content.data?.notificationId;
@@ -26,5 +26,6 @@ export function listenForPush(onUpdate:(id:number)=>void){
   };
   receive(Notifications.getLastNotificationResponse());
   const listener=Notifications.addNotificationResponseReceivedListener(receive);
-  return()=>listener.remove();
+  const incoming=Notifications.addNotificationReceivedListener(onReceive);
+  return()=>{listener.remove();incoming.remove();};
 }

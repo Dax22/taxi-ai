@@ -8,6 +8,11 @@ The screen explains this before and during incident submission.
 
 ## Controls
 
+The journey's **Vehicle doesn’t match?** button opens a report preset for a
+different plate, make/model or colour. Submission is explicit and uses the
+existing private safety review queue; it does not automatically cancel the trip
+or penalise the driver. See [pickup identity](pickup-identity.md).
+
 - Add, edit or remove up to three international-format trusted contacts. Names
   and numbers remain account-owned and unverified. Editing uses the displayed
   record version and cancels queued/failed simulations. A previously sent test

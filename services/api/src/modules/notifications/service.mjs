@@ -2,12 +2,18 @@ import { check } from '../../shared/errors.mjs';
 import { fields } from '../../shared/validation.mjs';
 import { hasCapability } from '../../shared/policies.mjs';
 import { NOTIFICATION_LABELS } from '../../../../../packages/shared/src/notification-labels.mjs';
+import { arrivalNotice } from '../../../../../packages/shared/src/pickup-identity.mjs';
 
-export function createNotificationsService({ repository, getAccount, sessionOwner, canOpen, provider, unitOfWork, clock }) {
+export function createNotificationsService({ repository, getAccount, sessionOwner, canOpen, getArrival = () => null, provider, unitOfWork, clock }) {
   let running = false, stopped = false;
   const actor = (id) => { const user = getAccount(id); check(hasCapability(user, 'customer'), 'FORBIDDEN', 'Sign in to view updates.'); return user; };
   const own = (userId,id) => { actor(userId); check(Number.isSafeInteger(id) && id > 0, 'INVALID_CURSOR', 'Invalid update ID.'); const n = repository.find(id); check(n?.userId === userId, 'NOT_FOUND', 'Update not found.'); return n; };
-  const project = ({ id, rideId, kind, mode, createdAt, readAt }) => ({ id, rideId, kind, mode, createdAt, readAt, title: NOTIFICATION_LABELS[kind] });
+  const arrival = (n) => n?.kind === 'arrive' && n.mode === 'customer' ? getArrival(n.userId, n.rideId) : null;
+  const project = (n) => {
+    const { id, rideId, kind, mode, createdAt, readAt } = n, context = arrival(n), notice = arrivalNotice(context?.driver);
+    return { id, rideId, kind, mode, createdAt, readAt, title: NOTIFICATION_LABELS[kind],
+      ...(notice ? { body: notice.body, arrivalActive: context.status === 'arrived' } : {}) };
+  };
   // Internal event port. The caller's transaction includes both state changes and notification jobs.
   function publish({ userId, rideId, kind, mode, eventKey, now = clock() }) {
     if (hasCapability(getAccount(userId), mode === 'work' ? 'driver' : 'customer')) repository.add({ userId,rideId,kind,mode,eventKey,now });
@@ -39,12 +45,15 @@ export function createNotificationsService({ repository, getAccount, sessionOwne
       for (const job of repository.due(clock())) {
         if (stopped) break;
         const valid = () => sessionOwner(job.sessionId) === job.userId && repository.registered(job.sessionId) === job.token;
-        if (!valid() || clock() >= job.createdAt + (job.kind === 'request' && job.status === 'pending' ? 300_000 : 86_400_000) || job.attempts >= 8) {
+        const arrived = job.kind === 'arrive' && job.status === 'pending' ? arrival(repository.find(job.notificationId)) : null;
+        if (!valid() || job.kind === 'arrive' && job.status === 'pending' && arrived?.status !== 'arrived'
+          || clock() >= job.createdAt + (['request','arrive'].includes(job.kind) && job.status === 'pending' ? 300_000 : 86_400_000) || job.attempts >= 8) {
           unitOfWork(() => repository.finish(job.id,'dead',clock())); continue;
         }
         unitOfWork(() => repository.lease(job.id,clock()));
         let result;
-        try { result = job.status === 'ticket' ? await provider.receipt(job.ticket) : await provider.send({ token: job.token, notificationId: job.notificationId }); }
+        try { result = job.status === 'ticket' ? await provider.receipt(job.ticket) : await provider.send({ token: job.token, notificationId: job.notificationId,
+          ...(arrived ? { arrivalBody: arrivalNotice(arrived.driver)?.body } : {}) }); }
         catch { result = { status: 'retry' }; }
         if (stopped) break;
         unitOfWork(() => {

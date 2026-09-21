@@ -5,6 +5,7 @@ import { JourneyChat } from '../src/journeys/chat';
 import { TripLocationCard } from '../src/tracking/view';
 import { Button, Card, Field, Heading, Loading, Notice, Pill, Screen, fare, styles } from '../src/ui/components';
 import { VehicleCard } from '../src/ui/vehicle-card';
+import { PickupIdentity } from '../src/ui/pickup-identity';
 import { bookingStatusLabel } from '../../../packages/shared/src/mobile-booking.mjs';
 import { vehicleCategory } from '../../../packages/shared/src/vehicle-categories.mjs';
 import type { JourneyAction } from '../../../packages/shared/src/mobile-journeys.mjs';
@@ -24,6 +25,7 @@ function JourneyScreen({id}:{id:string}){
         {r.allowedActions.includes('confirm')&&<Button title={`Confirm booking · ${fare(r.fareKobo!)}`} disabled={locked} onPress={()=>confirm('confirm','Confirm booking',`Book this journey for the agreed ${fare(r.fareKobo!)}?`)}/>}
         {r.status==='agreed'&&r.mode==='work'&&<Text style={styles.body}>The customer must confirm the booking before you depart.</Text>}
       </Card>
+      <PickupIdentity ride={r}/>
       {r.delivery&&<Card><Text style={styles.h2}>Delivery details</Text><Text style={styles.body}>{r.delivery.description} · {r.delivery.weightKg} kg</Text><Text style={styles.body}>Recipient · {r.delivery.recipientName}</Text>
         {Boolean(r.delivery.pickupInstructions)&&<Text style={styles.body}>Pickup · {r.delivery.pickupInstructions}</Text>}{Boolean(r.delivery.dropoffInstructions)&&<Text style={styles.body}>Drop-off · {r.delivery.dropoffInstructions}</Text>}
         {r.delivery.dropoffPin&&<><Text style={styles.label}>RECIPIENT’S DROP-OFF CODE</Text><Text selectable style={styles.title}>{r.delivery.dropoffPin}</Text><Text style={styles.small}>Share privately with your recipient. They give this code to the driver only after receiving the parcel.</Text></>}

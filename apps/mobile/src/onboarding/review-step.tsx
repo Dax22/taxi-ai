@@ -19,6 +19,6 @@ export function ReviewStep({ application: app, onSubmit, onReopen, pending, disa
     })}</Card>
     {editable ? <><Text style={styles.small}>By submitting, you confirm these details describe the vehicle you will use. An administrator must record the document review before approval.</Text>
       <Button title="Confirm details and submit for review" onPress={onSubmit} busy={pending} disabled={disabled || !ready}/></>
-      : <><Text style={styles.small}>Changed your vehicle or documents? Reopening pauses new rides until the application is approved again.</Text><Button title="Reopen application for changes" secondary onPress={onReopen} disabled={disabled || app.busy} busy={pending}/></>}
+      : <><Text style={styles.small}>Changed your car, colour or number plate? Reopen, update the details and vehicle documents, then submit for review. New jobs stay paused until approval. Finish assigned work first.</Text><Button title="Edit vehicle or documents" secondary onPress={onReopen} disabled={disabled || app.busy} busy={pending}/></>}
   </>;
 }

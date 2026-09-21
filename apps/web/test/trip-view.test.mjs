@@ -7,6 +7,7 @@ import { readFile } from 'node:fs/promises';
 const shared = new URL('../../../packages/shared/src/', import.meta.url);
 function sharedImports(source) {
   return source.replaceAll("'/shared/demo-booking.mjs'", `'${new URL('demo-booking.mjs', shared)}'`)
+    .replaceAll("'/shared/pickup-identity.mjs'", `'${new URL('pickup-identity.mjs', shared)}'`)
     .replaceAll("'/shared/trip-lifecycle.mjs'", `'${new URL('trip-lifecycle.mjs', shared)}'`);
 }
 const modelUrl = `data:text/javascript;base64,${Buffer.from(sharedImports(await readFile(new URL('../public/dashboard/trip-model.mjs', import.meta.url), 'utf8'))).toString('base64')}`;

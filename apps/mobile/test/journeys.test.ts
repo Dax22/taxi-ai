@@ -107,3 +107,13 @@ test('runtime contracts reject private code leakage, malformed chat, invalid cat
   assert.throws(()=>parseWork({...work().value,available:[{id}]}));
   assert.throws(()=>parseNotifications({...env,unread:0,nextBefore:null,push:{enabled:false,projectId:null,registered:false},notifications:[{id:1,rideId:id,kind:'message',title:'PIN 123456',mode:'customer',createdAt:0,readAt:null}]}));
 });
+
+test('arrival inbox details accept older servers but only allow bounded rider arrival text and a current-state flag',()=>{
+  const page={...env,unread:1,nextBefore:null,push:{enabled:false,projectId:null,registered:false}};
+  const note={id:1,rideId:id,kind:'arrive',title:'Driver has arrived',mode:'customer',createdAt:0,readAt:null};
+  parseNotifications({...page,notifications:[note]});
+  parseNotifications({...page,notifications:[{...note,body:'Driver · plate TEST · Yellow Toyota Corolla',arrivalActive:true}]});
+  for(const change of [{mode:'work'},{kind:'message',title:'New journey message'},{body:'x'.repeat(501)},{arrivalActive:'yes'}]) {
+    assert.throws(()=>parseNotifications({...page,notifications:[{...note,body:'Arrival details',arrivalActive:true,...change}]}));
+  }
+});

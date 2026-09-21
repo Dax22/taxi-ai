@@ -55,6 +55,7 @@ const routes = new Map([
   ...VEHICLE_CATEGORIES.filter((category) => category.id !== 'standard').map((category) => [category.assetPath, [`public${category.assetPath}`, 'image/png']]),
   ['/dashboard/vehicle-card.mjs', ['public/dashboard/vehicle-card.mjs', 'text/javascript; charset=utf-8']],
   ['/shared/vehicle-profile.mjs', ['../../packages/shared/src/vehicle-profile.mjs', 'text/javascript; charset=utf-8']],
+  ['/shared/pickup-identity.mjs', ['../../packages/shared/src/pickup-identity.mjs', 'text/javascript; charset=utf-8']],
   ['/shared/vehicle-registration.mjs', ['../../packages/shared/src/vehicle-registration.mjs', 'text/javascript; charset=utf-8']],
   ['/dashboard/vehicle-fields.mjs', ['public/dashboard/vehicle-fields.mjs', 'text/javascript; charset=utf-8']],
   ...[...VEHICLE_COLOURS.map((c) => c.id), 'neutral'].map((id) => [`/assets/vehicles/sedan-${id}.png`, [`public/assets/vehicles/sedan-${id}.png`, 'image/png']]),

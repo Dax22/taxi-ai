@@ -49,6 +49,7 @@
           <div class="mode-picker" role="group" aria-label="Account mode"><button id="mode-customer" type="button" aria-pressed="true">Customer</button><button id="mode-work" type="button" aria-pressed="false">Work</button></div></div>
         <p><a class="text-link" href="/devices">Manage signed-in mobile devices ↗</a></p>
         <p><a class="text-link" href="/account-access">Sign-in methods &amp; email verification ↗</a></p>
+        <button id="account-edit-vehicle" type="button" class="button button-outline button-small" hidden>Manage vehicle and documents</button>
         <p id="mode-note" class="supporting-copy"></p>
         <p class="small-note">Switching clears unsaved forms in this window. Saved journeys, calls and active trip location sharing continue.</p>
         <div id="mode-confirm" class="mode-confirm" hidden role="group" aria-labelledby="mode-confirm-title"><h3 id="mode-confirm-title">Go offline before switching?</h3><p>Your Work availability is online. Going offline stops matching for this account.</p><div class="review-actions"><button id="mode-offline-confirm" type="button" class="button button-primary button-small">Go offline and switch</button><button id="mode-cancel" type="button" class="button button-outline button-small">Stay in Work</button></div></div>
@@ -82,6 +83,8 @@
         <p id="onboarding-error" class="error-text" role="alert"></p><p id="onboarding-loading" role="status">Loading your application…</p>
         <div id="onboarding-content" hidden>
           <p id="onboarding-eligibility" class="supporting-copy" role="status"></p><p id="onboarding-reason-note" class="small-note"></p>
+          <p class="small-note">Changed your car, colour or number plate? Reopen, update the details and vehicle documents, then submit for approval. New jobs pause until approval; finish assigned work first.</p>
+          <button id="onboarding-reopen" type="button" class="button button-outline">Edit vehicle or documents · pause new jobs</button>
           <nav id="onboarding-progress" class="onboarding-progress" aria-label="Application steps"><a href="#onboarding-details-form">1 · Details</a><a href="#onboarding-documents-heading">2 · Documents</a><a href="#onboarding-final-review">3 · Review</a></nav>
           <div id="onboarding-vehicle-preview"></div>
           <dl id="onboarding-summary" class="onboarding-summary"></dl>
@@ -111,7 +114,7 @@
             <div id="onboarding-expiry-row"><label for="onboarding-expiresOn">Expiry date</label><input id="onboarding-expiresOn" type="date"></div>
             <div><label for="onboarding-file">Choose image</label><input id="onboarding-file" type="file" accept="image/png,image/jpeg" required></div>
           </div><p class="small-note">Save any changes to your details before uploading or submitting.</p><button type="submit" class="button button-outline button-small">Upload document</button></fieldset></form>
-          <div id="onboarding-final-review" class="onboarding-actions"><button id="onboarding-submit" type="button" class="button button-primary">Submit for review</button><button id="onboarding-reopen" type="button" class="button button-outline">Reopen for changes · pause new rides</button><button id="onboarding-close" type="button" class="button button-outline">Close application</button></div>
+          <div id="onboarding-final-review" class="onboarding-actions"><button id="onboarding-submit" type="button" class="button button-primary">Submit for review</button><button id="onboarding-close" type="button" class="button button-outline">Close application</button></div>
           <form id="onboarding-review-form" class="stack-form"><fieldset id="onboarding-review-fields"><legend>3. Record your review</legend>
             <p class="small-note">Download and inspect all five current documents. Approval requires all four checks and a reference to the manual verification performed. A download alone is not a completed check.</p>
             <div id="onboarding-checks"></div><label for="onboarding-reference">Manual verification reference (required for approval)</label><input id="onboarding-reference" minlength="5" maxlength="200" autocomplete="off">
@@ -215,6 +218,10 @@
             <p id="agreed-note" class="agreement-note" hidden>Your fare is saved. The customer must confirm the booking to reserve this test trip.</p>
             <section id="trip-panel" class="trip-panel" hidden aria-labelledby="trip-title">
               <p class="eyebrow">YOUR TRIP</p><h3 id="trip-title"></h3><p id="trip-guidance" class="supporting-copy"></p>
+              <div id="pickup-identity" class="quote-preview" hidden><div role="status" aria-live="polite" aria-atomic="true"><h3 id="arrival-title"></h3><p id="arrival-body"></p></div>
+                <p>Compare the number plate, make/model and colour. If anything differs, do not board, hand over a parcel or share your pickup PIN.</p>
+                <p class="small-note">Arrival is reported by the driver. The example image does not verify the physical vehicle.</p>
+                <button id="vehicle-mismatch-report" type="button" class="button button-outline button-small">Vehicle doesn’t match?</button></div>
               <button id="trip-confirm" class="button button-primary button-full" type="button" hidden>Confirm test booking</button>
               <button id="trip-action" class="button button-primary button-full" type="button" hidden></button>
               <div id="pickup-pin-panel" class="pickup-pin-panel" hidden><p class="eyebrow">YOUR PICKUP PIN</p><output id="pickup-pin-value" aria-label="Your six-digit pickup PIN"></output><p class="small-note">Share this with your driver in person after checking the vehicle. Keep it private until pickup.</p></div>
@@ -232,7 +239,8 @@
             <p class="safety-preview-note"><strong>Development preview.</strong> Test SOS records are saved; no messages are sent to contacts, police or emergency services. For an actual emergency, use your phone to contact emergency services or someone you trust.</p>
             <p id="safety-error" class="error-text" role="alert"></p><p id="safety-notice" class="small-note" role="status"></p><p id="safety-guidance" class="supporting-copy"></p>
             <form id="safety-form" class="stack-form"><fieldset id="safety-fields" disabled><legend>Create a test SOS</legend>
-              <label for="safety-kind">Concern</label><select id="safety-kind"><option value="need_help">Need help</option><option value="possible_crash">Possible crash</option><option value="unsafe_behaviour">Unsafe behaviour</option><option value="other">Other concern</option></select>
+              <label for="safety-kind">Concern</label><select id="safety-kind"><option value="need_help">Need help</option><option value="vehicle_mismatch">Vehicle or number plate does not match</option><option value="possible_crash">Possible crash</option><option value="unsafe_behaviour">Unsafe behaviour</option><option value="other">Other concern</option></select>
+              <p class="small-note">For a different vehicle, describe the plate, model or colour you can safely observe. Reports go to review and do not automatically penalise the driver. Reporting does not cancel the trip; use Cancel booking before pickup if needed.</p>
               <label for="safety-note">Note (optional)</label><textarea id="safety-note" rows="3" maxlength="500" placeholder="Add details for the test administrator…"></textarea>
               <p class="small-note">Choose contacts for simulated alerts (optional):</p><div id="safety-recipients" class="safety-recipients"></div>
               <p class="small-note">The report saves the trip reference, driver ID, vehicle plate and the last available driver-shared location with its timestamp. This does not turn on GPS.</p>

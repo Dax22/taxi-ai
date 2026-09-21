@@ -2,8 +2,9 @@ import { formatNaira } from '/shared/demo-booking.mjs';
 import { RIDE_STATUS_LABELS, CANCELLATION_REASONS } from '/shared/trip-lifecycle.mjs';
 import { $, element } from './dom.mjs';
 import { tripControls } from './trip-model.mjs';
+import { arrivalNotice } from '/shared/pickup-identity.mjs';
 
-export function createTripView({ onCommand, serverNow }) {
+export function createTripView({ onCommand, serverNow, onVehicleMismatch = () => {} }) {
   let current = null, busy = false, rendered = '';
 
   function tick() {
@@ -18,6 +19,8 @@ export function createTripView({ onCommand, serverNow }) {
     $('trip-start').dataset.locked = String(controls.next?.action !== 'start' || controls.pinLocked);
     $('cancel-request').dataset.locked = String(!controls.cancel);
     $('trip-cancel-submit').dataset.locked = String(!controls.cancel);
+    $('vehicle-mismatch-report').disabled = busy;
+    $('vehicle-mismatch-report').dataset.locked = String(busy);
     $('pickup-pin-fields').disabled = busy || controls.next?.action !== 'start' || controls.pinLocked;
     $('trip-cancel-fields').disabled = busy || !controls.cancel;
     $('pickup-pin-lock').textContent = controls.pinLocked
@@ -38,6 +41,12 @@ export function createTripView({ onCommand, serverNow }) {
     const controls = tripControls(ride, user, serverNow());
     $('trip-panel').hidden = !ride.trip && ride.status !== 'agreed';
     $('trip-title').textContent = ride.delivery && ride.status === 'completed' ? 'Delivered' : RIDE_STATUS_LABELS[ride.status];
+    const pickupCheck = ride.customer.id === user.id && ride.driver && ['booked','on_way','arrived'].includes(ride.status);
+    $('pickup-identity').hidden = !pickupCheck;
+    const notice = pickupCheck && ride.status === 'arrived' ? arrivalNotice(ride.driver) : null;
+    const heading = notice?.title ?? 'Check your pickup vehicle', body = notice?.body ?? '';
+    if ($('arrival-title').textContent !== heading) $('arrival-title').textContent = heading;
+    if ($('arrival-body').textContent !== body) $('arrival-body').textContent = body;
     const hints = {
       agreed: user.role === 'customer'
         ? 'Review the fare and driver above, then confirm your test booking. Availability is checked when you confirm.'
@@ -99,6 +108,9 @@ export function createTripView({ onCommand, serverNow }) {
     if (controls.next?.action !== 'start' || controls.pinLocked) return;
     onCommand(`/api/rides/${ride.id}/start`, { expectedVersion: ride.version, pickupPin: $('driver-pickup-pin').value }, 'Pickup verified. Trip started.');
   });
+  $('vehicle-mismatch-report').addEventListener('click', () => {
+    if (current && !busy && current.ride.customer.id === current.user.id && ['booked','on_way','arrived'].includes(current.ride.status)) onVehicleMismatch(current.ride.id);
+  });
   $('delivery-pin-form').addEventListener('submit', (event) => {
     event.preventDefault();
     if (!current || busy || !current.ride.delivery) return;
@@ -121,6 +133,7 @@ export function createTripView({ onCommand, serverNow }) {
 
   function reset() {
     current = null; rendered = '';
+    $('pickup-identity').hidden = true; $('arrival-title').textContent = ''; $('arrival-body').textContent = '';
     $('delivery-pin-value').textContent = ''; $('driver-delivery-pin').value = ''; $('delivery-pin-lock').textContent = '';
     $('delivery-pin-panel').hidden = true; $('delivery-pin-form').hidden = true;
     $('pickup-pin-value').textContent = ''; $('driver-pickup-pin').value = '';

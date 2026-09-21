@@ -94,6 +94,11 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
     } });
   notifications = createNotificationsService({ repository: createNotificationsRepository(db), getAccount: accounts.profile,
     sessionOwner: devices.sessionOwner, provider: pushProvider, unitOfWork, clock,
+    getArrival: (userId, rideId) => {
+      const ride = rideRepository.find(rideId), trip = rideRepository.findTrip(rideId);
+      if (ride?.customerId !== userId || !trip?.arrivedAt || !ride.driverSnapshotJson) return null;
+      return { status: trip.status, driver: JSON.parse(ride.driverSnapshotJson) };
+    },
     canOpen: (user, notification) => {
       if (notification.kind === 'request') {
         const available = rides.list(user, 'work').available.some((r) => r.id === notification.rideId);

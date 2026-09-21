@@ -1,6 +1,7 @@
 import { $, element } from './dom.mjs';
 import { safetyTime, safetyLocation } from './safety-format.mjs';
 import { SAFETY_KINDS, INCIDENT_LABELS, ALERT_LABELS } from '/shared/safety.mjs';
+import { vehicleMismatchReport } from '/shared/pickup-identity.mjs';
 
 export function createSafetyView({ onAdd, onRemove, onRaise, onShare, onRevoke, onCopy, onOpen, onPage, onReview, onSimulate }) {
   let state = {}, contactsKey = '', incidentsKey = '', queueKey = '', detailKey = '', reviewKey = '';
@@ -16,6 +17,7 @@ export function createSafetyView({ onAdd, onRemove, onRaise, onShare, onRevoke, 
     const snapshot = record.snapshot, details = element('dl', undefined, 'safety-details');
     for (const [label, value] of [['Trip reference', record.rideId], ['Route', `${snapshot.pickup} → ${snapshot.destination}`],
       ['Driver', `${snapshot.driver.name} · ${snapshot.driver.id}`], ['Vehicle / plate', `${snapshot.driver.vehicle.model} · ${snapshot.driver.vehicle.plate}`],
+      ['Vehicle colour', snapshot.driver.vehicle.colour || 'Not recorded'], ['Vehicle category', snapshot.driver.vehicle.category || 'standard'],
       ['Location at report', safetyLocation(snapshot.location)], ['Reporter', `${snapshot.reporter.name} · ${snapshot.reporter.role}`],
       ['Report note', record.note || 'No note provided.']]) details.append(element('dt', label), element('dd', value));
     card.append(details, element('h4', 'Recorded actions'));
@@ -125,17 +127,35 @@ export function createSafetyView({ onAdd, onRemove, onRaise, onShare, onRevoke, 
     if (action === 'review') clearReview();
   }
   $('contact-form').addEventListener('submit', (event) => { event.preventDefault(); if (!$('contact-fields').disabled) onAdd({ name: $('contact-name').value, phone: $('contact-phone').value }); });
-  $('safety-form').addEventListener('submit', (event) => { event.preventDefault(); if (!$('safety-fields').disabled) onRaise({ kind: $('safety-kind').value, note: $('safety-note').value, contactIds: [...selectedContacts] }); });
+  $('safety-form').addEventListener('submit', (event) => {
+    event.preventDefault(); if ($('safety-fields').disabled) return;
+    try {
+      const data = $('safety-kind').value === 'vehicle_mismatch' ? vehicleMismatchReport($('safety-note').value)
+        : { kind: $('safety-kind').value, note: $('safety-note').value };
+      onRaise({ ...data, contactIds: [...selectedContacts] });
+    } catch (error) { $('safety-error').textContent = error.message; }
+  });
+  function concern() {
+    const mismatch = $('safety-kind').value === 'vehicle_mismatch';
+    $('safety-note').maxLength = mismatch ? 480 : 500;
+    $('safety-raise').textContent = mismatch ? 'Report different vehicle' : 'Create test SOS';
+  }
+  $('safety-kind').addEventListener('change', concern);
   $('safety-share-create').addEventListener('click', () => { if (!$('safety-share-create').disabled) onShare(Number($('safety-share-minutes').value)); });
   $('safety-share-copy').addEventListener('click', onCopy);
   $('safety-admin-filter').addEventListener('change', () => onPage(null, $('safety-admin-filter').value));
   $('safety-admin-latest').addEventListener('click', () => onPage(null));
   $('safety-admin-older').addEventListener('click', () => { if (state.queue?.nextBefore) onPage(state.queue.nextBefore); });
   return Object.freeze({ render, saved, clearReview, focusReview() { $('safety-admin-detail').scrollIntoView({ behavior: 'smooth', block: 'start' }); },
+    vehicleMismatch(rideId) {
+      if (state.ride?.id !== rideId || state.user?.role !== 'customer' || state.pending) return;
+      $('safety-kind').value = 'vehicle_mismatch'; concern();
+      $('safety-panel').scrollIntoView({ behavior: 'smooth', block: 'start' }); $('safety-note').focus();
+    },
     reset() {
       state = {}; contactsKey = incidentsKey = queueKey = detailKey = ''; selectedContacts.clear(); clearReview();
       for (const id of ['contact-name', 'contact-phone', 'safety-note', 'safety-share-url']) $(id).value = '';
-      $('safety-kind').value = 'need_help'; $('safety-share-minutes').value = '15';
+      $('safety-kind').value = 'need_help'; concern(); $('safety-share-minutes').value = '15';
       for (const id of ['contacts-list', 'safety-recipients', 'safety-incidents', 'safety-admin-list', 'safety-admin-detail']) $(id).replaceChildren();
     },
   });

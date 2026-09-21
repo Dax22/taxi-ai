@@ -10,6 +10,7 @@ import { join } from 'node:path';
 import { openDatabase } from '../src/infrastructure/database.mjs';
 import { saveSnapshot } from '../src/infrastructure/database-snapshot.mjs';
 import { noteText } from '../src/modules/safety/domain.mjs';
+import { vehicleMismatchReport } from '../../../packages/shared/src/pickup-identity.mjs';
 
 async function step(who, ride, action, extra = {}) {
   const result = await who.post(`/api/rides/${ride.id}/${action}`, { expectedVersion: ride.version, ...extra });
@@ -42,6 +43,22 @@ async function gps(h, driver, ride) {
     sequence: 1, lat: 9.087654, lng: 7.412345, accuracy: 12, capturedAt: TEST_NOW,
   } }); assert.equal(update.status, 200, JSON.stringify(update.body)); return start.body.share.id;
 }
+
+test('a vehicle-mismatch report saves the expected identity and rider observation privately without penalising or cancelling automatically', async (t) => {
+  const { customer, driver, admin, ride } = await booked(t);
+  const payload = vehicleMismatchReport('A red van arrived with number plate TEST-999.'), key = randomUUID();
+  const saved = await customer.post(`/api/safety/rides/${ride.id}/incidents`, payload, key);
+  assert.equal(saved.status, 200); const incident = saved.body.incident;
+  assert.equal(incident.kind, 'unsafe_behaviour'); assert.equal(incident.note, payload.note);
+  assert.equal(incident.snapshot.driver.vehicle.plate, 'TEST-DRIVER'); assert.equal(incident.snapshot.driver.vehicle.colour, 'Yellow');
+  assert.deepEqual(incident.notifications, []);
+  const replay = await customer.post(`/api/safety/rides/${ride.id}/incidents`, payload, key);
+  assert.equal(replay.body.replayed, true); assert.equal(replay.body.incident.id, incident.id);
+  assert.equal((await driver.send(`/api/safety/incidents/${incident.id}`)).status, 404);
+  assert.equal((await admin.send(`/api/safety/incidents/${incident.id}`)).body.incident.note, payload.note);
+  assert.equal((await customer.send(`/api/rides/${ride.id}`)).body.ride.status, 'booked');
+  assert.equal((await driver.send('/api/session')).body.user.driver.eligibility.eligible, true);
+});
 
 test('incident and review notes allow plain multiline text while bounding length and rejecting hidden controls', () => {
   assert.equal(noteText('First line\nSecond line\t<text>'), 'First line\nSecond line\t<text>');

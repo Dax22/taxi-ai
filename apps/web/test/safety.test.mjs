@@ -102,7 +102,8 @@ test('shared-trip viewer clears private data on errors, expiry, suspension and p
 const source = (await readFile(new URL('../public/dashboard/safety-view.mjs', import.meta.url), 'utf8'))
   .replace("'./dom.mjs'", `'${new URL('../public/dashboard/dom.mjs', import.meta.url)}'`)
   .replace("'./safety-format.mjs'", `'${new URL('../public/dashboard/safety-format.mjs', import.meta.url)}'`)
-  .replace("'/shared/safety.mjs'", `'${new URL('../../../packages/shared/src/safety.mjs', import.meta.url)}'`);
+  .replace("'/shared/safety.mjs'", `'${new URL('../../../packages/shared/src/safety.mjs', import.meta.url)}'`)
+  .replace("'/shared/pickup-identity.mjs'", `'${new URL('../../../packages/shared/src/pickup-identity.mjs', import.meta.url)}'`);
 const { createSafetyView } = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
 const html = await readFile(new URL('../public/dashboard.html', import.meta.url), 'utf8');
 function dom(t) {
@@ -113,6 +114,7 @@ function dom(t) {
     replaceChildren(...children) { this.children = children; }
     addEventListener(name, fn) { this.handlers[name] = fn; }
     scrollIntoView() {}
+    focus() { this.focused = true; }
   }
   for (const [, tag, id] of html.matchAll(/<(\w+)\b[^>]*?\bid="([^"]+)"/g)) nodes.set(id, new Element(tag));
   const node = (id) => { assert.ok(nodes.has(id), id); return nodes.get(id); };
@@ -135,6 +137,17 @@ test('safety UI preserves notes and selected contacts during polls, uses text fo
   assert.match(strings(f.node('safety-incidents')), /stale update/); assert.match(strings(f.node('safety-incidents')), /Test alert queued/);
   f.view.reset(); f.render({ user: null, ride: null, contacts: null, trip: null });
   assert.equal(f.node('safety-note').value, ''); assert.equal(f.node('safety-panel').hidden, true); assert.equal(f.node('safety-incidents').children.length, 0);
+});
+
+test('vehicle-mismatch shortcuts select the current trip and require an explicit bounded report submission', (t) => {
+  const f = dom(t); f.render(); f.view.vehicleMismatch('different-trip'); assert.equal(f.node('safety-kind').value, 'need_help');
+  f.view.vehicleMismatch(ride.id); assert.equal(f.node('safety-kind').value, 'vehicle_mismatch'); assert.equal(f.actions.length, 0);
+  assert.equal(f.node('safety-note').focused, true); assert.equal(f.node('safety-note').maxLength, 480);
+  f.node('safety-note').value = 'Red van, TEST-999'; f.node('safety-form').handlers.submit(f.event);
+  assert.deepEqual(f.actions[0], ['Raise', { kind: 'unsafe_behaviour', note: 'Vehicle mismatch: Red van, TEST-999', contactIds: [] }]);
+  f.node('safety-note').value = 'x'.repeat(481); f.node('safety-form').handlers.submit(f.event);
+  assert.equal(f.actions.length, 1); assert.match(f.node('safety-error').textContent, /480/);
+  f.view.reset(); assert.equal(f.node('safety-kind').value, 'need_help'); assert.equal(f.node('safety-note').value, '');
 });
 
 test('administrator notes stay with the shown incident version, simulation controls respect state, and inactive trip controls are disabled', (t) => {

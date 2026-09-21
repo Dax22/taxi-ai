@@ -4,7 +4,7 @@ import { createVehicleFields } from './vehicle-fields.mjs';
 import { renderVehicleCard } from './vehicle-card.mjs';
 
 /** Controls are local to this window; selecting a mode grants no permissions. */
-export function createAccountModeView({ onSwitch, onCancel, onAddDriver, onOpenRide }) {
+export function createAccountModeView({ onSwitch, onCancel, onAddDriver, onOpenRide, onEditVehicle = () => {} }) {
   let state = null, busy = false, activeKey = '';
   const vehicleFields = createVehicleFields({ prefix: 'driver-profile', onChange: preview });
   function preview() {
@@ -22,6 +22,8 @@ export function createAccountModeView({ onSwitch, onCancel, onAddDriver, onOpenR
     $('account-modes').hidden = !personal;
     if (!personal) return;
     const work = account.capabilities.includes('driver');
+    $('account-edit-vehicle').hidden = !work;
+    $('account-edit-vehicle').disabled = busy;
     $('mode-customer').setAttribute('aria-pressed', String(state.mode === 'customer'));
     $('mode-work').setAttribute('aria-pressed', String(state.mode === 'work'));
     $('mode-work').textContent = work ? 'Work' : 'Apply to drive';
@@ -47,6 +49,7 @@ export function createAccountModeView({ onSwitch, onCancel, onAddDriver, onOpenR
     $('mode-active').hidden = !state.activeElsewhere.length;
   }
   $('mode-customer').addEventListener('click', () => onSwitch('customer'));
+  $('account-edit-vehicle').addEventListener('click', () => { if (!busy && state?.account?.capabilities.includes('driver')) onEditVehicle(); });
   $('mode-work').addEventListener('click', () => {
     if (busy) return;
     if (state?.account?.capabilities.includes('driver')) return onSwitch('work');

@@ -26,6 +26,7 @@ export default function Updates(){
     <Button title="Refresh updates" secondary busy={resource.busy} disabled={busy} onPress={()=>{resource.reload();void ops.refreshUpdates();}}/>
     {ops.pushId&&<Card><Text style={styles.body}>You opened a phone alert. Check whether it is still available for this account.</Text><Button title="Review phone alert" disabled={busy} onPress={()=>void open(ops.pushId!)}/><Button title="Dismiss phone alert" secondary onPress={ops.dismissPush}/></Card>}
     {resource.value&&<><Card><Text style={styles.h2}>Phone alerts</Text><Text style={styles.body}>{resource.value.push.registered?'Alerts are enabled for this signed-in device.':'Your updates are always available here. Phone alerts are optional.'}</Text>
+      <Text style={styles.small}>Arrival alerts include the driver’s name, vehicle type, colour and number plate. These details may appear on your lock screen; use your phone’s notification-preview settings to hide them.</Text>
       {resource.value.push.enabled?<Button title={resource.value.push.registered?'Disable phone alerts':'Enable phone alerts'} busy={busy} onPress={()=>void run(async()=>{
         const g=generation.current,actor=user?.id;
         if(resource.value!.push.registered)await client.disablePush();else{
@@ -35,7 +36,7 @@ export default function Updates(){
         }if(g===generation.current){resource.reload();void ops.refreshUpdates();}
       })}/>:<Text style={styles.small}>Phone alerts are not enabled on this server. Check this inbox for updates.</Text>}
     </Card>
-    {[...resource.value.notifications,...more].filter((n,i,all)=>all.findIndex((v)=>v.id===n.id)===i).map((n)=><Card key={n.id}><Pill>{`${n.mode==='work'?'WORK':'CUSTOMER'}${n.readAt===null?' · NEW':''}`}</Pill><Text style={styles.h2}>{n.title}</Text><Text style={styles.small}>{new Date(n.createdAt).toLocaleString()}</Text><Button title={n.kind==='request'?'Review available work':'View journey'} disabled={busy} onPress={()=>void open(n.id)}/>
+    {[...resource.value.notifications,...more].filter((n,i,all)=>all.findIndex((v)=>v.id===n.id)===i).map((n)=><Card key={n.id}><Pill>{`${n.mode==='work'?'WORK':'CUSTOMER'}${n.readAt===null?' · NEW':''}`}</Pill><Text style={styles.h2}>{n.title}</Text>{n.body&&<><Text style={styles.body}>{n.body}</Text><Text style={styles.small}>Recorded arrival update. Open the journey for its current status.</Text></>}<Text style={styles.small}>{new Date(n.createdAt).toLocaleString()}</Text><Button title={n.kind==='request'?'Review available work':'View journey'} disabled={busy} onPress={()=>void open(n.id)}/>
       {n.readAt===null&&<Button title="Mark as read" secondary disabled={busy} onPress={()=>void run(async()=>{await client.readNotification(n.id);resource.reload();void ops.refreshUpdates();})}/>}</Card>)}
     {!resource.value.notifications.length&&<Text style={styles.body}>You are all caught up. New journey updates will appear here.</Text>}
     {cursor&&<Button title="Load older updates" secondary busy={busy} onPress={()=>void run(async()=>{const g=generation.current,page=await client.notifications(cursor);if(g===generation.current){setMore((old)=>[...old,...page.notifications]);setCursor(page.nextBefore);}})}/>}

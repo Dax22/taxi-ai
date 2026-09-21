@@ -21,7 +21,7 @@ export function OperationsProvider({children}:PropsWithChildren){
   const refreshUpdates=useCallback(async()=>{
     if(!client.account()||AppState.currentState!=='active'||blocked||updatesBusy.current)return;
     const generation=updateGeneration.current;updatesBusy.current=true;
-    try{const result=await client.notifications();if(generation===updateGeneration.current)setUpdates(result);}catch{}finally{updatesBusy.current=false;}
+    try{const result=await client.notifications();if(generation===updateGeneration.current)setUpdates(result);}catch{if(generation===updateGeneration.current)setUpdates(null);}finally{updatesBusy.current=false;}
   },[client,blocked]);
   useEffect(()=>{
     if(blocked||!user)return;
@@ -43,7 +43,7 @@ export function OperationsProvider({children}:PropsWithChildren){
     if(!agreed)return false;
     const offline=await work.offline();if(!offline)Alert.alert('Offline status unconfirmed','Return to Work and retry the pending action.');return offline;
   }),[client,work,registerModeGuard]);
-  useEffect(()=>{if(user)return listenForPush(setPushId);},[user?.id]);
+  useEffect(()=>{if(user)return listenForPush(setPushId,()=>void refreshUpdates());},[user?.id,refreshUpdates]);
   // Disposal is deferred across Strict Mode's effect replay; account-key changes destroy private controllers.
   const alive=useRef(false);
   useEffect(()=>{alive.current=true;return()=>{alive.current=false;queueMicrotask(()=>{if(!alive.current){work.dispose();for(const c of controllers.current.values())c.dispose();controllers.current.clear();for(const c of safetyControllers.current.values())c.dispose();safetyControllers.current.clear();}});};},[work]);
