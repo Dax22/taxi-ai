@@ -139,5 +139,7 @@ switching, app lock/background behavior, expired offers, notification permission
 revocation, cold/warm alert taps, wrong-account alert taps, chat pagination/reporting
 and both pickup/drop-off lockouts. Test real APNs/FCM receipt delivery only after
 configuring the project with test devices. No live deployment or store release is
-part of this change. Native voice, trip location sharing, safety and payments
-remain separate integrations.
+part of this change. Native voice and payments remain separate integrations.
+[Mobile safety](mobile-safety.md) and explicit [foreground trip location
+sharing](mobile-trip-location.md) have since been added; their real-device
+acceptance remains pending.

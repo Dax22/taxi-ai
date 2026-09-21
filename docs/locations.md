@@ -4,7 +4,8 @@ The account dashboard can search Abuja addresses, select map pins, save a road
 route quote and share the assigned driver's browser-reported location during a
 confirmed test trip. Fare negotiation, chat, voice controls and pickup PINs use
 their existing rules. This milestone does not dispatch a vehicle, take payment,
-verify physical arrival or provide background/native-mobile tracking.
+verify physical arrival or provide background tracking. The native app now also
+supports explicit [foreground trip location sharing](mobile-trip-location.md).
 
 ## Try it locally
 

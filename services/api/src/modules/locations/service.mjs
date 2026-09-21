@@ -5,16 +5,25 @@ import { transportCategory } from '../../../../../packages/shared/src/transport-
 import { ABUJA_BOUNDS, insideAbuja, canShareLocation } from '../../../../../packages/shared/src/locations.mjs';
 import { key, clientIdentity, endpoints, point, checkedRoute, directQuote, position, QUOTE_MS, FRESH_MS, SHARE_MS } from './domain.mjs';
 
-export function createLocationsService({ repository, provider, getAccount, sessionOwner, nativeSessionOwner = () => null, getRideContext, unitOfWork, tokens, audit, clock }) {
+export function createLocationsService({ repository, provider, getAccount, sessionOwner, nativeAccessOwner = () => null, nativeSessionOwner = () => null, getRideContext, unitOfWork, tokens, audit, clock }) {
   function context(input, clientRequired = false, planning = false) {
     const user = getAccount(input.userId);
-    check(user && typeof input.sessionToken === 'string', 'UNAUTHENTICATED', 'Sign in to use locations.');
+    check(user, 'UNAUTHENTICATED', 'Sign in to use locations.');
     requireRole(user, 'customer');
-    const sessionHash = tokens.digest(input.sessionToken);
-    const owner = planning && input.native === true ? nativeSessionOwner : sessionOwner;
-    check(owner(sessionHash) === user.id, 'UNAUTHENTICATED', 'This location session has expired.');
+    let sessionHash;
+    if (!planning && typeof input.nativeSessionId === 'string') {
+      // A native share belongs to the device family, so rotating its access token
+      // neither ends sharing nor lets a different device publish positions.
+      check(nativeSessionOwner(input.nativeSessionId) === user.id, 'UNAUTHENTICATED', 'This location session has expired.');
+      sessionHash = `native:${input.nativeSessionId}`;
+    } else {
+      check(typeof input.sessionToken === 'string', 'UNAUTHENTICATED', 'Sign in to use locations.');
+      sessionHash = tokens.digest(input.sessionToken);
+      const owner = planning && input.native === true ? nativeAccessOwner : sessionOwner;
+      check(owner(sessionHash) === user.id, 'UNAUTHENTICATED', 'This location session has expired.');
+    }
     const clientHash = input.clientId ? tokens.digest(clientIdentity(input.clientId)) : null;
-    check(!clientRequired || clientHash, 'INVALID_LOCATION_CLIENT', 'Use location controls in this window.');
+    check(!(clientRequired || input.nativeSessionId) || clientHash, 'INVALID_LOCATION_CLIENT', 'Use location controls on this device or window.');
     return { user, userId: user.id, sessionHash, clientHash };
   }
   const planningContext = (input) => context(input, false, true);
@@ -79,13 +88,14 @@ export function createLocationsService({ repository, provider, getAccount, sessi
     audit.record(share.driverId, 'location.stopped', share.id, now);
   }
   function closeRide(id, now) { close(repository.currentShare(id), now); }
+  const shareOwner = (binding) => binding?.startsWith('native:') ? nativeSessionOwner(binding.slice(7)) : sessionOwner(binding);
   function expire() {
     const now = clock();
     for (const share of repository.activeShares()) {
       const driver = getAccount(share.driverId);
       const ride = getRideContext(driver, share.rideId);
       if (!canShareLocation(ride.status) || driver.driver?.status !== 'approved'
-        || sessionOwner(share.sessionHash) !== share.driverId || now >= share.seenAt + SHARE_MS) close(share, now);
+        || shareOwner(share.sessionHash) !== share.driverId || now >= share.seenAt + SHARE_MS) close(share, now);
     }
     repository.pruneQuotes(now);
   }
@@ -101,9 +111,11 @@ export function createLocationsService({ repository, provider, getAccount, sessi
   function tracking(input, rideId) {
     const ctx = context(input);
     const ride = getRideContext(ctx.user, rideId);
-    if (ride.driverId === ctx.userId) requireRole(ctx.user, 'driver');
+    const isDriver = ride.driverId === ctx.userId;
+    if (isDriver && !input.nativeSessionId) requireRole(ctx.user, 'driver');
     sweep();
-    return { share: shareView(repository.currentShare(rideId), ctx) };
+    return { rideId, isDriver, canShare: isDriver && ctx.user.driver?.status === 'approved' && canShareLocation(ride.status),
+      share: shareView(repository.currentShare(rideId), ctx) };
   }
   function driverShare(ctx, id) {
     const share = repository.share(id);
@@ -144,7 +156,7 @@ export function createLocationsService({ repository, provider, getAccount, sessi
     return unitOfWork(() => {
       const share = driverShare(ctx, id);
       check(share.active, 'LOCATION_CLOSED', 'Location sharing has ended.');
-      check(owns(share, ctx), 'LOCATION_WINDOW', 'Only the browser window that started sharing may update it.');
+      check(owns(share, ctx), 'LOCATION_WINDOW', 'Only the device or browser window that started sharing may update it.');
       if (data.sequence <= share.sequence) {
         check(data.sequence < share.sequence || JSON.stringify(value) === share.positionJson, 'STALE_LOCATION', 'This sequence belongs to a different location.');
         return { share: shareView(share, ctx), replayed: true };
@@ -158,7 +170,7 @@ export function createLocationsService({ repository, provider, getAccount, sessi
   // Read-only port: the safety use case already checked ride access. No nested writes.
   function safetyPosition(rideId) {
     const share = repository.currentShare(rideId), now = clock();
-    if (!share?.positionJson || now >= share.seenAt + SHARE_MS || sessionOwner(share.sessionHash) !== share.driverId
+    if (!share?.positionJson || now >= share.seenAt + SHARE_MS || shareOwner(share.sessionHash) !== share.driverId
       || getAccount(share.driverId)?.driver?.status !== 'approved') return null;
     const point = JSON.parse(share.positionJson);
     return { ...point, source: 'driver_shared', stale: now - point.capturedAt >= FRESH_MS };

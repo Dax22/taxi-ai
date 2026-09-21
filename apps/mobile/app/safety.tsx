@@ -6,6 +6,7 @@ import { useSession } from '../src/session/provider';
 import { Button, Card, Field, Heading, Notice, Screen, styles } from '../src/ui/components';
 import { SelectField } from '../src/ui/select-field';
 import type { Contact } from '../src/safety/contracts';
+import { TripLocationCard } from '../src/tracking/view';
 const kinds=[{value:'need_help',label:'Need help / SOS'},{value:'unsafe_behaviour',label:'Unsafe behaviour'},{value:'possible_crash',label:'Possible crash'},{value:'other',label:'Other concern'}];
 function SafetyScreen({id}:{id:string}){
  const {state:s,controller:c}=useSafety(id),{client,blocked,user}=useSession();
@@ -24,8 +25,7 @@ function SafetyScreen({id}:{id:string}){
  <Field label="Contact name" value={name} maxLength={80} editable={!locked} onChangeText={setName}/><Field label="Phone including country code" value={phone} maxLength={16} keyboardType="phone-pad" editable={!locked} onChangeText={setPhone}/>
  <Button title={editing?'Save contact changes':'Add trusted contact'} disabled={locked||!name.trim()||!phone.trim()||!editing&&s.contacts.length>=3} onPress={()=>{const data={name:name.trim(),phone:phone.trim(),...(editing?{expectedVersion:editing.version}:{})};void c.command(editing?`contacts/${editing.id}/edit`:'contacts',data).then(()=>{if(!c.snapshot().error){setEditing(null);setName('');setPhone('');}});}}/>
  {editing&&<Button title="Cancel editing" secondary disabled={s.busy||s.uncertain} onPress={()=>{setEditing(null);setName('');setPhone('');}}/>}</Card>
- {s.trip&&<><Card><Text style={styles.h2}>Share this trip</Text><Text style={styles.body}>Links expire and can be revoked. Recipients need invited-tester access in staging. Sharing exposes the trip, driver and available driver-shared location to the chosen recipient.</Text>
- <Text style={styles.small}>{s.trip.location?`Driver location recorded ${new Date(s.trip.location.capturedAt).toLocaleString()}${s.trip.location.stale?' · marked stale at last refresh':''}. Location may have changed.`:'No driver-shared location is available. The link can show trip details, but this screen does not start GPS tracking.'}</Text>
+ {s.trip&&<><TripLocationCard id={id}/><Card><Text style={styles.h2}>Share this trip</Text><Text style={styles.body}>Links expire and can be revoked. Recipients need invited-tester access in staging. Sharing exposes the trip, driver and available driver-shared location to the chosen recipient. Creating a link does not start GPS; the driver chooses Share my location separately.</Text>
  {s.trip.share&&<><Text style={styles.body}>Link expires {new Date(s.trip.share.expiresAt).toLocaleString()}</Text><Button title="Revoke trip link" secondary disabled={locked} onPress={()=>confirm('Revoke link','People with this link will lose access.',`links/${s.trip!.share!.id}/revoke`,{expectedVersion:s.trip!.share!.version})}/></>}
  {[15,30,60].map(minutes=><Button key={minutes} title={`${s.trip?.share?'Replace':'Create'} ${minutes}-minute link`} secondary disabled={locked||!s.trip?.canRaise} onPress={()=>confirm('Create private link','This replaces any current link. You choose whether and where to share it.',`rides/${id}/links`,{minutes,expectedShareId:s.trip?.share?.id??null})}/>)}
  {s.token&&<Button title="Choose who to share with" disabled={locked} onPress={()=>void share()}/>}</Card>

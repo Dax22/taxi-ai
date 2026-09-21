@@ -32,6 +32,7 @@ claiming. Both participants negotiate fares, chat and finish rides/deliveries in
 app, including pickup and drop-off verification. Updates has a durable inbox and
 optional configured Expo phone alerts. See [native journeys and push setup](../../docs/mobile-journeys.md).
 Native Safety / SOS now opens trusted contacts, revocable trip links and private test incident records. See [mobile safety](../../docs/mobile-safety.md).
+The driver can explicitly share foreground trip GPS from Journey or Safety; the customer and active trip links receive the latest position. See [native trip location](../../docs/mobile-trip-location.md).
 Native calls, payment controls, live trip maps, automatic crash detection, restaurant
 ordering and staff tools remain separate milestones.
 This is a connected foundation, not a store-ready transport service.
@@ -166,7 +167,7 @@ and the remaining live-host/device checks.
    navigation stack; returning from the picker must retain the selected file and form.
    Verify cache cleanup, expired/replaced images, offline upload retry, stale edits
    from web, approval and reopening during assigned work.
-6. GPS permission is requested only from Go online; phone-alert permission only from
+6. GPS permission is requested only from Go online or Share my location; phone-alert permission only from
    Enable phone alerts. Check that there are no unexpected microphone/camera prompts, credentials
    in logs or success messages after failed network/storage operations.
 

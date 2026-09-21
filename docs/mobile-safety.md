@@ -18,10 +18,11 @@ The screen explains this before and during incident submission.
 - Revoke the active link at any time. A link also ends on expiry, trip closure,
   native device sign-out/revocation or session-family expiry. Access-token refresh
   preserves the device family and therefore does not invalidate the link.
-- Show when driver-shared location was recorded and whether it was marked stale
-  at the last refresh, or explicitly report that no location is available. This
-  screen does not start native location tracking; the existing web driver sharing
-  can supply the position. Do not interpret availability GPS as trip sharing.
+- Show driver-reported location, accuracy and age, mark stale data, or explicitly
+  report that no location is available. The assigned driver can separately choose
+  **Share my location** on Journey or Safety; native foreground updates now supply
+  trip links and incident snapshots. Creating a link never starts GPS. See
+  [native trip location](mobile-trip-location.md); availability GPS is separate.
 - Record a concern/SOS test incident on a confirmed active journey, with a kind
   and optional note. Native submissions select no notification recipients because
   real contact delivery is unavailable. The backend stores a trip snapshot.
@@ -68,4 +69,4 @@ snapshot privacy, transactions, permissions and cleanup.
 Physical device/visual/accessibility acceptance is pending. Test the OS share
 sheet, cancellation, large text, keyboard avoidance, background privacy, connectivity
 loss and account changes on signed iOS/Android builds. No test establishes actual
-emergency response, trusted-contact delivery or native live location tracking.
+emergency response, trusted-contact delivery or real-device GPS behavior.

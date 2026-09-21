@@ -6,6 +6,7 @@ import { readBody } from './body.mjs';
 import { json } from './responses.mjs';
 import { createMobileJourneys, mobileNotifications } from './mobile-journeys.mjs';
 import { mobileSafety } from './mobile-safety.mjs';
+import { mobileTracking } from './mobile-tracking.mjs';
 import { createMobileBooking } from './mobile-booking.mjs';
 
 /** Versioned native surface. Cookie identity and browser CSRF are never reused. */
@@ -56,6 +57,7 @@ export function createMobileRouter({ devices, accounts, drivers, rides, location
     else if (path === '/work' || path.startsWith('/work/') || path.startsWith('/journeys/')) body = journeys({ path, write, user: session.user,
       accessToken, query, data, key: request.headers['idempotency-key'] });
     else if (path.startsWith('/safety/')) body = mobileSafety({ safety, session, path, write, data, key: request.headers['idempotency-key'] });
+    else if (path.startsWith('/tracking/')) body = mobileTracking({ locations, session, path, write, query, data, key: request.headers['idempotency-key'] });
     else if (path === '/notifications' || path.startsWith('/notifications/')) body = mobileNotifications({ notifications, user: session.user, sessionId: session.id, path, write, query, data });
     else if (!write && path === '/activity') {
       const mode = query.get('mode'); check(['customer','work'].includes(mode), 'INVALID_MODE', 'Choose Customer or Work.');

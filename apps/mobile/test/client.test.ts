@@ -22,6 +22,26 @@ function vault() {
 function client(fetcher: (url: string, options: RequestInit) => Promise<Response>, v = vault()) {
   return { app: new MobileClient({ origin: 'https://taxi.example.test', vault: v.port, fetchImpl: ((url, options) => fetcher(String(url), options ?? {})) as typeof fetch }), ...v };
 }
+test('native GPS publication keeps its owner nonce and sequence across access refresh without persisting position', async () => {
+  const attempts: Array<{ url: string; options: RequestInit }> = [];
+  const position = { lat: 9.071234, lng: 7.401234, accuracy: 20, capturedAt: 1000 };
+  const { app, storage } = client(async (url, options) => {
+    if (url.endsWith('/auth/login')) return response(auth());
+    if (url.endsWith('/auth/refresh')) return response(auth(2));
+    attempts.push({ url, options });
+    if (new Headers(options.headers).get('Authorization') === `Bearer ${auth().credentials.accessToken}`) return unauthorized();
+    return ok({ replayed: false, share: { id, rideId: id, active: true, owned: true, sequence: 4,
+      startedAt: 500, updatedAt: 1000, stale: false, position } });
+  });
+  await app.login(user.email, 'Test password', 'Phone');
+  assert.equal((await app.trackingPosition(id, id, 4, position)).share.sequence, 4);
+  assert.equal(attempts.length, 2);
+  assert.equal(attempts[0].url, attempts[1].url);
+  assert.ok(attempts[0].url.endsWith(`/tracking/shares/${id}/position?clientId=${id}`));
+  assert.equal(attempts[0].options.body, attempts[1].options.body);
+  assert.deepEqual(JSON.parse(String(attempts[0].options.body)), { sequence: 4, ...position });
+  for (const value of ['9.071234', '7.401234', 'capturedAt']) assert.ok(!storage.value!.includes(value));
+});
 test('booking preserves the exact command through access refresh and keeps addresses and fares out of secure storage', async () => {
   const attempts: RequestInit[] = [];
   const { app, storage } = client(async (url, options) => {
