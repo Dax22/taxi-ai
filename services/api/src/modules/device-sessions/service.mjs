@@ -98,5 +98,9 @@ export function createDeviceSessionsService({ repository, authenticate, validate
   return Object.freeze({ login, issue, sessionFor, refresh, logout, list, revoke,
     // Planning rechecks this internal port after provider I/O; it cannot authorize browser cookies.
     accessOwner: (hash) => sessionForHash(hash)?.user.id ?? null,
+    sessionOwner: (id) => {
+      const s = repository.find(id);
+      return active(s, clock()) && hasCapability(getAccount(s.userId), 'customer') ? s.userId : null;
+    },
     revokeUser: (id) => repository.revokeUser(id, clock()), sweep: () => unitOfWork(() => repository.purge(clock())) });
 }

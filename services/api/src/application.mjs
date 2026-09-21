@@ -41,9 +41,13 @@ import { createAccountMail } from './infrastructure/account-mail.mjs';
 import { createAccountEmailRepository } from './modules/account-email/repository.mjs';
 import { createAccountEmailService } from './modules/account-email/service.mjs';
 
+import { createNotificationsRepository } from './modules/notifications/repository.mjs';
+import { createNotificationsService } from './modules/notifications/service.mjs';
+import { createPushProvider } from './infrastructure/push-provider.mjs';
+
 /** Composition root: the only place that wires business modules to adapters. */
 export function createApplication({ db, clock = Date.now, callConfig = createCallConfig(), mapProvider = createMapProvider(), allowSimulation = false,
-  accountMail = createAccountMail(),
+  accountMail = createAccountMail(), pushProvider = createPushProvider(),
   googleProvider = createGoogleProvider({ config: createGoogleConfig({}), clock }) }) {
   const unitOfWork = (run) => transaction(db, run);
   const audit = createAudit(db);
@@ -64,9 +68,9 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
   drivers = createDriversService({ repository: driverRepository,
     getAccount: accounts.profile, hasDriverWork: rideRepository.hasDriverWork, codec: createDriverDocumentCodec(MAX_DRIVER_FILE_BYTES),
     tokens, unitOfWork, audit, clock });
-  let calls, locations, payments, safety;
+  let calls, locations, payments, safety, notifications;
   const availability = createAvailabilityService({ repository: createAvailabilityRepository(db),
-    getAccount: accounts.profile, sessionOwner: accounts.sessionOwner, isBusy: (id) => rideRepository.hasNegotiation(id) || rideRepository.hasCustomerWork(id, clock()),
+    getAccount: accounts.profile, sessionOwner: accounts.sessionOwner, nativeSessionFor: devices.sessionFor, nativeSessionOwner: devices.sessionOwner, isBusy: (id) => rideRepository.hasNegotiation(id) || rideRepository.hasCustomerWork(id, clock()),
     unitOfWork, tokens, audit, clock, allowSimulation });
   const rides = createRidesService({ repository: rideRepository,
     getAccount: accounts.profile, unitOfWork, audit, tokens, clock,
@@ -74,11 +78,28 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
     routeForRide: (id) => locations.routeForRide(id),
     quoteForRide: (userId, id, now) => locations.quoteForRide(userId, id, now),
     bindQuote: (userId, id, rideId, now) => locations.bindQuote(userId, id, rideId, now),
-    availabilityFor: availability.positionFor, onClaim: availability.onClaim, allowSimulation,
+    availabilityFor: availability.positionFor, onClaim: availability.onClaim, availableDriverIds: availability.driverIds, allowSimulation,
+    onEvent: ({ kind, ride, actorId, recipients = [], eventKey, now }) => {
+      const targets = kind === 'request' ? recipients : [ride.customerId,ride.driverId].filter((id) => id && id !== actorId);
+      for (const userId of targets) notifications.publish({ userId, rideId: ride.id, kind,
+        mode: userId === ride.customerId ? 'customer' : 'work', eventKey, now });
+    },
     onTripCompleted: (data) => payments.recordCompletion(data),
     onRideClosed: (id, now) => { calls.closeRide(id, now); locations.closeRide(id, now); safety.closeRide(id, now); } });
   const chat = createChatService({ repository: createChatRepository(db), getAccount: accounts.profile,
-    getRideContext: rides.conversationContext, listConversationIds: rides.conversationIds, unitOfWork, audit, tokens, clock });
+    getRideContext: rides.conversationContext, listConversationIds: rides.conversationIds, unitOfWork, audit, tokens, clock,
+    onMessage: ({ ride, message }) => {
+      const userId = ride.customerId === message.senderId ? ride.driverId : ride.customerId;
+      notifications.publish({ userId, rideId: ride.id, kind: 'message', mode: userId === ride.customerId ? 'customer' : 'work', eventKey: `message:${message.id}` });
+    } });
+  notifications = createNotificationsService({ repository: createNotificationsRepository(db), getAccount: accounts.profile,
+    sessionOwner: devices.sessionOwner, provider: pushProvider, unitOfWork, clock,
+    canOpen: (user, notification) => {
+      if (notification.kind === 'request') {
+        const available = rides.list(user, 'work').available.some((r) => r.id === notification.rideId);
+        if (!available) rides.conversationContext(user, notification.rideId);
+      } else rides.conversationContext(user, notification.rideId);
+    } });
   const rateLimiter = createRateLimiter({ db, unitOfWork, digest: tokens.digest });
   accountEmail = createAccountEmailService({ repository: createAccountEmailRepository(db), accounts, mail: accountMail,
     passwords, tokens, unitOfWork, rateLimiter, audit, clock });
@@ -94,5 +115,5 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
   const adminConsole = createAdminConsoleService({ repository: createAdminConsoleRepository(db), audit, clock, unitOfWork });
   const googleAuth = createGoogleAuthService({ repository: createGoogleAuthRepository(db), provider: googleProvider,
     accounts, devices, tokens, unitOfWork, clock });
-  return Object.freeze({ accounts, devices, drivers, rides, chat, calls, locations, availability, payments, safety, adminConsole, googleAuth, accountEmail, rateLimiter, clock });
+  return Object.freeze({ accounts, devices, drivers, rides, chat, calls, locations, availability, payments, safety, adminConsole, googleAuth, accountEmail, notifications, rateLimiter, clock });
 }

@@ -14,6 +14,7 @@ function RideCard({ ride }: { ride: RideSummary }) {
     <Text style={styles.small}>{new Date(ride.createdAt).toLocaleDateString()} · {ride.isDemo ? 'Preview journey' : 'Journey'}</Text>
     {ride.driver && <><Button title={showVehicle ? 'Hide vehicle details' : 'View vehicle details'} secondary onPress={() => setShowVehicle((v) => !v)}/>
       {showVehicle && <><Text style={styles.body}>Driver: {ride.driver.name}</Text><VehicleCard vehicle={ride.driver.vehicle} label="VEHICLE FOR THIS JOURNEY" compact/></>}</>}
+    <Button title="Open journey" onPress={() => router.push({ pathname: '/journey', params: { id: ride.id } })}/>
   </Card>;
 }
 function Journeys({ mode }: { mode: Mode }) {

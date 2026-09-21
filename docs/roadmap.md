@@ -6,6 +6,14 @@ with shared accounts and Customer, Drive & deliver and My store modes. The
 moves the mobile foundation earlier. Completed milestones below describe the
 prototype; planned milestones do not claim shipped features.
 
+## Native journey milestone — implemented; device acceptance pending
+
+Release 0.23 / mobile 0.7 adds native foreground Work availability, job claiming,
+exact fare offers and acceptance, booking confirmation, chat/reporting, trip
+progress and pickup/drop-off verification. Schema 17 adds stable device lease
+bindings and a durable inbox/push outbox. Optional phone alerts need project
+credentials and a signed device build. See [native journeys](mobile-journeys.md).
+
 ## Category milestone — rides and deliveries (implemented; device acceptance pending)
 
 Release 0.22 / mobile 0.6 enables SUV, van, truck and motorcycle booking, approved
@@ -18,8 +26,8 @@ direct distance without a driving ETA. See [category workflows](vehicle-categori
 Release 0.21 / mobile 0.5 adds native route search/review, server fare suggestions,
 shared customer requests, status recovery, assigned vehicles and pre-start cancellation.
 No schema change: schema 15 and existing business services are reused.
-See [native booking](mobile-booking.md). Next: native driver availability/acceptance,
-then fare negotiation/chat and the remaining trip lifecycle. Provider/device review
+See [native booking](mobile-booking.md). Native driver availability, negotiation,
+chat and the remaining lifecycle are now implemented in release 0.23. Provider/device review
 and signed app testing remain outstanding.
 
 ## Account milestone — verification and recovery (implemented; delivery/device acceptance pending)
@@ -264,8 +272,8 @@ enrollment/status and device revocation. Both platform bundles are compiled;
 actual simulator/device and signed native build testing are pending. Website
 download links remain Coming soon until real listings exist.
 
-Next: native driver requests and fare negotiation through trip completion, then native
-communication/location/safety integrations. The separate [staff dashboard](admin-dashboard.md)
+Next: signed iOS/Android device acceptance and configured phone-alert testing,
+then native voice, trip-location, safety and payment integrations. The separate [staff dashboard](admin-dashboard.md)
 now has audited account/trip views and analytics. Extend it with dedicated staff
 sessions, MFA and granular permissions. Real providers and staffed operations
 remain gates before a live pilot.

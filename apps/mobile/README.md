@@ -9,7 +9,7 @@ keyboard, accessibility and tablet QA remain pending.
 ## Included
 
 - Existing-account sign-in, secure session restore and per-device sign-out.
-- Home, Activity, Work and Account tabs; driver application and booking screens.
+- Home, Activity, Work, Updates and Account tabs; driver application, booking and journey screens.
 - **Book a ride or delivery**: Standard/SUV passenger trips and van/truck/motorcycle
   parcels with recipient details, category pricing and approved capacity matching; explicit Abuja search, route/fare review, shared ride requests,
   same-command retries, current status, registered vehicle and pre-start cancellation.
@@ -27,10 +27,12 @@ keyboard, accessibility and tablet QA remain pending.
 - Native device list and remote sign-out; web recovery at `/devices`.
 - Delivery requests and recipient drop-off codes; restaurant/vendor ordering remains planned.
 
-Native driver availability/acceptance, fare negotiation, chat/calls, trip progress,
-payments, live GPS, push notifications, SOS, crash detection, restaurant ordering
-and admin tools are not implemented in this app yet. Continue negotiation and trip
-controls on the website using the same account.
+Native Work now supports foreground location, online/offline availability and job
+claiming. Both participants negotiate fares, chat and finish rides/deliveries in the
+app, including pickup and drop-off verification. Updates has a durable inbox and
+optional configured Expo phone alerts. See [native journeys and push setup](../../docs/mobile-journeys.md).
+Native calls, payment controls, live trip maps, SOS/crash detection, restaurant
+ordering and staff tools remain separate milestones.
 This is a connected foundation, not a store-ready transport service.
 
 ## Run locally on your Mac
@@ -124,6 +126,7 @@ Native Google authentication is not activated by a bundle export alone.
 | `src/api/client.ts` | HTTPS, bearer transport, one refresh at a time, stale-response rejection |
 | `src/booking/` | Ephemeral request controller, address search, route review and status cards |
 | `src/onboarding/` | Guided application, form conversion and user-selected file adapters |
+| `src/work/`, `src/journeys/`, `src/notifications/` | Native availability, account-scoped journey controllers, chat and optional phone alerts |
 | `src/ui/` | Shared visual components and focus-scoped loading |
 | `src/assets/vehicles/` | Bundled colour variants; identical to the web icons |
 | `packages/shared/src/vehicle-registration.*` | Registration year policy and choice normalisation |
@@ -137,11 +140,15 @@ Read [vehicle identity and acceptance](../../docs/vehicle-identity.md),
 
 For the new ride flow, open **Home → Book a ride → Sample journey** while the
 backend is running, choose two areas, preview and request. Use a separate approved
-web driver to take the request. Return to the app to see the registered vehicle,
-then continue negotiation on the website. Provider and device acceptance steps
+driver in native Work or on web to take the request. Open the journey in the app
+to negotiate, chat, confirm and complete. Provider and device acceptance steps
 are in the [booking guide](../../docs/mobile-booking.md).
 
 ## Device review before the next milestone
+
+Use [the signed preview setup and acceptance record](../../docs/device-preview.md)
+for installable APK/ad hoc builds, Firebase client configuration, push credentials
+and the remaining live-host/device checks.
 
 1. Sign in with the same web account on iOS/Android. Confirm customer/work activity,
    application status and pagination agree with web.
@@ -158,7 +165,8 @@ are in the [booking guide](../../docs/mobile-booking.md).
    navigation stack; returning from the picker must retain the selected file and form.
    Verify cache cleanup, expired/replaced images, offline upload retry, stale edits
    from web, approval and reopening during assigned work.
-6. Check that there are no unexpected GPS/microphone/camera prompts, credentials
+6. GPS permission is requested only from Go online; phone-alert permission only from
+   Enable phone alerts. Check that there are no unexpected microphone/camera prompts, credentials
    in logs or success messages after failed network/storage operations.
 
 Before public downloads: finish native ride workflows and validate live recovery email delivery, test signed

@@ -13,7 +13,7 @@ import { requireParticipant, requireVersion, restoreNegotiation, canonical } fro
  * or HTTP objects. unitOfWork must encompass state, fare, audit and retry writes.
  */
 export function createRidesService({ repository, deliveries, getAccount, unitOfWork, audit, tokens, clock, onRideClosed = () => {}, onTripCompleted = () => {},
-  routeForRide = () => null, quoteForRide, bindQuote, availabilityFor = () => null, onClaim = () => {}, allowSimulation = false }) {
+  routeForRide = () => null, quoteForRide, bindQuote, availabilityFor = () => null, onClaim = () => {}, onEvent = () => {}, availableDriverIds = () => [], allowSimulation = false }) {
   // Expiry commits independently of a command that may fail afterward.
   function sweep() {
     unitOfWork(() => {
@@ -21,6 +21,7 @@ export function createRidesService({ repository, deliveries, getAccount, unitOfW
       for (const ride of repository.expiring(now)) {
         repository.expire(ride.id, now);
         audit.record(ride.customerId, 'ride.request_expired', ride.id, now);
+        onEvent({ kind: 'expired', ride, actorId: null, eventKey: `expired:${ride.id}`, now });
       }
     });
   }
@@ -297,6 +298,14 @@ export function createRidesService({ repository, deliveries, getAccount, unitOfW
         action === 'create' ? create(user, data, now) : action === 'claim' ? claim(user, id, data, now)
           : changeFare(user, id, action, data, now) };
       repository.saveCommand(userId, key, fingerprint, outcome.rideId, outcome.errorCode);
+      if (!outcome.errorCode) {
+        const ride = record(outcome.rideId);
+        const recipients = action === 'create' ? availableDriverIds().filter((driverId) => {
+          const driver = getAccount(driverId), position = availabilityFor(driverId, now);
+          return driverId !== userId && driver?.driver && position && deliveries.matches(ride, driver.driver.vehicle) && matchDistance(ride, position, now) !== null;
+        }) : [];
+        onEvent({ kind: action === 'create' ? 'request' : action, ride, actorId: userId, recipients, eventKey: `ride:${ride.id}:${ride.version}`, now });
+      }
       return outcome.errorCode ? outcome : { ride: view(record(outcome.rideId), user), replayed: false };
     });
     check(!result.errorCode, result.errorCode, result.errorCode === 'INVALID_DELIVERY_PIN'
