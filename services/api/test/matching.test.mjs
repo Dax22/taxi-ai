@@ -12,13 +12,31 @@ async function setup(t, options = {}, count = 1) {
   const h = await harness(t, { mapProvider, ...options });
   return { h, ...await participants(h, count, { online: false }) };
 }
-async function routed(customer) {
-  const result = await customer.post('/api/locations/quotes', { pickup, destination }); assert.equal(result.status, 201);
+async function routed(customer, point = pickup) {
+  const result = await customer.post('/api/locations/quotes', { pickup: point, destination }); assert.equal(result.status, 201);
   const request = await customer.post('/api/rides', { quoteId: result.body.quote.id }); assert.equal(request.status, 201);
   return request.body.ride;
 }
 const list = async (driver) => (await driver.send('/api/rides')).body.available;
 const claim = (driver, ride, key) => driver.post(`/api/rides/${ride.id}/claim`, { expectedVersion: ride.version }, key);
+
+test('ranked API requests balance waiting and distance while preserving private projections and explicit claiming', async (t) => {
+  const { h, customer, driver } = await setup(t);
+  const waiting = await routed(customer, { ...pickup, lat: 9.09 });
+  h.advance(180_000);
+  const newer = h.client(); await newer.register('new-ranking-customer');
+  const near = await routed(newer, { ...pickup, lat: 9.0802 });
+  await driver.online({ mode: 'gps', lat: 9.08, lng: pickup.lng });
+  const available = await list(driver);
+  assert.deepEqual(available.map((r) => r.id), [waiting.id, near.id]);
+  assert.deepEqual(available.map((r) => r.recommendation.rank), [1, 2]);
+  assert.equal(available[0].recommendation.policyVersion, 'proximity-wait-v1');
+  assert.ok(available[0].recommendation.reasons.includes('waiting_longer'));
+  for (const forbidden of ['distanceMeters', 'score', 'customerId', 'position', 'Private test pickup']) assert.ok(!JSON.stringify(available).includes(forbidden));
+  assert.equal((await customer.send(`/api/rides/${waiting.id}`)).body.ride.status, 'requested');
+  assert.equal((await claim(driver, near)).status, 200, 'driver can explicitly choose a lower ranked request');
+  assert.deepEqual(await list(driver), [], 'a claimed driver cannot keep receiving work');
+});
 
 test('availability starts offline and requires approval, session, CSRF, window and explicit valid mode', async (t) => {
   const { h, customer, admin, driver } = await setup(t);

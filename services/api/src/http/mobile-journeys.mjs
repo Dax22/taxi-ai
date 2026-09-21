@@ -31,7 +31,8 @@ export function createMobileJourneys({ rides, availability, chat, clock }) {
       const state = availability.get(context), list = rides.list(user,'work');
       return { ...state, areas: state.settings.allowSimulation ? DEMO_AREAS : [], current: list.rides.filter((r) => !['completed','cancelled','expired'].includes(r.status)).map((r) => projection(r,user,clock())),
         activeElsewhere: list.activeElsewhere, available: list.available.map((r) => ({ id: r.id, version: r.version, vehicleCategory: r.vehicleCategory,
-          pickup: r.pickup.name, destination: r.destination.name, suggestedFareKobo: r.suggestedFareKobo, expiresAt: r.expiresAt, approximateDistanceKm: r.approximateDistanceKm })) };
+          pickup: r.pickup.name, destination: r.destination.name, suggestedFareKobo: r.suggestedFareKobo, expiresAt: r.expiresAt, approximateDistanceKm: r.approximateDistanceKm,
+          recommendation: r.recommendation })) };
     }
     if (write && path === '/work/online') return availability.command(context,'online',null,data,key);
     const lease = path.match(/^\/work\/([a-f0-9-]{36})\/(offline|heartbeat)$/);

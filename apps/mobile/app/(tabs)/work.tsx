@@ -7,6 +7,7 @@ import { Button, Card, Heading, Notice, Pill, Screen, fare, styles } from '../..
 import { SelectField } from '../../src/ui/select-field';
 import { VehicleCard } from '../../src/ui/vehicle-card';
 import { vehicleCategory } from '../../../../packages/shared/src/vehicle-categories.mjs';
+import { MATCH_REASON_LABELS } from '../../../../packages/shared/src/smart-matching.mjs';
 export default function Work(){
   const {user,blocked}=useSession(),{state:s,controller:c}=useWork();const [area,setArea]=useState('');
   const eligible=Boolean(user?.driver?.eligibility.eligible),locked=s.busy||s.uncertain||s.stale;
@@ -26,11 +27,13 @@ export default function Work(){
       </Card>
       {s.work?.activeElsewhere.map((j)=><Card key={j.id}><Text style={styles.body}>You have a personal journey to finish.</Text><Button title="View personal journey" onPress={()=>router.push({pathname:'/journey',params:{id:j.id}})}/></Card>)}
       {s.work?.current.map((j)=><Card key={j.id}><Pill>CURRENT JOB</Pill><Text style={styles.h2}>{j.pickup} → {j.destination}</Text><Button title="Open journey" onPress={()=>router.push({pathname:'/journey',params:{id:j.id}})}/></Card>)}
-      <Heading title="Nearby requests." subtitle={online?'Requests match your approved vehicle category and capacity.':'Go online to see available work.'}/>
+      <Heading title="Nearby requests." subtitle={online?'Eligible requests are ordered by pickup distance and customer waiting time.':'Go online to see available work.'}/>
       {online&&!s.work?.available.length&&<Text style={styles.body}>No matching requests yet. This screen refreshes while the app is open.</Text>}
       {online&&s.work?.available.map((job)=><Card key={job.id}><Pill>{vehicleCategory(job.vehicleCategory)?.name.toUpperCase()??'REQUEST'}</Pill>
         <Text style={styles.h2}>{job.pickup} → {job.destination}</Text><Text style={styles.body}>Suggested fare · {fare(job.suggestedFareKobo)}</Text>
-        {job.approximateDistanceKm!==null&&<Text style={styles.small}>About {job.approximateDistanceKm} km from pickup</Text>}
+        <Text style={styles.small}>Matches your approved vehicle category and capacity.</Text>
+        {job.approximateDistanceKm!==null&&<Text style={styles.small}>Within about {Math.max(1,job.approximateDistanceKm)} km in a straight line · driving time varies</Text>}
+        {job.recommendation&&<Text style={styles.small}>{job.recommendation.reasons.map((reason)=>MATCH_REASON_LABELS[reason]).join(' · ')}</Text>}
         <Text style={styles.small}>Taking this request opens a conversation to agree the fare.</Text>
         <Button title="Take request and discuss fare" disabled={locked||s.now>=job.expiresAt} onPress={()=>void c.claim(job)}/></Card>)}
     </>}<Text style={styles.small}>Development preview · no live transport.</Text></Screen>;

@@ -1,3 +1,4 @@
+import { SafetyController } from '../safety/controller';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { PropsWithChildren } from 'react';
 import { Alert, AppState } from 'react-native';
@@ -9,11 +10,12 @@ import { WorkController } from '../work/controller';
 import { currentPosition } from '../work/location';
 import type { Notifications } from '../../../../packages/shared/src/mobile-journeys.mjs';
 import { listenForPush } from '../notifications/push';
-interface Operations { work:WorkController; journey(id:string):JourneyController; updates:Notifications|null; refreshUpdates():Promise<void>; pushId:number|null; dismissPush():void }
+interface Operations { safety(id:string):SafetyController; work:WorkController; journey(id:string):JourneyController; updates:Notifications|null; refreshUpdates():Promise<void>; pushId:number|null; dismissPush():void }
 const Context=createContext<Operations|null>(null);
 export function OperationsProvider({children}:PropsWithChildren){
   const {client,user,blocked,registerModeGuard}=useSession();
   const work=useMemo(()=>new WorkController(client,randomUUID,currentPosition),[client]);
+  const safetyControllers=useRef(new Map<string,SafetyController>());
   const controllers=useRef(new Map<string,JourneyController>()),[updates,setUpdates]=useState<Notifications|null>(null),[pushId,setPushId]=useState<number|null>(null);
   const updateGeneration=useRef(0),updatesBusy=useRef(false);
   const refreshUpdates=useCallback(async()=>{
@@ -44,8 +46,8 @@ export function OperationsProvider({children}:PropsWithChildren){
   useEffect(()=>{if(user)return listenForPush(setPushId);},[user?.id]);
   // Disposal is deferred across Strict Mode's effect replay; account-key changes destroy private controllers.
   const alive=useRef(false);
-  useEffect(()=>{alive.current=true;return()=>{alive.current=false;queueMicrotask(()=>{if(!alive.current){work.dispose();for(const c of controllers.current.values())c.dispose();controllers.current.clear();}});};},[work]);
-  const value:Operations={work,updates,refreshUpdates,pushId,dismissPush:()=>setPushId(null),journey:(id)=>{
+  useEffect(()=>{alive.current=true;return()=>{alive.current=false;queueMicrotask(()=>{if(!alive.current){work.dispose();for(const c of controllers.current.values())c.dispose();controllers.current.clear();for(const c of safetyControllers.current.values())c.dispose();safetyControllers.current.clear();}});};},[work]);
+  const value:Operations={safety:(id)=>{let c=safetyControllers.current.get(id);if(!c){c=new SafetyController(client,id,randomUUID);safetyControllers.current.set(id,c);}return c;},work,updates,refreshUpdates,pushId,dismissPush:()=>setPushId(null),journey:(id)=>{
     let controller=controllers.current.get(id);if(!controller){controller=new JourneyController(client,id,randomUUID);controllers.current.set(id,controller);}return controller;
   }};
   return <Context.Provider value={value}>{children}</Context.Provider>;
@@ -63,4 +65,14 @@ export function useJourney(id:string){
     return()=>{listener.remove();clearInterval(poll);clearInterval(tick);controller.pause();};
   },[controller,blocked]));
   return{controller,state};
+}
+
+export function useSafety(id:string){
+ const c=useOperations().safety(id),{blocked}=useSession();
+ const state=useSyncExternalStore(c.subscribe,c.snapshot);
+ useFocusEffect(useCallback(()=>{if(blocked)return;if(AppState.currentState==='active')c.activate();
+ const listener=AppState.addEventListener('change',next=>next==='active'?c.activate():c.pause());
+ const poll=setInterval(()=>void c.refresh(),10000);
+ return()=>{listener.remove();clearInterval(poll);c.pause();};},[c,blocked]));
+ return {controller:c,state};
 }

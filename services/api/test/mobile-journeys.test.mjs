@@ -31,6 +31,8 @@ test('native passenger and delivery journeys complete across all vehicle categor
     const d=await phone(h,driver);ok(await d.online());
     let r=ok(await c.send('/booking/requests',{...sample,vehicleCategory:category,...(policy.service==='delivery'?{delivery:parcel}:{})})).ride;
     const jobs=parseWork(ok(await d.work()));assert.equal(jobs.availability.owned,true);assert.equal(jobs.available[0].id,r.id);
+    assert.equal(jobs.available[0].recommendation.policyVersion,'proximity-wait-v1');
+    assert.deepEqual(jobs.available[0].recommendation.reasons,['sample_area']);
     assert.equal(JSON.stringify(jobs.available).includes(parcel.recipientName),false);
     const notices=parseNotifications(ok(await d.send('/notifications')));assert.equal(notices.notifications[0].kind,'request');
     const key=randomUUID(),data={expectedVersion:r.version};

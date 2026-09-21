@@ -1,6 +1,7 @@
 import type { Envelope, Mode } from './mobile-contracts.mjs';
 import type { BookingRide } from './mobile-booking.mjs';
 import type { VehicleCategoryId } from './vehicle-categories.mjs';
+import type { MatchRecommendation } from './smart-matching.mjs';
 export type JourneyAction = 'claim' | 'propose' | 'accept' | 'confirm' | 'depart' | 'arrive' | 'start' | 'complete' | 'cancel';
 export interface JourneyData { expectedVersion: number; amountKobo?: number; offerId?: string; pickupPin?: string; deliveryPin?: string; reason?: string }
 export interface Journey extends BookingRide { mode: Mode; customerName: string; chatReady: boolean; pickupPin: string | null; pinBlockedUntil: number | null;
@@ -10,7 +11,7 @@ export interface Position { lat: number; lng: number; accuracy: number; captured
 export type OnlineData = { mode: 'gps'; position: Position } | { mode: 'sample'; areaId: string };
 export interface Availability { id: string; online: boolean; owned: boolean; mode: 'gps' | 'sample'; areaId: string | null; sequence: number; updatedAt: number; expiresAt: number | null; reason: string | null }
 export interface AvailabilityResult extends Envelope { availability: Availability | null }
-export interface AvailableJob { id: string; version: number; vehicleCategory: VehicleCategoryId; pickup: string; destination: string; suggestedFareKobo: number; expiresAt: number; approximateDistanceKm: number | null }
+export interface AvailableJob { id: string; version: number; vehicleCategory: VehicleCategoryId; pickup: string; destination: string; suggestedFareKobo: number; expiresAt: number; approximateDistanceKm: number | null; recommendation?: MatchRecommendation }
 export interface Work extends AvailabilityResult { settings: { allowSimulation: boolean; heartbeatSeconds: number; leaseSeconds: number; freshPositionSeconds: number };
  areas: { id: string; name: string }[]; current: Journey[]; activeElsewhere: { id: string; mode: Mode; status: string }[]; available: AvailableJob[] }
 export interface Message { id: string; sequence: number; body: string; createdAt: number; fromYou: boolean }

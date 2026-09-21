@@ -5,10 +5,11 @@ import { hasCapability } from '../shared/policies.mjs';
 import { readBody } from './body.mjs';
 import { json } from './responses.mjs';
 import { createMobileJourneys, mobileNotifications } from './mobile-journeys.mjs';
+import { mobileSafety } from './mobile-safety.mjs';
 import { createMobileBooking } from './mobile-booking.mjs';
 
 /** Versioned native surface. Cookie identity and browser CSRF are never reused. */
-export function createMobileRouter({ devices, accounts, drivers, rides, locations, availability, chat, notifications, clock, rateLimiter, googleAuth, accountEmail }) {
+export function createMobileRouter({ devices, accounts, drivers, rides, locations, availability, chat, notifications, safety, clock, rateLimiter, googleAuth, accountEmail }) {
   const booking = createMobileBooking({ rides, locations, availability, clock });
   const journeys = createMobileJourneys({ rides, availability, chat, clock });
   function summary(ride) {
@@ -54,6 +55,7 @@ export function createMobileRouter({ devices, accounts, drivers, rides, location
       accessToken, data, key: request.headers['idempotency-key'] });
     else if (path === '/work' || path.startsWith('/work/') || path.startsWith('/journeys/')) body = journeys({ path, write, user: session.user,
       accessToken, query, data, key: request.headers['idempotency-key'] });
+    else if (path.startsWith('/safety/')) body = mobileSafety({ safety, session, path, write, data, key: request.headers['idempotency-key'] });
     else if (path === '/notifications' || path.startsWith('/notifications/')) body = mobileNotifications({ notifications, user: session.user, sessionId: session.id, path, write, query, data });
     else if (!write && path === '/activity') {
       const mode = query.get('mode'); check(['customer','work'].includes(mode), 'INVALID_MODE', 'Choose Customer or Work.');

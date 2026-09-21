@@ -6,6 +6,7 @@ import { $, element } from './dom.mjs';
 import { renderChatReports } from './chat-reports-view.mjs';
 import { RIDE_STATUS_LABELS as statuses, isActiveRide } from '/shared/trip-lifecycle.mjs';
 import { searchRadius } from '/shared/matching.mjs';
+import { MATCH_REASON_LABELS } from '/shared/smart-matching.mjs';
 import { createTripView } from './trip-view.mjs';
 import { renderVehicleCard } from './vehicle-card.mjs';
 import { createVehicleCategoryPicker } from './vehicle-categories.mjs';
@@ -133,12 +134,14 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
     $('available-list').replaceChildren();
     if (!state.available.length) $('available-list').append(element('p', 'Nearby requests appear while you are online. Local sample mode matches requests from your selected sample area.', 'empty-state'));
     const driverBusy = (state.activeElsewhere?.length > 0 || state.rides.some((ride) => isActiveRide(ride.status)));
+    if (state.available.some((ride) => ride.recommendation)) $('available-list').append(element('p', 'Eligible requests are ordered by pickup distance and customer waiting time.', 'empty-state'));
     for (const ride of state.available) {
       const row = element('div', undefined, 'request-row');
       const description = element('div');
       description.append(element('strong', `${ride.pickup.name} → ${ride.destination.name}`),
         element('small', `${vehicleCategory(ride.vehicleCategory ?? 'standard')?.name} · ${ride.hasRoute ? 'Route suggestion' : 'Sample suggestion'} ${formatNaira(ride.suggestedFareKobo)}`));
       description.append(element('small', ride.hasRoute ? `Within about ${Math.max(1, ride.approximateDistanceKm)} km in a straight line · driving time varies` : 'Local sample-area match'));
+      if (ride.recommendation) description.append(element('small', ride.recommendation.reasons.map((reason) => MATCH_REASON_LABELS[reason]).filter(Boolean).join(' · ')));
       const button = element('button', 'Start negotiation ↗', 'button button-primary button-small');
       button.type = 'button';
       button.dataset.locked = String(driverBusy || !state.availabilityOnline || ride.expiresAt <= serverNow());
