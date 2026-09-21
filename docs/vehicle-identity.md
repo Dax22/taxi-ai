@@ -31,10 +31,10 @@ server decisions. Use fictional information and images in the development previe
   journey's colour illustration only when a driver-reported position is available.
   No synthetic movement, heading or live-location claim is added.
 - Responsive cards with preserved image aspect ratios and a large text plate.
-  Rounded 3D-style PNG icons follow the supplied reference, with ten separately
-  generated paint variants. Identical 640×640 assets are served locally on web and
-  bundled for native. Layout crops empty transparent margins without stretching
-  the car. Unknown/custom/two-tone colours use white fallback artwork with an
+  Realistic front three-quarter PNG cutouts follow the supplied SUV reference,
+  with ten separately generated sedan paint variants. Identical 768×512 assets
+  are served locally on web and bundled for native. Layout contains the entire
+  vehicle without stretching or cropping. Unknown/custom/two-tone colours use white fallback artwork with an
   explicit mismatch note. See [icon provenance and prompts](design/vehicle-icons.md).
 - Home, Activity, Work and Account native tabs with consistent vector icons.
 

@@ -16,7 +16,7 @@ export function createVehicleCategoryPicker(container, { onSelect = () => {} } =
     button.setAttribute('role', 'radio');
     button.setAttribute('aria-label', `${category.name}, ${category.purpose}, ${category.statusLabel}`);
     const image = element('img'); image.src = category.assetPath; image.alt = '';
-    image.width = 640; image.height = 640; image.decoding = 'async';
+    image.width = 768; image.height = 512; image.decoding = 'async';
     button.append(image, element('strong', category.name), element('span', category.purpose, 'vehicle-category-purpose'),
       element('span', category.statusLabel, 'vehicle-category-status'));
     button.addEventListener('click', () => select(category.id));

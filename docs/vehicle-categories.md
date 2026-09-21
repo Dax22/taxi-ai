@@ -1,8 +1,9 @@
 # Vehicle categories and booking workflows
 
 Release 0.22 / mobile 0.6 enables all five categories in the development preview.
-The SUV artwork retains the user's silver Cybertruck; van, truck and motorcycle
-use matching white illustrations. Artwork never guarantees a particular model,
+The artwork follows the user's realistic grey SUV reference: a graphite SUV,
+white sedan, panel van, box truck and motorcycle, all facing left in a front
+three-quarter view on transparent backgrounds. Artwork never guarantees a particular model,
 paint or fleet. Check the assigned driver's approved vehicle and plate.
 
 | Category | Booking | Preview fare factor | Preview maximum parcel weight |

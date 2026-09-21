@@ -62,7 +62,7 @@ export function createMapView(root, { onPick } = {}) {
       if (label === 'V' && state.vehicle) {
         const vehicle = vehiclePresentation(state.vehicle);
         marker.append(svg('image', { href: vehicle.assetPath, x: -44, y: -58, width: 88, height: 52,
-          preserveAspectRatio: 'xMidYMid slice', opacity: state.stale ? '.55' : '1', 'aria-hidden': 'true' }));
+          preserveAspectRatio: 'xMidYMid meet', opacity: state.stale ? '.55' : '1', 'aria-hidden': 'true' }));
         marker.append(svg('title', {}, `${state.stale ? 'Last known location. ' : ''}${vehicle.title} · ${vehicle.description} · ${vehicle.plate}. Illustrative icon.`));
       }
       overlay.append(marker);

@@ -63,12 +63,13 @@ communications, payments or autonomous rides.
 
 ## Vehicle identity cards
 
-Vehicle cards use the same amber/graphite interface with rounded 3D-style PNG
-illustrations and the registered solid colour from a bounded palette. The
+Vehicle cards use the same amber/graphite interface with realistic front
+three-quarter PNG cutouts and the registered solid colour from a bounded palette. The
 number plate is selectable text, separate from the artwork. Unknown or two-tone
 colours use a clearly labelled neutral illustration. The illustration is not an
 exact make/model render. Web assets live in `apps/web/public/assets/vehicles/`;
 identical native files are bundled in `apps/mobile/src/assets/vehicles/`. The
-transparent square sources keep their proportions; interface crops remove only
-empty margins. See [the icon prompts and provenance](design/vehicle-icons.md).
+transparent landscape sources keep their 3:2 proportions, with the nose facing
+left. Cards and map markers contain the complete vehicle without cropping.
+See [the artwork prompts and provenance](design/vehicle-icons.md).
 See [vehicle identity](vehicle-identity.md) for the exact-model catalogue roadmap.

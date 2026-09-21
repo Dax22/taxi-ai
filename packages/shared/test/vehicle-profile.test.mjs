@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { vehiclePresentation, vehicleColour, modelsForMake, VEHICLE_COLOURS } from '../src/vehicle-profile.mjs';
+import { VEHICLE_CATEGORIES } from '../src/vehicle-categories.mjs';
 
 test('structured and legacy vehicles keep a readable plate without duplicated makes or invented colour/model matches', () => {
   const current = { make:'Toyota',model:'Toyota Corolla',modelName:'Corolla',year:2020,colour:'Silver',plate:'abc-123' };
@@ -18,11 +19,14 @@ test('structured and legacy vehicles keep a readable plate without duplicated ma
 test('untrusted car fields cannot change artwork URLs and web/native share bounded bundled PNG assets', async () => {
   const malicious = 'red\"/><script>alert(1)</script>';
   assert.equal(vehiclePresentation({ colour:malicious,model:malicious,plate:malicious }).assetPath,'/assets/vehicles/sedan-neutral.png');
-  for (const colour of [...VEHICLE_COLOURS,{ id:'neutral' }]) {
-    const asset = await readFile(new URL(`../../../apps/web/public/assets/vehicles/sedan-${colour.id}.png`,import.meta.url));
-    const native = await readFile(new URL(`../../../apps/mobile/src/assets/vehicles/sedan-${colour.id === 'neutral' ? 'white' : colour.id}.png`,import.meta.url));
+  const files = new Set([...VEHICLE_COLOURS.map(({ id }) => `sedan-${id}.png`), 'sedan-neutral.png',
+    ...VEHICLE_CATEGORIES.map(({ assetPath }) => assetPath.split('/').at(-1))]);
+  for (const file of files) {
+    const asset = await readFile(new URL(`../../../apps/web/public/assets/vehicles/${file}`,import.meta.url));
+    const native = await readFile(new URL(`../../../apps/mobile/src/assets/vehicles/${file === 'sedan-neutral.png' ? 'sedan-white.png' : file}`,import.meta.url));
     assert.deepEqual(asset.subarray(0,8),Buffer.from([137,80,78,71,13,10,26,10]));
-    assert.deepEqual(asset,native); assert.ok(asset.length < 75_000);
-    assert.equal(asset.readUInt32BE(16),640); assert.equal(asset.readUInt32BE(20),640);
+    assert.deepEqual(asset,native); assert.ok(asset.length < (file.startsWith('sedan-') ? 350_000 : 450_000));
+    assert.equal(asset.readUInt32BE(16),768); assert.equal(asset.readUInt32BE(20),512);
+    assert.equal(asset[25],6); // PNG RGBA: preserve full colour and generated alpha.
   }
 });
