@@ -1,4 +1,13 @@
 module.exports = ({ config }) => {
+  // Android embeds this restricted SDK key in the native manifest. iOS uses MapKit.
+  const androidMapsKey = process.env.GOOGLE_MAPS_ANDROID_API_KEY;
+  if (androidMapsKey && !/^[A-Za-z0-9_-]{20,200}$/.test(androidMapsKey)) throw new Error('Configure a valid Android Maps SDK key.');
+  config = { ...config,
+    plugins: [...(config.plugins ?? []), ['react-native-maps', {
+      ...(androidMapsKey ? { androidGoogleMapsApiKey: androidMapsKey } : {}),
+    }]],
+    extra: { ...config.extra, nativeMaps: { androidConfigured: Boolean(androidMapsKey) } },
+  };
   // EAS file environment variable, or a local ignored client configuration file.
   // This is google-services.json, never a Firebase service-account private key.
   const googleServicesFile = process.env.GOOGLE_SERVICES_JSON;

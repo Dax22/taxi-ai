@@ -26,6 +26,11 @@ before starting it; it validates enabled push configuration without sending aler
 
 ## Prepare the signed build
 
+Native maps use Google Maps on Android and Apple Maps on iOS. Configure the
+restricted Android SDK key as `GOOGLE_MAPS_ANDROID_API_KEY` in EAS preview before
+building; follow [mobile-maps.md](mobile-maps.md). This is separate from Firebase
+phone-alert configuration. iOS MapKit needs no Google Maps key.
+
 From `apps/mobile`, using the official EAS CLI in your authenticated terminal:
 
 ```bash
@@ -85,6 +90,7 @@ passed based on JavaScript bundle exports or mocked provider tests.
 | Delivery codes, cancellation, stale offers | Wrong codes cannot complete; invalid transitions rejected | API tests only |
 | Background, permission denial, reconnect, account switch | No hidden tracking, private data cleared, uncertain commands retry unchanged | Controller tests only |
 | Native trip GPS and private trip link | Driver explicitly shares; customer and authorized link viewer see matching position/age; stopping removes it | API/controller fixtures only |
+| Platform street maps | Google Maps on Android, Apple Maps on iOS; route/driver pins fit, stale labels and attribution remain visible | Configuration/type/bundle checks only; real tiles unverified |
 | GPS interruption and session lifecycle | Navigation keeps foreground sharing; background stops it; no auto-resume; revoked/closed/expired trips cannot publish | API/controller fixtures only |
 | Push opt-in and opt-out | Correct project registers; opt-out stops future delivery | Mocked provider tests only |
 | Foreground/background/closed-app alert tap | Own update opens for review without automatic booking actions | Not run on devices |

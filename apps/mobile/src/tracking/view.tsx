@@ -5,6 +5,7 @@ import { router } from 'expo-router';
 import { Button, Card, Notice, Pill, styles } from '../ui/components';
 import { useTripLocation, useTripLocationControllers } from './provider';
 import type { TripLocationController } from './controller';
+import { NativeMap } from '../maps/native-map';
 
 export function TripLocationCard({ id }: { id: string }) {
   const { controller: c, state: s } = useTripLocation(id), data = s.data, share = data?.share;
@@ -16,6 +17,9 @@ export function TripLocationCard({ id }: { id: string }) {
     {position ? <><Pill>{stale ? 'LAST KNOWN LOCATION' : 'RECENT DRIVER LOCATION'}</Pill>
       <Text style={styles.body}>Recorded {new Date(position.capturedAt).toLocaleTimeString()} · {age} seconds ago</Text>
       <Text style={styles.small}>Reported accuracy: {Math.round(position.accuracy)} m · {position.lat.toFixed(5)}, {position.lng.toFixed(5)}</Text>
+      <NativeMap pins={[{ id: 'driver', lat: position.lat, lng: position.lng, title: stale ? 'Last known driver location' : 'Reported driver location', stale: Boolean(stale),
+        description: `Recorded ${new Date(position.capturedAt).toLocaleTimeString()} · accuracy ${Math.round(position.accuracy)} m` }]}
+        summary={`${stale ? 'Last known' : 'Reported'} driver location. Recorded ${age} seconds ago; accuracy ${Math.round(position.accuracy)} metres.`}/>
     </> : <Text style={styles.body}>No driver-shared location is available.</Text>}
     <Text style={styles.small}>Location is reported by the driver’s phone and may have changed. Updates stop when Taxi Ai leaves the foreground. The last location may remain visible for up to one minute if Stop cannot reach the server. Trip-link recipients can also see it.</Text>
     {s.sharing && <Pill>THIS PHONE IS SHARING</Pill>}

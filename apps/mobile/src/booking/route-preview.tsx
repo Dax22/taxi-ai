@@ -4,14 +4,18 @@ import Svg, { Circle, Line, Polyline, Rect, Text as SvgText } from 'react-native
 import type { BookingPreview } from '../../../../packages/shared/src/mobile-booking.mjs';
 import { Button, Card, colors, fare, Pill, styles } from '../ui/components';
 import { routeDrawing } from './route-drawing';
+import { NativeMap } from '../maps/native-map';
 
 export function RoutePreview({ preview, now, disabled, busy, onRequest, onPreview }: {
   preview: BookingPreview; now: number; disabled: boolean; busy: boolean; onRequest(): void; onPreview(): void;
 }) {
   const expired = preview.expiresAt !== null && now >= preview.expiresAt;
   const drawing = preview.route ? routeDrawing(preview.route.coordinates) : null;
+  const points = preview.route?.coordinates.map(([lng, lat]) => ({ lat, lng })) ?? [];
   return <Card><Pill>{`${vehicleCategory(preview.vehicleCategory ?? 'standard')?.name.toUpperCase()} · REVIEW YOUR JOURNEY`}</Pill>
-    {drawing && <View style={look.map} accessible accessibilityLabel={`Route preview from ${preview.pickup} to ${preview.destination}. This is not live tracking.`}>
+    {drawing && <NativeMap route={points} direct={preview.route?.distanceKind === 'straight_line'} summary={`Planned route from ${preview.pickup} to ${preview.destination}. This is not live tracking.`}
+      pins={[{ ...points[0], id: 'pickup', title: 'A · Pickup route point', description: preview.pickup }, { ...points[points.length - 1], id: 'destination', title: 'B · Destination route point', description: preview.destination }]}
+      fallback={<><View style={look.map} accessible accessibilityLabel={`Route outline from ${preview.pickup} to ${preview.destination}. This is not a street map or live tracking.`}>
       <Svg width="100%" height="100%" viewBox="0 0 360 220" preserveAspectRatio="xMidYMid meet" accessible={false}>
         <Rect width={360} height={220} fill="#f0f2e9"/>
         {[40,100,160,220,280,340].map((x) => <Line key={`x${x}`} x1={x} y1={0} x2={x} y2={220} stroke="#fff" strokeWidth={12}/>)}
@@ -21,10 +25,10 @@ export function RoutePreview({ preview, now, disabled, busy, onRequest, onPrevie
         {[drawing.start,drawing.end].map((p,i) => <Circle key={i} cx={p.x} cy={p.y} r={15} fill={i ? colors.ink : colors.yellow} stroke="#fff" strokeWidth={3}/>)}
         {[drawing.start,drawing.end].map((p,i) => <SvgText key={i} x={p.x} y={p.y + 5} textAnchor="middle" fontSize={13} fontWeight="bold" fill={i ? '#fff' : colors.ink}>{i ? 'B' : 'A'}</SvgText>)}
       </Svg>
-    </View>}
+    </View><Text style={styles.small}>Route outline on a decorative grid · not a street map.</Text></>}/>}
     <View style={styles.stack}><Text style={styles.body}>A · {preview.pickup}</Text><Text style={styles.body}>B · {preview.destination}</Text></View>
     {preview.route?.distanceKind === 'straight_line' ? <><Text style={styles.body}>{(preview.route.distanceMeters / 1000).toFixed(1)} km in a straight line</Text><Text style={styles.small}>Direct-distance delivery estimate, not a road route or driving ETA. Confirm access and timing with the driver.</Text></> : preview.route ? <><View style={styles.row}><Text style={styles.body}>{(preview.route.distanceMeters / 1000).toFixed(1)} km</Text><Text style={styles.body}>About {Math.ceil((preview.route.durationSeconds ?? 0) / 60)} min driving</Text></View>
-      <Text style={styles.small}>Route outline on a decorative grid · not a street map. © OpenStreetMap contributors · OSRM. Travel time excludes traffic and driver arrival.</Text></>
+      <Text style={styles.small}>Route data: © OpenStreetMap contributors · OSRM. Travel time excludes traffic and driver arrival.</Text></>
       : <Text style={styles.small}>Sample areas for local testing. No road route or travel time is calculated.</Text>}
     <View style={look.fare}><Text style={styles.label}>SUGGESTED FARE</Text><Text style={styles.title}>{fare(preview.suggestedFareKobo)}</Text><Text style={styles.body}>You and the driver agree the final fare.</Text></View>
     <Text style={styles.small}>Illustrative pricing for this development preview. Requesting a driver does not accept a fare or confirm a booking. No live dispatch or payment.</Text>
