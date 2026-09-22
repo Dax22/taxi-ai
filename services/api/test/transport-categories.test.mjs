@@ -1,3 +1,4 @@
+import { removeEatsFixtureTables } from './migration-fixtures.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -173,7 +174,7 @@ test('schema fifteen upgrades preserve accounts, approvals, active PINs and save
   const trips = h.db.prepare('SELECT * FROM ride_trips').all();
   const users = h.db.prepare('SELECT * FROM users ORDER BY id').all();
   const applications = h.db.prepare('SELECT * FROM driver_applications').all();
-  h.db.exec('DROP TABLE vehicle_photo_checks; DROP TABLE push_jobs; DROP TABLE push_registrations; DROP TABLE account_notifications; ALTER TABLE driver_availability DROP COLUMN native_session_id; DROP TABLE delivery_orders; ALTER TABLE rides DROP COLUMN vehicle_category; PRAGMA user_version=15;');
+  removeEatsFixtureTables(h.db); h.db.exec('DROP TABLE vehicle_photo_checks; DROP TABLE push_jobs; DROP TABLE push_registrations; DROP TABLE account_notifications; ALTER TABLE driver_availability DROP COLUMN native_session_id; DROP TABLE delivery_orders; ALTER TABLE rides DROP COLUMN vehicle_category; PRAGMA user_version=15;');
   await h.restart();
   assert.deepEqual(h.db.prepare('SELECT * FROM idempotency ORDER BY actor_id,key').all(), commands);
   assert.deepEqual(h.db.prepare('SELECT * FROM ride_trips').all(), trips);

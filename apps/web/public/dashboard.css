@@ -188,7 +188,7 @@
   .map-route-halo { fill: none; stroke: #1c2428; stroke-width: 9; stroke-linecap: round; stroke-linejoin: round; }
   .map-route-line { fill: none; stroke: #ffd335; stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; }
   .map-marker circle { fill: #ffcd2a; stroke: #202626; stroke-width: 3; }
-  .map-marker text { fill: #172125; font: 700 15px system-ui; }
+  .map-marker text { fill: #172125; font: 700 15px var(--font-app); }
   .map-marker-destination circle { fill: #fff; }
   .map-marker-driver circle { fill: #16816b; stroke: #fff; }
   .map-marker-driver text, .map-marker-stale text { fill: #fff; }

@@ -18,6 +18,8 @@ import { createRidesRepository } from './modules/rides/repository.mjs';
 import { createDeliveriesRepository } from './modules/deliveries/repository.mjs';
 import { createDeliveriesService } from './modules/deliveries/service.mjs';
 import { createRidesService } from './modules/rides/service.mjs';
+import { createEatsRepository } from './modules/eats/repository.mjs';
+import { createEatsService } from './modules/eats/service.mjs';
 import { createChatRepository } from './modules/chat/repository.mjs';
 import { createChatService } from './modules/chat/service.mjs';
 import { createCallsRepository } from './modules/calls/repository.mjs';
@@ -58,10 +60,12 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
   const accountRepository = createAccountsRepository(db);
   const driverRepository = createDriversRepository(db);
   const rideRepository = createRidesRepository(db);
+  const eatsRepository = createEatsRepository(db);
+  const hasDriverWork = (id) => rideRepository.hasDriverWork(id) || eatsRepository.hasWork(id);
   let drivers, devices, accountEmail;
   const accounts = createAccountsService({ repository: accountRepository,
     driverProfiles: { insert: driverRepository.insert, remove: driverRepository.remove,
-      version: (id) => driverRepository.application(id)?.version, hasWork: rideRepository.hasDriverWork,
+      version: (id) => driverRepository.application(id)?.version, hasWork: hasDriverWork,
       stopWork: (id, now) => { availability.onProfileDeleted(id, now); notifications.onProfileDeleted(id, now); },
       validateVehicle: (data) => vehicleDetails(data, clock()), find: (id) => {
       const driver = driverRepository.find(id);
@@ -73,13 +77,14 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
     authenticate: accounts.login, validatePasswordLogin: accounts.validatePasswordLogin,
     getAccount: accounts.profile, tokens, unitOfWork, audit, clock });
   drivers = createDriversService({ repository: driverRepository,
-    getAccount: accounts.profile, hasDriverWork: rideRepository.hasDriverWork, codec: createDriverDocumentCodec(MAX_DRIVER_FILE_BYTES),
+    getAccount: accounts.profile, hasDriverWork, codec: createDriverDocumentCodec(MAX_DRIVER_FILE_BYTES),
     tokens, unitOfWork, audit, clock });
   let calls, locations, payments, safety, notifications;
   const availability = createAvailabilityService({ repository: createAvailabilityRepository(db),
-    getAccount: accounts.profile, sessionOwner: accounts.sessionOwner, nativeSessionFor: devices.sessionFor, nativeSessionOwner: devices.sessionOwner, isBusy: (id) => rideRepository.hasNegotiation(id) || rideRepository.hasCustomerWork(id, clock()),
+    getAccount: accounts.profile, sessionOwner: accounts.sessionOwner, nativeSessionFor: devices.sessionFor, nativeSessionOwner: devices.sessionOwner, isBusy: (id) => rideRepository.hasNegotiation(id) || rideRepository.hasCustomerWork(id, clock()) || eatsRepository.hasWork(id),
     unitOfWork, tokens, audit, clock, allowSimulation });
   const rides = createRidesService({ repository: rideRepository,
+    hasOtherWork: eatsRepository.hasWork,
     getAccount: accounts.profile, unitOfWork, audit, tokens, clock,
     deliveries: createDeliveriesService({ repository: createDeliveriesRepository(db), tokens }),
     routeForRide: (id) => locations.routeForRide(id),
@@ -129,7 +134,10 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
     vehicleCheckEvidence:vehicleChecks.evidence,
     locationForTrip: locations.safetyPosition, sessionOwner: accounts.sessionOwner, nativeSessionOwner: devices.sessionOwner, unitOfWork, tokens, audit, clock, allowSimulation });
   const adminConsole = createAdminConsoleService({ repository: createAdminConsoleRepository(db), audit, clock, unitOfWork });
+  const eats = createEatsService({ repository: eatsRepository, getAccount: accounts.profile,
+    hasOtherWork: (id) => rideRepository.hasDriverWork(id) || rideRepository.hasCustomerWork(id, clock()),
+    availabilityFor: availability.positionFor, onClaim: availability.onClaim, tokens, unitOfWork, audit, clock });
   const googleAuth = createGoogleAuthService({ repository: createGoogleAuthRepository(db), provider: googleProvider,
     accounts, devices, tokens, unitOfWork, clock });
-  return Object.freeze({ accounts, devices, drivers, rides, chat, calls, locations, availability, payments, safety, vehicleChecks, adminConsole, googleAuth, accountEmail, notifications, rateLimiter, clock });
+  return Object.freeze({ accounts, devices, drivers, rides, eats, chat, calls, locations, availability, payments, safety, vehicleChecks, adminConsole, googleAuth, accountEmail, notifications, rateLimiter, clock });
 }

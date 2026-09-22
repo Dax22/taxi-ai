@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Text } from 'react-native';
+import { Text } from '../src/ui/typography';
 import { router } from 'expo-router';
 import { useSession } from '../src/session/provider';
 import { useDriverOnboarding } from '../src/onboarding/use-onboarding';

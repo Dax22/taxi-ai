@@ -20,6 +20,16 @@ do not use pale yellow for small body copy on white. Do not rely on colour alone
 to communicate selection: tabs retain an underline, buttons have visible state
 changes, and accessible state attributes remain in place.
 
+## Typography
+
+App typography follows the native system font consistently: iOS uses System
+(San Francisco), Android uses `sans-serif` (Roboto), and web/admin use `system-ui`
+with platform fallbacks. This preserves the mobile app's existing font choice;
+it does not promise identical glyphs across operating systems. Native text uses
+`src/ui/typography.tsx`, including form and navigation labels. Web styles import
+`typography.css`; no external font download is required. Sizes and weights retain
+their heading/body hierarchy and native text scaling.
+
 ## Logo assets
 
 - `apps/web/public/assets/taxi-ai-mark.svg`: clean vector reconstruction of the

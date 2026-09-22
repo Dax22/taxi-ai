@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { router } from 'expo-router';
-import { Text } from 'react-native';
+import { Text } from '../../src/ui/typography';
 import { useSession } from '../../src/session/provider';
 import { useWork } from '../../src/journeys/provider';
 import { Button, Card, Heading, Notice, Pill, Screen, fare, styles } from '../../src/ui/components';
@@ -16,6 +16,7 @@ export default function Work(){
   return <Screen><Pill>WORK</Pill><Heading title="Ready when you are." subtitle="Choose when to receive nearby requests."/><Notice message={s.error}/>
     {!user?.driver?<Card><Text style={styles.h2}>Drive or deliver with Taxi Ai.</Text><Button title="Start driver application" onPress={()=>router.push('/driver-application')}/></Card>:<>
       <WorkProfileControls/>
+      <Card><Text style={styles.h2}>Deliver with Taxi Ai Eats</Text><Text style={styles.body}>Collect ready food orders with your approved motorcycle, car, SUV or van. Go online below, then check food deliveries.</Text><Button title="Food deliveries & current order" secondary onPress={() => router.push('/food-work')}/></Card>
       <Card><Pill>{online?(s.availability?.owned?'ONLINE ON THIS PHONE':'ONLINE ON ANOTHER DEVICE'):'OFFLINE'}</Pill>
         <Text style={styles.body}>{eligible?'Keep Taxi Ai open to receive requests. Leaving the app stops location updates and takes you offline.':'Complete your application and approval before taking new jobs.'}</Text>
         <Text style={styles.small}>Your precise location is used to find nearby work. Customers do not see your availability location.</Text>

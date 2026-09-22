@@ -1,7 +1,7 @@
 import { VEHICLE_CATEGORIES } from '../../../../packages/shared/src/vehicle-categories.mjs';
 import type { VehicleCategoryId } from '../../../../packages/shared/src/vehicle-categories.mjs';
 import { transportCategory } from '../../../../packages/shared/src/transport-categories.mjs';
-import { Text } from 'react-native';
+import { Text } from '../ui/typography';
 import { modelsForMake, VEHICLE_MAKES, VEHICLE_COLOURS } from '../../../../packages/shared/src/vehicle-profile.mjs';
 import { vehicleRegistrationYears, vehicleYearMessage } from '../../../../packages/shared/src/vehicle-registration.mjs';
 import { Button, Card, Field, styles } from '../ui/components';

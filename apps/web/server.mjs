@@ -34,6 +34,13 @@ const routes = new Map([
   ['/download.mjs', ['public/download.mjs', 'text/javascript; charset=utf-8']],
   ['/app-release.mjs', ['public/app-release.mjs', 'text/javascript; charset=utf-8']],
   ['/app', ['public/dashboard.html', 'text/html; charset=utf-8']],
+  ['/eats', ['public/eats.html', 'text/html; charset=utf-8']],
+  ['/eats.mjs', ['public/eats.mjs', 'text/javascript; charset=utf-8']],
+  ['/eats.css', ['public/eats.css', 'text/css; charset=utf-8']],
+  ['/eats/view.mjs', ['public/eats/view.mjs', 'text/javascript; charset=utf-8']],
+  ['/eats/transport.mjs', ['public/eats/transport.mjs', 'text/javascript; charset=utf-8']],
+  ['/typography.css', ['public/typography.css', 'text/css; charset=utf-8']],
+  ...['eats', 'eats-contracts', 'eats-controller'].map((name) => [`/shared/${name}.mjs`, [`../../packages/shared/src/${name}.mjs`, 'text/javascript; charset=utf-8']]),
   ['/account-access', ['public/account-access.html', 'text/html; charset=utf-8']],
   ['/account-access.mjs', ['public/account-access.mjs', 'text/javascript; charset=utf-8']],
   ['/account-recovery', ['public/account-recovery.html', 'text/html; charset=utf-8']],
@@ -149,7 +156,7 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
     try {
       pathname = new URL(request.url, 'http://localhost').pathname;
       if (pathname === '/app' && mapProvider.mode !== 'off') response.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-      response.setHeader('Permissions-Policy', `camera=${pathname === '/app' ? '(self)' : '()'}, microphone=${pathname === '/app' && callConfig.mode !== 'off' ? '(self)' : '()'}, geolocation=${pathname === '/app' ? '(self)' : '()'}`);
+      response.setHeader('Permissions-Policy', `camera=${pathname === '/app' ? '(self)' : '()'}, microphone=${pathname === '/app' && callConfig.mode !== 'off' ? '(self)' : '()'}, geolocation=${['/app', '/eats'].includes(pathname) ? '(self)' : '()'}`);
     } catch {
       response.writeHead(400);
       response.end('Bad request');

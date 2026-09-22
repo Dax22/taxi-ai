@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { AppState, FlatList, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { AppState, FlatList, Modal, Pressable, StyleSheet, View } from 'react-native';
+import { Text } from './typography';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button, colors, styles } from './components';
 

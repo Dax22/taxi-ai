@@ -243,14 +243,15 @@ same Work mode. Enforce worker/vehicle capacity across passenger and delivery
 services; no multi-job batching initially. Decide courier pricing before its
 checkout or negotiation flow is implemented.
 
-## 3b — Taxi Ai Eats and My store (planned)
+## 3b — Taxi Ai Eats and My store (development preview implemented)
 
-Add vendor/store onboarding, scoped staff memberships, menus, inventory, opening
-hours, customer checkout, preparation, delivery handover and settlements in the
-same mobile app and website. Reuse shared delivery capacity while keeping food
-order rules distinct from passenger trips. Pilot coverage, stock consistency,
-delivery capacity and vendor operations before expanding. 3a/3b can be
-reprioritized, but Eats delivery requires the shared delivery contract.
+Version 0.24.0 / mobile 0.8.0 implements store creation/manual review, scoped owner
+membership, menu availability, server-priced test checkout, kitchen preparation,
+courier handover codes and paginated order history on web/mobile. Work capacity
+is shared with rides and parcels. See [Eats](eats.md) for setup and current limits.
+Real payments/settlements, merchant verification, staff invitations, inventory,
+opening schedules, live routing, notification delivery and operational support
+remain planned. Browser/device acceptance and private deployment are release gates.
 
 ## 4 — Evaluated intelligence (planned)
 

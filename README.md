@@ -8,7 +8,7 @@ approved capabilities. This direction is documented in the
 [unified platform plan](docs/unified-platform.md). The first milestone is implemented:
 one website account with Customer and Work modes for rides. The first iOS/Android
 app now shares sign-in, profiles, booking, driver availability, fare negotiation,
-chat and complete ride/delivery journeys. Eats restaurant ordering and My store remain planned. See [unified accounts](docs/unified-accounts.md)
+chat and complete ride/delivery journeys. Taxi Ai Eats now adds restaurant browsing, checkout, My store and courier handovers as a test flow. See [Eats setup](docs/eats.md). See [unified accounts](docs/unified-accounts.md)
 and [mobile setup](apps/mobile/README.md).
 
 ## What works today
@@ -33,6 +33,9 @@ private documents and recorded manual checks; external identity/licence verifica
 is not connected. Use fictional details and documents.
 
 - One personal login, Customer/Work mode switching and optional driver enrollment.
+- Taxi Ai Eats on web/mobile: restaurant menus, single-store carts, itemized test checkout,
+  order history, My store and courier handover codes. [Try a food order](docs/eats.md).
+- One native system-font policy across app text, inputs, navigation, web and admin.
 - Native sign-in, Home/Activity/Work/Updates/Account navigation and device revocation.
 - Native driver availability, job claiming, fare consent, chat, pickup/drop-off verification
   and a durable updates inbox, with optional Expo phone alerts. See [native journeys](docs/mobile-journeys.md).
@@ -96,9 +99,8 @@ is not connected. Use fictional details and documents.
 
 **Still planned:** production calling, verified identity and driver
 documents, production mapping/tracking, actual dispatch, real payment-provider integration and payouts,
-staff recovery/MFA, live safety notifications and staffed emergency response, food/vendor
-ordering, motorcycle courier delivery, AI estimators and
-complete native ride workflows and store releases. Autonomous taxis remain **Coming soon**, with no launch date.
+staff recovery/MFA, live safety notifications and staffed emergency response, production food/vendor
+operations and settlements, AI estimators and app store releases. Autonomous taxis remain **Coming soon**, with no launch date.
 
 ## Run in VS Code
 
@@ -233,7 +235,7 @@ automatically at startup. `npm run backup -- /absolute/new-backup.sqlite` makes 
 validated copy without changing the source. See [staging and recovery](docs/staging.md)
 for restore, transient-data removal, scheduling and off-host backup requirements.
 
-The current schema is **16**: Trip Safety added schema 9, unified accounts added
+The current schema is **19**: Trip Safety added schema 9, unified accounts added
 schema 10, native device sessions added schema 11 and initial vehicle selections
 add schema 12 in 0.17. This new table preserves the car chosen before full driver
 details are complete without changing existing applications or approvals. Release
@@ -242,7 +244,9 @@ adds Google identity mappings, password eligibility and expiring login attempts
 in schema 14. Release 0.20 adds email verification records, hashed action tokens
 and durable email intentions in schema 15. Release 0.22 adds persisted vehicle
 categories and delivery handover state in schema 16, preserving previous records
-and command retry outcomes. Backups retain private contact/incident
+and command retry outcomes. Schema 17 adds native availability and notifications,
+schema 18 vehicle photo checks, and schema 19 restaurant/menu/food-order records.
+Backups retain private contact/incident
 data, identity mappings and verification records while revoking trip links, sessions,
 pending Google attempts, email links and queued mail. Restored backups never send old emails.
 
@@ -301,13 +305,11 @@ The terminal example runs with `npm run demo`. Read [the architecture](docs/arch
 
 ## Development and review
 
-The latest development branch is `feat/mobile-trips`. Version 0.23.0 / mobile
-0.7.0 adds native driver availability, job claiming, fare negotiation, chat and
-complete ride/delivery controls for all five categories. Schema 17 preserves
-existing accounts and journeys, adds stable device lease bindings and a durable
-updates inbox with optional Expo push. See [native journeys and device acceptance](docs/mobile-journeys.md).
-Eats restaurant ordering and vendor tools remain planned. Follow
-[mobile setup](apps/mobile/README.md). Back up the database before changing
+The latest development branch is `feat/eats-ordering`. Version 0.24.0 / mobile
+0.8.0 adds Taxi Ai Eats and a shared system-font policy across app surfaces.
+Schema 19 preserves existing records and adds stores, menus, reviews, checkout
+quotes, food orders and retry records. See [Eats setup and acceptance](docs/eats.md)
+and [mobile setup](apps/mobile/README.md). Back up the database before changing
 branches; older releases may not support the existing schema.
 Read [CONTRIBUTING.md](CONTRIBUTING.md) for the GitHub/VS Code workflow and where
 new code belongs. `npm run check` validates syntax and module conventions;

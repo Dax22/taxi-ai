@@ -1,9 +1,10 @@
+@import url('/typography.css');
 @layer reset, base, components, responsive;
 
 @layer reset {
   *, *::before, *::after { box-sizing: border-box; }
   body, h1, h2, h3, p, ol { margin: 0; }
-  button, input, select { font: inherit; }
+  button, input, select, textarea { font: inherit; }
   button, a { -webkit-tap-highlight-color: transparent; }
   button { cursor: pointer; }
   a { color: inherit; text-decoration: none; }
@@ -17,7 +18,7 @@
     --brand: #f4b400; --brand-hover: #dda300; --brand-soft: #fff3ce; --brand-strong: #805400;
   }
   html { scroll-behavior: smooth; scroll-padding-top: 24px; }
-  body { font-family: Arial, Helvetica, sans-serif; color: var(--ink); background: var(--paper); font-size: 15px; line-height: 1.5; }
+  body { font-family: var(--font-app); color: var(--ink); background: var(--paper); font-size: 15px; line-height: 1.5; }
   body:has(dialog[open]) { overflow: hidden; }
   button, input, select { color: var(--ink); }
   button { border: 0; }

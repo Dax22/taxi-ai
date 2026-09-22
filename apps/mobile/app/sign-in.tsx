@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Platform, Text, View } from 'react-native';
+import { Platform, View } from 'react-native';
+import { Text } from '../src/ui/typography';
 import { previewHeader } from '../src/api/client.ts';
 import { useSession } from '../src/session/provider';
 import { chooseGoogleIdentity, googleAvailable } from '../src/session/google-provider';

@@ -1,5 +1,6 @@
 import { vehicleCategory } from '../../../../packages/shared/src/vehicle-categories.mjs';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { Text } from '../ui/typography';
 import Svg, { Circle, Line, Polyline, Rect, Text as SvgText } from 'react-native-svg';
 import type { BookingPreview } from '../../../../packages/shared/src/mobile-booking.mjs';
 import { Button, Card, colors, fare, Pill, styles } from '../ui/components';

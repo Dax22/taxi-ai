@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Text } from 'react-native';
+import { Text } from './typography';
 import type { MobileClient } from '../api/client.ts';
 import { useResource } from './use-resource';
 import { Button, Card, Loading, Notice, Pill, styles } from './components';

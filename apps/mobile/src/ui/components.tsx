@@ -1,8 +1,10 @@
 import type { PropsWithChildren } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Text } from './typography';
 import type { TextInputProps } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
+import { fontFamily } from './typography';
 
 export const colors = { ink: '#171a18', muted: '#606762', paper: '#f6f6f2', white: '#ffffff', yellow: '#F4B400', border: '#dfe3dc' };
 export const styles = StyleSheet.create({
@@ -14,7 +16,7 @@ export const styles = StyleSheet.create({
   card: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.white, borderRadius: 24, padding: 22, gap: 12 },
   button: { backgroundColor: colors.yellow, paddingVertical: 15, paddingHorizontal: 20, minHeight: 50, maxWidth: '100%', borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   secondary: { backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border }, buttonText: { fontSize: 16, fontWeight: '700', color: colors.ink, textAlign: 'center' },
-  input: { backgroundColor: colors.white, borderColor: '#a9b3ab', borderWidth: 1, borderRadius: 12, padding: 14, fontSize: 17, minHeight: 52, color: colors.ink },
+  input: { fontFamily, backgroundColor: colors.white, borderColor: '#a9b3ab', borderWidth: 1, borderRadius: 12, padding: 14, fontSize: 17, minHeight: 52, color: colors.ink },
   error: { backgroundColor: '#fff0eb', padding: 16, borderRadius: 14 }, errorText: { color: '#872c15', fontSize: 15, lineHeight: 22 },
   pill: { alignSelf: 'flex-start', borderRadius: 20, paddingVertical: 5, paddingHorizontal: 10, backgroundColor: '#fff0bd' },
 });

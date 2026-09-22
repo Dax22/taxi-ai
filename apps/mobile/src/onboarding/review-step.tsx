@@ -1,4 +1,5 @@
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
+import { Text } from '../ui/typography';
 import { DRIVER_DOCUMENTS, DRIVER_APPLICATION_LABELS } from '../../../../packages/shared/src/driver-onboarding.mjs';
 import type { DriverOnboarding, DocumentKind } from '../../../../packages/shared/src/mobile-contracts.mjs';
 import { Button, Card, Pill, styles } from '../ui/components';

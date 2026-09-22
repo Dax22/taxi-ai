@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Text } from 'react-native';
+import { Text } from '../ui/typography';
 import type { JourneyController, JourneyState } from './controller';
 import { Button, Card, Field, styles } from '../ui/components';
 import { SelectField } from '../ui/select-field';

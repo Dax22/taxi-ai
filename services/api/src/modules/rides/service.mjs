@@ -14,7 +14,7 @@ import { requireParticipant, requireVersion, restoreNegotiation, canonical } fro
  * or HTTP objects. unitOfWork must encompass state, fare, audit and retry writes.
  */
 export function createRidesService({ repository, deliveries, getAccount, unitOfWork, audit, tokens, clock, onRideClosed = () => {}, onTripCompleted = () => {},
-  routeForRide = () => null, quoteForRide, bindQuote, availabilityFor = () => null, onClaim = () => {}, onEvent = () => {}, availableDriverIds = () => [], allowSimulation = false }) {
+  routeForRide = () => null, quoteForRide, bindQuote, availabilityFor = () => null, onClaim = () => {}, onEvent = () => {}, availableDriverIds = () => [], hasOtherWork = () => false, allowSimulation = false }) {
   // Expiry commits independently of a command that may fail afterward.
   function sweep() {
     unitOfWork(() => {
@@ -143,7 +143,7 @@ export function createRidesService({ repository, deliveries, getAccount, unitOfW
       catch (error) { check(false, 'INVALID_ROUTE', error.message); }
     }
     check(!repository.hasOpenRequest(user.id), 'OPEN_REQUEST_EXISTS', 'You already have an open request. Finish or cancel it first.');
-    check(!repository.hasDriverWork(user.id), 'DRIVER_BUSY', 'Finish or cancel your assigned work before requesting a personal ride.');
+    check(!repository.hasDriverWork(user.id) && !hasOtherWork(user.id), 'DRIVER_BUSY', 'Finish or cancel your assigned work before requesting a personal ride.');
     check(!availabilityFor(user.id, now), 'DRIVER_ONLINE', 'Go offline from Work before requesting a personal ride.');
     const id = tokens.id();
     repository.insert({ id, customerId: user.id, pickupId: quote.pickup.id,
@@ -162,7 +162,7 @@ export function createRidesService({ repository, deliveries, getAccount, unitOfW
     check(deliveries.matches(ride, user.driver.vehicle), 'VEHICLE_MISMATCH', 'This request needs a different approved vehicle category or load capacity.');
     check(ride.status === 'requested', 'REQUEST_UNAVAILABLE', 'Another driver took this request, or it is no longer open.');
     requireVersion(ride, data.expectedVersion);
-    check(!repository.hasNegotiation(user.id), 'DRIVER_BUSY', 'Finish your current negotiation or trip first.');
+    check(!repository.hasNegotiation(user.id) && !hasOtherWork(user.id), 'DRIVER_BUSY', 'Finish your current negotiation, trip or food delivery first.');
     check(!repository.hasCustomerWork(user.id, now), 'CUSTOMER_BUSY', 'Finish or cancel your personal journey before accepting work.');
     const availability = availabilityFor(user.id, now);
     check(availability, 'DRIVER_OFFLINE', 'Go online with a fresh location before selecting a request.');
@@ -219,8 +219,8 @@ export function createRidesService({ repository, deliveries, getAccount, unitOfW
       requireEligibleDriver(driver);
       check(deliveries.matches(ride, driver.driver.vehicle), 'VEHICLE_MISMATCH', 'The approved vehicle no longer matches this request.');
       check(!repository.hasOpenRequest(user.id), 'OPEN_REQUEST_EXISTS', 'Finish or cancel your other request or trip before confirming.');
-      check(!repository.hasNegotiation(ride.driverId), 'DRIVER_BUSY', 'This driver has another negotiation or trip. Ask them to finish it before confirming.');
-      check(!repository.hasDriverWork(user.id), 'DRIVER_BUSY', 'Finish your assigned work before confirming a personal ride.');
+      check(!repository.hasNegotiation(ride.driverId) && !hasOtherWork(ride.driverId), 'DRIVER_BUSY', 'This driver has another negotiation, trip or food delivery. Ask them to finish it before confirming.');
+      check(!repository.hasDriverWork(user.id) && !hasOtherWork(user.id), 'DRIVER_BUSY', 'Finish your assigned work before confirming a personal ride.');
       check(!repository.hasCustomerWork(ride.driverId, now), 'CUSTOMER_BUSY', 'This driver has a personal journey to finish before taking work.');
       check(!availabilityFor(user.id, now), 'DRIVER_ONLINE', 'Go offline from Work before confirming a personal ride.');
       const agreement = negotiationFor(ride).snapshot().agreement;

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { router } from 'expo-router';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
+import { Text } from '../../src/ui/typography';
 import { useSession } from '../../src/session/provider';
 import { useResource } from '../../src/ui/use-resource';
 import { Button, Card, Heading, Loading, Notice, Pill, Screen, fare, readable, styles } from '../../src/ui/components';
@@ -41,6 +42,7 @@ function Journeys({ mode }: { mode: Mode }) {
 export default function Activity() {
   const { user, mode, setMode } = useSession();
   return <Screen><Heading title="Your activity." subtitle="The same saved journeys, across the app and website."/>
+    <Card><Text style={styles.h2}>Taxi Ai Eats orders</Text><Text style={styles.body}>Track your food, view past orders and check handover details.</Text><Button title="My food orders" secondary onPress={() => router.push({ pathname: '/eats', params: { section: 'orders' } })}/></Card>
     <View style={styles.row}><Button title="Customer" secondary={mode !== 'customer'} onPress={() => setMode('customer')}/>{user?.driver && <Button title="Work" secondary={mode !== 'work'} onPress={() => setMode('work')}/>}</View>
     <Journeys key={`${user?.id}:${mode}`} mode={mode}/>
   </Screen>;

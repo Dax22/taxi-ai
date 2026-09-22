@@ -5,7 +5,9 @@ See [unified accounts](unified-accounts.md) for delivered scope. This document r
 the user's request to combine customer, driver, delivery and food-vendor access
 before mobile development proceeds. It supersedes the separate customer/driver
 mobile-app plan. The website now supports Customer/Work capabilities under one
-account. There is no runnable native app or vendor/delivery ordering flow yet.
+account. The native app now shares rides and parcel journeys; release 0.24.0
+adds Eats, My store and food delivery handovers. See [Eats](eats.md) for the
+implemented preview. Broader capabilities below remain the target product.
 
 ## Product structure
 

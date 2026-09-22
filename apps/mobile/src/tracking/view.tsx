@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react';
-import { Alert, Text } from 'react-native';
+import { Alert } from 'react-native';
+import { Text } from '../ui/typography';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Button, Card, Notice, Pill, styles } from '../ui/components';

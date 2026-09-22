@@ -14,6 +14,7 @@ import { paymentRoutes } from '../modules/payments/routes.mjs';
 import { adminConsoleRoutes } from '../modules/admin-console/routes.mjs';
 import { googleAuthRoutes } from '../modules/google-auth/routes.mjs';
 import { accountEmailRoutes } from '../modules/account-email/routes.mjs';
+import { eatsRoutes } from '../modules/eats/routes.mjs';
 import { requireSameOrigin, readSessionToken, sessionCookie, requireCsrf } from './security.mjs';
 import { readBody } from './body.mjs';
 import { json } from './responses.mjs';
@@ -24,6 +25,7 @@ export function createApiRouter(application, { secure = false } = {}) {
   const cookie = (token, age) => sessionCookie(token, age, secure);
   const routes = [...accountEmailRoutes(application.accountEmail, cookie), ...googleAuthRoutes(application.googleAuth, accounts, secure), ...adminConsoleRoutes(application.adminConsole, accounts, cookie), ...deviceSessionRoutes(devices), ...accountRoutes(accounts, cookie), ...driverRoutes(drivers), ...rideRoutes(rides), ...chatRoutes(chat), ...callRoutes(calls), ...locationRoutes(locations), ...availabilityRoutes(availability), ...paymentRoutes(payments), ...safetyRoutes(safety)];
   routes.push(...vehicleCheckRoutes(application.vehicleChecks));
+  routes.push(...eatsRoutes(application.eats));
   return async function handleApi({ request, response, pathname, origin, clientAddress }) {
     const write = request.method === 'POST';
     check(['GET', 'POST'].includes(request.method), 'METHOD_NOT_ALLOWED', 'Use GET or POST.');

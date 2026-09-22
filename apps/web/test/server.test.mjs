@@ -16,6 +16,9 @@ async function withServer(run, mode = 'local', maps = 'community') {
 test('the local site serves HTML, modules and artwork with correct content types', async () => {
   await withServer(async (base) => {
     for (const [path, type] of [['/', 'text/html'], ['/app', 'text/html'],
+      ['/eats', 'text/html'], ['/eats.css', 'text/css'], ['/typography.css', 'text/css'], ['/eats.mjs', 'text/javascript'],
+      ['/eats/view.mjs', 'text/javascript'], ['/eats/transport.mjs', 'text/javascript'],
+      ...['eats', 'eats-controller', 'eats-contracts'].map((name) => [`/shared/${name}.mjs`, 'text/javascript']),
       ['/trip-share', 'text/html'], ['/trip-share.mjs', 'text/javascript'], ['/shared/safety.mjs', 'text/javascript'],
       ...['safety-controller', 'safety-view', 'safety-format', 'trip-share-controller'].map((name) => [`/dashboard/${name}.mjs`, 'text/javascript']),
       ['/dashboard.css', 'text/css'], ['/dashboard.mjs', 'text/javascript'], ['/styles.css', 'text/css'],
@@ -51,12 +54,12 @@ test('the local site serves HTML, modules and artwork with correct content types
   });
 });
 
-test('camera, microphone and geolocation permissions are scoped to the account page; only configured tiles can load externally', async () => {
+test('camera and microphone are account-only; explicit work geolocation is also permitted in Eats; only configured tiles can load externally', async () => {
   for (const mode of ['local', 'off']) await withServer(async (base) => {
-    for (const path of ['/', '/app', '/app?preview=1', '/api/session', '/trip-share']) {
+    for (const path of ['/', '/app', '/app?preview=1', '/eats', '/api/session', '/trip-share']) {
       const result = await fetch(base + path);
       const policy = result.headers.get('permissions-policy');
-      assert.equal(policy, `camera=${path.startsWith('/app') ? '(self)' : '()'}, microphone=${path.startsWith('/app') && mode !== 'off' ? '(self)' : '()'}, geolocation=${path.startsWith('/app') ? '(self)' : '()'}`);
+      assert.equal(policy, `camera=${path.startsWith('/app') ? '(self)' : '()'}, microphone=${path.startsWith('/app') && mode !== 'off' ? '(self)' : '()'}, geolocation=${path.startsWith('/app') || path === '/eats' ? '(self)' : '()'}`);
       assert.match(result.headers.get('content-security-policy'), /media-src 'self' blob:/);
       assert.match(result.headers.get('content-security-policy'), /img-src 'self' https:\/\/tile.openstreetmap.org/);
       assert.match(result.headers.get('content-security-policy'), /connect-src 'self'/);

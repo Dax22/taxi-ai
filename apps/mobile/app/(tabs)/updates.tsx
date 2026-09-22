@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Text } from 'react-native';
+import { Alert } from 'react-native';
+import { Text } from '../../src/ui/typography';
 import { router } from 'expo-router';
 import { useSession } from '../../src/session/provider';
 import { useOperations } from '../../src/journeys/provider';

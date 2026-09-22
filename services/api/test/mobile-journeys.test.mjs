@@ -1,3 +1,4 @@
+import { removeEatsFixtureTables } from './migration-fixtures.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -135,7 +136,7 @@ test('notifications commit once with the journey, roll back on persistence failu
 test('schema sixteen migration preserves existing web availability, native sessions, ride retries and trip history',async(t)=>{
   const h=await harness(t,{persistent:true}),{customer,driver}=await participants(h),c=await phone(h,customer);
   const key=randomUUID();const r=ok(await c.send('/booking/requests',sample,key)).ride;
-  h.db.exec('DROP TABLE vehicle_photo_checks; DROP TABLE push_jobs; DROP TABLE push_registrations; DROP TABLE account_notifications; ALTER TABLE driver_availability DROP COLUMN native_session_id; PRAGMA user_version=16;');
+  removeEatsFixtureTables(h.db); h.db.exec('DROP TABLE vehicle_photo_checks; DROP TABLE push_jobs; DROP TABLE push_registrations; DROP TABLE account_notifications; ALTER TABLE driver_availability DROP COLUMN native_session_id; PRAGMA user_version=16;');
   const tables=['users','sessions','device_sessions','device_refresh_tokens','rides','ride_trips','idempotency','driver_applications','availability_commands'];
   const records=new Map(tables.map((name)=>[name,h.db.prepare(`SELECT * FROM ${name}`).all()]));
   const availability=h.db.prepare('SELECT * FROM driver_availability').all().map((row)=>({...row}));
