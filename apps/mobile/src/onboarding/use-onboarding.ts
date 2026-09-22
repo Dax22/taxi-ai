@@ -10,7 +10,7 @@ import type { DriverDraft } from './form';
 import { pickDriverFile } from './files';
 import type { DriverFile } from './files';
 
-export function useDriverOnboarding() {
+export function useDriverOnboarding(editVehicle = false) {
   const { client, user } = useSession(), accountId = user!.id;
   const [application, setApplication] = useState<DriverOnboarding | null>(null);
   const [draft, setDraft] = useState<DriverDraft>(() => draftFromDetails(null));
@@ -41,7 +41,7 @@ export function useDriverOnboarding() {
     const app = account.driver ? await client.application() : null; assertCurrent();
     accept(app, account.name, account.driver?.vehicle);
     setLoaded(true);
-    setStep(app && !['draft','changes_requested','rejected'].includes(app.status) ? 2 : app?.details ? 1 : 0);
+    setStep(app && !['draft','changes_requested','rejected'].includes(app.status) ? 2 : editVehicle ? 0 : app?.details ? 1 : 0);
   }
   async function run(action: (assertCurrent: () => void) => Promise<void>) {
     if (!lifecycle.current.active || lifecycle.current.busy) return;
@@ -77,10 +77,10 @@ export function useDriverOnboarding() {
         await client.addDriver(vehicle, keyFor('start', vehicle)); current(); retry.current = null;
       }
       app = await client.application(); current(); setApplication(app);
-      if (app.version !== 0) throw new ApiError('This application was changed elsewhere. Load and review the saved details.', 'STALE_VERSION', 409);
+      if (app.details || app.documents.length || app.status !== 'draft') throw new ApiError('This application was changed elsewhere. Load and review the saved details.', 'STALE_VERSION', 409);
     }
     const next = await command('save', { expectedVersion: app.version, details }); current();
-    accept(next, user!.name); setStep(1); setNotice('Your details are saved. Add your documents next.');
+    accept(next, user!.name); setStep(1); setNotice('Your details are saved. If you changed the vehicle, upload its replacement vehicle document, insurance and vehicle photo next.');
   });
   const chooseFile = () => run(async (current) => { const next = await pickDriverFile(); current(); if (next) setFile(next); });
   const upload = () => run(async (current) => {
@@ -100,8 +100,15 @@ export function useDriverOnboarding() {
     setNotice(action === 'submit' ? 'Application submitted. Your documents are awaiting manual review.'
       : action === 'reopen' ? 'Application reopened. New rides are paused until a new approval.' : 'Document removed.');
   });
+  const deleteProfile = (confirmation: string, onDeleted: () => void) => run(async (current) => {
+    if (!application || stale || application.busy || confirmation !== 'DELETE') return;
+    const data = { expectedVersion: application.version, confirmation };
+    const account = await client.deleteDriver(data.expectedVersion, confirmation, keyFor('delete-profile', data)); current();
+    if (account.driver) throw new ApiError('Your Work profile changed. Refresh it and confirm again.', 'STALE_VERSION', 409);
+    retry.current = null; accept(null, account.name); onDeleted();
+  });
   return { application, draft, setDraft, step, setStep, pending, loading, error, notice, stale, dirty, canEdit,
     kind, expiresOn, setExpiresOn, file, clearFile: () => setFile(null),
     selectKind: (next: DocumentKind) => { setKind(next); setExpiresOn(''); setFile(null); },
-    reload: () => run(load), save, chooseFile, upload, change };
+    reload: () => run(load), save, chooseFile, upload, change, deleteProfile };
 }

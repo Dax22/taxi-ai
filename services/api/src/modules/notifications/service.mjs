@@ -44,7 +44,8 @@ export function createNotificationsService({ repository, getAccount, sessionOwne
     try {
       for (const job of repository.due(clock())) {
         if (stopped) break;
-        const valid = () => sessionOwner(job.sessionId) === job.userId && repository.registered(job.sessionId) === job.token;
+        const valid = () => repository.jobActive(job.id) && sessionOwner(job.sessionId) === job.userId && repository.registered(job.sessionId) === job.token
+          && (repository.find(job.notificationId)?.mode !== 'work' || hasCapability(getAccount(job.userId), 'driver'));
         const arrived = job.kind === 'arrive' && job.status === 'pending' ? arrival(repository.find(job.notificationId)) : null;
         if (!valid() || job.kind === 'arrive' && job.status === 'pending' && arrived?.status !== 'arrived'
           || clock() >= job.createdAt + (['request','arrive'].includes(job.kind) && job.status === 'pending' ? 300_000 : 86_400_000) || job.attempts >= 8) {
@@ -66,5 +67,6 @@ export function createNotificationsService({ repository, getAccount, sessionOwne
       }
     } finally { running = false; }
   }
-  return Object.freeze({ publish, list, open, read, register, unregister, deliverPending, stop: () => { stopped = true; } });
+  return Object.freeze({ publish, list, open, read, register, unregister, deliverPending,
+    onProfileDeleted: (id, now) => repository.closeWork(id, now), stop: () => { stopped = true; } });
 }

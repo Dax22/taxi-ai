@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { createOnboardingController } from '../public/dashboard/onboarding-controller.mjs';
+import { harness, participants } from '../../../services/api/test/helpers.mjs';
+import { fixtureApi } from '../../../services/api/test/driver-fixtures.mjs';
 
 const deferred = () => { let resolve; const promise = new Promise((done) => { resolve = done; }); return { resolve, promise }; };
 const driver = { id: 'driver', role: 'driver' }, admin = { id: 'admin', role: 'admin' };
@@ -78,7 +80,7 @@ const source = (await readFile(new URL('../public/dashboard/onboarding-view.mjs'
   .replace("'/shared/driver-onboarding.mjs'", `'${new URL('../../../packages/shared/src/driver-onboarding.mjs', import.meta.url)}'`);
 const { createOnboardingView } = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
 const html = await readFile(new URL('../public/dashboard.html', import.meta.url), 'utf8');
-function dom(t) {
+function dom(t, { onAction } = {}) {
   const original = globalThis.document, nodes = new Map();
   class Element {
     constructor(tag) { this.tag = tag; this.children = []; this.value = ''; this.textContent = ''; this.handlers = {}; this.checked = false; }
@@ -95,18 +97,19 @@ function dom(t) {
       if (this.id.includes('review')) for (const key of ['identity', 'licence', 'vehicle', 'insurance']) nodes.get('onboarding-check-' + key).checked = false;
     }
     scrollIntoView() {}
+    focus() { this.focused = true; }
   }
   for (const [, tag, id] of html.matchAll(/<(\w+)\b[^>]*?\bid="([^"]+)"/g)) { const node = new Element(tag); node.id = id; }
   const node = (id) => { assert.ok(nodes.has(id), id); return nodes.get(id); };
   globalThis.document = { getElementById: node, createElement: (tag) => new Element(tag) };
   t.after(() => { globalThis.document = original; });
-  const actions = [], downloads = [], view = createOnboardingView({ onAction: (...args) => actions.push(args), onDownload: (id) => downloads.push(id), onClose() {} });
+  const actions = [], downloads = [], view = createOnboardingView({ onAction: (...args) => { actions.push(args); return onAction?.(...args); }, onDownload: (id) => downloads.push(id), onClose() {} });
   const event = { preventDefault() {} };
   return { node, view, actions, downloads, event, render: (app = application, who = driver, pending = false) => view.render({ user: who, application: app, pending, error: '' }) };
 }
 
 test('onboarding forms preserve unsaved text and its version, reset review checks after changes and render private strings as text', (t) => {
-  const f = dom(t); f.render();
+  const f = dom(t); f.render(); f.view.editVehicle();
   assert.equal(f.node('onboarding-phone').value, application.details.phone);
   f.node('onboarding-legalName').value = 'Unsaved name'; f.node('onboarding-details-form').handlers.input();
   assert.equal(f.node('onboarding-upload-fields').disabled, true);
@@ -155,7 +158,7 @@ test('a cookie switch between page refresh and private reads cannot show a diffe
 });
 
 test('vehicle previews follow unsaved details, keep identity as text, and clear on account reset', (t) => {
-  const f = dom(t); f.render();
+  const f = dom(t); f.render(); f.view.editVehicle();
   const card = () => f.node('onboarding-vehicle-preview').children[0];
   assert.equal(card().children[0].children[0].src,'/assets/vehicles/sedan-yellow.png');
   assert.equal(card().children[1].children[1].textContent,'Toyota Corolla');
@@ -170,7 +173,7 @@ test('vehicle previews follow unsaved details, keep identity as text, and clear 
 });
 
 test('vehicle dropdowns reset the previous model on make changes and send explicit custom values', (t) => {
-  const f = dom(t); f.render();
+  const f = dom(t); f.render(); f.view.editVehicle();
   const values = (name) => f.node('onboarding-' + name).children.map((option) => option.value);
   assert.ok(values('year').includes('2000')); assert.ok(!values('year').includes('1999'));
   assert.equal(values('year')[1],String(new Date().getUTCFullYear()));
@@ -197,7 +200,7 @@ test('vehicle dropdowns reset the previous model on make changes and send explic
 
 test('saved unlisted details and pre-2000 years remain visible, without becoming a valid new application', (t) => {
   const f = dom(t), old = { ...application,details:{ ...application.details,vehicle:{ make:'Unlisted',model:'<Actual model>',year:1999,colour:'Two tone',plate:'OLD-123' } } };
-  f.render(old);
+  f.render(old); f.view.editVehicle();
   assert.equal(f.node('onboarding-make').value,'__other__');
   assert.equal(f.node('onboarding-model-other').value,'<Actual model>');
   assert.equal(f.node('onboarding-year').value,'1999'); assert.match(f.node('onboarding-year').validationMessage,/2000/);
@@ -217,4 +220,122 @@ test('a first application carries the initial vehicle selection into the full fo
   for (const name of ['legalName', 'phone', 'licenceNumber']) f.node('onboarding-' + name).value = application.details[name];
   f.node('onboarding-details-form').handlers.submit(f.event);
   assert.deepEqual(f.actions.at(-1), ['save', { expectedVersion: 0, details: { ...application.details, vehicle: { ...selected, category: 'standard', payloadKg: null } } }]);
+});
+
+test('vehicle editing is visible for drafts and approved profiles, and reopening needs explicit confirmation', (t) => {
+  const f = dom(t); f.view.reset(); f.render();
+  assert.equal(f.node('onboarding-details-form').hidden, true);
+  f.node('onboarding-edit-vehicle').handlers.click();
+  assert.equal(f.node('onboarding-make').focused, true); assert.equal(f.actions.length, 0);
+  assert.equal(f.node('onboarding-details-form').hidden, false); assert.equal(f.node('onboarding-details-fields').disabled, false);
+  f.render({ ...application, status: 'approved' });
+  assert.equal(f.node('onboarding-details-form').hidden, true);
+  f.node('onboarding-edit-vehicle').handlers.click();
+  assert.equal(f.node('onboarding-edit-confirm').hidden, false); assert.equal(f.actions.length, 0);
+  f.node('onboarding-edit-cancel').handlers.click(); assert.equal(f.node('onboarding-edit-confirm').hidden, true);
+  f.node('onboarding-edit-vehicle').handlers.click(); f.node('onboarding-reopen').handlers.click();
+  assert.deepEqual(f.actions, [['reopen', { expectedVersion: application.version }]]);
+  f.render({ ...application, status: 'approved', busy: true, eligibility: { eligible: true, missing: [], expired: [] } });
+  f.node('onboarding-edit-vehicle').handlers.click();
+  assert.match(f.node('onboarding-notice').textContent, /Finish or cancel/);
+  assert.match(f.node('onboarding-eligibility').textContent, /Finish or cancel/);
+  assert.equal(f.node('onboarding-details-fields').disabled, true);
+  f.node('onboarding-details-form').handlers.submit(f.event); assert.equal(f.actions.length, 1);
+  f.render(application, admin); assert.equal(f.node('onboarding-owner-controls').hidden, true);
+});
+
+test('editor cancel restores saved values, and returning to Details opens the form again', (t) => {
+  const f = dom(t); f.view.reset(); f.render(); f.view.editVehicle();
+  f.node('onboarding-plate').value = 'UNSAVED'; f.node('onboarding-details-form').handlers.input();
+  f.render({ ...application, version: 8 });
+  f.node('onboarding-editor-cancel').handlers.click();
+  assert.equal(f.node('onboarding-details-form').hidden, true);
+  assert.equal(f.node('onboarding-plate').value, application.details.vehicle.plate);
+  assert.equal(f.node('onboarding-stale').hidden, true); assert.equal(f.actions.length, 0);
+  f.node('onboarding-edit-details').handlers.click(f.event);
+  assert.equal(f.node('onboarding-details-form').hidden, false);
+  f.node('onboarding-details-form').handlers.submit(f.event);
+  assert.equal(f.actions.at(-1)[1].expectedVersion, 8);
+});
+
+test('editing waits for the initial application read and discards a click after an account switch', async (t) => {
+  const f = dom(t), first = deferred();
+  let requests = 0;
+  const client = { request() { requests++; return first.promise; } };
+  const c = createOnboardingController({ client, view: f.view, files: {} });
+  c.context(driver); const poll = c.poll(), edit = c.editVehicle();
+  assert.equal(requests, 1); first.resolve({ application }); await poll;
+  assert.equal(await edit, true); assert.equal(f.node('onboarding-details-form').hidden, false);
+  c.reset(); c.context(driver); const late = deferred(); client.request = () => late.promise;
+  const staleEdit = c.editVehicle(); c.context({ ...driver, id: 'other' });
+  late.resolve({ application }); assert.equal(await staleEdit, false);
+  assert.equal(f.node('onboarding-details-form').hidden, true); assert.equal(f.node('onboarding-plate').value, '');
+});
+
+test('an edit click reports a failed load and can retry without reloading the page', async (t) => {
+  const f = dom(t), client = { request: async () => { throw new Error('Connection lost. Try again.'); } };
+  const c = createOnboardingController({ client, view: f.view, files: {} });
+  c.context(driver); assert.equal(await c.editVehicle(), false);
+  assert.match(f.node('onboarding-error').textContent, /Connection lost/);
+  client.request = async () => ({ application }); assert.equal(await c.editVehicle(), true);
+  assert.equal(f.node('onboarding-error').textContent, ''); assert.equal(f.node('onboarding-details-form').hidden, false);
+});
+
+test('the editor reopens an approved profile and saves replacement vehicle details through HTTP', async (t) => {
+  const h = await harness(t), { driver: actor } = await participants(h, 1, { online: false });
+  let c;
+  const f = dom(t, { onAction: (...args) => c.run(...args) });
+  const api = fixtureApi(actor), writes = [];
+  const client = { ...api, async command(path, data) { writes.push(path); return api.command(path, data); } };
+  c = createOnboardingController({ client, view: f.view, files: {} });
+  c.context({ ...actor.user, role: 'driver' });
+  await c.editVehicle();
+  assert.equal(f.node('onboarding-edit-confirm').hidden, false);
+  assert.equal(f.node('onboarding-details-form').hidden, true); assert.deepEqual(writes, []);
+  await f.node('onboarding-reopen').handlers.click();
+  assert.equal(f.node('onboarding-edit-confirm').hidden, true);
+  assert.equal(f.node('onboarding-details-form').hidden, false); assert.equal(f.node('onboarding-details-fields').disabled, false);
+  f.node('onboarding-make').value = 'Honda'; f.node('onboarding-make').handlers.change();
+  f.node('onboarding-model').value = 'Civic'; f.node('onboarding-model').handlers.change();
+  f.node('onboarding-colour').value = 'Blue'; f.node('onboarding-colour').handlers.change();
+  f.node('onboarding-plate').value = 'NEW-456'; f.node('onboarding-details-form').handlers.input();
+  await f.node('onboarding-details-form').handlers.submit(f.event);
+  assert.equal(f.node('onboarding-error').textContent, ''); assert.match(f.node('onboarding-notice').textContent, /details saved/);
+  assert.deepEqual(writes, ['/api/driver/application/reopen', '/api/driver/application/save']);
+  const { application: saved } = await api.request('/api/driver/application');
+  assert.equal(saved.status, 'draft'); assert.equal(saved.details.vehicle.make, 'Honda');
+  assert.equal(saved.details.vehicle.model, 'Civic'); assert.equal(saved.details.vehicle.colour, 'Blue'); assert.equal(saved.details.vehicle.plate, 'NEW-456');
+  assert.equal(saved.eligibility.eligible, false);
+  assert.deepEqual(new Set(saved.documents.map((doc) => doc.kind)), new Set(['profile_photo', 'driving_licence']));
+  c.reset(); c.context({ ...actor.user, role: 'driver' }); await c.editVehicle();
+  assert.equal(f.node('onboarding-plate').value, 'NEW-456'); assert.equal(f.node('onboarding-make').value, 'Honda');
+});
+
+test('Work deletion requires typing DELETE and reconfirming after a profile version change', (t) => {
+  const f = dom(t); f.view.reset(); f.render();
+  const open = () => f.node('onboarding-delete-profile').handlers.click();
+  const submit = () => f.node('onboarding-delete-form').handlers.submit(f.event);
+  open(); assert.equal(f.actions.length, 0);
+  f.node('onboarding-delete-confirmation').value = 'yes'; submit(); assert.equal(f.actions.length, 0);
+  f.node('onboarding-delete-confirmation').value = 'DELETE';
+  f.node('onboarding-delete-cancel').handlers.click(); submit(); assert.equal(f.actions.length, 0);
+  open(); f.node('onboarding-delete-confirmation').value = 'DELETE';
+  f.render({ ...application, version: 8 });
+  assert.equal(f.node('onboarding-delete-form').hidden, true); submit(); assert.equal(f.actions.length, 0);
+  open(); f.node('onboarding-delete-confirmation').value = 'DELETE'; submit();
+  assert.deepEqual(f.actions, [['delete-profile', { expectedVersion: 8, confirmation: 'DELETE' }]]);
+  f.render({ ...application, version: 8, busy: true }); assert.equal(f.node('onboarding-delete-profile').disabled, true);
+  f.view.reset(); assert.equal(f.node('onboarding-delete-confirmation').value, '');
+});
+
+test('deletion does not replace application state with an account response or act on a late result for another account', async () => {
+  const deleted = [], responses = [];
+  const response = deferred();
+  const c = createOnboardingController({ client: { request: async () => ({ application }), command: () => response.promise }, files: {},
+    onDeleted: (user) => deleted.push(user), view: { render: (state) => responses.push(state), reset() {} } });
+  c.context(driver); await c.poll(); const task = c.run('delete-profile', { expectedVersion: 7, confirmation: 'DELETE' });
+  c.context({ ...driver, id: 'someone-else' }); response.resolve({ user: { ...driver, capabilities: ['customer'], driver: null } }); await task;
+  assert.equal(deleted.length, 0); assert.equal(responses.at(-1).user.id, 'someone-else');
+  c.context(driver); await c.poll(); await c.run('delete-profile', { expectedVersion: 7, confirmation: 'DELETE' });
+  assert.equal(deleted.length, 1); assert.equal(responses.at(-1).application, null);
 });

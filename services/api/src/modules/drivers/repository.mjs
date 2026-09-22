@@ -20,11 +20,28 @@ export function createDriversRepository(db) {
       FROM drivers d LEFT JOIN driver_applications a ON a.driver_id=d.user_id WHERE d.user_id = ?`).get(id)),
     list: () => db.prepare(`SELECT d.*, CASE WHEN a.status='approved' THEN a.details_json END AS approved_details
       FROM drivers d JOIN driver_applications a ON a.driver_id=d.user_id
+      JOIN account_capabilities c ON c.user_id=d.user_id AND c.capability='driver'
       ORDER BY (a.status='submitted') DESC, a.updated_at DESC, d.user_id LIMIT 100`).all().map(profile),
     insert(id, vehicle, now) {
-      db.prepare('INSERT INTO drivers (user_id, vehicle_model, vehicle_plate) VALUES (?, ?, ?)').run(id, vehicle.model, vehicle.plate);
-      db.prepare('INSERT INTO driver_applications(driver_id,updated_at) VALUES (?,?)').run(id, now);
+      // Accounts checks that no active driver capability exists. Retain old IDs
+      // and monotonic versions so history and stale command protection survive.
+      db.prepare(`INSERT INTO drivers (user_id, vehicle_model, vehicle_plate) VALUES (?, ?, ?)
+        ON CONFLICT(user_id) DO UPDATE SET vehicle_model=excluded.vehicle_model,vehicle_plate=excluded.vehicle_plate,
+        status='pending',reviewed_by=NULL,reviewed_at=NULL`).run(id, vehicle.model, vehicle.plate);
+      db.prepare(`INSERT INTO driver_applications(driver_id,updated_at) VALUES (?,?)
+        ON CONFLICT(driver_id) DO UPDATE SET version=version+1,updated_at=excluded.updated_at`).run(id, now);
       if (vehicle.selection) db.prepare('INSERT INTO driver_vehicle_selections(driver_id,vehicle_json) VALUES (?,?)').run(id, JSON.stringify(vehicle.selection));
+    },
+    remove(id, now) {
+      // Minimal rows and audit snapshots anchor historical trips/reviews. Active
+      // profile details and current document bytes are removed atomically.
+      db.prepare('DELETE FROM driver_documents WHERE driver_id=?').run(id);
+      db.prepare('DELETE FROM driver_vehicle_selections WHERE driver_id=?').run(id);
+      db.prepare(`UPDATE drivers SET status='pending',vehicle_model='',vehicle_plate='',reviewed_by=NULL,reviewed_at=NULL WHERE user_id=?`).run(id);
+      db.prepare(`UPDATE driver_applications SET status='draft',version=version+1,details_json=NULL,submitted_at=NULL,
+        updated_at=?,reviewed_at=NULL,reviewed_by=NULL,review_reason=NULL,verification_json=NULL WHERE driver_id=?`).run(now,id);
+      db.prepare(`INSERT INTO driver_application_events(driver_id,actor_id,action,version,payload_json,created_at)
+        SELECT driver_id,driver_id,'profile_deleted',version,'{}',? FROM driver_applications WHERE driver_id=?`).run(now,id);
     },
     selection(id) {
       const row = db.prepare('SELECT vehicle_json FROM driver_vehicle_selections WHERE driver_id=?').get(id);

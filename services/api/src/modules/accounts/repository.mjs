@@ -14,6 +14,7 @@ export function createAccountsRepository(db) {
     capabilities: (id) => db.prepare('SELECT capability FROM account_capabilities WHERE user_id = ? ORDER BY capability')
       .all(id).map((row) => row.capability),
     grant: (id, capability, now) => db.prepare('INSERT INTO account_capabilities (user_id, capability, created_at) VALUES (?, ?, ?)').run(id, capability, now),
+    revokeCapability: (id, capability) => db.prepare('DELETE FROM account_capabilities WHERE user_id=? AND capability=?').run(id, capability),
     clearCapabilities: (id) => db.prepare('DELETE FROM account_capabilities WHERE user_id = ?').run(id),
     findCommand: (id, key) => db.prepare('SELECT fingerprint FROM account_commands WHERE actor_id = ? AND key = ?').get(id, key),
     saveCommand: (id, key, fingerprint) => db.prepare('INSERT INTO account_commands (actor_id, key, fingerprint) VALUES (?, ?, ?)').run(id, key, fingerprint),

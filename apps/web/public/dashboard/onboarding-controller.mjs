@@ -1,5 +1,5 @@
 /** Private application state stays within the current account and selected applicant. */
-export function createOnboardingController({ client, view, files }) {
+export function createOnboardingController({ client, view, files, onDeleted = () => {} }) {
   let user = null, selected = null, application = null, generation = 0, pending = false, polling = null, error = '';
   const current = (epoch) => epoch === generation && Boolean(user && selected);
   const path = () => user.role === 'admin' ? `/api/admin/drivers/${selected}` : '/api/driver/application';
@@ -44,21 +44,31 @@ export function createOnboardingController({ client, view, files }) {
   }
   async function run(action, data, file = null) {
     if (!application || pending) return;
+    let accepted = false;
     const epoch = ++generation; polling = null; pending = true; error = ''; render();
-    const target = action === 'review' ? `${path()}/review` : `/api/driver/application/${action}`;
+    const target = action === 'delete-profile' ? '/api/account/driver-profile/delete'
+      : action === 'review' ? `${path()}/review` : `/api/driver/application/${action}`;
     try {
       const payload = file ? { ...data, ...await files.read(file) } : data;
       if (!current(epoch)) return;
       const result = await client.command(target, payload);
       if (!current(epoch)) return;
-      acceptApplication(result.application); view.acceptChanges();
+      if (action === 'delete-profile') {
+        if (result.user?.id !== user.id || result.user.driver) throw new Error('Your Work profile changed. Refresh and review it before deleting again.');
+        reset(); await onDeleted(result.user); return;
+      }
+      acceptApplication(result.application); view.acceptChanges(action); accepted = true;
     } catch (cause) {
       if (current(epoch)) {
         error = cause.message;
         if ([401, 403, 404].includes(cause.status)) { application = null; view.reset(); }
       }
     } finally {
-      if (current(epoch)) { pending = false; render(); await poll(); }
+      if (current(epoch)) {
+        pending = false; render();
+        if (accepted && action === 'reopen') view.editVehicle?.();
+        await poll();
+      }
     }
   }
   async function download(id) {
@@ -78,6 +88,18 @@ export function createOnboardingController({ client, view, files }) {
     } finally { if (current(epoch)) { pending = false; render(); await poll(); } }
   }
   return Object.freeze({ context, reset, open, poll, run, download,
+    async editVehicle() {
+      if (user?.role !== 'driver') return false;
+      const epoch = generation;
+      view.focus();
+      if (!application && !pending) { error = ''; render(); await poll(); }
+      if (!current(epoch)) return false;
+      if (!application) {
+        error ||= 'Unable to load your driver profile. Check your connection and try Edit / change vehicle again.';
+        render(); return false;
+      }
+      return view.editVehicle?.() ?? false;
+    },
     focus() { if (user && application) view.focus(); }, close() {
     generation++; selected = application = polling = null; pending = false; error = ''; view.reset(); render();
   } });

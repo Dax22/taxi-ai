@@ -222,6 +222,12 @@ test('reopening immediately removes new-work eligibility and later vehicle chang
   await driver.online(); await change(driver, 'reopen');
   assert.equal((await driver.send('/api/availability')).body.availability, null);
   await change(driver, 'save', { details: { ...DETAILS, vehicle: { ...DETAILS.vehicle, make: 'Honda', model: 'Accord', plate: 'NEW-123' } } });
+  let replacement = (await driver.send('/api/driver/application')).body.application;
+  assert.deepEqual(replacement.documents.map((d) => d.kind).sort(), ['driving_licence', 'profile_photo']);
+  assert.equal((await driver.post('/api/driver/application/submit', { expectedVersion: replacement.version })).body.error.code, 'APPLICATION_INCOMPLETE');
+  for (const kind of ['vehicle_registration', 'insurance', 'vehicle_photo']) {
+    replacement = await change(driver, 'upload', { kind, ...IMAGE, expiresOn: kind.endsWith('photo') ? null : '2099-12-31' });
+  }
   await change(driver, 'submit'); await approveApplication(fixtureApi(admin), driver.user.id);
   assert.equal((await driver.send('/api/session')).body.user.driver.vehicle.plate, 'NEW-123');
   assert.deepEqual((await customer.send(`/api/rides/${ride.id}`)).body.ride.driver, original);

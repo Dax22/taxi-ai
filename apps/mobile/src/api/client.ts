@@ -238,6 +238,15 @@ export class MobileClient {
   async addDriver(vehicle: DriverDetails['vehicle'], key: string) {
     const epoch = this.epoch, body = await this.request('/account/driver-profile', { vehicle }, key); if (epoch !== this.epoch) throw changed(); const user = parseAccount(body.user); this.publish(user); return user;
   }
+  async deleteDriver(expectedVersion: number, confirmation: string, key: string) {
+    const epoch = this.epoch, accountId = this.user?.id;
+    const body = await this.request('/account/driver-profile/delete', { expectedVersion, confirmation }, key);
+    if (epoch !== this.epoch) throw changed();
+    const user = parseAccount(body.user);
+    if (user.id !== accountId) throw changed();
+    this.publish(user);
+    return user;
+  }
   async logout(): Promise<string | null> {
     const saved = this.saved; ++this.epoch; this.credentials = null; this.saved = null; this.publish(null);
     let warning: string | null = null;

@@ -266,6 +266,9 @@
 
 .onboarding-panel { margin-bottom: 26px; }
 .onboarding-panel h3 { margin-top: 28px; }
+.onboarding-panel .review-actions { flex-wrap: wrap; }
+.vehicle-editor { border: 1px solid var(--ink); border-radius: 12px; padding: 20px; scroll-margin-top: 24px; }
+.vehicle-editor h3 { margin-top: 0; }
 .onboarding-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 20px; margin-bottom: 20px; }
 .onboarding-actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 22px; }
 .onboarding-documents { list-style: none; padding: 0; margin-top: 16px; }

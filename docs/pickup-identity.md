@@ -2,17 +2,46 @@
 
 ## Change the registered vehicle
 
-Native: **Account → Your vehicle → Manage vehicle and documents**, or the same
-button in **Work**. Web: **Account → Manage vehicle and documents** opens the
-driver application in Work. Choose **Edit vehicle or documents** to reopen a
-submitted or approved application. Update make, model, year, colour, number plate,
-category and applicable load capacity; replace the vehicle photo, registration
-and insurance evidence as necessary, then submit for a new manual review.
+On web and native, open **Work → Your Work profile → Edit / change vehicle**.
+Native also shows the same controls in **Account**; the web account shortcut opens
+Work. Drafts open the vehicle fields directly. Submitted or approved applications
+ask for confirmation before reopening and pausing new jobs. Update make, model,
+year, colour, number plate, category and applicable load capacity, then save.
+Saving changed vehicle details removes the current vehicle photo, registration
+and insurance files. Upload replacements for that vehicle and submit for a new
+manual review. The driver photo and driving licence remain available.
 
 Reopening pauses eligibility for new jobs. The backend blocks application changes
 during assigned work. Draft details do not bypass document review. A later approved
 vehicle applies to new assignments; existing journeys retain their vehicle snapshot
 saved at claim. The account has one reviewed vehicle, not an interchangeable garage.
+
+## Delete the Work profile
+
+**Work → Your Work profile → Delete Work profile** opens a separate confirmation.
+The driver must type **DELETE** and choose **Confirm delete Work profile**.
+Native also exposes this through Account. The server blocks deletion during any
+assigned negotiation, accepted fare awaiting booking or unfinished trip.
+
+This removes the driver capability, active vehicle/details and current uploaded
+document bytes, stops availability on every device and closes queued Work alerts.
+The customer account, login sessions, past trips, receipts, safety reports and
+review audit snapshots are retained. Minimal driver/application rows anchor those
+records. This is Work profile deletion, not full-account erasure. Copies in
+database pages, backups and prior downloads are not securely erased by the action.
+An alert already handed to a push provider cannot be recalled.
+
+The owner may apply again. Reapplication starts as a draft with no current
+documents or approval; versions continue increasing, and historical review events
+remain. Old deletion retries and stale forms cannot delete or overwrite the new
+profile. Account enrollment/deletion and driver/availability/notification changes
+share one transaction through injected ports; schema 18 remains unchanged.
+
+Web uses `POST /api/account/driver-profile/delete`; native uses
+`POST /api/mobile/v1/account/driver-profile/delete`. Both require an authenticated
+owner, idempotency key and `{ expectedVersion, confirmation: "DELETE" }`.
+Browser writes also require the existing same-origin and CSRF checks. No user ID
+is accepted from the client. The response contains the updated customer account.
 
 ## Arrival notices
 

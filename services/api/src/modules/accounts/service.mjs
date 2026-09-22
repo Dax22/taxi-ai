@@ -83,6 +83,33 @@ export function createAccountsService({ repository, driverProfiles, passwords, t
     });
   }
 
+  function deleteDriverProfile(userId, data, key) {
+    fields(data, ['expectedVersion', 'confirmation']);
+    check(data.confirmation === 'DELETE', 'INVALID_CONFIRMATION', 'Type DELETE to confirm deleting your Work profile.');
+    check(Number.isSafeInteger(data.expectedVersion) && data.expectedVersion >= 0, 'INVALID_VERSION', 'Refresh your Work profile before deleting it.');
+    check(typeof key === 'string' && /^[A-Za-z0-9_-]{16,128}$/.test(key), 'INVALID_IDEMPOTENCY_KEY', 'A unique request key is required.');
+    const fingerprint = tokens.digest(JSON.stringify(['delete-driver-profile', data.expectedVersion, data.confirmation]));
+    return unitOfWork(() => {
+      const user = profile(userId); requireRole(user, 'customer');
+      const previous = repository.findCommand(userId, key);
+      if (previous) {
+        check(previous.fingerprint === fingerprint, 'KEY_REUSED', 'This key belongs to another action.');
+        // A lost response must never delete a subsequently recreated profile.
+        return { user, replayed: true };
+      }
+      check(user.capabilities.includes('driver'), 'NOT_FOUND', 'Your Work profile has already been deleted.');
+      check(driverProfiles.version(userId) === data.expectedVersion, 'STALE_VERSION', 'Your Work profile changed. Refresh it and confirm deletion again.');
+      check(!driverProfiles.hasWork(userId), 'DRIVER_BUSY', 'Finish or cancel assigned work before deleting your Work profile.');
+      const now = clock();
+      driverProfiles.remove(userId, now);
+      repository.revokeCapability(userId, 'driver');
+      driverProfiles.stopWork(userId, now);
+      repository.saveCommand(userId, key, fingerprint);
+      audit.record(userId, 'account.driver_profile_deleted', userId, now);
+      return { user: profile(userId), replayed: false };
+    });
+  }
+
   async function login(data) {
     fields(data, ['email', 'password']);
     const record = repository.findByEmail(emailAddress(data.email));
@@ -222,7 +249,7 @@ export function createAccountsService({ repository, driverProfiles, passwords, t
     });
   }
 
-  return Object.freeze({ profile, register, login, resolveGoogle, signInMethods, unlinkGoogle, addDriverProfile, issueSession, sessionFor, revokeSession, bootstrapAdmin,
+  return Object.freeze({ profile, register, login, resolveGoogle, signInMethods, unlinkGoogle, addDriverProfile, deleteDriverProfile, issueSession, sessionFor, revokeSession, bootstrapAdmin,
     emailState, emailStateForAddress, confirmEmail, replacePassword, validatePasswordLogin,
     sessionOwner: (hash) => repository.findSession(hash, clock())?.userId ?? null });
 }

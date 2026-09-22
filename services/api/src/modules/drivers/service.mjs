@@ -8,6 +8,7 @@ import { DRIVER_REVIEW_CHECKS } from '../../../../../packages/shared/src/driver-
 export function createDriversService({ repository, getAccount, hasDriverWork, codec, tokens, unitOfWork, audit, clock }) {
   function access(user, id) {
     check(user?.role === 'admin' || (hasCapability(user, 'driver') && user.id === id), 'FORBIDDEN', 'Only the applicant and administrators can access this application.');
+    check(hasCapability(getAccount(id), 'driver'), 'NOT_FOUND', 'This Work profile has been deleted.');
     const app = repository.application(id);
     check(app, 'NOT_FOUND', 'Driver application not found.'); return app;
   }
@@ -55,7 +56,16 @@ export function createDriversService({ repository, getAccount, hasDriverWork, co
       const now = clock(); let event = {};
       if (['save', 'upload', 'remove'].includes(action)) {
         editable(app);
-        if (action === 'save') app.details = applicationDetails(data.details, now);
+        if (action === 'save') {
+          const next = applicationDetails(data.details, now);
+          const vehicleIdentity = (vehicle) => canonical({ ...vehicle, category: vehicle.category ?? 'standard', payloadKg: vehicle.payloadKg ?? null });
+          if (app.details && vehicleIdentity(app.details.vehicle) !== vehicleIdentity(next.vehicle)) {
+            const old = repository.documents(id).filter((doc) => ['vehicle_registration', 'insurance', 'vehicle_photo'].includes(doc.kind));
+            for (const doc of old) repository.removeDocument(doc.id);
+            event = { replacedVehicleDocumentIds: old.map((doc) => doc.id) };
+          }
+          app.details = next;
+        }
         if (action === 'upload') {
           const expiresOn = documentExpiry(data.kind, data.expiresOn), file = codec.decode(data);
           const old = repository.documents(id).find((doc) => doc.kind === data.kind);

@@ -13,7 +13,7 @@ import { createVehicleCategoryPicker } from './vehicle-categories.mjs';
 
 
 /** DOM rendering and UI events. No network, session storage or backend imports. */
-export function createDashboardView({ onCommand, onReview, onReportReview, onSelectionChange, onHistory, serverNow, onCategoryChange = () => {}, onVehicleMismatch = () => {} }) {
+export function createDashboardView({ onCommand, onReview, onReportReview, onSelectionChange, onHistory, serverNow, onCategoryChange = () => {}, onVehicleMismatch = () => {}, onEditVehicle = () => {} }) {
   let state = { user: null, rides: [], available: [], drivers: [] };
   let selectedId = null, detailId = null;
   let renderedLists = '', renderedDetail = '';
@@ -43,6 +43,7 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
     const canAccept = ride?.status === 'negotiating' && offer && offer.proposedBy !== state.user?.id && remaining > 0;
     tripView.tick();
     $('history-more').dataset.locked = String(!state.historyCursor);
+    $('driver-edit-vehicle').dataset.locked = String(state.user?.role !== 'driver');
     $('accept-fare').dataset.locked = String(!canAccept);
     $('fare-expiry').textContent = ride?.status === 'negotiating' && offer
       ? remaining > 0 ? `Offer expires in ${Math.ceil(remaining / 1000)} seconds.` : 'This offer expired. Send a new offer to continue.' : '';
@@ -270,6 +271,7 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
   });
 
   updateQuote();
+  $('driver-edit-vehicle').addEventListener('click', () => { if (!busy && state.user?.role === 'driver') return onEditVehicle(); });
   $('history-refresh').addEventListener('click', () => onHistory(null));
   $('history-more').addEventListener('click', () => { if (state.historyCursor) onHistory(state.historyCursor); });
   return Object.freeze({

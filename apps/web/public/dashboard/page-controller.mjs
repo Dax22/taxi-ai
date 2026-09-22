@@ -96,6 +96,7 @@ export function createPageController({ client, activityClient = client, view, mo
           const last = await client.request('/api/session');
           if (epoch !== generation) return;
           if (identity(last) !== key) { session(last); return; }
+          if (next.mode === 'work' && !canUseMode(last.user, 'work')) { session(last); return; }
           next.account = last.user; next.user = accountInMode(last.user, next.mode);
         }
         state = next; render();
@@ -166,6 +167,21 @@ export function createPageController({ client, activityClient = client, view, mo
   }
   return Object.freeze({ refresh, poll, runAction, selection, rideCommand, switchMode, snapshot: () => structuredClone(state),
     cancelSwitch() { state.modePrompt = false; render(); },
+    async editVehicle() {
+      if (busy || !canUseMode(state.account, 'work')) return false;
+      const key = sessionKey;
+      if (state.mode !== 'work' && !await switchMode('work')) return false;
+      if (key !== sessionKey || state.user?.role !== 'driver') return false;
+      // The profile card may be clicked before the first private application read finishes.
+      onboarding.context(state.user);
+      return onboarding.editVehicle();
+    },
+    async driverDeleted(account) {
+      if (state.account?.id !== account.id) return;
+      state.account = account; availability.reset(); resetWorkspace('customer'); modeView?.reset();
+      feedback.notice('Your Work profile was deleted. Your customer account is still open.');
+      try { await refresh(); } catch { feedback.error('Your Work profile was deleted. Reconnect and refresh to load Customer.'); }
+    },
     async addDriver(vehicle) {
       const result = await runAction(async () => {
         const result = await client.command('/api/account/driver-profile', { vehicle });

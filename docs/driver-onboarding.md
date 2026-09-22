@@ -63,6 +63,12 @@ or payment actions happen as a side effect of application review.
 
 Application changes/reviews are blocked during any assigned negotiation, agreed
 fare awaiting booking, or unfinished trip. Finish or cancel that work first.
+**Edit / change vehicle** is visible at the top of the Work profile. Changing
+vehicle details removes the current vehicle registration, insurance and vehicle
+photo, requiring replacement evidence before resubmission. Driver photo/licence
+files are retained. **Delete Work profile** removes active driver access and files
+after typed confirmation while retaining the customer account and historical
+records. See [vehicle changes and deletion](pickup-identity.md).
 Approval changes future profile data; each assigned ride keeps its driver name
 and vehicle snapshot, so subsequent vehicle changes do not rewrite trip history.
 

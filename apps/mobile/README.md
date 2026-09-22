@@ -40,6 +40,12 @@ This is a connected foundation, not a store-ready transport service.
 
 ## Run locally on your Mac
 
+For vehicle changes, use **Work → Your Work profile → Edit / change vehicle**
+(also available in Account). Approved/submitted profiles ask for confirmation;
+saved vehicle changes require replacement vehicle documents and a new review.
+**Delete Work profile** opens a typed confirmation and retains Customer and past
+records. See [vehicle changes and deletion](../../docs/pickup-identity.md).
+
 Use **Node 24** (selected by the repository `.nvmrc`). Upgrade from Node 22.12.0
 before installing mobile dependencies. With nvm installed, run `nvm install`
 and `nvm use` from the repository root.

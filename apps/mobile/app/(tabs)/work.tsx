@@ -5,7 +5,7 @@ import { useSession } from '../../src/session/provider';
 import { useWork } from '../../src/journeys/provider';
 import { Button, Card, Heading, Notice, Pill, Screen, fare, styles } from '../../src/ui/components';
 import { SelectField } from '../../src/ui/select-field';
-import { VehicleCard } from '../../src/ui/vehicle-card';
+import { WorkProfileControls } from '../../src/ui/work-profile-controls';
 import { vehicleCategory } from '../../../../packages/shared/src/vehicle-categories.mjs';
 import { MATCH_REASON_LABELS } from '../../../../packages/shared/src/smart-matching.mjs';
 export default function Work(){
@@ -15,8 +15,7 @@ export default function Work(){
   useEffect(()=>{if(s.journey&&!blocked){const id=s.journey.id;c.clearJourney();router.push({pathname:'/journey',params:{id}});}},[s.journey,blocked,c]);
   return <Screen><Pill>WORK</Pill><Heading title="Ready when you are." subtitle="Choose when to receive nearby requests."/><Notice message={s.error}/>
     {!user?.driver?<Card><Text style={styles.h2}>Drive or deliver with Taxi Ai.</Text><Button title="Start driver application" onPress={()=>router.push('/driver-application')}/></Card>:<>
-      <VehicleCard vehicle={user.driver.vehicle} compact/>
-      <Button title="Manage vehicle and documents" secondary onPress={()=>router.push('/driver-application')}/>
+      <WorkProfileControls/>
       <Card><Pill>{online?(s.availability?.owned?'ONLINE ON THIS PHONE':'ONLINE ON ANOTHER DEVICE'):'OFFLINE'}</Pill>
         <Text style={styles.body}>{eligible?'Keep Taxi Ai open to receive requests. Leaving the app stops location updates and takes you offline.':'Complete your application and approval before taking new jobs.'}</Text>
         <Text style={styles.small}>Your precise location is used to find nearby work. Customers do not see your availability location.</Text>

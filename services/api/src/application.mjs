@@ -60,7 +60,10 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
   const rideRepository = createRidesRepository(db);
   let drivers, devices, accountEmail;
   const accounts = createAccountsService({ repository: accountRepository,
-    driverProfiles: { insert: driverRepository.insert, validateVehicle: (data) => vehicleDetails(data, clock()), find: (id) => {
+    driverProfiles: { insert: driverRepository.insert, remove: driverRepository.remove,
+      version: (id) => driverRepository.application(id)?.version, hasWork: rideRepository.hasDriverWork,
+      stopWork: (id, now) => { availability.onProfileDeleted(id, now); notifications.onProfileDeleted(id, now); },
+      validateVehicle: (data) => vehicleDetails(data, clock()), find: (id) => {
       const driver = driverRepository.find(id);
       return driver ? { ...driver, eligibility: drivers.eligibilityFor(id) } : null;
     } },
