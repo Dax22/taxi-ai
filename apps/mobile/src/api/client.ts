@@ -223,6 +223,10 @@ export class MobileClient {
     return this.ownApplication(await this.request(`/driver/application/${action}`, data, key));
   }
   async devices() { return parseDevices(await this.request('/devices')); }
+  async eats(path: string, data?: unknown, key?: string) {
+    if (!path.startsWith('/eats/')) throw new Error('Use an Eats API path.');
+    return this.request(path, data, key);
+  }
   async emailStatus() { return parseEmailStatus(await this.request('/account/email')); }
   private accepted(body: Record<string, unknown>) {
     if (body.accepted !== true) throw new ApiError('Taxi Ai returned an incompatible response. Try again later.', 'INVALID_RESPONSE');

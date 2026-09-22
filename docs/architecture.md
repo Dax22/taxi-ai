@@ -5,7 +5,9 @@ separate business modules and explicit dependencies. The current code implements
 accounts, driver review, ride/fare negotiation, trip lifecycle, participant chat
 and audio calling, route quotes, driver location sharing, availability/nearby matching and simulated payments/receipts/earnings. Category-aware bookings use the shared
 journey engine; a deliveries module owns parcel details and handover verification.
-Eats restaurant and vendor ordering remain separate planned modules.
+The Eats module owns restaurant menus, store membership, test checkout and food
+fulfilment. It shares worker capacity with journeys through injected ports.
+See [Eats architecture and acceptance](eats.md).
 See [ADR 0001](decisions/0001-modular-monolith.md) for the decision and tradeoffs.
 
 The target product is now one app and website with Customer, Drive & deliver
@@ -52,6 +54,7 @@ See [vehicle photo checks](vehicle-photo-checks.md) for configuration and limits
 | Drivers | Private applications, documents, manual review and expiry eligibility | `drivers`, `driver_applications`, `driver_documents`, `driver_document_reads`, `driver_application_events`, `driver_application_commands` |
 | Rides | Requests, fares, bookings, pickup verification, progress, cancellation and history | `rides`, `fare_events`, `idempotency`, `ride_trips`, `ride_activity` |
 | Deliveries | Parcel validation, category/capacity eligibility and drop-off verification | `delivery_orders` |
+| Eats | Store membership/review, menus, test checkout, kitchen and courier food handovers | `eats_stores`, `eats_memberships`, `eats_reviews`, `eats_menu`, `eats_quotes`, `eats_orders`, `eats_commands` |
 | Notifications | Account-scoped inbox, device opt-in and durable push/receipt retries | `account_notifications`, `push_registrations`, `push_jobs` |
 | Vehicle checks | Optional photo observations, comparison, retry reservation and expiry | `vehicle_photo_checks` |
 | Chat | Participant messages, read markers, retries and reports | `chat_messages`, `chat_reads`, `chat_commands`, `chat_reports` |
@@ -217,16 +220,15 @@ or erase current retry keys. See [journey verification](pilot-readiness.md).
 
 One native Taxi Ai app for iOS/Android, including tablets, lives in `apps/mobile/`
 using React Native + Expo + TypeScript. The website/backend remain JavaScript ESM.
-Customer/Work modes share account use cases and versioned API contracts; delivery
-and My store remain planned. Device sessions, secure credential storage and
+Customer/Work modes share account use cases and versioned API contracts. Eats
+and My store are separate native screens using the same authenticated account. Device sessions, secure credential storage and
 expiry/revocation are implemented separately from browser cookies. Native views
-and device adapters remain platform-aware. Scoped store memberships remain part
-of the later Eats module.
+and device adapters remain platform-aware. Schema 19 implements one owner membership per store/account in the Eats module.
 Mode selection remains per client; authorization, ownership and worker capacity
 remain server-side. Workspace resets and retry keys are now scoped to account
 and Customer/Work mode. Calls/GPS/availability use a separate session client and
-preserve active trip ownership across mode changes. Store/service contexts will
-follow when their workflows exist. See the
+preserve active trip ownership across mode changes. The shared Eats controller resets private state on account changes,
+preserves exact retries and checks store/order permissions server-side. See the
 [unified plan](unified-platform.md) for active-work continuity and acceptance cases.
 
 ## Participant chat
@@ -297,7 +299,7 @@ configuration and the remaining provider/browser/device validation.
 | Future module | Boundary to preserve |
 | --- | --- |
 | Production communication | Operated TURN infrastructure, cross-network/mobile validation, push notifications and abuse controls |
-| Taxi Ai Eats | Vendors, fixed-price menus, ordering and fulfilment; show delivery fees at checkout |
+| Taxi Ai Eats production | Payments/settlements, merchant verification, operational support, notifications and live courier tracking; test ordering is implemented |
 | Courier | Parcel details, vehicle eligibility and proof of delivery; confirm its pricing policy separately |
 | Live payments | Provider checkout/verification, authenticated webhooks, durable reconciliation, refunds and payouts |
 | AI assistance | Fare/ETA suggestions and authorized assistance through explicit application commands |

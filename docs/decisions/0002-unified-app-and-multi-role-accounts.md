@@ -58,5 +58,6 @@ flows in subsequent releases. See [the product and reliability plan](../unified-
 The original decision was documentation-only at version 0.13.2/schema 9.
 Version 0.14.0/schema 10 implements Customer/Work on the website, additive public
 capabilities and driver enrollment under the same login. Staff remains separate.
-See [the account implementation](../unified-accounts.md). Native authentication,
-mobile apps, scoped store memberships and delivery workflows remain planned.
+See [the account implementation](../unified-accounts.md). The native app now includes authentication and ride/parcel workflows. Version
+0.24.0 adds Eats and one scoped owner/store membership per personal account.
+See [Eats](../eats.md) for implemented scope and remaining production work.

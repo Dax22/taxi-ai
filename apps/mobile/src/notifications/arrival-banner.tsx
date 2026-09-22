@@ -1,4 +1,4 @@
-import { Text } from 'react-native';
+import { Text } from '../ui/typography';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useOperations } from '../journeys/provider';

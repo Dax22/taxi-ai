@@ -5,6 +5,11 @@ The **Your account** button opens `/app`. Node.js 22.12+ works. Email/password
 preview needs no provider credentials. Optional Google sign-in and sign-in method
 management are described in [Google setup](../../docs/google-sign-in.md).
 
+Taxi Ai Eats is at `/eats`, with restaurant browsing, test checkout, My store and
+food delivery work. Follow [the Eats guide](../../docs/eats.md) to create a fictional
+menu, approve it and exercise customer–kitchen–courier handovers. All web/admin
+text and controls now share the native system-font policy.
+
 ## Client structure
 
 `public/dashboard.mjs` wires browser events and feature adapters. The injected
@@ -93,8 +98,8 @@ origin, a gateway token and invited tester access. CSP permits same-origin scrip
 connections, plus images from the configured tile origin. Inline code and
 embedding are disabled. Microphone permission
 is enabled only on `/app` while calling is enabled; acquisition requires a Call
-or Answer click and browser permission. Geolocation is allowed only at `/app`
-and requires an explicit location-sharing action plus browser consent. Camera remains disabled.
+or Answer click and browser permission. Geolocation is allowed at `/app` and `/eats` for explicit driver availability
+actions, and requires an explicit action plus browser consent. Camera remains disabled.
 The account page sends an origin-only cross-origin Referer for street tiles;
 other pages use no-referrer. Address search and routing go through the API.
 

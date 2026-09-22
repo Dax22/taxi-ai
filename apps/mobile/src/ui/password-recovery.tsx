@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Text } from 'react-native';
+import { Text } from './typography';
 import type { MobileClient } from '../api/client.ts';
 import { Button, Field, Notice, styles } from './components';
 

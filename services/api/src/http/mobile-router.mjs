@@ -9,9 +9,11 @@ import { mobileSafety } from './mobile-safety.mjs';
 import { mobileVehicleChecks } from './mobile-vehicle-checks.mjs';
 import { mobileTracking } from './mobile-tracking.mjs';
 import { createMobileBooking } from './mobile-booking.mjs';
+import { eatsRoutes } from '../modules/eats/routes.mjs';
 
 /** Versioned native surface. Cookie identity and browser CSRF are never reused. */
-export function createMobileRouter({ devices, accounts, drivers, rides, locations, availability, chat, notifications, safety, vehicleChecks, clock, rateLimiter, googleAuth, accountEmail }) {
+export function createMobileRouter({ devices, accounts, drivers, rides, eats, locations, availability, chat, notifications, safety, vehicleChecks, clock, rateLimiter, googleAuth, accountEmail }) {
+  const foodRoutes = eatsRoutes(eats);
   const booking = createMobileBooking({ rides, locations, availability, clock });
   const journeys = createMobileJourneys({ rides, availability, chat, clock });
   function summary(ride) {
@@ -52,6 +54,11 @@ export function createMobileRouter({ devices, accounts, drivers, rides, location
     else if (auth) body = path === '/auth/login' ? await devices.login(data) : path === '/auth/refresh' ? devices.refresh(data) : devices.logout(data);
     else if (!write && path === '/session') body = { user: session.user, sessionId: session.id };
     else if (!write && path === '/account/email') body = accountEmail.status(session.user.id);
+    else if (path.startsWith('/eats/')) {
+      const route = foodRoutes.find((entry) => entry.method === request.method && entry.path.test('/api' + path));
+      check(route, 'NOT_FOUND', 'Eats endpoint not found.');
+      body = route.handle({ user: session.user, query, data, key: request.headers['idempotency-key'], match: ('/api' + path).match(route.path) }).body;
+    }
     else if (write && path === '/account/email/request') body = accountEmail.requestVerification(session.user.id,data);
     else if (path === '/booking' || path.startsWith('/booking/')) body = await booking({ path, write, user: session.user,
       accessToken, data, key: request.headers['idempotency-key'] });

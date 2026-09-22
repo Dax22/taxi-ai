@@ -1,4 +1,5 @@
-import { Alert, Text } from 'react-native';
+import { Alert } from 'react-native';
+import { Text } from '../src/ui/typography';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useJourney } from '../src/journeys/provider';
 import { JourneyChat } from '../src/journeys/chat';

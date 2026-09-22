@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { vehicleCategory } from '../../../../packages/shared/src/vehicle-categories.mjs';
-import { Text } from 'react-native';
+import { Text } from '../ui/typography';
 import type { BookingRide } from '../../../../packages/shared/src/mobile-booking.mjs';
 import { bookingStatusLabel, isRequestOpen } from '../../../../packages/shared/src/mobile-booking.mjs';
 import { Button, Card, fare, Pill, styles } from '../ui/components';

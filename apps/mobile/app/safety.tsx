@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Alert, Share, Text } from 'react-native';
+import { Alert, Share } from 'react-native';
+import { Text } from '../src/ui/typography';
 import { useLocalSearchParams } from 'expo-router';
 import { useSafety } from '../src/journeys/provider';
 import { useSession } from '../src/session/provider';

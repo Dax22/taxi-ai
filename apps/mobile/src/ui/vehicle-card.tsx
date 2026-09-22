@@ -1,4 +1,5 @@
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { Image, StyleSheet, View } from 'react-native';
+import { Text } from './typography';
 import type { VehicleIdentity } from '../../../../packages/shared/src/vehicle-profile.mjs';
 import { vehiclePresentation } from '../../../../packages/shared/src/vehicle-profile.mjs';
 import { categoryImages } from './vehicle-category-images';

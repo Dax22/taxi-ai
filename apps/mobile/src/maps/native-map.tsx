@@ -1,6 +1,7 @@
 import { Component, useCallback, useEffect, useRef, useState } from 'react';
 import type { PropsWithChildren, ReactNode } from 'react';
-import { AppState, Platform, StyleSheet, Text, View } from 'react-native';
+import { AppState, Platform, StyleSheet, View } from 'react-native';
+import { Text } from '../ui/typography';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { useFocusEffect } from 'expo-router';
 import MapView, { Marker, Polyline } from 'react-native-maps';

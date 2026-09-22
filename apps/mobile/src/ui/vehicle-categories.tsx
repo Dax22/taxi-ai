@@ -1,4 +1,5 @@
-import { Image, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Image, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Text } from './typography';
 import { VEHICLE_CATEGORIES, vehicleCategory } from '../../../../packages/shared/src/vehicle-categories.mjs';
 import type { VehicleCategoryId } from '../../../../packages/shared/src/vehicle-categories.mjs';
 import { categoryImages } from './vehicle-category-images';

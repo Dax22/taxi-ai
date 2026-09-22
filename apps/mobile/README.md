@@ -25,7 +25,11 @@ keyboard, accessibility and tablet QA remain pending.
   Illustrations are labelled; exact-model 3D assets are not included.
 - The same manual approval workflow as the web. Administrators review on the web.
 - Native device list and remote sign-out; web recovery at `/devices`.
-- Delivery requests and recipient drop-off codes; restaurant/vendor ordering remains planned.
+- Delivery requests and recipient drop-off codes.
+- **Taxi Ai Eats** on Home, **My food orders** in Activity, **My store** in Account
+  and **Food deliveries** in Work, with the same restaurant/menu/order records as
+  the website. See [Eats setup](../../docs/eats.md) for the full test journey.
+- A shared native system-font family across text, fields, buttons and navigation.
 
 Native Work now supports foreground location, online/offline availability and job
 claiming. Both participants negotiate fares, chat and finish rides/deliveries in the
@@ -34,8 +38,9 @@ optional configured Expo phone alerts. See [native journeys and push setup](../.
 Native Safety / SOS now opens trusted contacts, revocable trip links and private test incident records. See [mobile safety](../../docs/mobile-safety.md).
 The driver can explicitly share foreground trip GPS from Journey or Safety; the customer and active trip links receive the latest position. See [native trip location](../../docs/mobile-trip-location.md).
 Booking and shared-driver-location views can show Google Maps on Android and Apple Maps on iOS. Android signed builds need the restricted Maps SDK key; see [native maps](../../docs/mobile-maps.md).
-Native calls, payment controls, live trip maps, automatic crash detection, restaurant
-ordering and staff tools remain separate milestones.
+Native calls, real payment controls, automatic crash detection and staff tools
+remain separate milestones. Eats has a polling order timeline; its live courier
+map and phone alerts remain future work.
 This is a connected foundation, not a store-ready transport service.
 
 ## Run locally on your Mac

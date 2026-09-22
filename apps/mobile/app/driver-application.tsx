@@ -1,4 +1,5 @@
-import { Alert, Text, View } from 'react-native';
+import { Alert, View } from 'react-native';
+import { Text } from '../src/ui/typography';
 import { useLocalSearchParams } from 'expo-router';
 import { useSession } from '../src/session/provider';
 import { useDriverOnboarding } from '../src/onboarding/use-onboarding';

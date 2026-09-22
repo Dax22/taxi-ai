@@ -1,4 +1,4 @@
-import { Text } from 'react-native';
+import { Text } from './typography';
 import { router } from 'expo-router';
 import { useSession } from '../session/provider';
 import { Button, Card, styles } from './components';

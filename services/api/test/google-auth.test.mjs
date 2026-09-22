@@ -1,3 +1,4 @@
+import { removeEatsFixtureTables } from './migration-fixtures.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { harness, PASSWORD, bootstrapAdmin } from './helpers.mjs';
@@ -162,7 +163,7 @@ test('schema 13 upgrades preserve existing records and all Google pages are expl
   const h = await harness(t, { persistent: true }), web = browser(h);
   await web.register('old-account@example.test');
   const before = h.db.prepare('SELECT * FROM users').all();
-  h.db.exec('DROP TABLE vehicle_photo_checks; DROP TABLE push_jobs; DROP TABLE push_registrations; DROP TABLE account_notifications; ALTER TABLE driver_availability DROP COLUMN native_session_id; DROP TABLE delivery_orders; ALTER TABLE rides DROP COLUMN vehicle_category; DROP TABLE account_identities; DROP TABLE account_password_settings; DROP TABLE google_auth_attempts; PRAGMA user_version=13');
+  removeEatsFixtureTables(h.db); h.db.exec('DROP TABLE vehicle_photo_checks; DROP TABLE push_jobs; DROP TABLE push_registrations; DROP TABLE account_notifications; ALTER TABLE driver_availability DROP COLUMN native_session_id; DROP TABLE delivery_orders; ALTER TABLE rides DROP COLUMN vehicle_category; DROP TABLE account_identities; DROP TABLE account_password_settings; DROP TABLE google_auth_attempts; PRAGMA user_version=13');
   await h.restart();
   assert.deepEqual(h.db.prepare('SELECT * FROM users').all(), before);
   assert.equal(h.db.prepare('PRAGMA user_version').get().user_version, SCHEMA_VERSION);

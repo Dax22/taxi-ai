@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { Alert, Image, Text } from 'react-native';
+import { Alert, Image } from 'react-native';
+import { Text } from '../ui/typography';
 import { router, useFocusEffect } from 'expo-router';
 import { randomUUID } from 'expo-crypto';
 import { useSession } from '../session/provider';

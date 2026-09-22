@@ -1,4 +1,5 @@
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
+import { Text } from '../ui/typography';
 import type { BookingState, BookingController } from './controller';
 import { Button, Field, Loading, styles } from '../ui/components';
 

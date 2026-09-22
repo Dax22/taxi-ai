@@ -1,4 +1,4 @@
-import { Text } from 'react-native';
+import { Text } from './typography';
 import { router } from 'expo-router';
 import type { Journey } from '../../../../packages/shared/src/mobile-journeys.mjs';
 import { arrivalNotice } from '../../../../packages/shared/src/pickup-identity.mjs';

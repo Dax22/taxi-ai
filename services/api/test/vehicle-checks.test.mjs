@@ -1,3 +1,4 @@
+import { removeEatsFixtureTables } from './migration-fixtures.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -133,7 +134,7 @@ test('provider failure is unavailable, limits bound repeated calls and disabled 
 
 test('checks survive restart, old positives become historical, and schema 17 upgrades preserve trips',async(t)=>{
   const f=await setup(t,{persistent:true});
-  f.h.db.exec('DROP TABLE vehicle_photo_checks; PRAGMA user_version=17');await f.h.restart();
+  removeEatsFixtureTables(f.h.db); f.h.db.exec('DROP TABLE vehicle_photo_checks; PRAGMA user_version=17');await f.h.restart();
   const key=randomUUID(),check=ok(await f.customer.post(f.path,data,key)).check;await f.h.restart();
   assert.equal(ok(await f.customer.post(f.path,data,key)).check.id,check.id);assert.equal(f.calls.length,1);
   f.h.advance(300_000);assert.equal(ok(await f.customer.send(f.path)).checks[0].current,false);
