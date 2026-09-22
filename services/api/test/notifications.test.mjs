@@ -68,6 +68,28 @@ test('unsent arrival alerts expire and are discarded after pickup or cancellatio
     assert.equal(f.h.db.prepare('SELECT status FROM push_jobs WHERE notification_id=?').get(id).status, 'dead');
   }
 });
+
+test('deleting Work closes queued alerts and a late provider reply cannot revive them after reapplication', async (t) => {
+  const f = await fixture(t);
+  await step(f.customer, f.ride, 'cancel'); await f.driver.online();
+  const device = f.app.devices.issue(f.driver.user.id, 'Work phone').credentials, workToken = 'ExpoPushToken[work_fixture_no_real_destination]';
+  f.app.notifications.register(f.driver.user.id, device.sessionId, { token: workToken, projectId });
+  await requestRide(f.customer);
+  let finish, started;
+  const ready = new Promise((resolve) => { started = resolve; });
+  f.provider.send = async (data) => {
+    if (data.token !== workToken) return { status: 'ok' };
+    started(); return new Promise((resolve) => { finish = resolve; });
+  };
+  const sending = f.app.notifications.deliverPending(); await ready;
+  const version = (await f.driver.send('/api/driver/application')).body.application.version;
+  f.app.accounts.deleteDriverProfile(f.driver.user.id, { expectedVersion: version, confirmation: 'DELETE' }, randomUUID());
+  const workJobs = () => f.h.db.prepare("SELECT j.status FROM push_jobs j JOIN account_notifications n ON n.id=j.notification_id WHERE n.mode='work'").all();
+  assert.ok(workJobs().length); assert.ok(workJobs().every((j) => j.status === 'dead'));
+  f.app.accounts.addDriverProfile(f.driver.user.id, { vehicle: DETAILS.vehicle }, randomUUID());
+  finish({ status: 'ticket', ticket: 'late-work-ticket' }); await sending;
+  assert.ok(workJobs().every((j) => j.status === 'dead'));
+});
 test('push jobs persist separately from transactions, await receipts and contain no journey or message contents',async(t)=>{
   const f=await fixture(t);assert.equal(f.sent.length,0);
   const row=f.h.db.prepare('SELECT status FROM push_jobs').get();assert.equal(row.status,'pending');

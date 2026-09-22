@@ -47,7 +47,7 @@ See [vehicle photo checks](vehicle-photo-checks.md) for configuration and limits
 
 | Module | Responsibility | Owns |
 | --- | --- | --- |
-| Accounts | Registration, authentication, sessions, first-admin setup, own profile and driver enrollment | `users`, `sessions`, `account_capabilities`, `account_commands`, `account_identities`, `account_password_settings`, `account_email_verifications` |
+| Accounts | Registration, authentication, sessions, first-admin setup, own profile, driver enrollment and Work profile deletion | `users`, `sessions`, `account_capabilities`, `account_commands`, `account_identities`, `account_password_settings`, `account_email_verifications` |
 | Account email | Verification and recovery actions, durable delivery intentions and bounded retries | `account_email_tokens`, `account_email_jobs` |
 | Drivers | Private applications, documents, manual review and expiry eligibility | `drivers`, `driver_applications`, `driver_documents`, `driver_document_reads`, `driver_application_events`, `driver_application_commands` |
 | Rides | Requests, fares, bookings, pickup verification, progress, cancellation and history | `rides`, `fare_events`, `idempotency`, `ride_trips`, `ride_activity` |

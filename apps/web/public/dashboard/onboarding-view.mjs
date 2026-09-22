@@ -7,6 +7,7 @@ const detailFields = ['legalName', 'phone', 'licenceNumber', 'make', 'model', 'y
 const editable = (app) => ['draft', 'changes_requested', 'rejected'].includes(app?.status);
 export function createOnboardingView({ onAction, onDownload, onClose }) {
   let current = null, user = null, formVersion = null, dirty = false, renderedVersion = null, lastState = null;
+  let deleteVersion = null;
   const input = (name) => $(`onboarding-${name}`);
   const vehicleFields = createVehicleFields({ onChange() { dirty = true; if (lastState) render(lastState); } });
   for (const [kind, spec] of Object.entries(DRIVER_DOCUMENTS)) {
@@ -43,14 +44,38 @@ export function createOnboardingView({ onAction, onDownload, onClose }) {
   });
   $('onboarding-reload').addEventListener('click', () => { dirty = false; renderedVersion = null; render({ user, application: current, pending: false, error: '' }); });
   $('onboarding-submit').addEventListener('click', () => onAction('submit', { expectedVersion: current.version }));
-  $('onboarding-reopen').addEventListener('click', () => onAction('reopen', { expectedVersion: current.version }));
+  function editVehicle() {
+    if (!current || user?.role !== 'driver' || lastState.pending || current.busy) return;
+    cancelDelete();
+    if (editable(current)) {
+      input('details-form').scrollIntoView({ behavior: 'smooth', block: 'start' }); input('make').focus();
+    } else { input('edit-confirm').hidden = false; input('reopen').focus(); }
+  }
+  function cancelDelete() { deleteVersion = null; input('delete-form').hidden = true; input('delete-confirmation').value = ''; }
+  input('edit-vehicle').addEventListener('click', editVehicle);
+  input('edit-cancel').addEventListener('click', () => { input('edit-confirm').hidden = true; input('edit-vehicle').focus(); });
+  $('onboarding-reopen').addEventListener('click', () => {
+    if (current && !lastState.pending && !current.busy) onAction('reopen', { expectedVersion: current.version });
+  });
+  input('delete-profile').addEventListener('click', () => {
+    if (!current || user?.role !== 'driver' || lastState.pending || current.busy) return;
+    input('edit-confirm').hidden = true; deleteVersion = current.version;
+    input('delete-form').hidden = false; input('delete-confirmation').value = ''; input('delete-confirmation').focus();
+  });
+  input('delete-cancel').addEventListener('click', () => { cancelDelete(); input('delete-profile').focus(); });
+  input('delete-form').addEventListener('submit', (event) => {
+    event.preventDefault();
+    if (!current || user?.role !== 'driver' || lastState.pending || current.busy || deleteVersion !== current.version || input('delete-confirmation').value !== 'DELETE') return;
+    onAction('delete-profile', { expectedVersion: deleteVersion, confirmation: 'DELETE' });
+  });
   $('onboarding-close').addEventListener('click', onClose);
   function reset() {
     current = user = lastState = null; formVersion = renderedVersion = null; dirty = false;
+    cancelDelete(); input('edit-confirm').hidden = true;
     for (const id of ['details', 'upload', 'review']) $(`onboarding-${id}-form`).reset();
     vehicleFields.load();
     for (const id of ['documents', 'history', 'summary']) $(`onboarding-${id}`).replaceChildren();
-    input('title').textContent = 'Your driver application'; input('eligibility').textContent = ''; input('stale').hidden = true;
+    input('title').textContent = 'Your Work profile'; input('eligibility').textContent = ''; input('stale').hidden = true;
     input('status').textContent = ''; input('reason-note').textContent = ''; input('error').textContent = '';
     renderVehicleCard(input('vehicle-preview'), null);
     $('onboarding-panel').hidden = true; expiry();
@@ -63,6 +88,11 @@ export function createOnboardingView({ onAction, onDownload, onClose }) {
     input('loading').hidden = Boolean(app); input('content').hidden = !app;
     if (!app) return;
     const owner = user.role === 'driver', canEdit = owner && editable(app) && !app.busy;
+    input('owner-controls').hidden = !owner;
+    if (deleteVersion !== null && (deleteVersion !== app.version || !owner || app.busy)) cancelDelete();
+    for (const name of ['edit-vehicle', 'delete-profile', 'delete-submit', 'delete-confirmation']) input(name).disabled = pending || app.busy;
+    for (const name of ['delete-cancel', 'edit-cancel']) input(name).disabled = pending;
+    if (!owner || editable(app)) input('edit-confirm').hidden = true;
     input('progress').hidden = !owner;
     const changed = renderedVersion !== app.version;
     if (changed) {
@@ -76,7 +106,7 @@ export function createOnboardingView({ onAction, onDownload, onClose }) {
       $('onboarding-review-form').reset(); renderedVersion = app.version;
     }
     input('status').textContent = `${DRIVER_APPLICATION_LABELS[app.status]} · version ${app.version}`;
-    input('title').textContent = owner ? 'Your driver application' : `Review ${app.name}`;
+    input('title').textContent = owner ? 'Your Work profile' : `Review ${app.name}`;
     input('reason-note').textContent = app.reviewReason ? `Last review: ${app.reviewReason}` : '';
     input('eligibility').textContent = app.eligibility.eligible ? 'Manual checks recorded. Current documents allow you to go online.'
       : app.busy ? 'Finish or cancel assigned work before updating this application.'
@@ -131,6 +161,6 @@ export function createOnboardingView({ onAction, onDownload, onClose }) {
       input('history').append(item);
     }
   }
-  return Object.freeze({ render, reset, acceptChanges() { dirty = false; renderedVersion = null; input('file').value = ''; },
+  return Object.freeze({ render, reset, editVehicle, acceptChanges() { dirty = false; renderedVersion = null; input('file').value = ''; },
     focus() { $('onboarding-panel').scrollIntoView({ behavior: 'smooth', block: 'start' }); } });
 }

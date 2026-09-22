@@ -83,6 +83,10 @@ test('approved vehicle identity is snapshotted for both native and web journeys;
   app = parseOnboarding((await driverPhone.send('/driver/application/save',{ expectedVersion:app.version,details:{ ...DETAILS,vehicle:{ ...DETAILS.vehicle,make:'Honda',model:'Accord',year:2018,colour:'Blue',plate:'NEW-123' } } })).body);
   const pending = (await driverPhone.send('/session')).body.user;
   assert.equal(pending.driver.status,'pending'); assert.equal(pending.driver.vehicle.colour,undefined);
+  assert.deepEqual(app.documents.map((d) => d.kind).sort(), ['driving_licence', 'profile_photo']);
+  for (const kind of ['vehicle_registration', 'insurance', 'vehicle_photo']) {
+    app = parseOnboarding((await driverPhone.send('/driver/application/upload', { expectedVersion: app.version, kind, ...IMAGE, expiresOn: kind.endsWith('photo') ? null : '2099-12-31' })).body);
+  }
   app = parseOnboarding((await driverPhone.send('/driver/application/submit',{ expectedVersion:app.version })).body);
   await approveApplication(fixtureApi(admin),driver.user.id);
   assert.equal((await driverPhone.send('/session')).body.user.driver.vehicle.colour,'Blue');

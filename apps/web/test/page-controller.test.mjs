@@ -13,6 +13,16 @@ const ride = { id: 'ride-one', status: 'negotiating', version: 2 };
 const session = (user = customer, token = 'csrf-one') => ({ user, csrfToken: user ? token : null });
 const deferred = () => { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; };
 
+test('confirmed Work deletion clears driver controls and restores Customer without signing out', async () => {
+  const h = setup(); h.session(session(driver)); await h.page.refresh(); await h.page.switchMode('work');
+  const deleted = { ...driver, capabilities: ['customer'], driver: null };
+  h.session(session(deleted)); await h.page.driverDeleted(deleted);
+  assert.equal(h.rendered().mode, 'customer'); assert.equal(h.rendered().user.role, 'customer');
+  assert.equal(h.rendered().account.id, driver.id); assert.equal(h.rendered().account.driver, null);
+  assert.ok(h.resets.includes('availability')); assert.ok(h.resets.includes('onboarding'));
+  assert.ok(h.feedback.some(([name, message]) => name === 'notice' && /Work profile was deleted/.test(message)));
+});
+
 function setup() {
   let current = session(), rendered, selected = null, intercept = async () => undefined;
   const requests = [], feedback = [], resets = [], contexts = [], commands = [];

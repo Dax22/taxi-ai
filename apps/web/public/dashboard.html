@@ -49,7 +49,7 @@
           <div class="mode-picker" role="group" aria-label="Account mode"><button id="mode-customer" type="button" aria-pressed="true">Customer</button><button id="mode-work" type="button" aria-pressed="false">Work</button></div></div>
         <p><a class="text-link" href="/devices">Manage signed-in mobile devices ↗</a></p>
         <p><a class="text-link" href="/account-access">Sign-in methods &amp; email verification ↗</a></p>
-        <button id="account-edit-vehicle" type="button" class="button button-outline button-small" hidden>Manage vehicle and documents</button>
+        <button id="account-edit-vehicle" type="button" class="button button-outline button-small" hidden>Edit / change vehicle</button>
         <p id="mode-note" class="supporting-copy"></p>
         <p class="small-note">Switching clears unsaved forms in this window. Saved journeys, calls and active trip location sharing continue.</p>
         <div id="mode-confirm" class="mode-confirm" hidden role="group" aria-labelledby="mode-confirm-title"><h3 id="mode-confirm-title">Go offline before switching?</h3><p>Your Work availability is online. Going offline stops matching for this account.</p><div class="review-actions"><button id="mode-offline-confirm" type="button" class="button button-primary button-small">Go offline and switch</button><button id="mode-cancel" type="button" class="button button-outline button-small">Stay in Work</button></div></div>
@@ -78,13 +78,17 @@
         <p class="mode-coming small-note">Coming later: Taxi Ai Eats, courier delivery by car or motorbike, and My store. These services are not open for orders yet.</p>
       </section>
       <section id="onboarding-panel" class="account-card onboarding-panel" hidden aria-labelledby="onboarding-title">
-        <div class="card-topline"><div><p class="eyebrow">DRIVE WITH TAXI AI</p><h2 id="onboarding-title">Your driver application</h2></div><span id="onboarding-status" class="status-badge" role="status"></span></div>
+        <div class="card-topline"><div><p class="eyebrow">DRIVE WITH TAXI AI</p><h2 id="onboarding-title" tabindex="-1">Your Work profile</h2></div><span id="onboarding-status" class="status-badge" role="status"></span></div>
         <p class="small-note">Development preview: use fictional details and documents. Uploads are private to the applicant and administrators. This preview records manual checks; it does not contact identity or licence databases.</p>
         <p id="onboarding-error" class="error-text" role="alert"></p><p id="onboarding-loading" role="status">Loading your application…</p>
         <div id="onboarding-content" hidden>
           <p id="onboarding-eligibility" class="supporting-copy" role="status"></p><p id="onboarding-reason-note" class="small-note"></p>
-          <p class="small-note">Changed your car, colour or number plate? Reopen, update the details and vehicle documents, then submit for approval. New jobs pause until approval; finish assigned work first.</p>
-          <button id="onboarding-reopen" type="button" class="button button-outline">Edit vehicle or documents · pause new jobs</button>
+          <div id="onboarding-owner-controls">
+            <h3>Your vehicle</h3><p class="supporting-copy">Bought another car? Use Edit / change vehicle to update its make, model, year, colour and number plate. Save the details, upload the replacement vehicle document, insurance and vehicle photo, then submit for review. New jobs pause until approval.</p>
+            <div class="review-actions"><button id="onboarding-edit-vehicle" type="button" class="button button-primary">Edit / change vehicle</button><button id="onboarding-delete-profile" type="button" class="button button-outline">Delete Work profile</button></div>
+            <div id="onboarding-edit-confirm" class="mode-confirm" hidden role="group" aria-labelledby="onboarding-edit-title"><h3 id="onboarding-edit-title">Edit your vehicle?</h3><p>This reopens your application and pauses new jobs until approval. Changing the vehicle details removes its current vehicle document, insurance and vehicle photo so you can upload replacements. Your driver photo and licence stay in the application.</p><div class="review-actions"><button id="onboarding-reopen" type="button" class="button button-primary">Continue to edit vehicle</button><button id="onboarding-edit-cancel" type="button" class="button button-outline">Cancel</button></div></div>
+            <form id="onboarding-delete-form" class="mode-confirm stack-form" hidden><h3>Delete your Work profile?</h3><p>This takes you offline and removes your current driver details, vehicle and uploaded documents. Your customer account stays open. Past trips, receipts, safety reports and review records are retained. Copies in backups or already downloaded are not erased by this action.</p><p>You can apply again later with new documents and a new review. Finish or cancel assigned work first. To change cars, use Edit / change vehicle instead.</p><label for="onboarding-delete-confirmation">Type DELETE to confirm</label><input id="onboarding-delete-confirmation" autocomplete="off" spellcheck="false" maxlength="6" pattern="DELETE" required><div class="review-actions"><button id="onboarding-delete-submit" type="submit" class="button button-outline">Confirm delete Work profile</button><button id="onboarding-delete-cancel" type="button" class="button button-outline">Keep Work profile</button></div></form>
+          </div>
           <nav id="onboarding-progress" class="onboarding-progress" aria-label="Application steps"><a href="#onboarding-details-form">1 · Details</a><a href="#onboarding-documents-heading">2 · Documents</a><a href="#onboarding-final-review">3 · Review</a></nav>
           <div id="onboarding-vehicle-preview"></div>
           <dl id="onboarding-summary" class="onboarding-summary"></dl>

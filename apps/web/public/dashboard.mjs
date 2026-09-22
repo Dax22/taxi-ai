@@ -70,7 +70,8 @@ const conversation = createConversationController({ client, view: conversationVi
 });
 const onboardingView = createOnboardingView({ onAction: (...args) => onboarding.run(...args),
   onDownload: (id) => onboarding.download(id), onClose: () => onboarding.close() });
-const onboarding = createOnboardingController({ client, view: onboardingView, files: driverFiles });
+const onboarding = createOnboardingController({ client, view: onboardingView, files: driverFiles,
+  onDeleted: (user) => page.driverDeleted(user) });
 const safetyView = createSafetyView({ onAdd: (data) => safety.add(data), onRemove: (contact) => safety.remove(contact),
   onRaise: (data) => safety.raise(data), onShare: (minutes) => safety.share(minutes), onRevoke: (link) => safety.revoke(link),
   onCopy: () => safety.copy(), onOpen: (id) => safety.open(id), onPage: (...args) => safety.page(...args),
@@ -100,7 +101,7 @@ $('google-sign-in').addEventListener('click', () => void google.start());
 $('page-notice').textContent = consumeGoogleOutcome(location, history);
 void google.load();
 const modeView = createAccountModeView({ onSwitch: (...args) => page.switchMode(...args), onCancel: () => page.cancelSwitch(),
-  onEditVehicle: async () => { if (page.snapshot().mode === 'work' || await page.switchMode('work')) onboarding.focus(); },
+  onEditVehicle: async () => { if (page.snapshot().mode === 'work' || await page.switchMode('work')) onboarding.editVehicle(); },
   onAddDriver: (vehicle) => page.addDriver(vehicle), onOpenRide: (id) => page.openRide(id) });
 let storage;
 try { storage = window.sessionStorage; } catch { /* Mode selection remains usable without storage. */ }

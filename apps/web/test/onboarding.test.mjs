@@ -95,6 +95,7 @@ function dom(t) {
       if (this.id.includes('review')) for (const key of ['identity', 'licence', 'vehicle', 'insurance']) nodes.get('onboarding-check-' + key).checked = false;
     }
     scrollIntoView() {}
+    focus() { this.focused = true; }
   }
   for (const [, tag, id] of html.matchAll(/<(\w+)\b[^>]*?\bid="([^"]+)"/g)) { const node = new Element(tag); node.id = id; }
   const node = (id) => { assert.ok(nodes.has(id), id); return nodes.get(id); };
@@ -217,4 +218,47 @@ test('a first application carries the initial vehicle selection into the full fo
   for (const name of ['legalName', 'phone', 'licenceNumber']) f.node('onboarding-' + name).value = application.details[name];
   f.node('onboarding-details-form').handlers.submit(f.event);
   assert.deepEqual(f.actions.at(-1), ['save', { expectedVersion: 0, details: { ...application.details, vehicle: { ...selected, category: 'standard', payloadKg: null } } }]);
+});
+
+test('vehicle editing is visible for drafts and approved profiles, and reopening needs explicit confirmation', (t) => {
+  const f = dom(t); f.view.reset(); f.render();
+  f.node('onboarding-edit-vehicle').handlers.click();
+  assert.equal(f.node('onboarding-make').focused, true); assert.equal(f.actions.length, 0);
+  f.render({ ...application, status: 'approved' });
+  f.node('onboarding-edit-vehicle').handlers.click();
+  assert.equal(f.node('onboarding-edit-confirm').hidden, false); assert.equal(f.actions.length, 0);
+  f.node('onboarding-edit-cancel').handlers.click(); assert.equal(f.node('onboarding-edit-confirm').hidden, true);
+  f.node('onboarding-edit-vehicle').handlers.click(); f.node('onboarding-reopen').handlers.click();
+  assert.deepEqual(f.actions, [['reopen', { expectedVersion: application.version }]]);
+  f.render({ ...application, busy: true }); assert.equal(f.node('onboarding-edit-vehicle').disabled, true);
+  f.render(application, admin); assert.equal(f.node('onboarding-owner-controls').hidden, true);
+});
+
+test('Work deletion requires typing DELETE and reconfirming after a profile version change', (t) => {
+  const f = dom(t); f.view.reset(); f.render();
+  const open = () => f.node('onboarding-delete-profile').handlers.click();
+  const submit = () => f.node('onboarding-delete-form').handlers.submit(f.event);
+  open(); assert.equal(f.actions.length, 0);
+  f.node('onboarding-delete-confirmation').value = 'yes'; submit(); assert.equal(f.actions.length, 0);
+  f.node('onboarding-delete-confirmation').value = 'DELETE';
+  f.node('onboarding-delete-cancel').handlers.click(); submit(); assert.equal(f.actions.length, 0);
+  open(); f.node('onboarding-delete-confirmation').value = 'DELETE';
+  f.render({ ...application, version: 8 });
+  assert.equal(f.node('onboarding-delete-form').hidden, true); submit(); assert.equal(f.actions.length, 0);
+  open(); f.node('onboarding-delete-confirmation').value = 'DELETE'; submit();
+  assert.deepEqual(f.actions, [['delete-profile', { expectedVersion: 8, confirmation: 'DELETE' }]]);
+  f.render({ ...application, version: 8, busy: true }); assert.equal(f.node('onboarding-delete-profile').disabled, true);
+  f.view.reset(); assert.equal(f.node('onboarding-delete-confirmation').value, '');
+});
+
+test('deletion does not replace application state with an account response or act on a late result for another account', async () => {
+  const deleted = [], responses = [];
+  const response = deferred();
+  const c = createOnboardingController({ client: { request: async () => ({ application }), command: () => response.promise }, files: {},
+    onDeleted: (user) => deleted.push(user), view: { render: (state) => responses.push(state), reset() {} } });
+  c.context(driver); await c.poll(); const task = c.run('delete-profile', { expectedVersion: 7, confirmation: 'DELETE' });
+  c.context({ ...driver, id: 'someone-else' }); response.resolve({ user: { ...driver, capabilities: ['customer'], driver: null } }); await task;
+  assert.equal(deleted.length, 0); assert.equal(responses.at(-1).user.id, 'someone-else');
+  c.context(driver); await c.poll(); await c.run('delete-profile', { expectedVersion: 7, confirmation: 'DELETE' });
+  assert.equal(deleted.length, 1); assert.equal(responses.at(-1).application, null);
 });

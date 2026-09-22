@@ -59,6 +59,11 @@ capability. Capability membership grants application access; `drivers.status`
 and document eligibility independently control driving work. Adding a driver
 profile does not rotate the session or promote the person to staff.
 
+The owner can now [delete the Work profile](pickup-identity.md#delete-the-work-profile)
+after typing DELETE and finishing assigned work. Customer access remains. Current
+driver details and files are removed; trip, receipt, safety and review audit
+records remain. Reapplying requires fresh documents and manual review.
+
 Existing account IDs, password hashes, sessions, rides, fares, messages, review
 evidence, receipts and safety records are preserved. The migration does not
 invent approvals, documents, bookings, payments or incidents. Enrollment writes

@@ -102,6 +102,7 @@ export function createAvailabilityService({ repository, getAccount, sessionOwner
       position: row.positionJson ? JSON.parse(row.positionJson) : null } : null;
   }
   return Object.freeze({ get, command, update, sweep, positionFor,
+    onProfileDeleted: (driverId, now) => close(repository.current(driverId), now, 'approval_changed'),
     driverIds: () => repository.active().filter((r) => !invalidReason(r, clock())).map((r) => r.driverId),
     onClaim: (driverId, now) => close(repository.current(driverId), now, 'claimed') });
 }

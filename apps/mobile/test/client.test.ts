@@ -22,6 +22,33 @@ function vault() {
 function client(fetcher: (url: string, options: RequestInit) => Promise<Response>, v = vault()) {
   return { app: new MobileClient({ origin: 'https://taxi.example.test', vault: v.port, fetchImpl: ((url, options) => fetcher(String(url), options ?? {})) as typeof fetch }), ...v };
 }
+
+test('Work deletion sends explicit confirmation and version, publishes the customer account and leaves credentials intact', async () => {
+  const writes: Array<{ url: string; options: RequestInit }> = [];
+  const { app, storage } = client(async (url, options) => {
+    if (url.endsWith('/auth/login')) return response(auth());
+    writes.push({ url, options }); return ok({ user, replayed: false });
+  });
+  await app.login(user.email, 'Test password', 'Phone'); const saved = storage.value;
+  const result = await app.deleteDriver(8, 'DELETE', 'delete-profile-key-123');
+  assert.equal(writes.length, 1); assert.ok(writes[0].url.endsWith('/account/driver-profile/delete'));
+  assert.deepEqual(JSON.parse(String(writes[0].options.body)), { expectedVersion: 8, confirmation: 'DELETE' });
+  assert.equal(new Headers(writes[0].options.headers).get('Idempotency-Key'), 'delete-profile-key-123');
+  assert.equal(result.driver, null); assert.equal(app.account()?.id, user.id); assert.equal(storage.value, saved);
+});
+
+test('a Work deletion response after logout cannot restore an account', async () => {
+  let finish!: (response: Response) => void, started!: () => void;
+  const ready = new Promise<void>((resolve) => { started = resolve; });
+  const { app } = client(async (url) => {
+    if (url.endsWith('/auth/login')) return response(auth());
+    if (url.endsWith('/account/driver-profile/delete')) { started(); return new Promise<Response>((resolve) => { finish = resolve; }); }
+    return ok();
+  });
+  await app.login(user.email, 'Test password', 'Phone');
+  const rejected = assert.rejects(app.deleteDriver(8, 'DELETE', 'delete-profile-key-123'), { code: 'SESSION_CHANGED' });
+  await ready; await app.logout(); finish(ok({ user })); await rejected; assert.equal(app.account(), null);
+});
 test('native GPS publication keeps its owner nonce and sequence across access refresh without persisting position', async () => {
   const attempts: Array<{ url: string; options: RequestInit }> = [];
   const position = { lat: 9.071234, lng: 7.401234, accuracy: 20, capturedAt: 1000 };

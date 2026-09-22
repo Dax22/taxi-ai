@@ -79,6 +79,7 @@ export function createMobileRouter({ devices, accounts, drivers, rides, location
       const result = drivers.command(session.user, session.user.id, path.split('/').at(-1), data, request.headers['idempotency-key']);
       body = { application: onboarding(session.user, result.application), replayed: result.replayed };
     } else if (write && path === '/account/driver-profile') body = accounts.addDriverProfile(session.user.id, data, request.headers['idempotency-key']);
+    else if (write && path === '/account/driver-profile/delete') body = accounts.deleteDriverProfile(session.user.id, data, request.headers['idempotency-key']);
     else if (!write && path === '/devices') body = { devices: devices.list(session.user, session.id) };
     else if (write && /^\/devices\/[a-f0-9-]{36}\/revoke$/.test(path)) {
       fields(data, []); body = devices.revoke(session.user, path.split('/')[2]);
