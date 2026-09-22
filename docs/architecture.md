@@ -54,7 +54,7 @@ See [vehicle photo checks](vehicle-photo-checks.md) for configuration and limits
 | Drivers | Private applications, documents, manual review and expiry eligibility | `drivers`, `driver_applications`, `driver_documents`, `driver_document_reads`, `driver_application_events`, `driver_application_commands` |
 | Rides | Requests, fares, bookings, pickup verification, progress, cancellation and history | `rides`, `fare_events`, `idempotency`, `ride_trips`, `ride_activity` |
 | Deliveries | Parcel validation, category/capacity eligibility and drop-off verification | `delivery_orders` |
-| Eats | Store membership/review, menus, test checkout, kitchen and courier food handovers | `eats_stores`, `eats_memberships`, `eats_reviews`, `eats_menu`, `eats_quotes`, `eats_orders`, `eats_commands` |
+| Eats | Store membership/review, menus, test checkout, kitchen and courier food handovers | `eats_stores`, `eats_memberships`, `eats_reviews`, `eats_menu`, `eats_quotes`, `eats_orders`, `eats_commands`, `eats_photos` |
 | Notifications | Account-scoped inbox, device opt-in and durable push/receipt retries | `account_notifications`, `push_registrations`, `push_jobs` |
 | Vehicle checks | Optional photo observations, comparison, retry reservation and expiry | `vehicle_photo_checks` |
 | Chat | Participant messages, read markers, retries and reports | `chat_messages`, `chat_reads`, `chat_commands`, `chat_reports` |
@@ -224,6 +224,10 @@ Customer/Work modes share account use cases and versioned API contracts. Eats
 and My store are separate native screens using the same authenticated account. Device sessions, secure credential storage and
 expiry/revocation are implemented separately from browser cookies. Native views
 and device adapters remain platform-aware. Schema 19 implements one owner membership per store/account in the Eats module.
+Schema 20 adds home-kitchen defaults and normalized photos; batch reservations,
+order transitions and command records commit atomically. Image decoding is an
+injected infrastructure port outside the transaction, with session revalidation
+before saving. Private home addresses are projected by participant and order stage.
 Mode selection remains per client; authorization, ownership and worker capacity
 remain server-side. Workspace resets and retry keys are now scoped to account
 and Customer/Work mode. Calls/GPS/availability use a separate session client and

@@ -19,6 +19,7 @@ import { createDeliveriesRepository } from './modules/deliveries/repository.mjs'
 import { createDeliveriesService } from './modules/deliveries/service.mjs';
 import { createRidesService } from './modules/rides/service.mjs';
 import { createEatsRepository } from './modules/eats/repository.mjs';
+import { normaliseFoodPhoto } from './infrastructure/food-photo-codec.mjs';
 import { createEatsService } from './modules/eats/service.mjs';
 import { createChatRepository } from './modules/chat/repository.mjs';
 import { createChatService } from './modules/chat/service.mjs';
@@ -136,7 +137,7 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
   const adminConsole = createAdminConsoleService({ repository: createAdminConsoleRepository(db), audit, clock, unitOfWork });
   const eats = createEatsService({ repository: eatsRepository, getAccount: accounts.profile,
     hasOtherWork: (id) => rideRepository.hasDriverWork(id) || rideRepository.hasCustomerWork(id, clock()),
-    availabilityFor: availability.positionFor, onClaim: availability.onClaim, tokens, unitOfWork, audit, clock });
+    availabilityFor: availability.positionFor, onClaim: availability.onClaim, tokens, unitOfWork, audit, clock, normalisePhoto: normaliseFoodPhoto });
   const googleAuth = createGoogleAuthService({ repository: createGoogleAuthRepository(db), provider: googleProvider,
     accounts, devices, tokens, unitOfWork, clock });
   return Object.freeze({ accounts, devices, drivers, rides, eats, chat, calls, locations, availability, payments, safety, vehicleChecks, adminConsole, googleAuth, accountEmail, notifications, rateLimiter, clock });

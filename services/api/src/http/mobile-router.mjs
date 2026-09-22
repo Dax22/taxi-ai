@@ -41,7 +41,7 @@ export function createMobileRouter({ devices, accounts, drivers, rides, eats, lo
     rateLimiter.consume(auth ? `auth:${clientAddress}` : `mobile:${session.user.id}`, clock(), auth ? 30 : 120, auth ? 10 * 60_000 : 60_000);
     let data;
     if (write) {
-      data = await readBody(request, path === '/driver/application/upload' || /^\/vehicle-checks\/rides\/[a-f0-9-]{36}$/.test(path) ? 2_800_000 : path === '/auth/google' ? 20_000 : 4096);
+      data = await readBody(request, path === '/driver/application/upload' || /^\/eats\/stores\/[a-f0-9-]{36}\/menu$/.test(path) || /^\/vehicle-checks\/rides\/[a-f0-9-]{36}$/.test(path) ? 2_800_000 : path === '/auth/google' ? 20_000 : 4096);
       if (!auth) { session = devices.sessionFor(accessToken); check(session, 'UNAUTHENTICATED', 'Sign in to continue.'); }
     }
     const query = new URL(request.url, origin).searchParams;
@@ -57,7 +57,7 @@ export function createMobileRouter({ devices, accounts, drivers, rides, eats, lo
     else if (path.startsWith('/eats/')) {
       const route = foodRoutes.find((entry) => entry.method === request.method && entry.path.test('/api' + path));
       check(route, 'NOT_FOUND', 'Eats endpoint not found.');
-      body = route.handle({ user: session.user, query, data, key: request.headers['idempotency-key'], match: ('/api' + path).match(route.path) }).body;
+      body = (await route.handle({ user: session.user, query, data, key: request.headers['idempotency-key'], match: ('/api' + path).match(route.path), reauthenticate: () => { const fresh = devices.sessionFor(accessToken); check(fresh, 'UNAUTHENTICATED', 'Sign in to continue.'); return fresh.user; } })).body;
     }
     else if (write && path === '/account/email/request') body = accountEmail.requestVerification(session.user.id,data);
     else if (path === '/booking' || path.startsWith('/booking/')) body = await booking({ path, write, user: session.user,

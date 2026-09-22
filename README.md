@@ -8,7 +8,7 @@ approved capabilities. This direction is documented in the
 [unified platform plan](docs/unified-platform.md). The first milestone is implemented:
 one website account with Customer and Work modes for rides. The first iOS/Android
 app now shares sign-in, profiles, booking, driver availability, fare negotiation,
-chat and complete ride/delivery journeys. Taxi Ai Eats now adds restaurant browsing, checkout, My store and courier handovers as a test flow. See [Eats setup](docs/eats.md). See [unified accounts](docs/unified-accounts.md)
+chat and complete ride/delivery journeys. Taxi Ai Eats adds restaurant/home-kitchen browsing, batch portions, meal photos, delivery or customer pickup, My store and handover codes as a test flow. See [Eats setup](docs/eats.md). See [unified accounts](docs/unified-accounts.md)
 and [mobile setup](apps/mobile/README.md).
 
 ## What works today
@@ -33,8 +33,8 @@ private documents and recorded manual checks; external identity/licence verifica
 is not connected. Use fictional details and documents.
 
 - One personal login, Customer/Work mode switching and optional driver enrollment.
-- Taxi Ai Eats on web/mobile: restaurant menus, single-store carts, itemized test checkout,
-  order history, My store and courier handover codes. [Try a food order](docs/eats.md).
+- Taxi Ai Eats on web/mobile: restaurant and home-kitchen menus, meal photos, finite batch
+  quantities, private home addresses, delivery or pickup, test checkout and My store. [Try a food order](docs/eats.md).
 - One native system-font policy across app text, inputs, navigation, web and admin.
 - Native sign-in, Home/Activity/Work/Updates/Account navigation and device revocation.
 - Native driver availability, job claiming, fare consent, chat, pickup/drop-off verification

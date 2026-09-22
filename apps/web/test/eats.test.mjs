@@ -144,3 +144,33 @@ test('a customer can remove an item from the cart after the restaurant marks it 
   await f.c.refresh({ quiet: true }); assert.equal(f.c.snapshot().quote, null); assert.equal(f.c.snapshot().cart.length, 1);
   node('cart-lines').children[0].children[1].handlers.click(); assert.deepEqual(f.c.snapshot().cart, []);
 });
+
+test('pickup selection invalidates a delivery quote, freezes during uncertain writes and resets with the account', async () => {
+  const f = fixture(); await cart(f); await f.c.checkout(); f.c.fulfillment('pickup');
+  assert.equal(f.c.snapshot().quote, null); assert.equal(f.c.snapshot().fulfillment, 'pickup');
+  f.api.command = async (path, data, key) => { f.writes.push({ path, data, key }); throw new Error('Lost reply'); };
+  await f.c.checkout(); assert.equal(f.writes.at(-1).data.fulfillment, 'pickup');
+  f.c.fulfillment('delivery'); assert.equal(f.c.snapshot().fulfillment, 'pickup');
+  f.c.context({ ...user, id: uuid(29) }); assert.equal(f.c.snapshot().fulfillment, 'delivery');
+});
+
+test('meal-photo reads are bounded, deduplicated and discarded after an account change', async () => {
+  const f = fixture(), pending = deferred(); let calls = 0;
+  f.api.request = () => { calls++; return pending.promise; };
+  const first = f.c.photo(uuid(100)), duplicate = f.c.photo(uuid(100)); assert.equal(calls, 1);
+  f.c.context({ ...user, id: uuid(99) }); pending.resolve({ photo: { id: uuid(100), mimeType: 'image/jpeg', base64: 'aGVsbG8=' } });
+  assert.equal(await first, null); assert.equal(await duplicate, null);
+  assert.throws(() => readEatsResponse({ photo: { id: uuid(100), mimeType: 'image/svg+xml', base64: 'aGVsbG8=' } }));
+  assert.throws(() => readEatsResponse({ store: { ...store, sellerType: 'home_kitchen', addressHidden: true }, menu }));
+});
+
+test('shipped home-kitchen controls filter discovery, preselect seller type and send pickup without a street address', async (t) => {
+  const node = dom(t), f = fixture(); f.changeStore({ sellerType: 'home_kitchen', pickupEnabled: true, addressHidden: true, address: '' });
+  const view = createEatsView(f.c); f.c.subscribe(() => view.render(f.c.snapshot())); await f.c.navigate('browse');
+  node('seller-filter').value = 'restaurant'; node('seller-filter').handlers.change(); assert.match(node('results').textContent, /^0 kitchens/);
+  node('seller-filter').value = 'home_kitchen'; node('seller-filter').handlers.change(); assert.match(node('results').textContent, /^1 kitchen/);
+  node('pickup-mode').handlers.click(); await f.c.selectRestaurant(store.id); f.c.quantity(menu[0].id, 1);
+  assert.equal(node('delivery-fields').hidden, true); assert.equal(node('address').required, false);
+  node('checkout-form').handlers.submit({ preventDefault() {} }); await flush(); assert.equal(f.writes.at(-1).data.fulfillment, 'pickup');
+  node('home-start').handlers.click(); await flush(); assert.equal(f.c.snapshot().screen, 'store'); assert.equal(node('store-type').value, 'home_kitchen');
+});
