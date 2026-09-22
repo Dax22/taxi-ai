@@ -1,4 +1,5 @@
-import { EATS_TERMINAL, eatsActions, foodAvailable, discoverKitchens } from '../../../../../packages/shared/src/eats.mjs';
+import { EATS_TERMINAL, eatsActions, foodAvailable, discoverKitchens, isPrivateKitchen } from '../../../../../packages/shared/src/eats.mjs';
+import { matchMeals, mealTotals, MEAL_LIMITS } from '../../../../../packages/shared/src/eats-meals.mjs';
 import { DEMO_AREAS } from '../../../../../packages/shared/src/demo-booking.mjs';
 import { hasCapability, requireEligibleDriver, requireRole } from '../../shared/policies.mjs';
 import { fields, label } from '../../shared/validation.mjs';
@@ -12,8 +13,10 @@ export function createEatsService({ repository, getAccount, hasOtherWork, availa
   const storeRecord = (id) => { const value = repository.store(identifier(id)); check(value, 'NOT_FOUND', 'Restaurant not found.'); return value; };
   const member = (user, id) => repository.membership(user.id)?.storeId === id;
   const ownStore = (user, id) => { check(member(user, id), 'FORBIDDEN', 'Only this store’s owner can manage it.'); return storeRecord(id); };
+  // Honour privacy in both historical snapshots and the current profile after a seller-type change.
+  const privateKitchen = (kitchen) => isPrivateKitchen(kitchen.sellerType) || isPrivateKitchen(repository.store(kitchen.id)?.sellerType);
   const kitchenView = (kitchen, reveal = false) => {
-    const hidden = (kitchen.sellerType === 'home_kitchen' || repository.store(kitchen.id)?.sellerType === 'home_kitchen') && !reveal;
+    const hidden = privateKitchen(kitchen) && (!reveal || !kitchen.address);
     return { ...kitchen, address: hidden ? '' : kitchen.address, addressHidden: hidden };
   };
   const menuView = (items) => items.map(({ batchId, ...item }) => item);
@@ -58,10 +61,12 @@ export function createEatsService({ repository, getAccount, hasOtherWork, availa
     check(order, 'NOT_FOUND', 'Order not found.');
     const role = roleFor(user, order); check(role, 'NOT_FOUND', 'Order not found.');
     const active = !EATS_TERMINAL.includes(order.status), pickup = order.snapshot.fulfillment === 'pickup';
-    const reveal = role === 'store' || role === 'admin' || active && (role === 'courier' || role === 'customer' && pickup && order.status !== 'placed');
-    const { address, ...snapshot } = snapshotView(order.snapshot, reveal);
+    const reveal = role === 'store' || role === 'admin' || active && (role === 'courier' || role === 'customer' && pickup && order.status === 'ready');
+    const source = order.collectionPoint ? { ...order.snapshot, restaurant: { ...order.snapshot.restaurant, address: order.collectionPoint } } : order.snapshot;
+    const { address, ...snapshot } = snapshotView(source, reveal);
     return { id: order.id, status: order.status, version: order.version, ...snapshot, role, actions: eatsActions(order, role),
       address: role === 'store' ? { areaId: address.areaId } : address,
+      needsCollectionPoint: role === 'store' && order.status === 'preparing' && privateKitchen(order.snapshot.restaurant) && !order.snapshot.restaurant.address && !order.collectionPoint,
       customerName: getAccount(order.customerId).name, courier: order.courier,
       ...(active && !pickup && role === 'store' && ['ready', 'assigned'].includes(order.status) ? { pickupPin: order.pickupPin } : {}),
       ...(active && role === 'customer' && (pickup ? order.status === 'ready' : ['picked_up', 'arrived'].includes(order.status)) ? { deliveryPin: order.deliveryPin } : {}),
@@ -102,10 +107,45 @@ export function createEatsService({ repository, getAccount, hasOtherWork, availa
   }
   function project(user, result, replayed) {
     if (result.failure) check(false, result.failure.code, result.failure.message);
+    if (result.orderIds) return { orders: result.orderIds.map((id) => orderView(user, repository.order(id))), nextBefore: null, checkoutId: result.checkoutId, replayed };
+    if (result.checkoutId) return { checkout: checkoutView(user, result.checkoutId), replayed };
     if (result.orderId) return { order: orderView(user, repository.order(result.orderId)), replayed };
     if (result.quoteId) return { quote: quoteView(user, result.quoteId), replayed };
     check(user.role === 'admin' || member(user, result.storeId), 'FORBIDDEN', 'Your store access changed.');
     return { ...storeView(user, result.storeId), replayed };
+  }
+  function checkedTotal(quotes) {
+    try { return mealTotals(quotes); } catch (error) { check(false, 'INVALID_CART', error.message); }
+  }
+  function checkoutRecord(user, id) {
+    const checkout = repository.checkout(identifier(id)); check(checkout?.customerId === user.id, 'NOT_FOUND', 'Meal checkout not found.'); return checkout;
+  }
+  function checkoutView(user, id) {
+    const checkout = checkoutRecord(user, id), quotes = checkout.quoteIds.map((quoteId) => quoteView(user, quoteId));
+    return { id, quotes, totals: checkedTotal(quotes), expiresAt: Math.min(...quotes.map((q) => q.expiresAt)) };
+  }
+  function makeQuote(user, data, now) {
+    requireRole(user, 'customer'); const store = storeRecord(data?.storeId);
+    check(store.status === 'approved' && store.isOpen, 'STORE_UNAVAILABLE', 'This kitchen is not accepting orders.');
+    check(!member(user, store.id), 'FORBIDDEN', 'Use a separate customer account to test orders from your store.');
+    const snapshot = checkedBasket(store, repository.menu(store.id), data), quoteId = tokens.id();
+    repository.createQuote({ id: quoteId, customerId: user.id, storeId: store.id, storeVersion: store.version, snapshot, expiresAt: now + 600_000 });
+    return quoteId;
+  }
+  function placeQuote(user, quoteId, now) {
+    requireRole(user, 'customer'); const q = repository.quote(identifier(quoteId));
+    check(q?.customerId === user.id, 'NOT_FOUND', 'Checkout quote not found.');
+    check(!q.orderId, 'QUOTE_USED', 'This checkout already created an order. Open My orders.');
+    check(q.expiresAt > now, 'QUOTE_EXPIRED', 'This checkout expired. Review your cart again.');
+    const store = storeRecord(q.storeId);
+    check(store.status === 'approved' && store.isOpen, 'STORE_UNAVAILABLE', 'This kitchen stopped accepting orders.');
+    check(store.version === q.storeVersion, 'MENU_CHANGED', 'The menu or fees changed. Review a fresh checkout before ordering.');
+    check(!member(user, store.id), 'FORBIDDEN', 'You cannot order from your own store.');
+    reserve(q.snapshot, store, now);
+    const orderId = tokens.id();
+    repository.createOrder({ id: orderId, storeId: store.id, customerId: user.id, snapshot: q.snapshot,
+      pickupPin: tokens.pickupPin(), deliveryPin: tokens.pickupPin(), events: [{ status: 'placed', at: now }], createdAt: now, updatedAt: now });
+    repository.bindQuote(q.id, orderId); return orderId;
   }
   function command(user, action, id, data, key, normalisedPhoto = null) {
     check(typeof key === 'string' && /^[A-Za-z0-9_-]{16,128}$/.test(key), 'INVALID_IDEMPOTENCY_KEY', 'A unique request key is required.');
@@ -159,32 +199,38 @@ export function createEatsService({ repository, getAccount, hasOtherWork, availa
         }
         store.version++; store.updatedAt = now; repository.saveStore(store); result = { storeId: store.id };
       } else if (action === 'quote') {
-        requireRole(user, 'customer'); const store = storeRecord(data?.storeId);
-        check(store.status === 'approved' && store.isOpen, 'STORE_UNAVAILABLE', 'This kitchen is not accepting orders.');
-        check(!member(user, store.id), 'FORBIDDEN', 'Use a separate customer account to test orders from your store.');
-        const snapshot = checkedBasket(store, repository.menu(store.id), data), quoteId = tokens.id();
-        repository.createQuote({ id: quoteId, customerId: user.id, storeId: store.id, storeVersion: store.version, snapshot, expiresAt: now + 600_000 }); result = { quoteId };
+        result = { quoteId: makeQuote(user, data, now) };
       } else if (action === 'place') {
-        requireRole(user, 'customer'); fields(data, ['quoteId']); const q = repository.quote(identifier(data.quoteId));
-        check(q?.customerId === user.id, 'NOT_FOUND', 'Checkout quote not found.');
-        check(!q.orderId, 'QUOTE_USED', 'This checkout already created an order. Open My orders.');
-        check(q.expiresAt > now, 'QUOTE_EXPIRED', 'This checkout expired. Review your cart again.');
-        const store = storeRecord(q.storeId);
-        check(store.status === 'approved' && store.isOpen, 'STORE_UNAVAILABLE', 'This kitchen stopped accepting orders.');
-        check(store.version === q.storeVersion, 'MENU_CHANGED', 'The menu or fees changed. Review a fresh checkout before ordering.');
-        check(!member(user, store.id), 'FORBIDDEN', 'You cannot order from your own store.');
-        reserve(q.snapshot, store, now);
-        const orderId = tokens.id();
-        repository.createOrder({ id: orderId, storeId: store.id, customerId: user.id, snapshot: q.snapshot,
-          pickupPin: tokens.pickupPin(), deliveryPin: tokens.pickupPin(), events: [{ status: 'placed', at: now }], createdAt: now, updatedAt: now });
-        repository.bindQuote(q.id, orderId); result = { orderId };
+        fields(data, ['quoteId']); result = { orderId: placeQuote(user, data.quoteId, now) };
+      } else if (action === 'meal-quote') {
+        requireRole(user, 'customer'); fields(data, ['groups', 'address', 'instructions']);
+        check(Array.isArray(data.groups) && data.groups.length > 0 && data.groups.length <= MEAL_LIMITS.kitchens, 'INVALID_CART', 'Choose dishes from 1–5 kitchens.');
+        const ids = new Set(); let lines = 0;
+        for (const group of data.groups) {
+          fields(group, ['storeId', 'expectedVersion', 'items']);
+          check(!ids.has(group.storeId) && Array.isArray(group.items), 'INVALID_CART', 'Combine each kitchen into one order.');
+          ids.add(group.storeId); lines += group.items.length;
+        }
+        check(lines > 0 && lines <= MEAL_LIMITS.lines, 'INVALID_CART', 'Choose up to 20 different dishes.');
+        const quoteIds = data.groups.map((group) => makeQuote(user, { ...group, address: data.address, instructions: data.instructions, fulfillment: 'delivery' }, now));
+        checkedTotal(quoteIds.map((quoteId) => repository.quote(quoteId).snapshot));
+        const checkoutId = tokens.id(); repository.createCheckout(checkoutId, user.id, quoteIds, now); result = { checkoutId };
+      } else if (action === 'meal-place') {
+        requireRole(user, 'customer'); fields(data, ['checkoutId']); const checkout = checkoutRecord(user, data.checkoutId);
+        // Every kitchen reservation, order, quote binding and retry record commits together.
+        result = { checkoutId: checkout.id, orderIds: checkout.quoteIds.map((quoteId) => placeQuote(user, quoteId, now)) };
       } else {
         const order = repository.order(id); check(order, 'NOT_FOUND', 'Order not found.');
         const role = action === 'claim' ? 'courier' : roleFor(user, order);
         check(role, 'NOT_FOUND', 'Order not found.');
-        fields(data, ['expectedVersion', ...(['pickup', 'deliver', 'complete_pickup'].includes(action) ? ['pin'] : ['cancel', 'reject'].includes(action) ? ['reason'] : [])]);
+        const required = ['expectedVersion', ...(['pickup', 'deliver', 'complete_pickup'].includes(action) ? ['pin'] : ['cancel', 'reject'].includes(action) ? ['reason'] : [])];
+        fields(data, [...required, ...(action === 'ready' ? ['collectionPoint'] : [])], required);
         version(order, data.expectedVersion);
         check(eatsActions(order, role).includes(action), 'ORDER_CLOSED', 'This action is no longer available. Refresh your order.');
+        if (action === 'ready' && privateKitchen(order.snapshot.restaurant)) {
+          const point = data.collectionPoint ?? order.collectionPoint ?? order.snapshot.restaurant.address;
+          repository.saveCollectionPoint(order.id, label(point, 'Private collection point for this order', 8, 240));
+        }
         if (action === 'claim') {
           courierEligible(user);
           check(order.customerId !== user.id && !member(user, order.storeId), 'FORBIDDEN', 'You cannot deliver your own order or your store’s order.');
@@ -215,12 +261,21 @@ export function createEatsService({ repository, getAccount, hasOtherWork, availa
           repository.saveOrder(order); result = { orderId: order.id };
         }
       }
-      audit.record(user.id, `eats.${action}`, result.orderId ?? result.storeId ?? result.quoteId ?? id, now);
+      audit.record(user.id, `eats.${action}`, result.orderId ?? result.storeId ?? result.quoteId ?? result.checkoutId ?? id, now);
       repository.saveCommand(user.id, key, fingerprint, result, now); return result;
     });
     return project(user, result, replayed);
   }
   return Object.freeze({ command, work, orders: list,
+    foods(user, query = {}) {
+      user = actor(user); area(query.areaId);
+      const q = label(query.q ?? '', 'Food search', 0, 200), offset = Number(query.offset ?? 0);
+      check(Number.isSafeInteger(offset) && offset >= 0 && offset <= 20_000, 'INVALID_CURSOR', 'Choose a valid food page.');
+      const stores = repository.stores().filter((s) => s.isOpen && s.deliveryEnabled !== false && !member(user, s.id) && (!s.deliveryAreaIds || s.deliveryAreaIds.includes(query.areaId)));
+      const options = stores.flatMap(({ reviewNote, ...s }) => menuView(repository.menu(s.id)).filter(foodAvailable).map((item) => ({ store: kitchenView(s), item })));
+      const matches = matchMeals(options, q);
+      return { foods: matches.slice(offset, offset + 60), foodCount: matches.length, nextOffset: offset + 60 < matches.length ? offset + 60 : null, area: area(query.areaId) };
+    },
     async saveMenu(user, id, data, key, reauthenticate) {
       user = actor(user); ownStore(user, id);
       check(typeof key === 'string' && /^[A-Za-z0-9_-]{16,128}$/.test(key), 'INVALID_IDEMPOTENCY_KEY', 'A unique request key is required.');

@@ -86,15 +86,19 @@ See [vehicle identity](vehicle-identity.md) for the exact-model catalogue roadma
 
 ### Eats discovery artwork
 
-The original `eats-hero.png` food illustration appears on web and native discovery.
-It does not represent any specific seller's meal. Merchant cards and menus use
-seller-uploaded photos when available; otherwise they show the established cuisine
-symbols. Both platforms use the existing app font policy.
+The shared `eats-hero.png` is a strictly overhead Nigerian-food composition with
+jollof rice, grilled chicken, plantain, egusi and pounded yam, suya, moi moi and
+puff-puff on a yellow tabletop. It appears on web and native discovery, labelled
+“Nigerian food inspiration · AI artwork.” It does not represent any seller's meal.
+The primary dish cards use seller-uploaded photos when supplied and never fill
+missing product photos with this generic artwork. Both platforms retain the
+existing system-font policy.
 
-Image created with built-in image generation. Files:
+Created with the built-in image-generation tool (new generation, no reference
+image), 1536 × 1024 PNG. The identical files are
 `apps/web/public/assets/eats-hero.png` and
 `apps/mobile/src/assets/eats-hero.png`.
 
-Generation prompt:
+Final generation prompt:
 
-> Create an original premium editorial food photograph for the hero banner of Taxi Ai Eats, a Nigerian food delivery marketplace. Wide landscape banner, approximately 3:2. Overhead composition on a warm buttery yellow table with soft daylight: beautiful authentic Nigerian jollof rice topped with grilled chicken in a simple cream bowl, golden fried plantain on a small plate, moi moi, fresh green salad, a folded plain linen napkin. Food occupies the RIGHT half and outer lower-right edge; LEFT half mostly clean buttery yellow negative space for separately rendered UI typography. Inviting, appetising, believable home-cooked portions, high-end natural food photography, warm colours, realistic textures, clean restrained styling. No people, hands, text, lettering, logos, watermarks, branding, restaurant storefronts, prices or packaging labels. This is general illustrative artwork, not a photograph of any actual seller's dish.
+> Use case: ads-marketing. Asset type: photographic hero artwork for Taxi Ai Eats website and mobile app in Abuja, Nigeria. Create a premium, appetizing, strictly top-down overhead flat-lay photograph of several recognisably Nigerian dishes in separate ceramic bowls and plates: party jollof rice with grilled chicken, golden fried plantain (dodo), egusi soup beside pounded yam, suya with onion and tomato, leaf-wrapped moi moi, and a small bowl of puff-puff. Camera perfectly perpendicular to the table, no tilted or side view. Warm amber-yellow tabletop matching Taxi Ai's yellow branding, natural daylight, rich realistic food texture, restrained dark-green and neutral crockery accents. Wide landscape composition, 1536 by 1024, dishes artfully arranged along the right two-thirds and edges, quieter uncluttered yellow space on the left third to hold live interface text. No text, logos, watermark, people, hands, phone or app UI. All food is generic illustrative menu inspiration, not a photograph of any actual vendor's products.

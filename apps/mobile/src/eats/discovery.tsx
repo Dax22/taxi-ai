@@ -7,7 +7,7 @@ import hero from '../assets/eats-hero.png';
 import { colors, styles } from '../ui/components';
 
 export function FoodHero() {
-  return <View style={discovery.hero}><Image source={hero} style={discovery.heroPhoto} accessible={false}/><View style={discovery.heroCopy}><Text style={styles.label}>ABUJA, SERVED FRESH</Text><Text accessibilityRole="header" style={discovery.title}>Good food.{ '\n' }Closer to home.</Text><Text style={styles.small}>Restaurants & home kitchens.</Text><Text style={styles.small}>Food illustration</Text></View></View>;
+  return <View style={discovery.hero}><Image source={hero} style={discovery.heroPhoto} accessible={false}/><View style={discovery.heroCopy}><Text style={styles.label}>NIGERIAN FLAVOURS. YOUR WAY.</Text><Text accessibilityRole="header" style={discovery.title}>Your craving.{ '\n' }Your combination.</Text><Text style={styles.small}>Restaurants, food vendors & home kitchens.</Text><Text style={styles.small}>Nigerian food inspiration · AI artwork</Text></View></View>;
 }
 export function DiscoveryChip({ label, selected = false, expanded, disabled = false, onPress }: { label: string; selected?: boolean; expanded?: boolean; disabled?: boolean; onPress(): void }) {
   return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ selected, expanded, disabled }} disabled={disabled} onPress={onPress}
@@ -23,7 +23,7 @@ export function CuisineChips({ value, onChange }: { value: string; onChange(valu
 }
 export const discovery = StyleSheet.create({
   hero: { backgroundColor: '#ffde72', borderRadius: 26, overflow: 'hidden' },
-  heroPhoto: { position: 'absolute', top: 0, right: 0, width: '42%', height: '100%', resizeMode: 'cover' }, heroCopy: { padding: 20, paddingRight: 8, width: '62%', minHeight: 198, gap: 10 },
+  heroPhoto: { width: '100%', height: 190, resizeMode: 'cover' }, heroCopy: { padding: 22, gap: 10 },
   title: { fontSize: 28, lineHeight: 32, letterSpacing: -0.8, color: colors.ink, fontWeight: '700' },
   controls: { gap: 8, paddingVertical: 2 }, control: { minHeight: 44, paddingHorizontal: 16, paddingVertical: 11, borderRadius: 24, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.white, justifyContent: 'center' },
   controlText: { fontSize: 14, fontWeight: '600', color: colors.ink },

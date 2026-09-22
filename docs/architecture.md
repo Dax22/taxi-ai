@@ -54,7 +54,7 @@ See [vehicle photo checks](vehicle-photo-checks.md) for configuration and limits
 | Drivers | Private applications, documents, manual review and expiry eligibility | `drivers`, `driver_applications`, `driver_documents`, `driver_document_reads`, `driver_application_events`, `driver_application_commands` |
 | Rides | Requests, fares, bookings, pickup verification, progress, cancellation and history | `rides`, `fare_events`, `idempotency`, `ride_trips`, `ride_activity` |
 | Deliveries | Parcel validation, category/capacity eligibility and drop-off verification | `delivery_orders` |
-| Eats | Store membership/review, menus, test checkout, kitchen and courier food handovers | `eats_stores`, `eats_memberships`, `eats_reviews`, `eats_menu`, `eats_quotes`, `eats_orders`, `eats_commands`, `eats_photos` |
+| Eats | Store membership/review, dish search, menus, combined test checkout, kitchen and courier food handovers | `eats_stores`, `eats_memberships`, `eats_reviews`, `eats_menu`, `eats_quotes`, `eats_orders`, `eats_commands`, `eats_photos`, `eats_checkouts`, `eats_collection_points` |
 | Notifications | Account-scoped inbox, device opt-in and durable push/receipt retries | `account_notifications`, `push_registrations`, `push_jobs` |
 | Vehicle checks | Optional photo observations, comparison, retry reservation and expiry | `vehicle_photo_checks` |
 | Chat | Participant messages, read markers, retries and reports | `chat_messages`, `chat_reads`, `chat_commands`, `chat_reports` |
@@ -227,7 +227,11 @@ and device adapters remain platform-aware. Schema 19 implements one owner member
 Schema 20 adds home-kitchen defaults and normalized photos; batch reservations,
 order transitions and command records commit atomically. Image decoding is an
 injected infrastructure port outside the transaction, with session revalidation
-before saving. Private home addresses are projected by participant and order stage.
+before saving. Private vendor and home-kitchen addresses are projected by participant and order stage.
+Schema 21 adds combined checkout and order-specific collection points. Vendor and
+home-kitchen profiles now use only a town/area; private collection details are supplied when
+food is ready. Dish search checks delivery coverage against published menus, and
+combined checkout commits every kitchen's order and stock reservation together.
 Mode selection remains per client; authorization, ownership and worker capacity
 remain server-side. Workspace resets and retry keys are now scoped to account
 and Customer/Work mode. Calls/GPS/availability use a separate session client and

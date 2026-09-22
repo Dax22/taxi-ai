@@ -38,7 +38,7 @@ async function fixture(t, options = {}) {
   f.place = async () => (await ok(f.customer, '/api/eats/orders', { quoteId: (await f.quote()).id })).order;
   f.ready = async () => {
     let order = await f.place();
-    for (const action of ['accept', 'prepare', 'ready']) ({ order } = await ok(seller, `/api/eats/orders/${order.id}/${action}`, { expectedVersion: order.version }));
+    for (const action of ['accept', 'prepare', 'ready']) ({ order } = await ok(seller, `/api/eats/orders/${order.id}/${action}`, { expectedVersion: order.version, ...(action === 'ready' && order.needsCollectionPoint ? { collectionPoint: details.address } : {}) }));
     return order;
   };
   return f;
@@ -185,26 +185,26 @@ test('native Eats uses device credentials and the same checkout, ownership and s
   assert.equal((await f.stranger.send('/api/eats/orders', { headers: { Authorization: `Bearer ${token}`, Cookie: null } })).status, 401);
 });
 
-async function homeFixture(t, { stock = 4, pickup = true, persistent = false } = {}) {
+async function homeFixture(t, { stock = 4, pickup = true, persistent = false, sellerType = 'home_kitchen' } = {}) {
   const f = await fixture(t, { persistent });
   ({ store: f.store, menu: f.menu } = await ok(f.seller, `/api/eats/stores/${f.store.id}/menu`, { expectedVersion: f.store.version, itemId: f.menu[0].id, item: { ...item, portionsRemaining: stock, allergens: 'Contains milk. Prepared in a kitchen handling nuts.' } }));
-  ({ store: f.store } = await ok(f.seller, `/api/eats/stores/${f.store.id}/save`, { expectedVersion: f.store.version, details: { ...details, sellerType: 'home_kitchen', pickupEnabled: pickup, deliveryEnabled: true } }));
+  ({ store: f.store } = await ok(f.seller, `/api/eats/stores/${f.store.id}/save`, { expectedVersion: f.store.version, details: { ...details, sellerType, pickupEnabled: pickup, deliveryEnabled: true } }));
   await f.open();
   f.latest = async () => { ({ store: f.store, menu: f.menu } = await ok(f.seller, '/api/eats/store')); };
   return f;
 }
 
-test('home addresses and batch internals stay private in discovery, quotes, order history, retries and unclaimed jobs', async (t) => {
-  const f = await homeFixture(t); const paths = ['/api/eats/restaurants', `/api/eats/restaurants/${f.store.id}`];
+for (const sellerType of ['home_kitchen', 'food_vendor']) test(`${sellerType} addresses and batch internals stay private in discovery, quotes, order history, retries and unclaimed jobs`, async (t) => {
+  const f = await homeFixture(t, { sellerType }); const paths = ['/api/eats/restaurants', `/api/eats/restaurants/${f.store.id}`];
   for (const path of paths) {
     const body = await ok(f.customer, path); assert.equal(JSON.stringify(body).includes(details.address), false); assert.equal(JSON.stringify(body).includes('batchId'), false);
   }
-  assert.equal((await ok(f.customer, '/api/eats/restaurants?sellerType=home_kitchen')).restaurants.length, 1);
+  assert.equal((await ok(f.customer, '/api/eats/restaurants?sellerType=' + sellerType)).restaurants.length, 1);
   assert.equal((await ok(f.customer, '/api/eats/restaurants?sellerType=restaurant')).restaurants.length, 0);
   const quote = await f.quote(); assert.equal(quote.restaurant.addressHidden, true); assert.equal(quote.restaurant.address, '');
   assert.ok(quote.lines[0].allergens); assert.equal(quote.lines[0].batchId, undefined);
   const key = randomUUID(); let order = (await f.customer.post('/api/eats/orders', { quoteId: quote.id }, key)).body.order;
-  for (const action of ['accept', 'prepare', 'ready']) ({ order } = await ok(f.seller, `/api/eats/orders/${order.id}/${action}`, { expectedVersion: order.version }));
+  for (const action of ['accept', 'prepare', 'ready']) ({ order } = await ok(f.seller, `/api/eats/orders/${order.id}/${action}`, { expectedVersion: order.version, ...(action === 'ready' && order.needsCollectionPoint ? { collectionPoint: details.address } : {}) }));
   const job = (await ok(f.driver, '/api/eats/work')).available[0]; assert.equal(job.restaurant.address, ''); assert.equal(job.restaurant.addressHidden, true);
   assert.equal(JSON.stringify(await ok(f.customer, '/api/eats/orders')).includes(details.address), false);
   assert.equal((await f.customer.post('/api/eats/orders', { quoteId: quote.id }, key)).body.order.restaurant.address, '');
@@ -214,15 +214,16 @@ test('home addresses and batch internals stay private in discovery, quotes, orde
   assert.equal((await f.stranger.send(`/api/eats/orders/${order.id}`)).status, 404);
 });
 
-test('home kitchen pickup has no delivery fee, reveals the address after acceptance, verifies customer code and never dispatches', async (t) => {
-  const f = await homeFixture(t, { persistent: true });
+for (const sellerType of ['home_kitchen', 'food_vendor']) test(`${sellerType} pickup has no delivery fee, reveals a private collection point when ready, verifies customer code and never dispatches`, async (t) => {
+  const f = await homeFixture(t, { persistent: true, sellerType });
   const quote = (await ok(f.customer, '/api/eats/quotes', { ...f.basket(), fulfillment: 'pickup', address: { line: '', areaId: 'wuse-ii' } })).quote;
   assert.equal(quote.totals.deliveryFeeKobo, 0); assert.equal(quote.restaurant.address, ''); assert.equal(quote.address.line, undefined);
   let order = (await ok(f.customer, '/api/eats/orders', { quoteId: quote.id })).order;
   assert.equal(order.fulfillment, 'pickup'); assert.equal(order.deliveryPin, undefined); assert.equal(order.restaurant.address, '');
   ({ order } = await ok(f.seller, `/api/eats/orders/${order.id}/accept`, { expectedVersion: order.version }));
+  assert.equal((await ok(f.customer, `/api/eats/orders/${order.id}`)).order.restaurant.address, '');
+  for (const action of ['prepare', 'ready']) ({ order } = await ok(f.seller, `/api/eats/orders/${order.id}/${action}`, { expectedVersion: order.version, ...(action === 'ready' && order.needsCollectionPoint ? { collectionPoint: details.address } : {}) }));
   assert.equal((await ok(f.customer, `/api/eats/orders/${order.id}`)).order.restaurant.address, details.address);
-  for (const action of ['prepare', 'ready']) ({ order } = await ok(f.seller, `/api/eats/orders/${order.id}/${action}`, { expectedVersion: order.version }));
   assert.deepEqual(order.actions, ['complete_pickup']); assert.equal(order.pickupPin, undefined); assert.equal(order.deliveryPin, undefined);
   const customer = (await ok(f.customer, `/api/eats/orders/${order.id}`)).order; assert.match(customer.deliveryPin, /^\d{6}$/);
   assert.deepEqual((await ok(f.driver, '/api/eats/work')).available, []);
@@ -296,7 +297,7 @@ test('schema 19 upgrade preserves populated Eats orders and restaurant settings 
   const legacyDetails = JSON.stringify(details), legacyMenu = JSON.stringify(item);
   f.h.db.prepare('UPDATE eats_stores SET details_json=? WHERE id=?').run(legacyDetails, f.store.id);
   f.h.db.prepare('UPDATE eats_menu SET details_json=? WHERE id=?').run(legacyMenu, f.menu[0].id);
-  f.h.db.exec('DROP TABLE eats_photos; PRAGMA user_version=19'); await f.h.restart();
+  f.h.db.exec('DROP TABLE eats_collection_points; DROP TABLE eats_checkouts; DROP TABLE eats_photos; PRAGMA user_version=19'); await f.h.restart();
   assert.equal(f.h.db.prepare('PRAGMA user_version').get().user_version, SCHEMA_VERSION);
   const current = await ok(f.seller, '/api/eats/store');
   assert.deepEqual({ name: current.store.name, address: current.store.address, fee: current.store.deliveryFeeKobo, version: current.store.version, isOpen: current.store.isOpen }, { name: details.name, address: details.address, fee: details.deliveryFeeKobo, version: f.store.version, isOpen: true });
@@ -306,22 +307,25 @@ test('schema 19 upgrade preserves populated Eats orders and restaurant settings 
   assert.deepEqual(f.h.db.prepare('PRAGMA foreign_key_check').all(), []);
 });
 
-test('native home-kitchen seller can upload a meal photo and serve customer pickup through shared device contracts', async (t) => {
-  const { default: sharp } = await import('sharp'); const f = await homeFixture(t);
+for (const sellerType of ['home_kitchen', 'food_vendor']) test(`native ${sellerType} seller can upload a meal photo and serve customer pickup through shared device contracts`, async (t) => {
+  const { default: sharp } = await import('sharp'); const f = await homeFixture(t, { sellerType });
   const login = async (person) => (await person.send('/api/mobile/v1/auth/login', { method: 'POST', data: { email: person.user.email, password: PASSWORD, deviceName: 'Home kitchen phone' }, headers: { Origin: null, Cookie: null, 'X-CSRF-Token': null } })).body.credentials.accessToken;
   const sellerToken = await login(f.seller), customerToken = await login(f.customer);
   const native = (token, path, data) => f.stranger.send('/api/mobile/v1/eats' + path, { ...(data ? { method: 'POST', data } : {}), headers: { Origin: null, Cookie: null, 'X-CSRF-Token': null, Authorization: `Bearer ${token}`, 'Idempotency-Key': randomUUID() } });
   const bytes = await sharp({ create: { width: 240, height: 180, channels: 3, background: '#c3703f' } }).png().toBuffer();
   const upload = await native(sellerToken, `/stores/${f.store.id}/menu`, { expectedVersion: f.store.version, itemId: f.menu[0].id, item: { ...item, portionsRemaining: 4, photo: { mimeType: 'image/png', base64: bytes.toString('base64') } } });
   assert.equal(upload.status, 200, JSON.stringify(upload.body)); f.store = upload.body.store;
-  const catalog = await native(customerToken, '/restaurants'); assert.equal(catalog.body.restaurants[0].address, ''); assert.equal(catalog.body.restaurants[0].sellerType, 'home_kitchen');
+  const catalog = await native(customerToken, '/restaurants'); assert.equal(catalog.body.restaurants[0].address, ''); assert.equal(catalog.body.restaurants[0].sellerType, sellerType);
   const id = upload.body.menu[0].photoId; assert.equal((await native(customerToken, '/photos/' + id)).body.photo.id, id);
   const quote = (await native(customerToken, '/quotes', { ...f.basket(), fulfillment: 'pickup' })).body.quote;
+  assert.equal(quote.restaurant.addressHidden, true); assert.equal(quote.restaurant.address, '');
   let order = (await native(customerToken, '/orders', { quoteId: quote.id })).body.order;
-  for (const action of ['accept', 'prepare', 'ready']) { const response = await native(sellerToken, `/orders/${order.id}/${action}`, { expectedVersion: order.version }); assert.equal(response.status, 200); order = response.body.order; }
+  assert.equal(order.restaurant.addressHidden, true); assert.equal(order.restaurant.address, '');
+  for (const action of ['accept', 'prepare', 'ready']) { const response = await native(sellerToken, `/orders/${order.id}/${action}`, { expectedVersion: order.version, ...(action === 'ready' && order.needsCollectionPoint ? { collectionPoint: details.address } : {}) }); assert.equal(response.status, 200); order = response.body.order; }
   const ready = (await native(customerToken, '/orders/' + order.id)).body.order;
   assert.equal(ready.restaurant.address, details.address); assert.equal(ready.totals.deliveryFeeKobo, 0);
   assert.equal((await native(sellerToken, `/orders/${order.id}/complete_pickup`, { expectedVersion: order.version, pin: ready.deliveryPin })).body.order.status, 'delivered');
+  assert.equal((await native(customerToken, '/orders/' + order.id)).body.order.restaurant.address, '');
 });
 
 test('a meal photo cannot be committed after its session is revoked during decoding', async () => {

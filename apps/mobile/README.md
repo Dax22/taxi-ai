@@ -31,7 +31,11 @@ keyboard, accessibility and tablet QA remain pending.
   the website. Home kitchens can sell small batches, upload meal photos and offer
   delivery or customer pickup. **Sell from home** is available in Eats and Account;
   **My store** manages kitchen details, remaining portions and incoming orders.
-  Home addresses stay private during browsing. See [Eats setup](../../docs/eats.md) for the full test journey.
+  Eats asks for the delivery location first, then searches listed dishes and prices.
+  Combine food from up to five kitchens, review each kitchen’s fees and place the
+  orders together. Home kitchens and food vendors need only a town; restaurants
+  list their business address. Private sellers share a collection point when
+  food is ready. The page uses overhead Nigerian-food artwork. See [Eats setup](../../docs/eats.md) for the full test journey.
 - A shared native system-font family across text, fields, buttons and navigation.
 
 Native Work now supports foreground location, online/offline availability and job

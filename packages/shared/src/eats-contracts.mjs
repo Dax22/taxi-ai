@@ -1,4 +1,5 @@
 import { EATS_STATUS, EATS_CUISINES, EATS_SELLERS, eatsTotals } from './eats.mjs';
+import { mealTotals } from './eats-meals.mjs';
 const object = (v) => v && typeof v === 'object' && !Array.isArray(v);
 const string = (v) => typeof v === 'string';
 const id = (v) => string(v) && /^[a-f0-9-]{36}$/.test(v);
@@ -9,6 +10,7 @@ function store(s) {
   valid(object(s) && id(s.id) && integer(s.version) && ['pending', 'approved', 'suspended'].includes(s.status) && typeof s.isOpen === 'boolean');
   valid(['name','description','address','areaId'].every((key) => string(s[key])) && EATS_CUISINES.includes(s.cuisine));
   seller(s); valid(['deliveryEnabled', 'pickupEnabled'].every((k) => s[k] === undefined || typeof s[k] === 'boolean'));
+  valid(s.deliveryAreaIds === undefined || Array.isArray(s.deliveryAreaIds) && s.deliveryAreaIds.length <= 50 && s.deliveryAreaIds.every(string));
   valid(s.coverPhotoId == null || id(s.coverPhotoId));
   valid(integer(s.prepMinutes) && integer(s.minimumKobo) && integer(s.deliveryFeeKobo));
 }
@@ -29,6 +31,7 @@ function order(o) {
   valid(string(o.customerName) && (o.courier === null || object(o.courier) && id(o.courier.id) && string(o.courier.name) && object(o.courier.vehicle) && string(o.courier.vehicle.plate)));
   valid(Array.isArray(o.events) && o.events.length <= 30 && o.events.every((e) => object(e) && Object.hasOwn(EATS_STATUS, e.status) && integer(e.at) && (e.reason === undefined || string(e.reason))));
   valid(integer(o.createdAt) && integer(o.updatedAt));
+  valid(o.needsCollectionPoint === undefined || typeof o.needsCollectionPoint === 'boolean' && (!o.needsCollectionPoint || o.role === 'store'));
   for (const code of ['pickupPin', 'deliveryPin']) valid(o[code] === undefined || string(o[code]) && /^\d{6}$/.test(o[code]));
   valid(o.pickupPin === undefined || o.role === 'store'); valid(o.deliveryPin === undefined || o.role === 'customer');
 }
@@ -36,12 +39,25 @@ function order(o) {
 export function readEatsResponse(body) {
   valid(object(body));
   let known = false;
+  if (Object.hasOwn(body, 'foods')) {
+    known = true; valid(Array.isArray(body.foods) && body.foods.length <= 60 && integer(body.foodCount) && body.foodCount <= 20_000 && body.foodCount >= body.foods.length && (body.nextOffset === null || integer(body.nextOffset) && body.nextOffset > 0 && body.nextOffset < body.foodCount));
+    valid(object(body.area) && string(body.area.id) && string(body.area.name));
+    for (const food of body.foods) { valid(object(food)); store(food.store); menu([food.item]); }
+  }
+  if (Object.hasOwn(body, 'checkout')) {
+    known = true; const c = body.checkout;
+    valid(object(c) && id(c.id) && Array.isArray(c.quotes) && c.quotes.length > 0 && c.quotes.length <= 5 && integer(c.expiresAt));
+    c.quotes.forEach((q) => { snapshot(q); valid(integer(q.expiresAt) && q.fulfillment === 'delivery'); });
+    valid(new Set(c.quotes.map((q) => q.restaurant.id)).size === c.quotes.length && c.expiresAt === Math.min(...c.quotes.map((q) => q.expiresAt)));
+    const totals = mealTotals(c.quotes); valid(object(c.totals) && Object.keys(totals).every((key) => c.totals[key] === totals[key]));
+  }
   if (Object.hasOwn(body, 'photo')) { known = true; const p = body.photo; valid(object(p) && id(p.id) && p.mimeType === 'image/jpeg' && string(p.base64) && p.base64.length > 0 && p.base64.length <= 466_668 && p.base64.length % 4 === 0 && /^[A-Za-z0-9+/]+={0,2}$/.test(p.base64)); }
   for (const key of ['restaurants', 'stores']) if (Object.hasOwn(body, key)) { known = true; valid(Array.isArray(body[key]) && body[key].length <= 200); body[key].forEach(store); }
   if (Object.hasOwn(body, 'store')) { known = true; if (body.store !== null) store(body.store); menu(body.menu); }
   if (Object.hasOwn(body, 'quote')) { known = true; snapshot(body.quote); valid(integer(body.quote.expiresAt)); }
   if (Object.hasOwn(body, 'order')) { known = true; order(body.order); }
   if (Object.hasOwn(body, 'orders')) { known = true; valid(Array.isArray(body.orders) && body.orders.length <= 50 && (body.nextBefore === null || id(body.nextBefore))); body.orders.forEach(order); }
+  if (Object.hasOwn(body, 'checkoutId')) valid(id(body.checkoutId) && Array.isArray(body.orders) && body.orders.length > 0 && body.orders.length <= 5 && new Set(body.orders.map((o) => o.restaurant.id)).size === body.orders.length);
   if (Object.hasOwn(body, 'current')) {
     known = true; valid(Array.isArray(body.current) && body.current.length <= 1); body.current.forEach(order);
     valid(typeof body.online === 'boolean' && typeof body.eligible === 'boolean' && body.isDemo === true && Array.isArray(body.available) && body.available.length <= 100);

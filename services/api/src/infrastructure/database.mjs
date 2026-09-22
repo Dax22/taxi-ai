@@ -8,6 +8,7 @@ const migrations = ['001_initial.sql', '002_chat.sql', '003_trip_lifecycle.sql',
 migrations.push('018_vehicle_photo_checks.sql');
 migrations.push('019_eats.sql');
 migrations.push('020_home_kitchens.sql');
+migrations.push('021_meal_checkout.sql');
 export const SCHEMA_VERSION = migrations.length;
 
 export function transaction(db, run) {

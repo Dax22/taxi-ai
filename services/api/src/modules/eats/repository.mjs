@@ -1,7 +1,8 @@
 const storeColumns = `id, status, version, is_open AS isOpen, details_json AS details, review_note AS reviewNote, created_at AS createdAt, updated_at AS updatedAt, (SELECT json_extract(m.details_json, '$.photoId') FROM eats_menu m WHERE m.store_id=eats_stores.id AND m.available=1 AND json_extract(m.details_json, '$.photoId') IS NOT NULL ORDER BY m.id LIMIT 1) AS coverPhotoId`;
 const orderColumns = `id, store_id AS storeId, customer_id AS customerId, courier_id AS courierId, status, version, snapshot_json AS snapshot,
   courier_json AS courier, pickup_pin AS pickupPin, delivery_pin AS deliveryPin, pin_failures AS pinFailures, pin_blocked_until AS pinBlockedUntil,
-  events_json AS events, created_at AS createdAt, updated_at AS updatedAt`;
+  events_json AS events, created_at AS createdAt, updated_at AS updatedAt,
+  (SELECT location FROM eats_collection_points WHERE order_id=eats_orders.id) AS collectionPoint`;
 const store = (row) => row ? { sellerType: 'restaurant', deliveryEnabled: true, pickupEnabled: false, ...JSON.parse(row.details), ...row, details: undefined, isOpen: Boolean(row.isOpen) } : null;
 const order = (row) => row ? { ...row, snapshot: JSON.parse(row.snapshot), courier: row.courier ? JSON.parse(row.courier) : null, events: JSON.parse(row.events) } : null;
 export function createEatsRepository(db) {
@@ -30,6 +31,9 @@ export function createEatsRepository(db) {
     quote: (id) => { const row = db.prepare('SELECT id,customer_id AS customerId,store_id AS storeId,store_version AS storeVersion,snapshot_json AS snapshot,expires_at AS expiresAt,order_id AS orderId FROM eats_quotes WHERE id=?').get(id); return row ? { ...row, snapshot: JSON.parse(row.snapshot) } : null; },
     createQuote(q) { db.prepare('INSERT INTO eats_quotes (id,customer_id,store_id,store_version,snapshot_json,expires_at) VALUES (?,?,?,?,?,?)').run(q.id,q.customerId,q.storeId,q.storeVersion,JSON.stringify(q.snapshot),q.expiresAt); },
     bindQuote(id, orderId) { db.prepare('UPDATE eats_quotes SET order_id=? WHERE id=?').run(orderId,id); },
+    checkout: (id) => { const row = db.prepare('SELECT id,customer_id AS customerId,quote_ids_json AS quoteIds FROM eats_checkouts WHERE id=?').get(id); return row ? { ...row, quoteIds: JSON.parse(row.quoteIds) } : null; },
+    createCheckout(id, customerId, quoteIds, now) { db.prepare('INSERT INTO eats_checkouts (id,customer_id,quote_ids_json,created_at) VALUES (?,?,?,?)').run(id,customerId,JSON.stringify(quoteIds),now); },
+    saveCollectionPoint(orderId, location) { db.prepare('INSERT INTO eats_collection_points (order_id,location) VALUES (?,?) ON CONFLICT(order_id) DO UPDATE SET location=excluded.location').run(orderId,location); },
     order: (id) => order(db.prepare(`SELECT ${orderColumns} FROM eats_orders WHERE id=?`).get(id)),
     orders(userId, scope, before = null) {
       const column = { customer: 'customer_id', store: 'store_id', courier: 'courier_id' }[scope];

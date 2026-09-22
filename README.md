@@ -8,7 +8,7 @@ approved capabilities. This direction is documented in the
 [unified platform plan](docs/unified-platform.md). The first milestone is implemented:
 one website account with Customer and Work modes for rides. The first iOS/Android
 app now shares sign-in, profiles, booking, driver availability, fare negotiation,
-chat and complete ride/delivery journeys. Taxi Ai Eats adds restaurant/home-kitchen browsing, batch portions, meal photos, delivery or customer pickup, My store and handover codes as a test flow. See [Eats setup](docs/eats.md). See [unified accounts](docs/unified-accounts.md)
+chat and complete ride/delivery journeys. Taxi Ai Eats asks for a delivery location first, searches dishes and prices from restaurants, food vendors and home kitchens, and combines food into one checkout with separate kitchen deliveries. It also supports batch portions, meal photos, customer pickup, My store and handover codes as a test flow. See [Eats setup](docs/eats.md). See [unified accounts](docs/unified-accounts.md)
 and [mobile setup](apps/mobile/README.md).
 
 ## What works today
@@ -33,8 +33,9 @@ private documents and recorded manual checks; external identity/licence verifica
 is not connected. Use fictional details and documents.
 
 - One personal login, Customer/Work mode switching and optional driver enrollment.
-- Taxi Ai Eats on web/mobile: restaurant and home-kitchen menus, meal photos, finite batch
-  quantities, private home addresses, delivery or pickup, test checkout and My store. [Try a food order](docs/eats.md).
+- Taxi Ai Eats on web/mobile: location-first dish search, combined kitchen orders,
+  restaurants/vendors/home kitchens, town-only vendor and home-kitchen profiles, meal photos and finite
+  portions, delivery or pickup, test checkout and My store. [Try a food order](docs/eats.md).
 - One native system-font policy across app text, inputs, navigation, web and admin.
 - Native sign-in, Home/Activity/Work/Updates/Account navigation and device revocation.
 - Native driver availability, job claiming, fare consent, chat, pickup/drop-off verification
@@ -305,12 +306,13 @@ The terminal example runs with `npm run demo`. Read [the architecture](docs/arch
 
 ## Development and review
 
-The latest development branch is `feat/eats-ordering`. Version 0.24.0 / mobile
-0.8.0 adds Taxi Ai Eats and a shared system-font policy across app surfaces.
-Schema 19 preserves existing records and adds stores, menus, reviews, checkout
-quotes, food orders and retry records. See [Eats setup and acceptance](docs/eats.md)
-and [mobile setup](apps/mobile/README.md). Back up the database before changing
-branches; older releases may not support the existing schema.
+The latest development branch is `feat/eats-meal-builder`, stacked on the Eats and
+home-kitchen branches. It adds dish search after delivery location, mixed-kitchen
+checkout and town-only vendor and home-kitchen profiles to web and mobile. Schema 21 preserves
+existing records and adds combined checkout and private collection-point storage.
+See [Eats setup and acceptance](docs/eats.md) and [mobile setup](apps/mobile/README.md).
+Back up the database before changing branches; older releases may not support the
+existing schema.
 Read [CONTRIBUTING.md](CONTRIBUTING.md) for the GitHub/VS Code workflow and where
 new code belongs. `npm run check` validates syntax and module conventions;
 `npm test` checks behaviour; `npm run verify` runs both. GitHub Actions is configured
