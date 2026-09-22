@@ -1,8 +1,9 @@
+import { MealBuilder } from '../src/eats/meal-builder';
 import { useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { Text } from '../src/ui/typography';
 import { router, useLocalSearchParams } from 'expo-router';
-import { EATS_COLOURS, EATS_SYMBOLS, EATS_SELLERS, foodAvailable, foodStock, discoverKitchens } from '../../../packages/shared/src/eats.mjs';
+import { EATS_COLOURS, EATS_SYMBOLS, EATS_SELLERS, foodAvailable, foodStock, discoverKitchens, isPrivateKitchen } from '../../../packages/shared/src/eats.mjs';
 import type { FoodFulfillment } from '../../../packages/shared/src/eats.mjs';
 import { useEatsScreen } from '../src/eats/provider';
 import { FoodFeedback, FoodMoney, FoodOrders, FoodPreview, food } from '../src/eats/components';
@@ -13,6 +14,7 @@ import { SelectField } from '../src/ui/select-field';
 export default function Eats() {
   const params = useLocalSearchParams<{ section?: string }>(), screen = params.section === 'orders' ? 'orders' : 'browse';
   const { state: s, controller: c, locked } = useEatsScreen(screen);
+  const [menusOpen, setMenusOpen] = useState(false);
   const [query, setQuery] = useState(''), [cuisine, setCuisine] = useState(''), [area, setArea] = useState(''), [sellerType, setSellerType] = useState('');
   const [openOnly, setOpenOnly] = useState(false), [sort, setSort] = useState('recommended'), [detail, setDetail] = useState(false), [limit, setLimit] = useState(24);
   const [filtersOpen, setFiltersOpen] = useState(false), [addressOpen, setAddressOpen] = useState(false);
@@ -23,9 +25,11 @@ export default function Eats() {
   const restaurants = discoverKitchens(s.restaurants, { q: query, cuisine, areaId: area, sellerType, fulfillment: s.fulfillment, openOnly, sort });
   const modeAvailable = s.restaurant && (s.fulfillment === 'pickup' ? s.restaurant.pickupEnabled : s.restaurant.deliveryEnabled !== false);
   return <Screen><Pill>TAXI AI EATS · ABUJA</Pill><FoodPreview/>
-    <View style={styles.row}><Button title="Discover" secondary disabled={navigating} onPress={() => { setDetail(false); router.setParams({ section: 'browse' }); if (screen === 'browse') void c.navigate('browse'); }}/><Button title="My food orders" secondary disabled={navigating} onPress={() => router.setParams({ section: 'orders' })}/></View>
+    <View style={styles.row}><Button title="Discover" secondary disabled={navigating} onPress={() => { setDetail(false); setMenusOpen(false); router.setParams({ section: 'browse' }); if (screen === 'browse') void c.navigate('browse'); }}/><Button title="My food orders" secondary disabled={navigating} onPress={() => router.setParams({ section: 'orders' })}/></View>
     <FoodFeedback state={s} controller={c}/>
     {screen === 'orders' ? <><Heading title="Good food, on its way." subtitle="Current orders and your food history."/><FoodOrders orders={s.orders}/>{s.nextBefore && <Button title="Load older orders" secondary disabled={locked || s.loading} onPress={() => void c.refresh({ before: s.nextBefore })}/>}</> : <>
+      {!menusOpen || !s.deliveryConfirmed ? <MealBuilder state={s} controller={c} locked={locked} onMenus={() => setMenusOpen(true)} onPlaced={() => router.setParams({ section: 'orders' })}/> : <>
+      <Button title="Back to building my meal" secondary disabled={navigating} onPress={() => setMenusOpen(false)}/>
       {!detail && <>
         <View style={styles.row}><DiscoveryChip label="Delivery" selected={s.fulfillment === 'delivery'} disabled={navigating} onPress={() => { c.fulfillment('delivery'); setLimit(24); }}/><DiscoveryChip label="Pickup" selected={s.fulfillment === 'pickup'} disabled={navigating} onPress={() => { c.fulfillment('pickup'); setLimit(24); }}/>{!admin && <DiscoveryChip label="Sell from home" disabled={navigating} onPress={home}/>}</View>
         {s.fulfillment === 'delivery' && <>
@@ -35,7 +39,7 @@ export default function Eats() {
         <Field label="Find your next favourite" value={query} onChangeText={(v) => { setQuery(v); setLimit(24); }} placeholder="Kitchen or cuisine" maxLength={100}/>
         <CuisineChips value={cuisine} onChange={(v) => { setCuisine(v); setLimit(24); }}/>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={discovery.controls}>
-          {[{ value: '', label: 'All kitchens' }, { value: 'home_kitchen', label: 'Home kitchens' }, { value: 'restaurant', label: 'Restaurants' }].map((option) => <DiscoveryChip key={option.value} label={option.label} selected={sellerType === option.value} onPress={() => { setSellerType(option.value); setLimit(24); }}/>) }
+          {[{ value: '', label: 'All kitchens' }, { value: 'home_kitchen', label: 'Home kitchens' }, { value: 'restaurant', label: 'Restaurants' }, { value: 'food_vendor', label: 'Food vendors' }].map((option) => <DiscoveryChip key={option.value} label={option.label} selected={sellerType === option.value} onPress={() => { setSellerType(option.value); setLimit(24); }}/>) }
           <DiscoveryChip label="Open now" selected={openOnly} onPress={() => { setOpenOnly(!openOnly); setLimit(24); }}/>
           <DiscoveryChip label={area || sort !== 'recommended' ? 'Filters · active' : 'Filters'} selected={filtersOpen || Boolean(area) || sort !== 'recommended'} expanded={filtersOpen} onPress={() => setFiltersOpen(!filtersOpen)}/>
         </ScrollView>
@@ -50,7 +54,7 @@ export default function Eats() {
         {!s.loading && !restaurants.length && <Card><Text style={styles.h2}>{s.restaurants.length ? 'Let’s try another craving.' : 'Make room at the table.'}</Text><Text style={styles.body}>{s.restaurants.length ? 'Try another area, cuisine, kitchen type or order option.' : 'The first kitchens are on their way. Create a test home kitchen, add a menu and complete staff review to explore the full ordering flow.'}</Text>{!admin && <Button title="Start a home kitchen" secondary disabled={navigating} onPress={home}/>}</Card>}
         {restaurants.slice(0, limit).map((r) => <Card key={r.id}>
           {r.coverPhotoId ? <FoodPhoto id={r.coverPhotoId} controller={c} label={`${r.name} · meal photo supplied by the kitchen`}/> : <View style={[food.cover, { backgroundColor: EATS_COLOURS[r.cuisine] }]}><Text accessible={false} style={food.symbol}>{EATS_SYMBOLS[r.cuisine]}</Text></View>}
-          <Text style={styles.label}>{EATS_SELLERS[r.sellerType ?? 'restaurant']}</Text><Text style={styles.h2}>{r.name}</Text><Pill>{r.isOpen ? 'OPEN FOR TEST ORDERS' : 'CLOSED'}</Pill><Text style={styles.body}>{r.description}</Text><Text style={styles.small}>{r.cuisine} · {areaName(r.areaId)}</Text><Text style={styles.small}>{r.prepMinutes} min preparation · {s.fulfillment === 'pickup' ? 'Pickup · no delivery fee' : `${fare(r.deliveryFeeKobo)} delivery`}</Text><Button title={`View ${r.name} menu`} disabled={locked} onPress={() => void select(r.id)}/>
+          <Text style={styles.label}>{EATS_SELLERS[r.sellerType ?? 'restaurant']}</Text><Text style={styles.h2}>{r.name}</Text><Pill>{r.isOpen ? 'OPEN FOR TEST ORDERS' : 'CLOSED'}</Pill><Text style={styles.body}>{r.description}</Text><Text style={styles.small}>{r.cuisine} · {areaName(r.areaId)}</Text>{!isPrivateKitchen(r.sellerType) && !r.addressHidden && <Text style={styles.small}>{r.address}</Text>}<Text style={styles.small}>{r.prepMinutes} min preparation · {s.fulfillment === 'pickup' ? 'Pickup · no delivery fee' : `${fare(r.deliveryFeeKobo)} delivery`}</Text><Button title={`View ${r.name} menu`} disabled={locked} onPress={() => void select(r.id)}/>
         </Card>)}
         {restaurants.length > limit && <Button title="Show more kitchens" secondary onPress={() => setLimit(limit + 24)}/>}
         {!!s.cart.length && s.restaurant && <Button title={`Return to ${s.restaurant.name} cart`} secondary disabled={navigating} onPress={() => setDetail(true)}/>}
@@ -60,7 +64,7 @@ export default function Eats() {
       {detail && s.restaurant && <>
         <Button title="Back to kitchens" secondary disabled={navigating} onPress={() => setDetail(false)}/>
         <Pill>{EATS_SELLERS[s.restaurant.sellerType ?? 'restaurant'].toUpperCase()}</Pill><Heading title={s.restaurant.name} subtitle={s.restaurant.description}/>
-        <Text style={styles.body}>{s.restaurant.addressHidden ? `${areaName(s.restaurant.areaId)} · Home address shared only for accepted pickup or assigned delivery.` : s.restaurant.address}</Text>
+        <Text style={styles.body}>{isPrivateKitchen(s.restaurant.sellerType) || s.restaurant.addressHidden ? `${areaName(s.restaurant.areaId)} · Private collection point shared with the assigned courier or pickup customer when food is ready.` : s.restaurant.address}</Text>
         <Text style={styles.small}>{s.restaurant.prepMinutes} min preparation · Minimum {fare(s.restaurant.minimumKobo)} · {s.restaurant.isOpen ? 'Open for test orders' : 'Closed'}</Text>
         <Text style={styles.small}>Ingredients and allergen information are supplied by the kitchen. Special requests are not guaranteed; confirm dietary requirements before ordering.</Text>
         {s.menu.map((item) => { const quantity = s.cart.find((i) => i.itemId === item.id)?.quantity ?? 0; return <View key={item.id} style={food.menuRow}>
@@ -71,7 +75,7 @@ export default function Eats() {
           {s.cart.map((line) => { const item = s.menu.find((i) => i.id === line.itemId); return <View key={line.itemId} style={styles.stack}><Text style={styles.body}>{line.quantity} × {item?.name ?? 'Unavailable item'}{item ? ` · ${fare(item.priceKobo * line.quantity)}` : ' · Remove before checkout'}</Text><Button title={`Remove ${item?.name ?? 'item'}`} secondary disabled={navigating} onPress={() => c.quantity(line.itemId, 0)}/></View>; })}
           <SelectField label="How would you like your food?" value={s.fulfillment} onChange={(v) => c.fulfillment(v as FoodFulfillment)} disabled={navigating} options={[{ value: 'delivery', label: 'Delivery', disabled: s.restaurant.deliveryEnabled === false }, { value: 'pickup', label: 'Customer pickup · no delivery fee', disabled: !s.restaurant.pickupEnabled }]}/>
           {!modeAvailable && <Text style={styles.body}>Choose an order option offered by this kitchen.</Text>}
-          {s.fulfillment === 'pickup' ? <Text style={styles.body}>Collect your food yourself. A home kitchen’s street address is shown after it accepts your order.</Text> : <>
+          {s.fulfillment === 'pickup' ? <Text style={styles.body}>Collect your food yourself. Food vendors and home kitchens share a private collection point when your food is ready.</Text> : <>
             <Field label="Delivery address and landmark" value={s.address.line} editable={!navigating} onChangeText={(line) => c.delivery({ ...s.address, line }, s.instructions)} maxLength={240} placeholder="Street, building and nearby landmark"/>
             <SelectField label="Abuja delivery area" value={s.address.areaId} onChange={(areaId) => c.delivery({ ...s.address, areaId }, s.instructions)} disabled={navigating} options={s.areas.map((a) => ({ value: a.id, label: a.name }))}/>
           </>}
@@ -79,6 +83,7 @@ export default function Eats() {
           <Button title="Review total" busy={s.busy} disabled={locked || !s.cart.length || (s.fulfillment !== 'pickup' && s.address.line.trim().length < 8) || !modeAvailable || !s.restaurant.isOpen} onPress={() => void c.checkout()}/>
         </Card>
         {s.quote && <Card><Text style={styles.h2}>Review your order</Text><Text style={styles.body}>{s.quote.fulfillment === 'pickup' ? 'Customer pickup · collect your food yourself.' : `Delivery to ${s.quote.address.line}`}</Text><FoodMoney value={s.quote.totals}/><Text style={styles.small}>Total held until {new Date(s.quote.expiresAt).toLocaleTimeString()}. Test checkout · no charge. Preparation time excludes delivery.</Text><Button title="Place test order" disabled={locked || s.now >= s.quote.expiresAt} onPress={() => void c.place().then((ok) => { const id = c.snapshot().orderId; if (ok && id) router.push({ pathname: '/food-order', params: { id } }); })}/></Card>}
+      </>}
       </>}
     </>}
     <Button title="Refresh Eats" secondary busy={s.loading} disabled={navigating} onPress={() => void c.refresh()}/>

@@ -1,7 +1,9 @@
 import { cartQuantity } from './eats.mjs';
 import { readEatsResponse } from './eats-contracts.mjs';
+import { mealGroups, mealQuantity } from './eats-meals.mjs';
 const empty = () => ({ user: null, screen: 'browse', restaurants: [], areas: [], restaurant: null, restaurantId: null, menu: [], cart: [],
   address: { line: '', areaId: 'wuse-ii' }, instructions: '', fulfillment: 'delivery', quote: null, order: null, orderId: null,
+  deliveryConfirmed: false, foodQuery: '', foods: [], foodCount: 0, foodNextOffset: null, foodLoading: false, mealBasket: [], mealCheckout: null,
   orders: [], nextBefore: null, store: null, storeMenu: [], storeOrders: [], storeNextBefore: null, work: null, reviewStores: [], review: null,
   loading: false, busy: false, uncertain: false, stale: true, error: '', notice: '', replaceRestaurantId: null, now: 0 });
 /** Shared screen state. Requests and credentials stay in each platform's transport. */
@@ -27,16 +29,31 @@ export function createEatsController({ api, makeKey, now = Date.now }) {
     if (state.user?.id !== user?.id || state.user?.role !== user?.role) { generation++; identity++; photos.clear(); state = empty(); pending = polling = null; }
     state.user = user; emit();
   }
+  async function refreshFoods(loaded, epoch) {
+    const query = '/foods?areaId=' + encodeURIComponent(state.address.areaId) + '&q=' + encodeURIComponent(state.foodQuery);
+    const first = await read(query); let foods = first.foods, nextOffset = first.nextOffset;
+    while (fresh(epoch) && nextOffset !== null && foods.length < loaded) {
+      const offset = nextOffset, page = await read(query + '&offset=' + offset);
+      if (page.nextOffset !== null && page.nextOffset <= offset) throw new Error('Food listings changed. Search again.');
+      foods = [...foods, ...page.foods]; nextOffset = page.nextOffset;
+    }
+    return { ...first, foods, nextOffset };
+  }
   async function refresh({ quiet = false, before = null } = {}) {
-    if (!state.user || locked() || polling) return polling;
+    if (!state.user || locked() || polling || state.foodLoading) return polling;
     const epoch = generation, screen = state.screen; if (!quiet) state.loading = true; emit();
     const task = (async () => {
       try {
         let result;
         if (screen === 'browse') {
-          const [catalog, restaurant] = await Promise.all([read('/restaurants'), state.restaurantId ? read('/restaurants/' + state.restaurantId) : null]);
-          result = { restaurants: catalog.restaurants, areas: catalog.areas, ...(restaurant ? { restaurant: restaurant.store, menu: restaurant.menu } : {}) };
-          if (restaurant && state.quote && state.restaurant?.version !== restaurant.store.version) result.quote = null;
+          const selected = state.restaurantId ? read('/restaurants/' + state.restaurantId).catch((error) => { if (error.status === 404) return { store: null, menu: [] }; throw error; }) : null;
+          const [catalog, restaurant, food] = await Promise.all([read('/restaurants'), selected, state.deliveryConfirmed ? refreshFoods(quiet ? state.foods.length : 0, epoch) : null]);
+          const basket = state.mealBasket.map((line) => ({ ...line, store: catalog.restaurants.find((store) => store.id === line.store.id) ?? line.store }));
+          result = { restaurants: catalog.restaurants, areas: catalog.areas, mealBasket: basket, ...(restaurant ? { restaurant: restaurant.store, menu: restaurant.menu } : {}) };
+          if (restaurant && !restaurant.store) Object.assign(result, { restaurantId: null, quote: null });
+          if (food) Object.assign(result, { foods: food.foods, foodCount: food.foodCount, foodNextOffset: food.nextOffset });
+          if (state.mealCheckout && basket.some((line, index) => line.store.version !== state.mealBasket[index].store.version)) result.mealCheckout = null;
+          if (restaurant && state.quote && state.restaurant?.version !== restaurant.store?.version) result.quote = null;
         } else if (screen === 'orders') { const response = await read('/orders' + (before ? '?before=' + before : '')); result = page(response, state.orders, state.nextBefore, before, quiet); }
         else if (screen === 'store') {
           const mine = await read('/store'), response = mine.store ? await read('/orders?scope=store' + (before ? '&before=' + before : '')) : { orders: [], nextBefore: null };
@@ -54,7 +71,7 @@ export function createEatsController({ api, makeKey, now = Date.now }) {
   }
   async function navigate(screen, id = null) {
     if (locked()) { state.error = 'Finish or retry the pending action before leaving this screen.'; emit(); return false; }
-    generation++; polling = null; state.screen = screen; state.loading = false; state.stale = true; state.error = state.notice = '';
+    generation++; polling = null; state.screen = screen; state.loading = state.foodLoading = false; state.stale = true; state.error = state.notice = '';
     if (screen === 'order') { state.orderId = id; state.order = null; }
     emit(); await refresh(); return !state.stale;
   }
@@ -66,13 +83,18 @@ export function createEatsController({ api, makeKey, now = Date.now }) {
   }
   async function execute(command) {
     if (state.busy || !state.user) return false;
-    const epoch = ++generation; polling = null; pending = command; state.busy = true; state.loading = false; state.error = state.notice = ''; emit();
+    const epoch = ++generation; polling = null; pending = command; state.busy = true; state.loading = state.foodLoading = false; state.error = state.notice = ''; emit();
     let success = false;
     try {
       const result = readEatsResponse(await api.command('/eats' + command.path, command.data, command.key));
       if (!fresh(epoch)) return false;
       pending = null; state.uncertain = false; success = true;
       if (result.quote) state.quote = result.quote;
+      if (result.checkout) state.mealCheckout = result.checkout;
+      if (result.checkoutId && result.orders) {
+        state.mealBasket = []; state.mealCheckout = null; state.orders = result.orders; state.nextBefore = null; state.screen = 'orders';
+        state.notice = `${result.orders.length} kitchen order${result.orders.length === 1 ? '' : 's'} placed. Each kitchen prepares and delivers separately. No money was charged.`;
+      }
       if (Object.hasOwn(result, 'store')) { state.store = result.store; state.storeMenu = result.menu; state.notice = 'Store changes saved.'; }
       if (result.order) {
         state.order = result.order; state.orderId = result.order.id;
@@ -84,11 +106,11 @@ export function createEatsController({ api, makeKey, now = Date.now }) {
     } catch (error) {
       if (!fresh(epoch)) return false;
       state.error = error.message; state.uncertain = !error.status || error.status >= 500;
-      if (!state.uncertain) { pending = null; if (['QUOTE_EXPIRED','MENU_CHANGED','STORE_UNAVAILABLE','STALE_VERSION'].includes(error.code)) state.quote = null; }
+      if (!state.uncertain) { pending = null; if (['QUOTE_EXPIRED','QUOTE_USED','MENU_CHANGED','STORE_UNAVAILABLE','STALE_VERSION'].includes(error.code)) state.quote = state.mealCheckout = null; }
     } finally {
       if (fresh(epoch)) {
         state.busy = false; emit();
-        if (!state.uncertain && command.path !== '/quotes') {
+        if (!state.uncertain && !['/quotes', '/checkouts'].includes(command.path)) {
           const error = state.error, notice = state.notice; await refresh({ quiet: true });
           if (fresh(epoch)) { if (error) state.error = error; state.notice = notice; emit(); }
         }
@@ -100,7 +122,38 @@ export function createEatsController({ api, makeKey, now = Date.now }) {
     if (locked() || state.stale || !state.user) return Promise.resolve(false);
     return execute({ path, data: structuredClone(data), key: makeKey(), goToOrder });
   }
+  async function findMeals(query = state.foodQuery, more = false) {
+    if (locked() || !state.user || !state.deliveryConfirmed || state.screen !== 'browse') return false;
+    const offset = more ? state.foodNextOffset : 0; if (offset === null) return false;
+    const epoch = ++generation; polling = null; state.foodQuery = query.trim().slice(0, 200); state.foodLoading = true; state.loading = false; state.error = ''; emit();
+    try {
+      const response = await read('/foods?areaId=' + encodeURIComponent(state.address.areaId) + '&q=' + encodeURIComponent(state.foodQuery) + '&offset=' + offset);
+      if (!fresh(epoch)) return false;
+      state.foods = more ? [...new Map([...state.foods, ...response.foods].map((food) => [food.item.id, food])).values()] : response.foods;
+      state.foodCount = response.foodCount; state.foodNextOffset = response.nextOffset;
+      return true;
+    } catch (error) { if (fresh(epoch)) { state.error = error.message; state.foods = []; state.foodCount = 0; state.foodNextOffset = null; } return false; }
+    finally { if (fresh(epoch)) { state.foodLoading = false; emit(); } }
+  }
   return Object.freeze({ context, navigate, refresh, selectRestaurant,
+    findMeals,
+    confirmDelivery(address) {
+      if (locked()) return Promise.resolve(false);
+      if (typeof address.line !== 'string' || address.line.trim().length < 8 || address.line.trim().length > 240 || !state.areas.some((area) => area.id === address.areaId)) {
+        state.error = 'Enter a delivery address and landmark, then choose the town or area.'; emit(); return Promise.resolve(false);
+      }
+      state.address = { line: address.line.trim(), areaId: address.areaId }; state.deliveryConfirmed = true; state.fulfillment = 'delivery'; state.mealCheckout = state.quote = null; state.error = ''; emit();
+      return findMeals(state.foodQuery);
+    },
+    editDelivery() { if (locked()) return; generation++; polling = null; state.deliveryConfirmed = false; state.foods = []; state.foodLoading = state.loading = false; state.mealCheckout = state.quote = null; emit(); },
+    mealQuantity(food, quantity) { if (locked()) return; try { state.mealBasket = mealQuantity(state.mealBasket, food, quantity); state.mealCheckout = null; state.error = ''; } catch (error) { state.error = error.message; } emit(); },
+    async reviewMeal() {
+      if (locked() || state.foodLoading || !state.deliveryConfirmed || !state.mealBasket.length) return false;
+      const owner = identity, epoch = generation; await refresh({ quiet: true });
+      if (owner !== identity || epoch !== generation || state.screen !== 'browse' || !state.deliveryConfirmed) return false;
+      return run('/checkouts', { groups: mealGroups(state.mealBasket), address: state.address, instructions: state.instructions });
+    },
+    placeMeal() { return state.mealCheckout && now() < state.mealCheckout.expiresAt ? run('/checkouts/place', { checkoutId: state.mealCheckout.id }) : Promise.resolve(false); },
     async photo(id) {
       if (!state.user || !id) return null;
       const owner = identity;
@@ -114,11 +167,11 @@ export function createEatsController({ api, makeKey, now = Date.now }) {
     fulfillment(value) { if (locked() || !['delivery', 'pickup'].includes(value)) return; state.fulfillment = value; state.quote = null; emit(); },
     snapshot: () => state, subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
     reset() { context(null); },
-    tick() { if (state.quote && now() >= state.quote.expiresAt) { state.quote = null; state.notice = 'Checkout expired. Review the total again before ordering.'; } emit(); },
+    tick() { if (state.quote && now() >= state.quote.expiresAt || state.mealCheckout && now() >= state.mealCheckout.expiresAt) { state.quote = state.mealCheckout = null; state.notice = 'Checkout expired. Review the total again before ordering.'; } emit(); },
     retry: () => pending ? execute(pending) : Promise.resolve(false),
     keepRestaurant() { state.replaceRestaurantId = null; emit(); },
     quantity(itemId, quantity) { if (locked()) return; try { state.cart = cartQuantity(state.cart, itemId, quantity); state.quote = null; state.error = ''; } catch (error) { state.error = error.message; } emit(); },
-    delivery(address, instructions) { if (locked()) return; state.address = { ...address }; state.instructions = instructions; state.quote = null; emit(); },
+    delivery(address, instructions) { if (locked()) return; state.address = { ...address }; state.instructions = instructions; state.quote = state.mealCheckout = null; emit(); },
     checkout() { if (!state.restaurant) return Promise.resolve(false); return run('/quotes', { storeId: state.restaurant.id, expectedVersion: state.restaurant.version, items: state.cart, fulfillment: state.fulfillment, address: state.address, instructions: state.instructions }); },
     place() { return state.quote && now() < state.quote.expiresAt ? run('/orders', { quoteId: state.quote.id }, true) : Promise.resolve(false); },
     orderAction(order, action, extras = {}) { return run(`/orders/${order.id}/${action}`, { expectedVersion: order.version, ...extras }, action === 'claim'); },

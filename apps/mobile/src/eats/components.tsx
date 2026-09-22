@@ -9,6 +9,7 @@ export function FoodFeedback({ state, controller }: { state: EatsState; controll
   async function retry() {
     if (await controller.retry()) {
       const next = controller.snapshot();
+      if (next.screen === 'orders') router.navigate({ pathname: '/eats', params: { section: 'orders' } });
       if (next.screen === 'order' && next.orderId) router.navigate({ pathname: '/food-order', params: { id: next.orderId } });
     }
   }

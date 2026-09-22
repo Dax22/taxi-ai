@@ -1,4 +1,4 @@
-import { EATS_CUISINES, EATS_SELLERS, foodAvailable, eatsTotals } from '../../../../../packages/shared/src/eats.mjs';
+import { EATS_CUISINES, EATS_SELLERS, foodAvailable, eatsTotals, isPrivateKitchen } from '../../../../../packages/shared/src/eats.mjs';
 import { DEMO_AREAS } from '../../../../../packages/shared/src/demo-booking.mjs';
 import { check } from '../../shared/errors.mjs';
 import { fields, label } from '../../shared/validation.mjs';
@@ -9,16 +9,19 @@ export function version(value, expected) { check(Number.isSafeInteger(expected) 
 export function amount(value, name, max = 2_000_000) { check(Number.isSafeInteger(value) && value >= 0 && value <= max, 'INVALID_PRICE', `${name} must be a nonnegative amount within the test limit.`); return value; }
 export function area(id) { const value = DEMO_AREAS.find((a) => a.id === id); check(value, 'INVALID_AREA', 'Choose an Abuja delivery area.'); return value; }
 export function storeDetails(data, previous = {}) {
-  const required = ['name', 'cuisine', 'description', 'address', 'areaId', 'prepMinutes', 'minimumKobo', 'deliveryFeeKobo'];
-  fields(data, [...required, 'sellerType', 'deliveryEnabled', 'pickupEnabled'], required);
+  const required = ['name', 'cuisine', 'description', 'areaId', 'prepMinutes', 'minimumKobo', 'deliveryFeeKobo'];
+  fields(data, [...required, 'address', 'sellerType', 'deliveryEnabled', 'pickupEnabled', 'deliveryAreaIds'], required);
   const sellerType = data.sellerType ?? previous.sellerType ?? 'restaurant';
   const deliveryEnabled = data.deliveryEnabled ?? previous.deliveryEnabled ?? true, pickupEnabled = data.pickupEnabled ?? previous.pickupEnabled ?? false;
-  check(Object.hasOwn(EATS_SELLERS, sellerType), 'INVALID_STORE', 'Choose restaurant or home kitchen.');
+  check(Object.hasOwn(EATS_SELLERS, sellerType), 'INVALID_STORE', 'Choose restaurant, food vendor or home kitchen.');
   check(typeof deliveryEnabled === 'boolean' && typeof pickupEnabled === 'boolean' && (deliveryEnabled || pickupEnabled), 'INVALID_STORE', 'Offer delivery, customer pickup, or both.');
   check(EATS_CUISINES.includes(data.cuisine), 'INVALID_CUISINE', 'Choose a cuisine.'); area(data.areaId);
+  const deliveryAreaIds = data.deliveryAreaIds ?? previous.deliveryAreaIds ?? DEMO_AREAS.map((a) => a.id);
+  check(Array.isArray(deliveryAreaIds) && deliveryAreaIds.length <= DEMO_AREAS.length && new Set(deliveryAreaIds).size === deliveryAreaIds.length && (!deliveryEnabled || deliveryAreaIds.length > 0), 'INVALID_AREA', 'Choose the towns or areas you deliver to.');
+  deliveryAreaIds.forEach(area);
   check(Number.isSafeInteger(data.prepMinutes) && data.prepMinutes >= 10 && data.prepMinutes <= 120, 'INVALID_PREPARATION', 'Choose 10–120 minutes for preparation.');
-  return { sellerType, deliveryEnabled, pickupEnabled, name: label(data.name, 'Kitchen name', 2, 80), cuisine: data.cuisine, description: label(data.description, 'Description', 2, 300),
-    address: label(data.address, 'Pickup address', 8, 240), areaId: data.areaId, prepMinutes: data.prepMinutes,
+  return { sellerType, deliveryEnabled, pickupEnabled, deliveryAreaIds, name: label(data.name, 'Kitchen name', 2, 80), cuisine: data.cuisine, description: label(data.description, 'Description', 2, 300),
+    address: isPrivateKitchen(sellerType) ? '' : label(data.address, 'Restaurant address', 8, 240), areaId: data.areaId, prepMinutes: data.prepMinutes,
     minimumKobo: amount(data.minimumKobo, 'Minimum order', 5_000_000), deliveryFeeKobo: amount(data.deliveryFeeKobo, 'Delivery fee') };
 }
 export function menuDetails(data, store, previous = {}) {
@@ -40,6 +43,7 @@ export function checkedBasket(store, menu, data) {
   check(fulfillment === 'pickup' ? store.pickupEnabled : store.deliveryEnabled !== false, 'STORE_UNAVAILABLE', 'This kitchen does not offer that order option.');
   version(store, data.expectedVersion);
   fields(data.address, ['line', 'areaId']); area(data.address.areaId);
+  check(fulfillment !== 'delivery' || !store.deliveryAreaIds || store.deliveryAreaIds.includes(data.address.areaId), 'STORE_UNAVAILABLE', 'This kitchen does not deliver to the selected town or area.');
   check(Array.isArray(data.items) && data.items.length > 0 && data.items.length <= 20, 'INVALID_CART', 'Choose 1–20 menu items.');
   check(new Set(data.items.map((i) => i?.itemId)).size === data.items.length, 'INVALID_CART', 'Combine duplicate items into one quantity.');
   const lines = data.items.map((line) => {
@@ -52,7 +56,7 @@ export function checkedBasket(store, menu, data) {
   let totals;
   try { totals = eatsTotals(lines, fulfillment === 'pickup' ? 0 : store.deliveryFeeKobo); } catch (error) { check(false, 'INVALID_CART', error.message); }
   check(totals.subtotalKobo >= store.minimumKobo, 'INVALID_CART', 'Add items to meet this kitchen’s minimum order.');
-  return { fulfillment, restaurant: { sellerType: store.sellerType, id: store.id, name: store.name, address: store.address, areaId: store.areaId, prepMinutes: store.prepMinutes }, lines, totals,
+  return { fulfillment, restaurant: { sellerType: store.sellerType, id: store.id, name: store.name, address: isPrivateKitchen(store.sellerType) ? '' : store.address, areaId: store.areaId, prepMinutes: store.prepMinutes }, lines, totals,
     address: fulfillment === 'pickup' ? { areaId: store.areaId } : { line: label(data.address.line, 'Delivery address and landmark', 8, 240), areaId: data.address.areaId },
     instructions: label(data.instructions, 'Delivery or kitchen instructions', 0, 240), isDemo: true, payment: { method: 'test', status: 'not_charged' } };
 }

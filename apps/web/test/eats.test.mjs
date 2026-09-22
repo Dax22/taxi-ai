@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { createEatsController } from '../../../packages/shared/src/eats-controller.mjs';
 import { readEatsResponse } from '../../../packages/shared/src/eats-contracts.mjs';
+import { mealTotals } from '../../../packages/shared/src/eats-meals.mjs';
 import { createEatsTransport } from '../public/eats/transport.mjs';
 const uuid = (n) => `00000000-0000-4000-a000-${String(n).padStart(12, '0')}`;
 const user = { id: uuid(1), name: 'Customer', role: 'customer' };
@@ -100,10 +101,13 @@ test('an expired web session clears private Eats state immediately', async () =>
 });
 
 const html = await readFile(new URL('../public/eats.html', import.meta.url), 'utf8');
-const viewSource = (await readFile(new URL('../public/eats/view.mjs', import.meta.url), 'utf8'))
+const imports = (source) => source
   .replace("'../dashboard/dom.mjs'", `'${new URL('../public/dashboard/dom.mjs', import.meta.url)}'`)
   .replace("'/shared/eats.mjs'", `'${new URL('../../../packages/shared/src/eats.mjs', import.meta.url)}'`)
   .replace("'/shared/demo-booking.mjs'", `'${new URL('../../../packages/shared/src/demo-booking.mjs', import.meta.url)}'`);
+const mealSource = imports(await readFile(new URL('../public/eats/meal-view.mjs', import.meta.url), 'utf8'));
+const viewSource = imports(await readFile(new URL('../public/eats/view.mjs', import.meta.url), 'utf8'))
+  .replace("'./meal-view.mjs'", `'data:text/javascript;base64,${Buffer.from(mealSource).toString('base64')}'`);
 const { createEatsView } = await import(`data:text/javascript;base64,${Buffer.from(viewSource).toString('base64')}`);
 // Uses shipped element IDs; this fixture does not claim browser or device layout coverage.
 function dom(t) {
@@ -114,6 +118,7 @@ function dom(t) {
     replaceChildren(...children) { this.children = children; }
     setAttribute(name, value) { this[name] = value; }
     addEventListener(name, handler) { this.handlers[name] = handler; }
+    querySelectorAll(tag) { return this.children.flatMap((child) => [ ...(child.tag === tag ? [child] : []), ...child.querySelectorAll(tag) ]); }
     reset() {} focus() {} scrollIntoView() {} reportValidity() { return true; }
   }
   for (const [, tag, id] of html.matchAll(/<(\w+)\b[^>]*?\bid="([^"]+)"/g)) { assert.ok(!nodes.has(id), 'Duplicate HTML ID ' + id); nodes.set(id, new Element(tag)); }
@@ -173,4 +178,120 @@ test('shipped home-kitchen controls filter discovery, preselect seller type and 
   assert.equal(node('delivery-fields').hidden, true); assert.equal(node('address').required, false);
   node('checkout-form').handlers.submit({ preventDefault() {} }); await flush(); assert.equal(f.writes.at(-1).data.fulfillment, 'pickup');
   node('home-start').handlers.click(); await flush(); assert.equal(f.c.snapshot().screen, 'store'); assert.equal(node('store-type').value, 'home_kitchen');
+  assert.equal(node('store-address-row').hidden, true); assert.equal(node('store-address').required, false);
+});
+
+for (const sellerType of ['restaurant', 'food_vendor', 'home_kitchen']) test(`web ${sellerType} discovery and registration follow the public address rule`, async (t) => {
+  const node = dom(t), f = fixture(), privateKitchen = sellerType !== 'restaurant';
+  // A stale listing must not cause a private street to appear in public cards.
+  f.changeStore({ sellerType, address: '17 Fictional Street Wuse II' });
+  const view = createEatsView(f.c); f.c.subscribe(() => view.render(f.c.snapshot()));
+  await f.c.navigate('browse');
+  const visibleText = (n) => [n.textContent ?? '', ...n.children.map(visibleText)].join(' ');
+  assert.equal(visibleText(node('restaurants')).includes('17 Fictional Street Wuse II'), !privateKitchen);
+  assert.match(visibleText(node('restaurants')), /Wuse II/);
+  node('store').handlers.click(); await flush();
+  node('store-type').value = sellerType; node('store-type').handlers.change();
+  assert.equal(node('store-address-row').hidden, privateKitchen);
+  assert.equal(node('store-address').required, !privateKitchen);
+  node('store-address').value = '17 Fictional Street Wuse II';
+  node('store-minimum').value = '0'; node('store-fee').value = '1500';
+  node('store-form').handlers.submit({ preventDefault() {} }); await flush();
+  assert.equal(f.writes.at(-1).data.details.address, privateKitchen ? '' : '17 Fictional Street Wuse II');
+});
+
+function mealFixture() {
+  const f = fixture(), second = { ...store, id: uuid(20), name: 'Home Test Kitchen', sellerType: 'home_kitchen', address: '', addressHidden: true };
+  const foods = [{ store, item: menu[0] }, { store: second, item: { ...menu[0], id: uuid(21), name: 'Fried plantain', portionsRemaining: 5 } }];
+  const quotes = [{ ...quote, fulfillment: 'delivery' }, { ...quote, id: uuid(22), fulfillment: 'delivery', restaurant: { id: second.id, name: second.name, sellerType: 'home_kitchen', address: '', addressHidden: true, areaId: 'wuse-ii' }, lines: [{ ...quote.lines[0], itemId: uuid(21), name: 'Fried plantain' }] }];
+  const checkout = { id: uuid(23), quotes, totals: mealTotals(quotes), expiresAt: quote.expiresAt };
+  const orders = quotes.map((q, i) => ({ ...order, ...q, id: uuid(30 + i) }));
+  const reads = [], oldRead = f.api.request;
+  f.api.request = async (path) => {
+    reads.push(path);
+    if (path.startsWith('/eats/foods?')) return { foods, foodCount: foods.length, nextOffset: null, area: { id: 'wuse-ii', name: 'Wuse II' } };
+    if (path === '/eats/restaurants') return { restaurants: [store, second], areas: [{ id: 'wuse-ii', name: 'Wuse II' }] };
+    if (path === '/eats/orders') return { orders, nextBefore: null };
+    return oldRead(path);
+  };
+  f.api.command = async (path, data, key) => { f.writes.push({ path, data, key }); return path === '/eats/checkouts' ? { checkout } : { checkoutId: checkout.id, orders, nextBefore: null }; };
+  return { ...f, reads, foods, checkout, orders };
+}
+
+test('shipped meal builder asks for location first, searches menu dishes, combines kitchens and reviews every fee', async (t) => {
+  const node = dom(t), f = mealFixture(), view = createEatsView(f.c); f.c.subscribe(() => view.render(f.c.snapshot()));
+  await f.c.navigate('browse');
+  assert.equal(node('meal-builder').hidden, true); assert.equal(node('kitchen-browser').hidden, true);
+  assert.equal(f.reads.some((p) => p.startsWith('/eats/foods')), false);
+  node('meal-address').value = quote.address.line; node('meal-area').value = 'wuse-ii';
+  node('meal-location-form').handlers.submit({ preventDefault() {} }); await flush();
+  assert.equal(node('meal-builder').hidden, false); assert.equal(node('meal-location-form').hidden, true);
+  node('meal-query').value = 'jollof and plantain'; node('meal-search-form').handlers.submit({ preventDefault() {} }); await flush();
+  assert.ok(f.reads.at(-1).includes('q=jollof%20and%20plantain'));
+  for (const b of node('meal-results').querySelectorAll('button').filter((b) => b['aria-label']?.startsWith('Add one'))) b.handlers.click();
+  assert.equal(f.c.snapshot().mealBasket.length, 2);
+  node('meal-review').handlers.click(); await flush();
+  assert.equal(f.writes.at(-1).path, '/eats/checkouts'); assert.equal(f.writes.at(-1).data.groups.length, 2);
+  assert.equal(node('meal-checkout').hidden, false); assert.equal(node('meal-quotes').children.length, 3);
+  node('meal-place').handlers.click(); await flush();
+  assert.equal(f.c.snapshot().screen, 'orders'); assert.equal(f.c.snapshot().orders.length, 2); assert.equal(f.c.snapshot().mealBasket.length, 0);
+  f.c.reset(); assert.equal(node('meal-address').value, ''); assert.equal(node('meal-results').children.length, 0);
+});
+
+test('combined checkout retries the identical request after a lost reply and blocks basket or location changes', async () => {
+  const f = mealFixture(); await f.c.navigate('browse'); await f.c.confirmDelivery(quote.address);
+  for (const food of f.foods) f.c.mealQuantity(food, 1);
+  await f.c.reviewMeal(); let attempts = 0;
+  f.api.command = async (path, data, key) => { f.writes.push({ path, data, key }); if (!attempts++) throw new Error('Lost reply'); return { checkoutId: f.checkout.id, orders: f.orders, nextBefore: null }; };
+  assert.equal(await f.c.placeMeal(), false); f.c.editDelivery(); f.c.mealQuantity(f.foods[0], 0);
+  assert.equal(f.c.snapshot().deliveryConfirmed, true); assert.equal(f.c.snapshot().mealBasket.length, 2);
+  assert.equal(await f.c.findMeals('suya'), false);
+  assert.equal(await f.c.retry(), true); assert.deepEqual(f.writes.at(-1), f.writes.at(-2));
+  assert.equal(f.c.snapshot().mealBasket.length, 0); assert.equal(f.c.snapshot().screen, 'orders');
+});
+
+test('changing location or account invalidates meal quotes and late search results cannot replace a newer search', async () => {
+  const f = mealFixture(); await f.c.navigate('browse');
+  assert.equal(await f.c.confirmDelivery({ line: 'short', areaId: 'wuse-ii' }), false);
+  assert.equal(f.c.snapshot().deliveryConfirmed, false);
+  await f.c.confirmDelivery(quote.address); await f.c.findMeals('jollof and plantain'); f.c.mealQuantity(f.foods[0], 1); await f.c.reviewMeal();
+  f.c.editDelivery(); assert.equal(f.c.snapshot().mealCheckout, null); assert.deepEqual(f.c.snapshot().foods, []);
+  await f.c.confirmDelivery(quote.address);
+  assert.equal(f.c.snapshot().foodQuery, 'jollof and plantain');
+  assert.ok(f.reads.at(-1).includes('q=jollof%20and%20plantain'));
+  const first = deferred(), second = deferred(); let count = 0;
+  f.api.request = () => count++ ? second.promise : first.promise;
+  const older = f.c.findMeals('rice'), newer = f.c.findMeals('plantain');
+  const response = (foods) => ({ foods, foodCount: foods.length, nextOffset: null, area: { id: 'wuse-ii', name: 'Wuse II' } });
+  second.resolve(response([f.foods[1]])); await newer; first.resolve(response([f.foods[0]])); await older;
+  assert.equal(f.c.snapshot().foods[0].item.name, 'Fried plantain');
+  const late = deferred(); f.api.request = () => late.promise; const pending = f.c.findMeals('rice');
+  f.c.context({ ...user, id: uuid(99) }); late.resolve(response(f.foods)); await pending;
+  assert.deepEqual(f.c.snapshot().foods, []); assert.deepEqual(f.c.snapshot().mealBasket, []); assert.equal(f.c.snapshot().deliveryConfirmed, false);
+});
+
+test('combined response checks reject altered totals, duplicate kitchens and mismatched expiry', () => {
+  const f = mealFixture(); assert.equal(readEatsResponse({ checkout: f.checkout }).checkout.id, f.checkout.id);
+  assert.throws(() => readEatsResponse({ checkout: { ...f.checkout, totals: { ...f.checkout.totals, totalKobo: 1 } } }));
+  assert.throws(() => readEatsResponse({ checkout: { ...f.checkout, quotes: [f.checkout.quotes[0], f.checkout.quotes[0]] } }));
+  assert.throws(() => readEatsResponse({ checkout: { ...f.checkout, expiresAt: f.checkout.expiresAt + 1 } }));
+  assert.throws(() => readEatsResponse({ checkoutId: f.checkout.id, orders: [f.orders[0], f.orders[0]], nextBefore: null }));
+});
+
+test('loaded dish pages refresh availability and a removed individual kitchen cannot block the combined basket', async () => {
+  const f = mealFixture(), oldRead = f.api.request;
+  let foods = Array.from({ length: 65 }, (_, i) => ({ store, item: { ...menu[0], id: uuid(100 + i) } }));
+  f.api.request = async (path) => {
+    if (!path.startsWith('/eats/foods?')) return oldRead(path);
+    const offset = Number(new URL(path, 'https://test.invalid').searchParams.get('offset') ?? 0);
+    return { foods: foods.slice(offset, offset + 60), foodCount: foods.length, nextOffset: offset + 60 < foods.length ? offset + 60 : null, area: { id: 'wuse-ii', name: 'Wuse II' } };
+  };
+  await f.c.navigate('browse'); await f.c.confirmDelivery(quote.address); await f.c.findMeals('', true);
+  assert.equal(f.c.snapshot().foods.length, 65);
+  foods = foods.slice(1); await f.c.refresh({ quiet: true });
+  assert.equal(f.c.snapshot().foods.length, 64); assert.equal(f.c.snapshot().foods.some((f) => f.item.id === uuid(100)), false);
+  await f.c.selectRestaurant(store.id); f.c.mealQuantity(f.foods[1], 1);
+  const currentRead = f.api.request;
+  f.api.request = async (path) => { if (path.startsWith('/eats/restaurants/')) throw Object.assign(new Error('Kitchen unavailable'), { status: 404 }); return currentRead(path); };
+  assert.equal(await f.c.reviewMeal(), true); assert.equal(f.c.snapshot().restaurant, null); assert.ok(f.c.snapshot().mealCheckout);
 });

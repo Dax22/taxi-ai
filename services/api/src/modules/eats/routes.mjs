@@ -3,6 +3,7 @@ export function eatsRoutes(eats) {
   const root = '/api/eats', uuid = '([a-f0-9-]{36})';
   return [
     { method: 'GET', path: /^\/api\/eats\/restaurants$/, handle: ({ user, query }) => ({ body: eats.catalog(user, Object.fromEntries(query)) }) },
+    { method: 'GET', path: /^\/api\/eats\/foods$/, handle: ({ user, query }) => ({ body: eats.foods(user, Object.fromEntries(query)) }) },
     { method: 'GET', path: new RegExp(`^${root}/restaurants/${uuid}$`), handle: ({ user, match }) => ({ body: eats.restaurant(user, match[1]) }) },
     { method: 'GET', path: /^\/api\/eats\/store$/, handle: ({ user }) => ({ body: eats.mine(user) }) },
     { method: 'GET', path: /^\/api\/eats\/admin\/stores$/, handle: ({ user }) => ({ body: eats.reviewList(user) }) },
@@ -11,7 +12,7 @@ export function eatsRoutes(eats) {
     { method: 'GET', path: new RegExp(`^${root}/orders/${uuid}$`), handle: ({ user, match }) => ({ body: eats.order(user, match[1]) }) },
     { method: 'GET', path: new RegExp(`^${root}/photos/${uuid}$`), handle: ({ user, match }) => ({ body: eats.photo(user, match[1]) }) },
     { method: 'POST', path: new RegExp(`^${root}/stores/${uuid}/menu$`), maxBodyBytes: 2_800_000, handle: async ({ user, match, data, key, reauthenticate }) => ({ body: await eats.saveMenu(user, match[1], data, key, reauthenticate) }) },
-    ...[['stores', 'store-create'], ['quotes', 'quote'], ['orders', 'place']].map(([path, action]) => ({ method: 'POST', path: new RegExp(`^${root}/${path}$`),
+    ...[['stores', 'store-create'], ['quotes', 'quote'], ['orders', 'place'], ['checkouts', 'meal-quote'], ['checkouts/place', 'meal-place']].map(([path, action]) => ({ method: 'POST', path: new RegExp(`^${root}/${path}$`),
       handle: ({ user, data, key }) => ({ body: eats.command(user, action, null, data, key) }) })),
     ...[['save', 'store-save'], ['open', 'store-open'], ['review', 'store-review']].map(([path, action]) => ({ method: 'POST', path: new RegExp(`^${root}/stores/${uuid}/${path}$`),
       handle: ({ user, match, data, key }) => ({ body: eats.command(user, action, match[1], data, key) }) })),

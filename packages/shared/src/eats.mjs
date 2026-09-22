@@ -1,7 +1,9 @@
 /** Food ordering rules shared by the clients and Eats service. Money is integer kobo. */
 export const EATS_CUISINES = Object.freeze(['Nigerian', 'Grills', 'Burgers', 'Pizza', 'Healthy', 'Bakery', 'Drinks']);
 export const EATS_STATUS = Object.freeze({ placed: 'Waiting for the kitchen', accepted: 'Order accepted', preparing: 'Preparing your food', ready: 'Ready for pickup', assigned: 'Courier collecting your food', picked_up: 'On the way', arrived: 'Your courier is here', delivered: 'Completed', cancelled: 'Cancelled', rejected: 'Declined by kitchen' });
-export const EATS_SELLERS = Object.freeze({ restaurant: 'Restaurant', home_kitchen: 'Home kitchen' });
+export const EATS_SELLERS = Object.freeze({ restaurant: 'Restaurant', food_vendor: 'Food vendor', home_kitchen: 'Home kitchen' });
+/** Only restaurants publish street addresses; other sellers share order-specific collection points. */
+export function isPrivateKitchen(sellerType) { return sellerType === 'food_vendor' || sellerType === 'home_kitchen'; }
 export function foodAvailable(item) { return item.available && (item.portionsRemaining == null || item.portionsRemaining > 0); }
 export function foodStock(item) { return !foodAvailable(item) ? 'Sold out' : item.portionsRemaining == null ? 'Available' : `${item.portionsRemaining} portions left`; }
 export function discoverKitchens(stores, { q = '', cuisine = '', areaId = '', sellerType = '', fulfillment = 'delivery', openOnly = false, sort = 'recommended' } = {}) {

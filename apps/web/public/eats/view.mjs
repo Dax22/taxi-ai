@@ -1,5 +1,6 @@
+import { createMealView } from './meal-view.mjs';
 import { $, element } from '../dashboard/dom.mjs';
-import { EATS_CUISINES, EATS_SYMBOLS, EATS_STATUS, EATS_SELLERS, foodAvailable, foodStock, discoverKitchens } from '/shared/eats.mjs';
+import { EATS_CUISINES, EATS_SYMBOLS, EATS_STATUS, EATS_SELLERS, foodAvailable, foodStock, discoverKitchens, isPrivateKitchen } from '/shared/eats.mjs';
 import { formatNaira } from '/shared/demo-booking.mjs';
 const actionLabels = { accept: 'Accept order', reject: 'Decline order', prepare: 'Start preparing', ready: 'Ready for pickup', claim: 'Accept delivery', pickup: 'Confirm food collected', arrive: 'I’m at the delivery address', deliver: 'Confirm delivered', complete_pickup: 'Confirm customer collected', cancel: 'Cancel order' };
 const field = (id) => $('food-' + id);
@@ -17,14 +18,13 @@ export function createEatsView(controller) {
     void controller.photo(id).then((uri) => { if (uri && ownerId === owner) { img.src = uri; img.hidden = false; } });
     return img;
   }
-  const pickupAddress = (restaurant) => restaurant.addressHidden ? `${state.areas.find((a) => a.id === restaurant.areaId)?.name ?? restaurant.areaId} · Home address shared only for an accepted pickup or assigned delivery` : restaurant.address;
+  const pickupAddress = (restaurant) => restaurant.addressHidden ? `${state.areas.find((a) => a.id === restaurant.areaId)?.name ?? restaurant.areaId} · Private collection point shared when food is ready` : restaurant.address;
   async function sellHome() {
-    if (await controller.navigate('store')) { if (!state.store) { field('store-type').value = 'home_kitchen'; storeDirty = true; } field('store-name').focus(); }
+    if (await controller.navigate('store')) { if (!state.store) { field('store-type').value = 'home_kitchen'; storeDirty = true; storeAddressFields(); } field('store-name').focus(); }
   }
   for (const id of ['sell-home', 'home-start']) field(id).addEventListener('click', () => void sellHome());
   for (const mode of ['delivery', 'pickup']) field(mode + '-mode').addEventListener('click', () => controller.fulfillment(mode));
   field('fulfillment').addEventListener('change', () => controller.fulfillment(field('fulfillment').value));
-  field('location-address').addEventListener('input', () => controller.delivery({ ...state.address, line: field('location-address').value }, state.instructions));
   field('restaurants-more').addEventListener('click', () => { kitchenLimit += 24; render(state); });
   function totals(value) {
     const dl = text('dl', undefined, 'food-money');
@@ -66,23 +66,33 @@ export function createEatsView(controller) {
     if (!state.order || !state.order.actions.includes(action) || locked()) return;
     const pin = ['pickup','deliver','complete_pickup'].includes(action), reason = ['reject','cancel'].includes(action);
     field('pin').required = pin; field('reason').required = reason;
+    const collection = action === 'ready' && state.order.needsCollectionPoint; field('collection').required = Boolean(collection);
     if (!field('order-action-form').reportValidity()) return;
-    void controller.orderAction(state.order, action, pin ? { pin: field('pin').value } : reason ? { reason: field('reason').value } : {}).then((ok) => {
-      if (ok) { field('pin').value = ''; field('reason').value = ''; }
+    void controller.orderAction(state.order, action, pin ? { pin: field('pin').value } : reason ? { reason: field('reason').value } : collection ? { collectionPoint: field('collection').value } : {}).then((ok) => {
+      if (ok) { field('pin').value = ''; field('reason').value = ''; field('collection').value = ''; }
     });
   });
+  const mealView = createMealView(controller, { button, mealPhoto, totals });
+  function storeAddressFields() {
+    const privateKitchen = isPrivateKitchen(field('store-type').value);
+    field('store-address-row').hidden = privateKitchen; field('store-address').required = !privateKitchen;
+    field('store-coverage').hidden = !field('store-delivery').checked;
+  }
+  field('store-type').addEventListener('change', storeAddressFields);
+  field('store-delivery').addEventListener('change', storeAddressFields);
   function fillStore() {
     const s = state.store; storeVersion = s?.version ?? null; storeDirty = false;
     for (const [id, value] of Object.entries({ name: s?.name ?? '', cuisine: s?.cuisine ?? 'Nigerian', description: s?.description ?? '', address: s?.address ?? '', area: s?.areaId ?? 'wuse-ii', prep: s?.prepMinutes ?? 25, minimum: (s?.minimumKobo ?? 0) / 100, fee: (s?.deliveryFeeKobo ?? 150_000) / 100 })) field('store-' + id).value = String(value);
     field('store-type').value = s?.sellerType ?? 'restaurant'; field('store-delivery').checked = s?.deliveryEnabled !== false; field('store-pickup').checked = s?.pickupEnabled ?? false;
-    field('store-stale').hidden = true;
+    for (const input of field('store-delivery-areas').querySelectorAll('input')) input.checked = (s?.deliveryAreaIds ?? (s ? state.areas.map((a) => a.id) : [field('store-area').value])).includes(input.value);
+    storeAddressFields(); field('store-stale').hidden = true;
   }
   field('store-form').addEventListener('input', () => { storeDirty = true; });
   field('store-reload').addEventListener('click', fillStore);
   field('store-form').addEventListener('submit', async (event) => {
     event.preventDefault(); if (locked()) return;
     try {
-      const details = { sellerType: field('store-type').value, deliveryEnabled: field('store-delivery').checked, pickupEnabled: field('store-pickup').checked, name: field('store-name').value, cuisine: field('store-cuisine').value, description: field('store-description').value, address: field('store-address').value,
+      const details = { sellerType: field('store-type').value, deliveryEnabled: field('store-delivery').checked, pickupEnabled: field('store-pickup').checked, name: field('store-name').value, cuisine: field('store-cuisine').value, description: field('store-description').value, address: isPrivateKitchen(field('store-type').value) ? '' : field('store-address').value, deliveryAreaIds: [...field('store-delivery-areas').querySelectorAll('input')].filter((i) => i.checked).map((i) => i.value),
         areaId: field('store-area').value, prepMinutes: Number(field('store-prep').value), minimumKobo: money(field('store-minimum').value), deliveryFeeKobo: money(field('store-fee').value) };
       const ok = state.store ? await controller.storeAction('save', { expectedVersion: storeVersion, details }) : await controller.createStore(details);
       if (ok) { fillStore(); render(controller.snapshot()); }
@@ -123,10 +133,11 @@ export function createEatsView(controller) {
     state = next;
     if (ownerId !== state.user?.id) {
       ownerId = state.user?.id; keys.clear(); photoEpoch++; photo = photoId = null; photoReading = false; kitchenLimit = 24; storeDirty = menuDirty = false; storeVersion = menuVersion = menuId = null;
-      for (const id of ['address','instructions','pin','reason','review-reference','review-reason','search','location-address','photo-status']) field(id).value = '';
+      for (const id of ['address','instructions','pin','reason','review-reference','review-reason','search','collection','photo-status']) field(id).value = '';
       for (const id of ['restaurants','restaurant-heading','menu-list','cart-lines','quote-totals','orders-list','store-summary','store-menu','store-orders','work-current','work-list','order-detail','order-buttons','review-list','review-profile']) field(id).replaceChildren();
       field('store-form').reset(); field('menu-form').reset();
     }
+    mealView.render(state);
     field('app').hidden = !state.user; field('auth').hidden = Boolean(state.user);
     if (!state.user) return;
     const admin = state.user.role === 'admin';
@@ -142,8 +153,11 @@ export function createEatsView(controller) {
     field('replace').hidden = !state.replaceRestaurantId;
     field('replace-yes').disabled = field('replace-no').disabled = locked();
     const areasKey = JSON.stringify(state.areas);
-    if (keys.get('areas') !== areasKey) { keys.set('areas', areasKey); for (const id of ['area','store-area']) areaOptions(field(id), state.areas); areaOptions(field('area-filter'), state.areas, 'All Abuja areas'); }
-    field('location-address').value = state.address.line;
+    if (keys.get('areas') !== areasKey) { keys.set('areas', areasKey); for (const id of ['area','store-area']) areaOptions(field(id), state.areas); areaOptions(field('area-filter'), state.areas, 'All Abuja areas');
+      const coverage = field('store-delivery-areas'); coverage.replaceChildren();
+      for (const area of state.areas) { const label = text('label', undefined, 'food-checkbox'), input = text('input'); input.type = 'checkbox'; input.value = area.id; label.append(input, text('span', area.name)); coverage.append(label); }
+      if (!storeDirty) fillStore();
+    }
     for (const mode of ['delivery', 'pickup']) { field(mode + '-mode').setAttribute('aria-pressed', String(state.fulfillment === mode)); field(mode + '-mode').disabled = state.busy || state.uncertain; }
     field('fulfillment').value = state.fulfillment; field('delivery-fields').hidden = state.fulfillment === 'pickup'; field('address').required = state.fulfillment !== 'pickup'; field('pickup-note').hidden = state.fulfillment !== 'pickup';
     field('item-stock').required = state.store?.sellerType === 'home_kitchen';
@@ -165,6 +179,7 @@ export function createEatsView(controller) {
         const info = text('div', undefined, 'food-restaurant-info');
         info.append(text('span', EATS_SELLERS[store.sellerType ?? 'restaurant'], 'food-kitchen-type'), text('h3', store.name), text('span', store.isOpen ? 'OPEN FOR TEST ORDERS' : 'CLOSED', 'food-tag' + (store.isOpen ? '' : ' closed')),
           text('p', store.description, 'small-note'), text('p', `${store.cuisine} · ${state.areas.find((a) => a.id === store.areaId)?.name ?? store.areaId}`),
+          ...(!isPrivateKitchen(store.sellerType) ? [text('p', store.address, 'small-note')] : []),
           text('p', `${store.prepMinutes} min preparation · ${state.fulfillment === 'pickup' ? 'Pickup · no delivery fee' : formatNaira(store.deliveryFeeKobo) + ' delivery'}`, 'small-note'),
           button('View menu', () => { void controller.selectRestaurant(store.id).then((ok) => { if (ok) field('shopping').scrollIntoView({ behavior: 'smooth', block: 'start' }); }); }));
         card.append(cover, info); root.append(card);
@@ -221,12 +236,13 @@ export function createEatsView(controller) {
       for (const event of o.events) { const li = text('li'); li.append(text('strong', EATS_STATUS[event.status]), text('small', new Date(event.at).toLocaleString())); if (event.reason) li.append(text('p', event.reason)); timeline.append(li); }
       card.append(timeline); root.append(card);
     });
+    field('collection-row').hidden = !state.order?.needsCollectionPoint;
     field('order-action-form').hidden = !state.order?.actions.length;
     field('pin-row').hidden = !state.order?.actions.some((a) => ['pickup','deliver','complete_pickup'].includes(a)); field('reason-row').hidden = !state.order?.actions.some((a) => ['cancel','reject'].includes(a));
     update('order-buttons', [state.order?.actions, locked()], (root) => { for (const action of state.order?.actions ?? []) { const b = button(actionLabels[action], () => {}, ['cancel','reject'].includes(action)); b.type = 'submit'; b.value = action; b.formNoValidate = true; root.append(b); } });
-    update('review-list', [state.reviewStores, locked()], (root) => { for (const s of state.reviewStores) { const card = text('article', undefined, 'food-card'); card.append(text('h3', s.name), text('p', `${EATS_SELLERS[s.sellerType ?? 'restaurant']} · ${s.status} · ${s.cuisine} · ${s.address}`), button('Review store and menu', () => void controller.reviewStore(s.id), true)); root.append(card); } });
+    update('review-list', [state.reviewStores, locked()], (root) => { for (const s of state.reviewStores) { const card = text('article', undefined, 'food-card'); card.append(text('h3', s.name), text('p', `${EATS_SELLERS[s.sellerType ?? 'restaurant']} · ${s.status} · ${s.cuisine} · ${pickupAddress(s) || s.areaId}`), button('Review store and menu', () => void controller.reviewStore(s.id), true)); root.append(card); } });
     field('review-detail').hidden = !state.review;
-    update('review-profile', state.review, (root) => { field('review-reference').value = field('review-reason').value = ''; const s = state.review; if (!s) return; root.append(text('h2', s.store.name), text('p', EATS_SELLERS[s.store.sellerType ?? 'restaurant']), text('p', s.store.description), text('p', s.store.address), text('p', `Delivery: ${s.store.deliveryEnabled !== false ? 'yes' : 'no'} · Customer pickup: ${s.store.pickupEnabled ? 'yes' : 'no'}`), text('p', `${s.store.prepMinutes} min preparation · ${formatNaira(s.store.deliveryFeeKobo)} delivery`)); for (const i of s.menu) root.append(text('p', `${i.name} · ${formatNaira(i.priceKobo)} · ${i.description}`)); });
+    update('review-profile', state.review, (root) => { field('review-reference').value = field('review-reason').value = ''; const s = state.review; if (!s) return; root.append(text('h2', s.store.name), text('p', EATS_SELLERS[s.store.sellerType ?? 'restaurant']), text('p', s.store.description), text('p', pickupAddress(s.store) || s.store.areaId), text('p', `Delivery: ${s.store.deliveryEnabled !== false ? 'yes' : 'no'} · Customer pickup: ${s.store.pickupEnabled ? 'yes' : 'no'}`), text('p', `${s.store.prepMinutes} min preparation · ${formatNaira(s.store.deliveryFeeKobo)} delivery`)); for (const i of s.menu) root.append(text('p', `${i.name} · ${formatNaira(i.priceKobo)} · ${i.description}`)); });
   }
   return { render };
 }
