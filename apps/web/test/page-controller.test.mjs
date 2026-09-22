@@ -51,6 +51,7 @@ function setup() {
     reset() { resets.push('view'); selected = null; }, setBusy() {}, select(id) { selected = id; },
     selected() { return [...(rendered?.rides ?? []), ...(rendered?.history ?? [])].find((item) => item.id === selected); } };
   const feature = (name) => ({ reset() { resets.push(name); }, async poll() {}, async stop() {}, shutdown() {},
+    async editVehicle() { contexts.push([name, 'editVehicle']); return true; },
     focus() { contexts.push([name, 'focus']); },
     setContext(...args) { contexts.push([name, ...args]); }, context(...args) { contexts.push([name, ...args]); },
     async show(...args) { contexts.push([name, ...args]); } });
@@ -64,6 +65,16 @@ function setup() {
   return { page, calls, sharing, availability, setWrites(value) { writes = value; }, setOffline(value) { offline = value; }, requests, feedback, resets, contexts, commands, rendered: () => rendered,
     session(next) { current = next; }, intercept(fn) { intercept = fn; } };
 }
+
+test('vehicle edit enters Work, establishes the driver context and opens the editor on every click', async () => {
+  const h = setup(); h.session(session(driver)); await h.page.refresh();
+  assert.equal(h.rendered().mode, 'customer'); assert.equal(await h.page.editVehicle(), true);
+  assert.equal(h.rendered().mode, 'work');
+  assert.deepEqual(h.contexts.slice(-2), [['onboarding', h.rendered().user], ['onboarding', 'editVehicle']]);
+  assert.equal(await h.page.editVehicle(), true);
+  assert.equal(h.contexts.filter(([name, action]) => name === 'onboarding' && action === 'editVehicle').length, 2);
+  h.session(session(customer)); await h.page.refresh(); assert.equal(await h.page.editVehicle(), false);
+});
 
 test('choosing a car saves the structured selection and opens the full application in Work on the same account', async () => {
   const h = setup(); await h.page.refresh();

@@ -80,6 +80,7 @@ const safety = createSafetyController({ client, view: safetyView, origin: locati
   copy: (value) => navigator.clipboard.writeText(value) });
 const vehicleCheck = createVehiclePhotoCheck({client,onReport:(id,checkId)=>safetyView.vehicleMismatch(id,checkId)});
 const view = createDashboardView({
+  onEditVehicle: () => page.editVehicle(),
   onVehicleMismatch: (id) => safetyView.vehicleMismatch(id),
   onCategoryChange: (id) => planner.setCategory(id),
   serverNow: () => serverTime.now + performance.now() - serverTime.received,
@@ -101,7 +102,7 @@ $('google-sign-in').addEventListener('click', () => void google.start());
 $('page-notice').textContent = consumeGoogleOutcome(location, history);
 void google.load();
 const modeView = createAccountModeView({ onSwitch: (...args) => page.switchMode(...args), onCancel: () => page.cancelSwitch(),
-  onEditVehicle: async () => { if (page.snapshot().mode === 'work' || await page.switchMode('work')) onboarding.editVehicle(); },
+  onEditVehicle: () => page.editVehicle(),
   onAddDriver: (vehicle) => page.addDriver(vehicle), onOpenRide: (id) => page.openRide(id) });
 let storage;
 try { storage = window.sessionStorage; } catch { /* Mode selection remains usable without storage. */ }

@@ -41,9 +41,9 @@ function setup(t) {
     querySelectorAll(selector) { const all = [...nodes.values(), ...created]; return selector === 'button'
       ? all.filter((value) => value.tag === 'button') : all.filter((value) => value.dataset.requestExpires); } };
   t.after(() => { globalThis.document = old; });
-  const commands = [], mismatches = [];
-  const view = createDashboardView({ serverNow: () => 1000, onCommand: (...args) => commands.push(args), onVehicleMismatch: (id) => mismatches.push(id), onReview() {}, onReportReview() {}, onSelectionChange() {}, onHistory() {} });
-  return { view, node, commands, mismatches };
+  const commands = [], mismatches = [], edits = [];
+  const view = createDashboardView({ serverNow: () => 1000, onCommand: (...args) => commands.push(args), onVehicleMismatch: (id) => mismatches.push(id), onEditVehicle: () => edits.push(true), onReview() {}, onReportReview() {}, onSelectionChange() {}, onHistory() {} });
+  return { view, node, commands, mismatches, edits };
 }
 const customer = { id: 'customer', name: 'Passenger', role: 'customer' };
 const driver = { id: 'driver', name: 'Driver', role: 'driver', driver: { status: 'approved', eligibility: { eligible: true, reviewStatus: 'approved' }, vehicle: { model: 'Toyota', plate: 'TEST-001' } } };
@@ -51,6 +51,18 @@ const ride = { id: 'ride-one', status: 'booked', version: 4, createdAt: 1000, su
   pickup: { name: 'Wuse' }, destination: { name: 'Maitama' }, customer, driver: { id: driver.id, name: driver.name, vehicle: driver.driver.vehicle },
   negotiation: { agreement: { amountKobo: 470001 } }, trip: { pickupPin: '123456' }, activity: [] };
 const state = (user, rides = [ride]) => ({ user, rides, history: [], drivers: [], available: [], reports: [], chatUnread: {}, historyCursor: null });
+
+test('Edit / change vehicle is in the driver profile card and stays usable after dashboard ticks', (t) => {
+  const h = setup(t), profile = html.match(/<section id="driver-panel"[^>]*>([\s\S]*?)<\/section>/)[1];
+  assert.match(profile, /id="driver-edit-vehicle"/);
+  h.view.render(state(driver, [])); h.view.tick();
+  assert.equal(h.node('driver-edit-vehicle').disabled, false); h.node('driver-edit-vehicle').handlers.click();
+  assert.equal(h.edits.length, 1);
+  h.view.setBusy(true); h.view.tick(); h.node('driver-edit-vehicle').handlers.click();
+  assert.equal(h.edits.length, 1); assert.equal(h.node('driver-edit-vehicle').disabled, true);
+  h.view.setBusy(false); h.view.render(state(customer, [])); h.node('driver-edit-vehicle').handlers.click();
+  assert.equal(h.edits.length, 1); assert.equal(h.node('driver-panel').hidden, true);
+});
 
 test('all categories book the selected service and delivery drafts clear at account boundaries', (t) => {
   const h = setup(t); h.view.render({ ...state(customer, []), sampleMatchingEnabled: true });
