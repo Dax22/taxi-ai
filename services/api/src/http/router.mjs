@@ -59,7 +59,7 @@ export function createApiRouter(application, { secure = false } = {}) {
       match: pathname.match(route.path), key: request.headers['idempotency-key'], callClient: request.headers['x-call-client'],
       locationClient: request.headers['x-location-client'],
       availabilityClient: request.headers['x-availability-client'],
-      query: new URL(request.url, origin).searchParams });
+      query: new URL(request.url, origin).searchParams, reauthenticate: () => { const fresh = accounts.sessionFor(token); check(fresh, 'UNAUTHENTICATED', 'Sign in to continue.'); requireCsrf(request, fresh); return fresh.user; } });
     if (result.cookie) response.setHeader('Set-Cookie', result.cookie);
     json(response, result.status ?? 200, { ...result.body, serverNow: clock() });
   };

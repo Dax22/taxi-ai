@@ -83,3 +83,18 @@ transparent landscape sources keep their 3:2 proportions, with the nose facing
 left. Cards and map markers contain the complete vehicle without cropping.
 See [the artwork prompts and provenance](design/vehicle-icons.md).
 See [vehicle identity](vehicle-identity.md) for the exact-model catalogue roadmap.
+
+### Eats discovery artwork
+
+The original `eats-hero.png` food illustration appears on web and native discovery.
+It does not represent any specific seller's meal. Merchant cards and menus use
+seller-uploaded photos when available; otherwise they show the established cuisine
+symbols. Both platforms use the existing app font policy.
+
+Image created with built-in image generation. Files:
+`apps/web/public/assets/eats-hero.png` and
+`apps/mobile/src/assets/eats-hero.png`.
+
+Generation prompt:
+
+> Create an original premium editorial food photograph for the hero banner of Taxi Ai Eats, a Nigerian food delivery marketplace. Wide landscape banner, approximately 3:2. Overhead composition on a warm buttery yellow table with soft daylight: beautiful authentic Nigerian jollof rice topped with grilled chicken in a simple cream bowl, golden fried plantain on a small plate, moi moi, fresh green salad, a folded plain linen napkin. Food occupies the RIGHT half and outer lower-right edge; LEFT half mostly clean buttery yellow negative space for separately rendered UI typography. Inviting, appetising, believable home-cooked portions, high-end natural food photography, warm colours, realistic textures, clean restrained styling. No people, hands, text, lettering, logos, watermarks, branding, restaurant storefronts, prices or packaging labels. This is general illustrative artwork, not a photograph of any actual seller's dish.

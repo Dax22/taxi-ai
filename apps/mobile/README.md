@@ -28,7 +28,10 @@ keyboard, accessibility and tablet QA remain pending.
 - Delivery requests and recipient drop-off codes.
 - **Taxi Ai Eats** on Home, **My food orders** in Activity, **My store** in Account
   and **Food deliveries** in Work, with the same restaurant/menu/order records as
-  the website. See [Eats setup](../../docs/eats.md) for the full test journey.
+  the website. Home kitchens can sell small batches, upload meal photos and offer
+  delivery or customer pickup. **Sell from home** is available in Eats and Account;
+  **My store** manages kitchen details, remaining portions and incoming orders.
+  Home addresses stay private during browsing. See [Eats setup](../../docs/eats.md) for the full test journey.
 - A shared native system-font family across text, fields, buttons and navigation.
 
 Native Work now supports foreground location, online/offline availability and job

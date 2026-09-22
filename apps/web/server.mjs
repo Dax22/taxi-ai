@@ -36,6 +36,7 @@ const routes = new Map([
   ['/app', ['public/dashboard.html', 'text/html; charset=utf-8']],
   ['/eats', ['public/eats.html', 'text/html; charset=utf-8']],
   ['/eats.mjs', ['public/eats.mjs', 'text/javascript; charset=utf-8']],
+  ['/assets/eats-hero.png', ['public/assets/eats-hero.png', 'image/png']],
   ['/eats.css', ['public/eats.css', 'text/css; charset=utf-8']],
   ['/eats/view.mjs', ['public/eats/view.mjs', 'text/javascript; charset=utf-8']],
   ['/eats/transport.mjs', ['public/eats/transport.mjs', 'text/javascript; charset=utf-8']],
@@ -152,7 +153,7 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
     response.setHeader('Cache-Control', 'no-store');
     response.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
     if (runtime.mode === 'staging') response.setHeader('Strict-Transport-Security', 'max-age=86400');
-    response.setHeader('Content-Security-Policy', `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'${mapProvider.mode === 'off' ? '' : ` ${mapProvider.tileOrigin}`}; media-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'`);
+    response.setHeader('Content-Security-Policy', `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'${pathname === '/eats' ? ' data:' : ''}${mapProvider.mode === 'off' ? '' : ` ${mapProvider.tileOrigin}`}; media-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'`);
     try {
       pathname = new URL(request.url, 'http://localhost').pathname;
       if (pathname === '/app' && mapProvider.mode !== 'off') response.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');

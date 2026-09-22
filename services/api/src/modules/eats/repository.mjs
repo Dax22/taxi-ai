@@ -1,8 +1,8 @@
-const storeColumns = 'id, status, version, is_open AS isOpen, details_json AS details, review_note AS reviewNote, created_at AS createdAt, updated_at AS updatedAt';
+const storeColumns = `id, status, version, is_open AS isOpen, details_json AS details, review_note AS reviewNote, created_at AS createdAt, updated_at AS updatedAt, (SELECT json_extract(m.details_json, '$.photoId') FROM eats_menu m WHERE m.store_id=eats_stores.id AND m.available=1 AND json_extract(m.details_json, '$.photoId') IS NOT NULL ORDER BY m.id LIMIT 1) AS coverPhotoId`;
 const orderColumns = `id, store_id AS storeId, customer_id AS customerId, courier_id AS courierId, status, version, snapshot_json AS snapshot,
   courier_json AS courier, pickup_pin AS pickupPin, delivery_pin AS deliveryPin, pin_failures AS pinFailures, pin_blocked_until AS pinBlockedUntil,
   events_json AS events, created_at AS createdAt, updated_at AS updatedAt`;
-const store = (row) => row ? { ...JSON.parse(row.details), ...row, details: undefined, isOpen: Boolean(row.isOpen) } : null;
+const store = (row) => row ? { sellerType: 'restaurant', deliveryEnabled: true, pickupEnabled: false, ...JSON.parse(row.details), ...row, details: undefined, isOpen: Boolean(row.isOpen) } : null;
 const order = (row) => row ? { ...row, snapshot: JSON.parse(row.snapshot), courier: row.courier ? JSON.parse(row.courier) : null, events: JSON.parse(row.events) } : null;
 export function createEatsRepository(db) {
   return Object.freeze({
@@ -16,7 +16,7 @@ export function createEatsRepository(db) {
       db.prepare("INSERT INTO eats_memberships (user_id,store_id,role) VALUES (?,?,'owner')").run(userId, value.id);
     },
     saveStore(value) {
-      const { id, status, version, isOpen, reviewNote, createdAt, updatedAt, details, ...profile } = value;
+      const { id, status, version, isOpen, reviewNote, createdAt, updatedAt, details, addressHidden, coverPhotoId, ...profile } = value;
       db.prepare('UPDATE eats_stores SET status=?,version=?,is_open=?,details_json=?,review_note=?,updated_at=? WHERE id=?')
         .run(status, version, isOpen ? 1 : 0, JSON.stringify(profile), reviewNote, updatedAt, id);
     },
@@ -24,6 +24,9 @@ export function createEatsRepository(db) {
     menuItem: (id) => { const row = db.prepare('SELECT store_id AS storeId,details_json AS details FROM eats_menu WHERE id=?').get(id); return row ? { id, storeId: row.storeId, ...JSON.parse(row.details) } : null; },
     saveMenu(id, storeId, item) { db.prepare(`INSERT INTO eats_menu (id,store_id,available,details_json) VALUES (?,?,?,?)
       ON CONFLICT(id) DO UPDATE SET available=excluded.available,details_json=excluded.details_json`).run(id, storeId, item.available ? 1 : 0, JSON.stringify(item)); },
+    photo: (id) => { const row = db.prepare('SELECT store_id AS storeId, base64 FROM eats_photos WHERE id=?').get(id); return row ?? null; },
+    savePhoto(id, storeId, base64, now) { db.prepare('INSERT INTO eats_photos (id,store_id,base64,created_at) VALUES (?,?,?,?)').run(id,storeId,base64,now); },
+    prunePhotos(storeId) { db.prepare("DELETE FROM eats_photos WHERE store_id=? AND id NOT IN (SELECT json_extract(details_json, '$.photoId') FROM eats_menu WHERE store_id=? AND json_extract(details_json, '$.photoId') IS NOT NULL)").run(storeId,storeId); },
     quote: (id) => { const row = db.prepare('SELECT id,customer_id AS customerId,store_id AS storeId,store_version AS storeVersion,snapshot_json AS snapshot,expires_at AS expiresAt,order_id AS orderId FROM eats_quotes WHERE id=?').get(id); return row ? { ...row, snapshot: JSON.parse(row.snapshot) } : null; },
     createQuote(q) { db.prepare('INSERT INTO eats_quotes (id,customer_id,store_id,store_version,snapshot_json,expires_at) VALUES (?,?,?,?,?,?)').run(q.id,q.customerId,q.storeId,q.storeVersion,JSON.stringify(q.snapshot),q.expiresAt); },
     bindQuote(id, orderId) { db.prepare('UPDATE eats_quotes SET order_id=? WHERE id=?').run(orderId,id); },
@@ -40,7 +43,7 @@ export function createEatsRepository(db) {
       return db.prepare(`SELECT ${orderColumns} FROM eats_orders WHERE ${column}=? AND (? IS NULL OR created_at < ? OR (created_at=? AND id<?)) ORDER BY created_at DESC,id DESC LIMIT 51`)
         .all(userId,before?.id ?? null,before?.createdAt ?? null,before?.createdAt ?? null,before?.id ?? null).map(order);
     },
-    ready: () => db.prepare(`SELECT ${orderColumns} FROM eats_orders WHERE status='ready' ORDER BY created_at,id LIMIT 100`).all().map(order),
+    ready: () => db.prepare(`SELECT ${orderColumns} FROM eats_orders WHERE status='ready' AND COALESCE(json_extract(snapshot_json, '$.fulfillment'), 'delivery')='delivery' ORDER BY created_at,id LIMIT 100`).all().map(order),
     activeCourier: (id) => db.prepare(`SELECT ${orderColumns} FROM eats_orders WHERE courier_id=? AND status IN ('assigned','picked_up','arrived')`).all(id).map(order),
     hasWork: (id) => Boolean(db.prepare("SELECT 1 FROM eats_orders WHERE courier_id=? AND status IN ('assigned','picked_up','arrived')").get(id)),
     createOrder(o) { db.prepare(`INSERT INTO eats_orders (id,store_id,customer_id,status,snapshot_json,pickup_pin,delivery_pin,events_json,created_at,updated_at)
