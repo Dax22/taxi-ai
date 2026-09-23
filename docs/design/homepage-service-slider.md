@@ -31,7 +31,7 @@ the WebP assets at quality 84. The original generated PNGs remain intact.
 `apps/web/public/homepage-carousel.mjs` is loaded only by the landing page and
 does not access booking state. The service selector buttons and controls row beneath
 the images are removed. Compact pause/play and previous/next controls sit over the
-top-right of the image. All controls have accessible names and 44-pixel touch targets.
+bottom-right of the image. All controls have accessible names and 44-pixel touch targets.
 
 Rotation begins automatically; a stationary mouse does not stop it. Keyboard focus
 and manual navigation stop rotation until Play is selected. A hidden browser tab
@@ -40,8 +40,18 @@ and animation; the overlay arrows allow manual browsing. Automatic changes are n
 announced to screen readers. Without JavaScript, the first scene stays visible.
 
 Artwork reaches both edges of the page with no side gutters, maximum-width cap or
-image distortion. Images retain a 2:1 ratio. Heading and booking content retain their
-normal spacing.
+image distortion. The slider starts immediately beneath the navigation with zero
+external top margin. One persistent text overlay carries the headline and links
+across all scenes; its primary action is “Book a ride” and links to `/app`.
+The fare-demo link continues to target `#book`.
+
+A pale directional gradient keeps dark text legible. Desktop typography scales
+fluidly; at 800px and below, the copy sits higher in the same hero and the complete
+2:1 artwork sits along its bottom edge. The content remains in the grid flow so
+wrapped or enlarged text increases the hero height instead of being clipped.
+The decorative journey card was removed to avoid overlapping the new headline.
+Keyboard focus on either overlay link pauses rotation, as it does for the controls.
+Booking content below keeps its normal spacing.
 
 ## Verification
 
