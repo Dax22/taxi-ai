@@ -20,6 +20,7 @@ import { createDeliveriesService } from './modules/deliveries/service.mjs';
 import { createRidesService } from './modules/rides/service.mjs';
 import { createEatsRepository } from './modules/eats/repository.mjs';
 import { createEatsService } from './modules/eats/service.mjs';
+import { normalizeDishPhoto } from './infrastructure/eats-photo-codec.mjs';
 import { createChatRepository } from './modules/chat/repository.mjs';
 import { createChatService } from './modules/chat/service.mjs';
 import { createCallsRepository } from './modules/calls/repository.mjs';
@@ -134,7 +135,7 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
     vehicleCheckEvidence:vehicleChecks.evidence,
     locationForTrip: locations.safetyPosition, sessionOwner: accounts.sessionOwner, nativeSessionOwner: devices.sessionOwner, unitOfWork, tokens, audit, clock, allowSimulation });
   const adminConsole = createAdminConsoleService({ repository: createAdminConsoleRepository(db), audit, clock, unitOfWork });
-  const eats = createEatsService({ repository: eatsRepository, getAccount: accounts.profile,
+  const eats = createEatsService({ repository: eatsRepository, getAccount: accounts.profile, photoCodec: { normalize: normalizeDishPhoto },
     hasOtherWork: (id) => rideRepository.hasDriverWork(id) || rideRepository.hasCustomerWork(id, clock()),
     availabilityFor: availability.positionFor, onClaim: availability.onClaim, tokens, unitOfWork, audit, clock });
   const googleAuth = createGoogleAuthService({ repository: createGoogleAuthRepository(db), provider: googleProvider,

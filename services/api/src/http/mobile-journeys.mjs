@@ -21,6 +21,7 @@ function projection(ride,user,now) {
     }
   }
   return { ...bookingProjection(ride), mode, customerName: ride.customer.name, offer, allowedActions,
+    route: ride.route, startedAt: ride.trip?.startedAt ?? null, rating: ride.rating ?? null,
     chatReady: permitted && Boolean(ride.driver), pickupPin: ride.trip?.pickupPin ?? null, pinBlockedUntil: ride.trip?.pinBlockedUntil ?? null };
 }
 const message = (value,userId) => ({ id: value.id, sequence: value.sequence, body: value.body, createdAt: value.createdAt, fromYou: value.senderId === userId });
@@ -37,6 +38,8 @@ export function createMobileJourneys({ rides, availability, chat, clock }) {
     if (write && path === '/work/online') return availability.command(context,'online',null,data,key);
     const lease = path.match(/^\/work\/([a-f0-9-]{36})\/(offline|heartbeat)$/);
     if (write && lease) return lease[2] === 'offline' ? availability.command(context,'offline',lease[1],data,key) : availability.update(context,lease[1],data);
+    const rating = path.match(/^\/journeys\/([a-f0-9-]{36})\/rating$/);
+    if (write && rating) return { ride: projection(rides.rate(user,rating[1],data).ride,user,clock()) };
     const journey = path.match(/^\/journeys\/([a-f0-9-]{36})(?:\/(claim|propose|accept|confirm|depart|arrive|start|complete|cancel))?$/);
     if (journey) {
       if (!write && !journey[2]) return { ride: projection(rides.get(user,journey[1]),user,clock()) };

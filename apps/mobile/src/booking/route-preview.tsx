@@ -1,6 +1,6 @@
 import { vehicleCategory } from '../../../../packages/shared/src/vehicle-categories.mjs';
 import { StyleSheet, View } from 'react-native';
-import { Text } from '../ui/typography';
+import { Text, fontFamilyBold } from '../ui/typography';
 import Svg, { Circle, Line, Polyline, Rect, Text as SvgText } from 'react-native-svg';
 import type { BookingPreview } from '../../../../packages/shared/src/mobile-booking.mjs';
 import { Button, Card, colors, fare, Pill, styles } from '../ui/components';
@@ -24,7 +24,7 @@ export function RoutePreview({ preview, now, disabled, busy, onRequest, onPrevie
         <Polyline points={drawing.line} fill="none" stroke={colors.ink} strokeWidth={9} strokeLinecap="round" strokeLinejoin="round"/>
         <Polyline points={drawing.line} fill="none" stroke={colors.yellow} strokeWidth={3} strokeLinecap="round" strokeLinejoin="round"/>
         {[drawing.start,drawing.end].map((p,i) => <Circle key={i} cx={p.x} cy={p.y} r={15} fill={i ? colors.ink : colors.yellow} stroke="#fff" strokeWidth={3}/>)}
-        {[drawing.start,drawing.end].map((p,i) => <SvgText key={i} x={p.x} y={p.y + 5} textAnchor="middle" fontSize={13} fontWeight="bold" fill={i ? '#fff' : colors.ink}>{i ? 'B' : 'A'}</SvgText>)}
+        {[drawing.start,drawing.end].map((p,i) => <SvgText key={i} x={p.x} y={p.y + 5} textAnchor="middle" fontFamily={fontFamilyBold} fontSize={13} fill={i ? '#fff' : colors.ink}>{i ? 'B' : 'A'}</SvgText>)}
       </Svg>
     </View><Text style={styles.small}>Route outline on a decorative grid · not a street map.</Text></>}/>}
     <View style={styles.stack}><Text style={styles.body}>A · {preview.pickup}</Text><Text style={styles.body}>B · {preview.destination}</Text></View>

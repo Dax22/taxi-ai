@@ -1,11 +1,13 @@
 import type { Envelope, Mode } from './mobile-contracts.mjs';
-import type { BookingRide } from './mobile-booking.mjs';
+import type { BookingRide, Place } from './mobile-booking.mjs';
 import type { VehicleCategoryId } from './vehicle-categories.mjs';
 import type { MatchRecommendation } from './smart-matching.mjs';
 export type JourneyAction = 'claim' | 'propose' | 'accept' | 'confirm' | 'depart' | 'arrive' | 'start' | 'complete' | 'cancel';
 export interface JourneyData { expectedVersion: number; amountKobo?: number; offerId?: string; pickupPin?: string; deliveryPin?: string; reason?: string }
 export interface Journey extends BookingRide { mode: Mode; customerName: string; chatReady: boolean; pickupPin: string | null; pinBlockedUntil: number | null;
- offer: { id: string; amountKobo: number; fromYou: boolean; expiresAt: number } | null; allowedActions: JourneyAction[] }
+ offer: { id: string; amountKobo: number; fromYou: boolean; expiresAt: number } | null; allowedActions: JourneyAction[];
+ route?: { pickup: Place; destination: Place; durationSeconds: number | null; distanceMeters: number; coordinates: [number, number][] } | null;
+ startedAt?: number | null; rating?: number | null }
 export interface JourneyResult extends Envelope { ride: Journey }
 export interface Position { lat: number; lng: number; accuracy: number; capturedAt: number }
 export type OnlineData = { mode: 'gps'; position: Position } | { mode: 'sample'; areaId: string };

@@ -37,8 +37,8 @@
       ],
       "expo-notifications",
       ["expo-image-picker", {
-        "cameraPermission": "Allow Taxi Ai to take a vehicle photo when you choose to check your pickup car.",
-        "photosPermission": "Allow Taxi Ai to use the vehicle photo you select for a pickup check.",
+        "cameraPermission": "Allow Taxi Ai to take a food or vehicle photo when you choose to add one.",
+        "photosPermission": "Allow Taxi Ai to use the food or vehicle photo you select.",
         "microphonePermission": false
       }]
     ],

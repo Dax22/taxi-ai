@@ -19,7 +19,7 @@ export default function FoodOrder() {
   }
   return <Screen><FoodPreview/><FoodFeedback state={s} controller={c}/>
     {o && <><Pill>{`FOOD ORDER · ${o.id.slice(0,8).toUpperCase()}`}</Pill><Heading title={EATS_STATUS[o.status]} subtitle={o.restaurant.name}/>
-      <Card><Text style={styles.h2}>Order details</Text><Text style={styles.body}>Customer · {o.customerName}</Text><Text style={styles.body}>Collect from · {o.restaurant.address}</Text>{o.address.line && <Text style={styles.body}>Deliver to · {o.address.line}</Text>}{!!o.instructions && <Text style={styles.body}>Instructions · {o.instructions}</Text>}
+      <Card><Text style={styles.h2}>Order details</Text><Text style={styles.body}>Customer · {o.customerName}</Text><Text style={styles.body}>{o.role === 'courier' || o.role === 'store' ? 'Pickup address' : 'Seller location'} · {o.restaurant.address ?? o.restaurant.town}</Text>{o.address.line && <Text style={styles.body}>Deliver to · {o.address.line}</Text>}{!!o.instructions && <Text style={styles.body}>Instructions · {o.instructions}</Text>}
         {o.courier && <><Text style={styles.h2}>Your courier · {o.courier.name}</Text><Text style={styles.body}>{o.courier.vehicle.colour} {o.courier.vehicle.model} · {o.courier.vehicle.plate}</Text></>}
         {(o.pickupPin || o.deliveryPin) && <><Text style={styles.body}>{o.pickupPin ? 'Restaurant pickup code. Share only when handing the food to the assigned courier.' : 'Your delivery code. Share only when you receive the food.'}</Text><Text selectable style={food.pin}>{o.pickupPin ?? o.deliveryPin}</Text></>}
       </Card>

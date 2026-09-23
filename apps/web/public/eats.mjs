@@ -11,7 +11,17 @@ const api = createApiClient({ onServerTime(at) { serverTime = { at, received: pe
 const transport = createEatsTransport({ client: api, identity: () => sessionKey,
   onChanged() { api.reset(); availability.reset(); controller.reset(); sessionKey = null; } });
 const controller = createEatsController({ api: transport, makeKey: () => crypto.randomUUID(), now: () => serverTime.at + performance.now() - serverTime.received });
-const view = createEatsView(controller);
+const screenPaths = { browse: '/eats', store: '/eats/sell', orders: '/eats?screen=orders', work: '/eats?screen=work', review: '/eats?screen=review' };
+const view = createEatsView(controller, {
+  sellerPage: () => location.pathname === '/eats/sell',
+  async navigate(screen) {
+    await controller.navigate(screen);
+    if (controller.snapshot().screen !== screen) return;
+    const path = screenPaths[screen];
+    if (path && path !== location.pathname + location.search) history.pushState({}, '', path);
+    render();
+  },
+});
 const availabilityView = createAvailabilityView({
   onOnline: (mode, areaId) => void availability.start(mode, areaId).then(() => controller.refresh({ quiet: true })),
   onOffline: () => void availability.stop().then(() => controller.refresh({ quiet: true })),
@@ -29,7 +39,7 @@ function render() {
 controller.subscribe(render);
 function route() {
   const params = new URLSearchParams(location.search), screen = params.get('screen');
-  return controller.navigate(['orders','store','work','review','order'].includes(screen) ? screen : 'browse', params.get('id'));
+  return controller.navigate(location.pathname === '/eats/sell' ? 'store' : ['orders','store','work','review','order'].includes(screen) ? screen : 'browse', params.get('id'));
 }
 async function sync() {
   if (syncing || document.hidden) return;

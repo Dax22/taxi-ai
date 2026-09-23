@@ -7,16 +7,22 @@ import { TripLocationCard } from '../src/tracking/view';
 import { Button, Card, Field, Heading, Loading, Notice, Pill, Screen, fare, styles } from '../src/ui/components';
 import { VehicleCard } from '../src/ui/vehicle-card';
 import { PickupIdentity } from '../src/ui/pickup-identity';
+import { KemmyCard } from '../src/journeys/kemmy';
+import { PaymentCard } from '../src/payments/payment-card';
+import { useSession } from '../src/session/provider';
 import { bookingStatusLabel } from '../../../packages/shared/src/mobile-booking.mjs';
 import { vehicleCategory } from '../../../packages/shared/src/vehicle-categories.mjs';
 import type { JourneyAction } from '../../../packages/shared/src/mobile-journeys.mjs';
 function JourneyScreen({id}:{id:string}){
   const {state:s,controller:c}=useJourney(id),r=s.ride,locked=s.busy||s.uncertain||s.stale;
+  const { mode } = useSession();
   function confirm(action:JourneyAction,title:string,detail:string){const shown=r!;Alert.alert(title,detail,[{text:'Back',style:'cancel'},{text:title,onPress:()=>void c.act(action,shown)}]);}
   const labels:Partial<Record<JourneyAction,string>>={depart:'On my way',arrive:'I have arrived',start:r?.delivery?'Verify pickup and collect parcel':'Verify pickup and start trip',complete:r?.delivery?'Verify drop-off and complete delivery':'Complete trip'};
+  if (r && r.mode !== mode) return <Screen><Notice message="This journey belongs to a different app experience. Open it from your web account."/></Screen>;
   return <Screen><Notice message={s.error}/>{!r&&s.loading&&<Loading/>}<Button title="Refresh journey" secondary busy={s.loading} disabled={s.busy} onPress={()=>void c.refresh()}/>
     {s.uncertain&&<Button title="Retry the same action" busy={s.busy} onPress={()=>void c.retry()}/>}
-    {r&&<><Button title="Safety / SOS" secondary onPress={()=>router.push({pathname:'/safety',params:{id:r.id}})}/><Pill>{bookingStatusLabel(r.status).toUpperCase()}</Pill><Heading title={`${r.pickup} → ${r.destination}`} subtitle={`${vehicleCategory(r.vehicleCategory??'standard')?.name} · ${r.mode==='work'?'Work':'Customer'}`}/>
+    {r&&<><Button title="Safety / SOS" secondary onPress={()=>router.push({pathname:'/safety',params:{id:r.id}})}/><Pill>{bookingStatusLabel(r.status).toUpperCase()}</Pill><Heading title={`${r.pickup} → ${r.destination}`} subtitle={`${vehicleCategory(r.vehicleCategory??'standard')?.name} · ${r.mode==='work'?'Driver':'Customer'}`}/>
+      {r.mode==='customer'&&<KemmyCard ride={r} now={s.now} ratingChoice={s.ratingChoice} busy={s.busy} onChoose={(stars)=>c.chooseRating(stars)} onRate={()=>void c.rate()}/>}
       <Card><Text style={styles.h2}>{r.fareKobo===null?'Suggested fare':'Agreed fare'} · {fare(r.fareKobo??r.suggestedFareKobo)}</Text>
         <Text style={styles.body}>{r.mode==='work'?`Customer · ${r.customerName}`:r.driver?`Driver · ${r.driver.name}`:'Waiting for a driver to take your request.'}</Text>
         {r.driver&&<VehicleCard vehicle={r.driver.vehicle} label="VEHICLE FOR THIS JOURNEY" compact/>}
@@ -38,10 +44,11 @@ function JourneyScreen({id}:{id:string}){
         {r.allowedActions.filter((a)=>labels[a]).map((a)=><Button key={a} title={labels[a]!} disabled={locked} onPress={()=>confirm(a,labels[a]!,a==='complete'?'Confirm that the journey and handover are complete.':'Update this journey to the next stage?')}/>)}
       </Card>}
       {r.status==='completed'&&<Card><Text style={styles.h2}>{r.delivery?'Delivery complete.':'You have arrived.'}</Text><Text style={styles.body}>Your journey is saved in Activity.</Text></Card>}
-      <TripLocationCard id={r.id}/>
+      {r.status==='completed'&&!r.delivery&&<PaymentCard rideId={r.id}/>}
+      <TripLocationCard id={r.id} ride={r}/>
       <JourneyChat state={s} controller={c}/>
       {r.allowedActions.includes('cancel')&&<Button title="Cancel journey" secondary disabled={locked} onPress={()=>confirm('cancel','Cancel journey','Cancel this request or booking?')}/>}
       <Text style={styles.small}>Development preview · no live transport or real payment.</Text>
     </>}</Screen>;
 }
-export default function Journey(){const {id}=useLocalSearchParams<{id:string}>();return typeof id==='string'&&/^[a-f0-9-]{36}$/.test(id)?<JourneyScreen key={id} id={id}/>:<Screen><Notice message="Choose a journey from Activity or Work."/></Screen>;}
+export default function Journey(){const {id}=useLocalSearchParams<{id:string}>();return typeof id==='string'&&/^[a-f0-9-]{36}$/.test(id)?<JourneyScreen key={id} id={id}/>:<Screen><Notice message="Choose a journey from Activity or Driver."/></Screen>;}

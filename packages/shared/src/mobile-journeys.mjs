@@ -3,6 +3,7 @@ import { parseBookingRide } from './mobile-booking.mjs';
 import { transportCategory } from './transport-categories.mjs';
 import { NOTIFICATION_LABELS } from './notification-labels.mjs';
 import { validMatchRecommendation } from './smart-matching.mjs';
+import { insideAbuja } from './locations.mjs';
 const object = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const text = (v,max=240) => typeof v === 'string' && v.length > 0 && v.length <= max;
 const integer = (v) => Number.isSafeInteger(v) && v >= 0;
@@ -19,6 +20,12 @@ function journey(r,env) {
     && Array.isArray(r.allowedActions) && r.allowedActions.length <= 9
     && r.allowedActions.every((a) => ['propose','accept','confirm','depart','arrive','start','complete','cancel'].includes(a)));
   expect(r.offer === null || object(r.offer) && text(r.offer.id,100) && positive(r.offer.amountKobo) && integer(r.offer.expiresAt) && typeof r.offer.fromYou === 'boolean');
+  expect(r.rating === undefined || r.rating === null || r.status === 'completed' && Number.isInteger(r.rating) && r.rating >= 1 && r.rating <= 5);
+  expect(r.startedAt === undefined || nullableTime(r.startedAt));
+  expect(r.route === undefined || r.route === null || object(r.route) && insideAbuja(r.route.pickup) && insideAbuja(r.route.destination)
+    && positive(r.route.distanceMeters) && (r.route.durationSeconds === null || positive(r.route.durationSeconds))
+    && Array.isArray(r.route.coordinates) && r.route.coordinates.length >= 2 && r.route.coordinates.length <= 1201
+    && r.route.coordinates.every((pair) => Array.isArray(pair) && pair.length === 2 && insideAbuja({ lng: pair[0], lat: pair[1] })));
   return r;
 }
 function availability(a) {

@@ -1,6 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createDemoQuote, nairaToKobo } from '../src/demo-booking.mjs';
+import { DEMO_AREAS, matchSampleArea, createDemoQuote, nairaToKobo } from '../src/demo-booking.mjs';
+
+test('typed sample destinations resolve only complete listed area names', () => {
+  assert.equal(matchSampleArea(DEMO_AREAS, '  mAiTaMa  ')?.id, 'maitama');
+  assert.equal(matchSampleArea(DEMO_AREAS, 'Abuja   Airport')?.id, 'airport');
+  assert.equal(matchSampleArea(DEMO_AREAS, 'Mai'), null);
+  assert.equal(matchSampleArea(DEMO_AREAS, 'Lagos'), null);
+});
 
 test('the sample quote is explicitly fictional and uses integer kobo', () => {
   const quote = createDemoQuote('wuse-ii', 'maitama');

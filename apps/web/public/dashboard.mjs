@@ -34,11 +34,14 @@ const callView = createCallView({ onStart: () => calls.start(), onAnswer: () => 
   onOpenRide: (id) => page.openRide(id),
 });
 const calls = createCallController({ client: activityClient, media: createCallMedia(), view: callView });
-const locationView = createLocationView({ onEnable: () => planner.enable(), onSearch: (side, query) => planner.search(side, query),
+const routeDevice = createGeolocation();
+const locationView = createLocationView({ onEnable: () => planner.enable(), onUsePickup: () => planner.useCurrentPickup(), onSearch: (side, query) => planner.search(side, query),
   onClear: (side) => planner.clear(side), onSelect: (side, value) => planner.select(side, value), onPick: (value) => planner.pick(value),
   onTarget: (value) => planner.setTarget(value), onPreview: () => planner.preview(), onBook: () => planner.book(),
-  onStart: () => sharing.start(), onStop: () => sharing.stop() });
+  onStart: () => sharing.start(), onStop: () => sharing.stop(),
+  onRate: (id, stars) => page.rideCommand(`/api/rides/${id}/rating`, { stars }, 'Your driver rating was saved.') });
 const planner = createLocationPlanner({ client, view: locationView,
+  device: routeDevice,
   serverNow: () => serverTime.now + performance.now() - serverTime.received,
   onOnline: (enabled, settings) => locationView.setOnline(enabled, settings),
   onBook: (quoteId) => page.rideCommand('/api/rides', { quoteId, ...view.requestOptions() },

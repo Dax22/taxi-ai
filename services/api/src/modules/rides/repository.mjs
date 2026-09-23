@@ -63,6 +63,11 @@ export function createRidesRepository(db) {
         .run(actorId, key, fingerprint, rideId, errorCode);
     },
     findTrip: (id) => db.prepare(`SELECT ${tripColumns} FROM ride_trips WHERE ride_id = ?`).get(id) ?? null,
+    rating: (id) => db.prepare('SELECT stars FROM ride_driver_ratings WHERE ride_id = ?').get(id)?.stars ?? null,
+    saveRating(ride, stars, now) {
+      return db.prepare('INSERT OR IGNORE INTO ride_driver_ratings (ride_id, customer_id, driver_id, stars, created_at) VALUES (?, ?, ?, ?, ?)')
+        .run(ride.id, ride.customerId, ride.driverId, stars, now).changes === 1;
+    },
     bookTrip({ ride, fareKobo, pin, now }) {
       db.prepare(`INSERT INTO ride_trips (ride_id, customer_id, driver_id, status, fare_kobo, booked_at, pickup_pin)
         VALUES (?, ?, ?, 'booked', ?, ?, ?)`).run(ride.id, ride.customerId, ride.driverId, fareKobo, now, pin);

@@ -59,7 +59,7 @@ export function createRidesService({ repository, deliveries, getAccount, unitOfW
         departedAt: trip.departedAt, arrivedAt: trip.arrivedAt, startedAt: trip.startedAt, completedAt: trip.completedAt,
         pinBlockedUntil: trip.pinBlockedUntil,
         ...(user.id === ride.customerId && trip.pickupPin ? { pickupPin: trip.pickupPin } : {}) } : null,
-      activity: repository.activity(ride.id) };
+      activity: repository.activity(ride.id), rating: repository.rating(ride.id) };
   }
 
   function get(user, id) {
@@ -67,6 +67,20 @@ export function createRidesService({ repository, deliveries, getAccount, unitOfW
     const ride = record(id);
     requireParticipant(ride, user);
     return view(ride, user);
+  }
+
+  function rate(user, id, data) {
+    fields(data, ['stars'], ['stars']);
+    check(Number.isInteger(data.stars) && data.stars >= 1 && data.stars <= 5, 'INVALID_RATING', 'Choose a rating from 1 to 5 stars.');
+    return unitOfWork(() => {
+      const ride = record(id);
+      check(ride.customerId === user.id && ride.driverId && ride.trip?.status === 'completed'
+        && transportCategory(ride.vehicleCategory).service === 'ride', 'RATING_UNAVAILABLE', 'Rate your driver after your completed ride.');
+      const existing = repository.rating(id);
+      check(existing === null || existing === data.stars, 'ALREADY_RATED', 'You have already rated this driver for this ride.');
+      if (existing === null && repository.saveRating(ride, data.stars, clock())) audit.record(user.id, 'ride.driver_rated', id, clock());
+      return { ride: view(record(id), user) };
+    });
   }
 
   function requireMode(user, mode) {
@@ -345,5 +359,5 @@ export function createRidesService({ repository, deliveries, getAccount, unitOfW
     return { rideId: id, customerId: ride.customerId, driverId: ride.driverId, status: ride.trip?.status ?? ride.status, pickup: route.pickup.name, destination: route.destination.name,
       driver: ride.driverSnapshotJson ? JSON.parse(ride.driverSnapshotJson) : peer(ride.driverId, true) };
   }
-  return Object.freeze({ get, list, history, mutate, conversationContext, conversationIds, paymentContext, safetyContext, sweep });
+  return Object.freeze({ get, list, history, mutate, rate, conversationContext, conversationIds, paymentContext, safetyContext, sweep });
 }

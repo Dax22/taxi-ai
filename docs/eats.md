@@ -11,11 +11,11 @@ It is a Taxi Ai workflow, with no DoorDash service or API dependency.
 | --- | --- | --- |
 | Browse, menu, cart and checkout | `/eats` | Home → Taxi Ai Eats |
 | Customer order history | `/eats?screen=orders` | Activity → My food orders |
-| Restaurant settings, menu and kitchen orders | `/eats?screen=store` | Account → My store |
+| Seller signup, menu and kitchen orders | `/eats/sell` | Account → Sell on Taxi Ai Eats → Seller hub |
 | Courier collection and delivery | `/eats?screen=work` | Work → Food deliveries |
 | Staff approval | `/eats?screen=review`, also linked in `/admin` | Staff uses the website |
 
-My store is an account-scoped workspace. It does not grant a public administrator
+The seller hub is an account-scoped workspace for restaurants, vendors and private kitchens. It does not grant a public administrator
 role or change Customer/Work permissions. The first version supports one owner
 and one store per personal account. Staff invitations and multiple branches are future work.
 
@@ -26,17 +26,18 @@ approved driver and administrator. Ordinary tabs share the same web login.
 Existing accounts and driver approvals can be reused. For the first administrator,
 follow the root README's `npm run admin -- your-admin-email@example.com` setup.
 
-1. Start `npm run dev` and sign in at `/app`. Open **My store**, create a fictional
+1. Start `npm run dev` and sign in at `/app`. Open **Seller hub** at `/eats/sell`, choose Restaurant, Vendor or Private kitchen, and create a fictional
    kitchen with its Abuja area/address, preparation time, minimum order and delivery
-   fee, then add at least one available menu item. No restaurants are seeded automatically.
-2. As the administrator, open **Restaurant review**, inspect the store and menu,
+   fee, then add at least one available menu item. Use **Add photo** beside a saved
+   item to upload a real dish image. No restaurants are seeded automatically.
+2. As the administrator, open **Seller review**, inspect the store and menu,
    record a test review reference and reason, then approve it. This is a recorded
    manual review, not a real business licence or food-safety verification.
-3. As the owner, refresh **My store** and choose **Open for test orders**.
-4. As a separate customer, open **Taxi Ai Eats**, choose a kitchen, add items,
-   enter an address/landmark and Abuja delivery area, then **Review total**.
+3. As the owner, refresh **Seller hub** and choose **Open for test orders**.
+4. As a separate customer, open **Taxi Ai Eats**, enter an address/landmark and
+   Abuja delivery area, search for a dish, choose a kitchen, add items, then **Review total**.
    Inspect the food subtotal, delivery and service fees before **Place test order**.
-5. Open the incoming order in **My store**, accept it, start preparation, then mark
+5. Open the incoming order in **Seller hub**, accept it, start preparation, then mark
    it ready. Unfinished kitchen orders appear before completed history.
 6. As an eligible motorcycle/car/SUV/van driver, open **Food deliveries** on the website and use its **Your availability**
    controls. On mobile, go online in **Work**, then open **Food deliveries**.
@@ -67,6 +68,10 @@ reassignment and exceptional recovery still need an operational support workflow
 - Sold-out items cannot be added to new quotes. Store owners can pause ordering;
   accepted orders remain actionable. Identity/location changes put the store back
   into review. Opening requires current approval and an available menu item.
+- Menu photos are optional JPEG/PNG uploads. The server strips metadata, converts
+  each image to a bounded JPEG and stores it separately from searchable menu data.
+  Owners and staff can preview photos before approval; customers see only photos
+  for available items from approved stores. Sellers can replace or remove a photo.
 - An approved courier may hold one food delivery, ride or parcel assignment at a
   time. Claiming a food job atomically stops availability. Active food work also
   blocks vehicle changes, Work profile deletion and competing journey actions.
@@ -93,6 +98,11 @@ cannot open the upgraded schema. Orders include private addresses and must be
 treated as private data in backups. Expired quote/command retention and production
 erasure policies still need an explicit cleanup implementation.
 
+Migration **021** adds a separate menu-photo table without changing existing menu
+items. Photos live in the same SQLite backup as stores and orders; production
+storage should later move to object storage with image review, retention and
+delivery caching.
+
 Both `/api/eats/*` (cookie + CSRF) and `/api/mobile/v1/eats/*` (device bearer) call
 the same service. The composition root injects shared workload and availability
 ports; Eats does not import another business module's internals. Shared contracts,
@@ -116,7 +126,7 @@ The available cloud browser blocks local previews, so visual/device acceptance
 remains outstanding.
 
 Further product work includes a real payment provider, refunds/payouts, verified
-merchant onboarding, food photos and item modifiers, stock counts/opening hours,
+merchant onboarding, photo review and item modifiers, stock counts/opening hours,
 tax policy, food chat and push notifications, live delivery routing/ETA/tracking,
 customer support and reassignment. The initial order timeline polls while open;
 it is not a live courier map or a phone alert. No food recommendation or autonomous

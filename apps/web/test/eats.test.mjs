@@ -16,7 +16,7 @@ const flush = () => new Promise((resolve) => setImmediate(resolve));
 function fixture() {
   let now = 1000, key = 0, restaurant = structuredClone(store);
   const writes = [], api = { async request(path) {
-    if (path === '/eats/restaurants') return { restaurants: [restaurant], areas: [{ id: 'wuse-ii', name: 'Wuse II' }] };
+    if (path.startsWith('/eats/restaurants?q=')) return { restaurants: [restaurant], dishes: menu.map((item) => ({ ...item, seller: restaurant })), areas: [{ id: 'wuse-ii', name: 'Wuse II' }] };
     if (path.startsWith('/eats/restaurants/')) return { store: restaurant, menu };
     if (path.startsWith('/eats/orders/')) return { order };
     if (path === '/eats/orders') return { orders: [order], nextBefore: null };
@@ -27,7 +27,7 @@ function fixture() {
   c.context(user);
   return { c, api, writes, advance(ms) { now += ms; }, changeStore(value) { restaurant = { ...restaurant, ...value }; } };
 }
-async function cart(f) { await f.c.selectRestaurant(store.id); f.c.quantity(menu[0].id, 1); f.c.delivery(quote.address, ''); }
+async function cart(f) { await f.c.refresh(); f.c.delivery(quote.address, ''); assert.equal(f.c.confirmDelivery(), true); await f.c.selectRestaurant(store.id); f.c.quantity(menu[0].id, 1); }
 
 test('one-restaurant cart replacement is explicit and server quotes expire or invalidate on edits', async () => {
   const f = fixture(); await cart(f); await f.c.checkout(); assert.equal(f.c.snapshot().quote.id, quote.id);
@@ -124,17 +124,34 @@ function dom(t) {
 
 test('shipped Eats page connects menu buttons, delivery form and checkout to the shared order flow', async (t) => {
   const node = dom(t), f = fixture(), view = createEatsView(f.c); f.c.subscribe(() => view.render(f.c.snapshot()));
-  view.render(f.c.snapshot()); await f.c.selectRestaurant(store.id);
+  view.render(f.c.snapshot()); await f.c.refresh();
+  assert.equal(node('discovery-content').hidden, true);
+  node('address').value = quote.address.line; node('area').value = quote.address.areaId;
+  node('delivery-form').handlers.submit({ preventDefault() {} });
+  assert.equal(node('discovery-content').hidden, false);
+  await f.c.selectRestaurant(store.id);
   assert.equal(node('shopping').hidden, false);
   node('menu-list').children[0].children[1].children[2].handlers.click();
   assert.equal(f.c.snapshot().cart[0].quantity, 1);
-  node('address').value = quote.address.line; node('area').value = quote.address.areaId;
   node('checkout-form').handlers.submit({ preventDefault() {} }); await flush();
   assert.equal(node('quote').hidden, false); assert.equal(node('place').disabled, false);
   assert.deepEqual(f.writes.at(-1).data.address, quote.address);
   node('place').handlers.click(); await flush();
   assert.equal(f.c.snapshot().screen, 'order'); assert.ok(node('order-detail').children.length > 0);
   f.c.reset(); assert.equal(node('app').hidden, true); assert.equal(node('order-detail').children.length, 0);
+});
+
+test('the seller page introduces onboarding before sign-in and opens the store workspace after sign-in', async (t) => {
+  const node = dom(t), f = fixture(), view = createEatsView(f.c, { sellerPage: () => true });
+  f.c.subscribe(() => view.render(f.c.snapshot()));
+  f.c.reset(); view.render(f.c.snapshot());
+  assert.equal(node('intro').hidden, true);
+  assert.equal(node('seller-intro').hidden, false);
+  assert.equal(node('seller-sign-in').hidden, false);
+  f.c.context(user); await f.c.navigate('store');
+  assert.equal(node('seller-sign-in').hidden, true);
+  assert.equal(node('screen-store').hidden, false);
+  assert.equal(node('store-form-title').textContent, 'Create your store');
 });
 
 test('a customer can remove an item from the cart after the restaurant marks it unavailable', async (t) => {

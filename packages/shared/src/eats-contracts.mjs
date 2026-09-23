@@ -6,12 +6,16 @@ const integer = (v) => Number.isSafeInteger(v) && v >= 0;
 function valid(value) { if (!value) throw new Error('Taxi Ai Eats returned an incompatible response. Refresh and try again.'); }
 function store(s) {
   valid(object(s) && id(s.id) && integer(s.version) && ['pending', 'approved', 'suspended'].includes(s.status) && typeof s.isOpen === 'boolean');
-  valid(['name','description','address','areaId'].every((key) => string(s[key])) && EATS_CUISINES.includes(s.cuisine));
+  valid(['restaurant','vendor','private_kitchen'].includes(s.sellerType ?? 'restaurant'));
+  valid(['name','description','areaId'].every((key) => string(s[key])) && EATS_CUISINES.includes(s.cuisine));
+  valid((s.sellerType ?? 'restaurant') === 'restaurant' ? string(s.address) : string(s.town) && (s.address === undefined || string(s.address)));
   valid(integer(s.prepMinutes) && integer(s.minimumKobo) && integer(s.deliveryFeeKobo));
 }
-function menu(m) { valid(Array.isArray(m) && m.length <= 100); for (const i of m) valid(object(i) && id(i.id) && string(i.name) && string(i.description) && string(i.category) && integer(i.priceKobo) && typeof i.available === 'boolean'); }
+function menu(m) { valid(Array.isArray(m) && m.length <= 100); for (const i of m) valid(object(i) && id(i.id) && string(i.name) && string(i.description) && string(i.category) && integer(i.priceKobo) && typeof i.available === 'boolean'
+  && (i.photoVersion === undefined || i.photoVersion === null || integer(i.photoVersion) && i.photoVersion > 0)); }
 function snapshot(o) {
-  valid(object(o) && id(o.id) && object(o.restaurant) && id(o.restaurant.id) && ['name','address','areaId'].every((k) => string(o.restaurant[k])));
+  valid(object(o) && id(o.id) && object(o.restaurant) && id(o.restaurant.id) && ['name','areaId'].every((k) => string(o.restaurant[k])));
+  valid((o.restaurant.sellerType ?? 'restaurant') === 'restaurant' ? string(o.restaurant.address) : string(o.restaurant.town) && (o.restaurant.address === undefined || string(o.restaurant.address)));
   valid(object(o.address) && string(o.address.areaId) && (o.address.line === undefined || string(o.address.line)) && string(o.instructions));
   valid(o.isDemo === true && o.payment?.method === 'test' && o.payment.status === 'not_charged');
   valid(Array.isArray(o.lines) && o.lines.every((l) => object(l) && id(l.itemId) && string(l.name) && string(l.description)));
@@ -32,6 +36,7 @@ export function readEatsResponse(body) {
   valid(object(body));
   let known = false;
   for (const key of ['restaurants', 'stores']) if (Object.hasOwn(body, key)) { known = true; valid(Array.isArray(body[key]) && body[key].length <= 200); body[key].forEach(store); }
+  if (Object.hasOwn(body, 'dishes')) { known = true; valid(Array.isArray(body.dishes) && body.dishes.length <= 60); for (const dish of body.dishes) { menu([dish]); store(dish.seller); } }
   if (Object.hasOwn(body, 'store')) { known = true; if (body.store !== null) store(body.store); menu(body.menu); }
   if (Object.hasOwn(body, 'quote')) { known = true; snapshot(body.quote); valid(integer(body.quote.expiresAt)); }
   if (Object.hasOwn(body, 'order')) { known = true; order(body.order); }
@@ -39,7 +44,9 @@ export function readEatsResponse(body) {
   if (Object.hasOwn(body, 'current')) {
     known = true; valid(Array.isArray(body.current) && body.current.length <= 1); body.current.forEach(order);
     valid(typeof body.online === 'boolean' && typeof body.eligible === 'boolean' && body.isDemo === true && Array.isArray(body.available) && body.available.length <= 100);
-    for (const j of body.available) valid(object(j) && id(j.id) && integer(j.version) && object(j.restaurant) && id(j.restaurant.id) && string(j.restaurant.name) && string(j.restaurant.address) && object(j.deliveryArea) && string(j.deliveryArea.name) && integer(j.deliveryFeeKobo));
+    for (const j of body.available) valid(object(j) && id(j.id) && integer(j.version) && object(j.restaurant) && id(j.restaurant.id) && string(j.restaurant.name)
+      && ((j.restaurant.sellerType ?? 'restaurant') === 'restaurant' ? string(j.restaurant.address) : string(j.restaurant.town) && j.restaurant.address === undefined)
+      && object(j.deliveryArea) && string(j.deliveryArea.name) && integer(j.deliveryFeeKobo));
   }
   if (body.areas !== undefined) valid(Array.isArray(body.areas) && body.areas.length <= 50 && body.areas.every((a) => object(a) && string(a.id) && string(a.name)));
   valid(known); return body;

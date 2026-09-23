@@ -22,13 +22,12 @@ changes, and accessible state attributes remain in place.
 
 ## Typography
 
-App typography follows the native system font consistently: iOS uses System
-(San Francisco), Android uses `sans-serif` (Roboto), and web/admin use `system-ui`
-with platform fallbacks. This preserves the mobile app's existing font choice;
-it does not promise identical glyphs across operating systems. Native text uses
-`src/ui/typography.tsx`, including form and navigation labels. Web styles import
-`typography.css`; no external font download is required. Sizes and weights retain
-their heading/body hierarchy and native text scaling.
+Taxi Ai uses **Manrope** across iOS, Android, web and admin. Native builds bundle
+Regular, Medium, Semibold, Bold and ExtraBold faces; `src/ui/typography.tsx` maps
+each text weight to its installed face, including form and navigation labels.
+Web styles import `typography.css` and self-host the variable Latin and Latin
+Extended files, including characters used in Nigerian names. No live font service
+is required. Sizes and weights retain their heading/body hierarchy and native text scaling.
 
 ## Logo assets
 

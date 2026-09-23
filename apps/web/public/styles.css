@@ -68,7 +68,10 @@
   .location-field { position: relative; }
   .location-field:last-child { margin-top: 8px; }
   .field label { display: block; font-size: 9px; letter-spacing: .05em; color: var(--muted); margin-bottom: 2px; }
-  .field select { width: 100%; background: transparent; border: 0; border-radius: 0; cursor: pointer; font-size: 12px; height: 22px; padding: 0; }
+  .field select, .field input[type="text"] { width: 100%; background: transparent; border: 0; border-radius: 0; font-size: 12px; min-height: 22px; padding: 0; }
+  .field input[type="text"]::placeholder { color: var(--muted); opacity: .8; }
+  .current-location-field strong { display: block; font-size: 12px; line-height: 1.35; font-weight: 600; }
+  .current-location-field small { display: block; color: var(--muted); font-size: 10px; line-height: 1.4; }
   .route-dot, .route-square { position: absolute; width: 7px; height: 7px; top: 28px; left: 13px; background: var(--brand-strong); }
   .route-dot { border-radius: 50%; }
   .swap-button { position: absolute; z-index: 1; right: 9px; top: calc(50% - 15px); width: 32px; height: 32px; border: 1px solid var(--line); border-radius: 50%; background: #fff; font-size: 19px; }

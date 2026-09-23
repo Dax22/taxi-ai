@@ -15,7 +15,7 @@ export function createApiClient({ fetchImpl = globalThis.fetch, makeKey = () => 
           ...(availabilityClient ? { 'X-Availability-Client': availabilityClient } : {}),
           ...(method === 'POST' ? { 'Content-Type': 'application/json',
             ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}), ...(key ? { 'Idempotency-Key': key } : {}) } : {}) },
-        ...(method === 'POST' ? { body: JSON.stringify(data ?? {}) } : {}), signal: AbortSignal.timeout(path.startsWith('/api/vehicle-checks/') ? 35_000 : 12_000) });
+        ...(method === 'POST' ? { body: JSON.stringify(data ?? {}) } : {}), signal: AbortSignal.timeout(path.startsWith('/api/vehicle-checks/') || /\/api\/eats\/stores\/[a-f0-9-]{36}\/photo$/.test(path) ? 35_000 : 12_000) });
       body = await response.json();
     } catch {
       if (epoch !== generation) throw changedSession();

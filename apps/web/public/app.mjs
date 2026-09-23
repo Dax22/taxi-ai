@@ -1,6 +1,6 @@
 import { categoryFare } from '/shared/transport-categories.mjs';
 import { FareNegotiation } from '/shared/fare-negotiation.mjs';
-import { DEMO_AREAS, createDemoQuote, nairaToKobo, formatNaira } from '/shared/demo-booking.mjs';
+import { createDemoQuote, nairaToKobo, formatNaira } from '/shared/demo-booking.mjs';
 import { createVehicleCategoryPicker } from './dashboard/vehicle-categories.mjs';
 
 const $ = (id) => document.getElementById(id);
@@ -10,9 +10,11 @@ const dialog = $('booking-dialog');
 let negotiation = null;
 let role = 'customer';
 let timer = null;
+const currentPickupId = 'wuse-ii';
+const previewDestinationId = 'maitama';
 const categories = createVehicleCategoryPicker($('home-vehicle-categories'), { onSelect(category) {
   $('trip-form').hidden = !category.ridePreview;
-  $('standard-fare-note').textContent = `${category.name} preview · Sample Abuja areas · Prices are illustrative`;
+  $('standard-fare-note').textContent = `${category.name} preview · Current pickup · Illustrative fare`;
   $('category-booking-link').href = `/app?category=${category.id}`;
   $('category-booking-link').textContent = `Book ${category.name} in your account ↗`;
   $('trip-error').textContent = '';
@@ -48,35 +50,25 @@ document.querySelectorAll('[data-switch]').forEach((button) => {
   button.addEventListener('click', () => selectService(button.dataset.switch, true));
 });
 
-for (const id of ['pickup', 'destination']) {
-  for (const area of DEMO_AREAS) {
-    const option = document.createElement('option');
-    option.value = area.id;
-    option.textContent = area.name;
-    $(id).append(option);
-  }
-  $(id).addEventListener('change', () => { $('trip-error').textContent = ''; });
-}
-$('pickup').value = 'wuse-ii';
-$('destination').value = 'maitama';
-$('swap-locations').addEventListener('click', () => {
-  [$('pickup').value, $('destination').value] = [$('destination').value, $('pickup').value];
-  $('trip-error').textContent = '';
-});
+$('destination').addEventListener('input', () => { $('trip-error').textContent = ''; });
+$('pickup').value = currentPickupId;
 
 $('trip-form').addEventListener('submit', (event) => {
   event.preventDefault();
   if (!categories.selected().ridePreview) return;
   try {
-    const quote = createDemoQuote($('pickup').value, $('destination').value);
+    const destination = $('destination').value.trim().replace(/\s+/g, ' ');
+    if (destination.length < 3) throw new Error('Enter where you are going.');
+    const quote = createDemoQuote($('pickup').value, previewDestinationId);
+    $('destination').value = destination;
     quote.suggestedFareKobo = categoryFare(quote.suggestedFareKobo, categories.selected().id);
     negotiation = new FareNegotiation({
       id: crypto.randomUUID(), customerId: actorIds.customer, driverId: actorIds.driver,
       suggestedFareKobo: quote.suggestedFareKobo,
     });
     role = 'customer';
-    $('summary-pickup').textContent = quote.pickup.name;
-    $('summary-destination').textContent = quote.destination.name;
+    $('summary-pickup').textContent = 'Current location';
+    $('summary-destination').textContent = destination;
     $('suggested-fare').textContent = formatNaira(quote.suggestedFareKobo);
     $('fare-amount').value = String(quote.suggestedFareKobo / 100);
     $('trip-error').textContent = '';

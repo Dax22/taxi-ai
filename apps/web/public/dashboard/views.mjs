@@ -1,7 +1,7 @@
 import { categoryFare, deliveryDetails, transportCategory } from '/shared/transport-categories.mjs';
 import { vehicleCategory } from '/shared/vehicle-categories.mjs';
 import { DRIVER_APPLICATION_LABELS } from '/shared/driver-onboarding.mjs';
-import { DEMO_AREAS, createDemoQuote, formatNaira, nairaToKobo } from '/shared/demo-booking.mjs';
+import { DEMO_AREAS, matchSampleArea, createDemoQuote, formatNaira, nairaToKobo } from '/shared/demo-booking.mjs';
 import { $, element } from './dom.mjs';
 import { renderChatReports } from './chat-reports-view.mjs';
 import { RIDE_STATUS_LABELS as statuses, isActiveRide } from '/shared/trip-lifecycle.mjs';
@@ -229,19 +229,24 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
     }
   }
 
-  for (const id of ['request-pickup', 'request-destination']) {
-    for (const area of DEMO_AREAS) {
-      const option = element('option', area.name);
-      option.value = area.id;
-      $(id).append(option);
-    }
-    $(id).addEventListener('change', updateQuote);
+  const currentPickupId = 'wuse-ii';
+  $('request-pickup').value = currentPickupId;
+  for (const area of DEMO_AREAS) {
+    if (area.id === currentPickupId) continue;
+    const option = element('option', area.name);
+    option.value = area.name;
+    $('request-destination-areas').append(option);
   }
-  $('request-pickup').value = 'wuse-ii';
-  $('request-destination').value = 'maitama';
+  $('request-destination').addEventListener('input', updateQuote);
+  const selectedSampleDestination = () => {
+    const area = matchSampleArea(DEMO_AREAS, $('request-destination').value);
+    return area?.id !== currentPickupId ? area : null;
+  };
   function updateQuote() {
-    try { $('request-quote').textContent = formatNaira(categoryFare(createDemoQuote($('request-pickup').value, $('request-destination').value).suggestedFareKobo, categories.selected().id)); }
-    catch { $('request-quote').textContent = 'Choose different areas'; }
+    const destination = selectedSampleDestination();
+    $('request-quote').textContent = destination
+      ? formatNaira(categoryFare(createDemoQuote(currentPickupId, destination.id).suggestedFareKobo, categories.selected().id))
+      : 'Type a suggested area';
   }
   function requestOptions() {
     const vehicleCategory = categories.selected().id;
@@ -256,7 +261,10 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
     if (busy || state.user?.role !== 'customer' || !categories.selected().ridePreview) return;
     let options;
     try { options = requestOptions(); } catch (error) { $('page-error').textContent = error.message; return; }
-    const data = { pickupId: $('request-pickup').value, destinationId: $('request-destination').value, ...options };
+    const destination = selectedSampleDestination();
+    if (!destination) { $('page-error').textContent = 'Type a destination from the suggested Abuja areas.'; $('request-destination').focus(); return; }
+    $('request-destination').value = destination.name;
+    const data = { pickupId: $('request-pickup').value, destinationId: destination.id, ...options };
     onCommand('/api/rides', data, 'Your test request is saved. Looking for online drivers in the same sample area.');
   });
   $('live-offer-form').addEventListener('submit', (event) => {
@@ -290,7 +298,7 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
       for (const id of ['detail-title', 'detail-person', 'detail-reference', 'detail-status', 'fare-value', 'fare-label',
         'fare-guidance', 'fare-expiry', 'driver-vehicle', 'driver-status', 'driver-guidance', 'account-identity', 'matching-status']) $(id).textContent = '';
       $('live-offer-amount').value = ''; $('accept-fare').onclick = null;
-      $('request-pickup').value = 'wuse-ii'; $('request-destination').value = 'maitama'; updateQuote();
+      $('request-pickup').value = currentPickupId; $('request-destination').value = ''; updateQuote();
       $('live-offer-history').replaceChildren(); $('available-list').replaceChildren(); $('driver-applications').replaceChildren();
       $('chat-reports-list').replaceChildren();
       $('ride-list').replaceChildren(); $('history-list').replaceChildren(); tripView.reset();

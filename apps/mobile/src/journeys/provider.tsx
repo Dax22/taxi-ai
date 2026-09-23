@@ -1,7 +1,7 @@
 import { SafetyController } from '../safety/controller';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { PropsWithChildren } from 'react';
-import { Alert, AppState } from 'react-native';
+import { AppState } from 'react-native';
 import { randomUUID } from 'expo-crypto';
 import { useFocusEffect } from 'expo-router';
 import { useSession } from '../session/provider';
@@ -13,7 +13,7 @@ import { listenForPush } from '../notifications/push';
 interface Operations { safety(id:string):SafetyController; work:WorkController; journey(id:string):JourneyController; updates:Notifications|null; refreshUpdates():Promise<void>; pushId:number|null; dismissPush():void }
 const Context=createContext<Operations|null>(null);
 export function OperationsProvider({children}:PropsWithChildren){
-  const {client,user,blocked,registerModeGuard}=useSession();
+  const {client,user,role,blocked}=useSession();
   const work=useMemo(()=>new WorkController(client,randomUUID,currentPosition),[client]);
   const safetyControllers=useRef(new Map<string,SafetyController>());
   const controllers=useRef(new Map<string,JourneyController>()),[updates,setUpdates]=useState<Notifications|null>(null),[pushId,setPushId]=useState<number|null>(null);
@@ -24,25 +24,14 @@ export function OperationsProvider({children}:PropsWithChildren){
     try{const result=await client.notifications();if(generation===updateGeneration.current)setUpdates(result);}catch{if(generation===updateGeneration.current)setUpdates(null);}finally{updatesBusy.current=false;}
   },[client,blocked]);
   useEffect(()=>{
-    if(blocked||!user)return;
-    if(user.driver&&AppState.currentState==='active')work.activate();
+    if(blocked||!user||!role)return;
+    if(role==='driver'&&user.driver&&AppState.currentState==='active')work.activate();
     void refreshUpdates();
-    const poll=setInterval(()=>{if(user.driver){void work.heartbeat().then(()=>work.refresh());}void refreshUpdates();},10_000);
+    const poll=setInterval(()=>{if(role==='driver'&&user.driver){void work.heartbeat().then(()=>work.refresh());}void refreshUpdates();},10_000);
     const tick=setInterval(()=>work.tick(),1000);
-    const state=AppState.addEventListener('change',(next)=>{if(next!=='active'){work.pause();updateGeneration.current++;}else{if(user.driver)work.activate();void refreshUpdates();}});
+    const state=AppState.addEventListener('change',(next)=>{if(next!=='active'){work.pause();updateGeneration.current++;}else{if(role==='driver'&&user.driver)work.activate();void refreshUpdates();}});
     return()=>{work.pause();updateGeneration.current++;clearInterval(poll);clearInterval(tick);state.remove();};
-  },[user?.id,Boolean(user?.driver),blocked,work,refreshUpdates]);
-  useEffect(()=>registerModeGuard(async(next)=>{
-    if(next!=='customer'||!client.account()?.driver)return true;
-    if(work.snapshot().busy||work.snapshot().uncertain){Alert.alert('Check your work status','Finish or retry the pending work action before switching to Customer.');return false;}
-    await work.refresh();const state=work.snapshot();
-    if(state.stale){Alert.alert('Reconnect before switching','Refresh Work to check your availability.');return false;}
-    if(!state.availability?.online)return true;
-    const agreed=await new Promise<boolean>((resolve)=>Alert.alert('Go offline?','Switching to Customer stops new work requests for your account.',[
-      {text:'Stay in Work',style:'cancel',onPress:()=>resolve(false)},{text:'Go offline',onPress:()=>resolve(true)}],{cancelable:false}));
-    if(!agreed)return false;
-    const offline=await work.offline();if(!offline)Alert.alert('Offline status unconfirmed','Return to Work and retry the pending action.');return offline;
-  }),[client,work,registerModeGuard]);
+  },[user?.id,Boolean(user?.driver),role,blocked,work,refreshUpdates]);
   useEffect(()=>{if(user)return listenForPush(setPushId,()=>void refreshUpdates());},[user?.id,refreshUpdates]);
   // Disposal is deferred across Strict Mode's effect replay; account-key changes destroy private controllers.
   const alive=useRef(false);

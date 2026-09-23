@@ -16,7 +16,8 @@ async function withServer(run, mode = 'local', maps = 'community') {
 test('the local site serves HTML, modules and artwork with correct content types', async () => {
   await withServer(async (base) => {
     for (const [path, type] of [['/', 'text/html'], ['/app', 'text/html'],
-      ['/eats', 'text/html'], ['/eats.css', 'text/css'], ['/typography.css', 'text/css'], ['/eats.mjs', 'text/javascript'],
+      ['/eats', 'text/html'], ['/eats/sell', 'text/html'], ['/eats.css', 'text/css'], ['/typography.css', 'text/css'],
+      ['/assets/fonts/manrope-latin-wght-normal.woff2', 'font/woff2'], ['/assets/fonts/manrope-latin-ext-wght-normal.woff2', 'font/woff2'], ['/eats.mjs', 'text/javascript'],
       ['/eats/view.mjs', 'text/javascript'], ['/eats/transport.mjs', 'text/javascript'],
       ...['eats', 'eats-controller', 'eats-contracts'].map((name) => [`/shared/${name}.mjs`, 'text/javascript']),
       ['/trip-share', 'text/html'], ['/trip-share.mjs', 'text/javascript'], ['/shared/safety.mjs', 'text/javascript'],
@@ -34,7 +35,7 @@ test('the local site serves HTML, modules and artwork with correct content types
       ['/dashboard/call-controller.mjs', 'text/javascript'], ['/dashboard/call-media.mjs', 'text/javascript'],
       ['/dashboard/call-view.mjs', 'text/javascript'], ['/shared/call-lifecycle.mjs', 'text/javascript'],
       ...['map-view', 'location-planner', 'location-view', 'location-sharing', 'geolocation', 'availability-controller', 'availability-view', 'payments-controller', 'payments-view'].map((name) => [`/dashboard/${name}.mjs`, 'text/javascript']),
-      ['/shared/payments.mjs', 'text/javascript'],
+      ['/shared/payments.mjs', 'text/javascript'], ['/shared/kemmy.mjs', 'text/javascript'],
       ['/shared/locations.mjs', 'text/javascript'], ['/shared/matching.mjs', 'text/javascript'],
       ['/dashboard/conversation-model.mjs', 'text/javascript'],
       ['/dashboard/conversation-controller.mjs', 'text/javascript'],
@@ -45,7 +46,7 @@ test('the local site serves HTML, modules and artwork with correct content types
       ['/assets/city-route-hero-small.webp', 'image/webp'],
       ['/assets/autonomous-concept.webp', 'image/webp'],
       ['/assets/autonomous-concept-small.webp', 'image/webp'], ['/favicon.svg?v=amber', 'image/svg+xml'],
-      ['/assets/taxi-ai-mark.svg', 'image/svg+xml']]) {
+      ['/assets/taxi-ai-mark.svg', 'image/svg+xml'], ['/assets/kemmy-avatar.png', 'image/png']]) {
       const response = await fetch(base + path);
       assert.equal(response.status, 200, path);
       assert.ok(response.headers.get('content-type').startsWith(type), path);

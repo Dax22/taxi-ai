@@ -8,6 +8,7 @@ function imports(source) {
   return source.replaceAll("'/shared/locations.mjs'", `'${new URL('../../../packages/shared/src/locations.mjs', import.meta.url)}'`)
     .replaceAll("'/shared/vehicle-profile.mjs'", `'${new URL('../../../packages/shared/src/vehicle-profile.mjs', import.meta.url)}'`)
     .replaceAll("'/shared/demo-booking.mjs'", `'${new URL('../../../packages/shared/src/demo-booking.mjs', import.meta.url)}'`)
+    .replaceAll("'/shared/kemmy.mjs'", `'${new URL('../../../packages/shared/src/kemmy.mjs', import.meta.url)}'`)
     .replaceAll("'./dom.mjs'", `'${new URL('../public/dashboard/dom.mjs', import.meta.url)}'`);
 }
 const mapSource = uri(imports(await readFile(new URL('../public/dashboard/map-view.mjs', import.meta.url), 'utf8')));
@@ -32,9 +33,11 @@ class NodeFixture {
 function setup(t) {
   const previous = globalThis.document, nodes = new Map();
   const node = (id) => { assert.ok(ids.has(id), `Dashboard HTML must contain #${id}`); if (!nodes.has(id)) nodes.set(id, new NodeFixture()); return nodes.get(id); };
-  globalThis.document = { getElementById: node, createElement: (tag) => new NodeFixture(tag), createElementNS: (_, tag) => new NodeFixture(tag) };
+  const stars = [1,2,3,4,5].map((value) => { const item = new NodeFixture('button'); item.dataset.kemmyStars = String(value); return item; });
+  globalThis.document = { getElementById: node, createElement: (tag) => new NodeFixture(tag), createElementNS: (_, tag) => new NodeFixture(tag),
+    querySelectorAll: (selector) => selector === '[data-kemmy-stars]' ? stars : [] };
   t.after(() => { globalThis.document = previous; });
-  return { node };
+  return { node, stars };
 }
 const descendants = (node) => [node, ...node.children.flatMap(descendants)];
 const tiles = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
@@ -64,10 +67,10 @@ test('map opt-in gates all external tiles; re-renders preserve caching and late 
 });
 
 function locationSetup(t) {
-  const { node } = setup(t), actions = [];
-  const view = createLocationView(Object.fromEntries(['Enable', 'Search', 'Clear', 'Select', 'Pick', 'Target', 'Preview', 'Book', 'Start', 'Stop']
+  const { node, stars } = setup(t), actions = [];
+  const view = createLocationView(Object.fromEntries(['Enable', 'UsePickup', 'Search', 'Clear', 'Select', 'Pick', 'Target', 'Preview', 'Book', 'Start', 'Stop', 'Rate']
     .map((name) => [`on${name}`, (...args) => actions.push([name, ...args])])));
-  return { node, actions, view };
+  return { node, stars, actions, view };
 }
 const pickup = { lat: 9.08, lng: 7.4, name: '<img src=x onerror=alert(1)>' }, destination = { lat: 9.1, lng: 7.45, name: 'Destination' };
 const settings = { enabled: true, tiles, searchHost: 'search.test', routeHost: 'route.test', tileHost: 'tiles.test' };
@@ -75,23 +78,25 @@ const settings = { enabled: true, tiles, searchHost: 'search.test', routeHost: '
 test('planner binds actual HTML controls, renders plain-text places and prevents expired or conflicting bookings', (t) => {
   const { node, actions, view } = locationSetup(t);
   const state = { user: { role: 'customer' }, online: true, settings, searching: { pickup: false, destination: false },
-    results: { pickup: [pickup], destination: [] }, pickup, destination, target: 'pickup', error: '',
-    blocked: false, booking: false, quoting: false, expired: false, quote: { id: 'quote', route: {
+    results: { pickup: [], destination: [destination] }, pickup, destination, target: 'destination', error: '',
+    blocked: false, booking: false, locatingPickup: false, supported: true, quoting: false, expired: false, quote: { id: 'quote', route: {
       distanceMeters: 7000, durationSeconds: 1200, suggestedFareKobo: 250000, coordinates: [[7.4, 9.08], [7.45, 9.1]],
       pricing: { baseKobo: 50000, perKmKobo: 20000, perMinuteKobo: 3000, minimumKobo: 100000, incrementKobo: 5000 },
     } } };
   view.renderPlanner(state);
   assert.equal(node('location-distance').textContent, '7.0 km'); assert.equal(node('location-duration').textContent, '20 min');
   assert.equal(node('location-book').disabled, false);
-  const result = node('location-pickup-results').children[0].children[0];
-  assert.equal(result.textContent, pickup.name); result.fire('click'); assert.deepEqual(actions.pop(), ['Select', 'pickup', pickup]);
-  node('location-pickup-query').value = 'Wuse'; node('location-pickup-form').fire('submit');
-  assert.deepEqual(actions.pop(), ['Search', 'pickup', 'Wuse']);
+  assert.match(node('location-pickup-selected').textContent, /<img src=x/);
+  node('location-pickup-current').fire('click'); assert.equal(actions.pop()[0], 'UsePickup');
+  const result = node('location-destination-results').children[0].children[0];
+  assert.equal(result.textContent, destination.name); result.fire('click'); assert.deepEqual(actions.pop(), ['Select', 'destination', destination]);
+  node('location-destination-query').value = 'Maitama'; node('location-destination-form').fire('submit');
+  assert.deepEqual(actions.pop(), ['Search', 'destination', 'Maitama']);
   node('location-latitude').value = '9.08'; node('location-longitude').value = '7.4'; node('location-pin-name').value = ' Test pin ';
   node('location-coordinate-form').fire('submit'); assert.deepEqual(actions.pop(), ['Pick', { lat: 9.08, lng: 7.4, name: 'Test pin' }]);
   view.renderPlanner({ ...state, expired: true }); assert.equal(node('location-book').disabled, true); assert.match(node('location-expiry').textContent, /expired/);
   view.renderPlanner({ ...state, blocked: true }); assert.equal(node('location-preview').disabled, true); assert.equal(node('location-book').disabled, true);
-  view.resetPlanner(); assert.equal(node('location-pickup-query').value, ''); assert.equal(node('location-pickup-results').children.length, 0);
+  view.resetPlanner(); assert.equal(node('location-pickup-selected').textContent, ''); assert.equal(node('location-destination-query').value, ''); assert.equal(node('location-destination-results').children.length, 0);
   assert.equal(descendants(node('planner-map')).filter((n) => n.tag === 'image').length, 0);
 });
 
@@ -123,4 +128,24 @@ test('the driver marker uses the trip vehicle colour only with a reported positi
   assert.equal(cars()[0].attributes.opacity,'.55');
   assert.ok(descendants(root).some((n) => n.tag === 'g' && n.attributes.class === 'map-marker map-marker-stale'));
   map.render({ enabled:false,tiles,vehicle,driver:ABUJA_CENTER }); assert.equal(cars().length,0);
+});
+
+test('Kemmy uses the map ETA, prompts after arrival and submits one completed ride rating', (t) => {
+  const { node, stars, actions, view } = locationSetup(t);
+  const ride = { id: 'ride', status: 'on_way', service: 'ride', pickup, destination,
+    driver: { name: 'James', vehicle: { make: 'Toyota', model: 'Camry', colour: 'Black' } },
+    route: { pickup, destination, distanceMeters: 7000, durationSeconds: 2400, coordinates: [[7.4,9.08],[7.45,9.1]] }, trip: { startedAt: 100000 }, rating: null };
+  const state = { user: { role: 'customer' }, ride, supported: true, now: 100000, error: '', pending: false,
+    share: { active: true, stale: false, position: { ...pickup, accuracy: 10, capturedAt: 99000 } } };
+  view.renderTracking(state);
+  assert.match(node('kemmy-message').textContent, /James.*Black Toyota Camry/);
+  assert.match(node('tracking-eta').textContent, /Estimated pickup: about 1 min/);
+  view.renderTracking({ ...state, ride: { ...ride, status: 'arrived' } });
+  assert.match(node('kemmy-message').textContent, /approximately 40 min/);
+  view.renderTracking({ ...state, ride: { ...ride, status: 'completed' } });
+  assert.equal(node('kemmy-rating').hidden, false);
+  stars[4].fire('click'); node('kemmy-rate').fire('click');
+  assert.deepEqual(actions.at(-1), ['Rate', ride.id, 5]);
+  view.renderTracking({ ...state, ride: { ...ride, status: 'completed', rating: 5 } });
+  assert.equal(node('kemmy-rating').hidden, true);
 });

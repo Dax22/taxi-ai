@@ -10,9 +10,10 @@
   .hero-intro { padding: 34px 0 0; text-align: center; position: relative; z-index: 1; }
   .hero-intro .eyebrow { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 22px; color: #545952; }
   .hero-intro .tiny-dot { background: var(--brand); }
-  .hero h1 { font-size: clamp(48px, 5vw, 72px); line-height: 1.05; letter-spacing: -.065em; font-weight: 500; }
+  .hero h1 { max-width: 900px; margin-inline: auto; font-size: clamp(52px, 5.6vw, 82px); line-height: .99; letter-spacing: -.058em; font-weight: 800; text-wrap: balance; }
   .hero h1 span { color: var(--ink); }
-  .hero-description { margin-top: 20px; color: #5c625b; font-size: 16px; line-height: 1.65; }
+  .hero h1 strong { font: inherit; background: linear-gradient(transparent 72%, var(--brand) 72% 91%, transparent 91%); }
+  .hero-description { max-width: 720px; margin: 24px auto 0; color: #555d56; font-size: 17px; line-height: 1.65; font-weight: 500; text-wrap: balance; }
   .hero-actions { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 22px 30px; margin-top: 22px; }
   .hero-actions .button-dark { background: #202225; color: white; border: 1px solid #35383a; border-radius: 999px; padding: 17px 25px; min-height: 54px; box-shadow: 0 7px 15px #20222516, inset 0 -3px 0 #0005; }
   .hero-actions .button-dark:hover { background: #363a3c; }
@@ -36,11 +37,13 @@
   .booking-card .card-heading h2 { font-size: 27px; }
   .booking-card .card-heading p { margin-top: 0; }
   #trip-form { display: grid; grid-template-columns: minmax(0, 1fr) 210px; gap: 12px 18px; align-items: stretch; margin-top: 20px; }
-  #trip-form .location-fields { grid-column: 1; grid-row: 1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin: 0; }
+  #trip-form .location-fields { grid-column: 1; grid-row: 1; display: grid; grid-template-columns: minmax(0, 1fr); margin: 0; }
   #trip-form .field { min-width: 0; padding: 12px 34px; border: 1px solid #e7eae4; background: #f7f8f5; border-radius: 9px; }
   #trip-form .field:focus-within { border-color: var(--brand-strong); }
   #trip-form .field:last-child { margin-top: 0; }
   #trip-form .field select { min-width: 0; height: 24px; font-size: 14px; }
+  #trip-form .field input[type="text"] { min-height: 30px; font-size: 16px; font-weight: 600; letter-spacing: -.015em; }
+  #trip-form .field input[type="text"]::placeholder { font-weight: 500; }
   #trip-form .route-dot, #trip-form .route-square { top: 29px; }
   #trip-form .swap-button { top: 50%; left: 50%; right: auto; transform: translate(-50%, -50%); width: 34px; height: 34px; }
   #trip-form > .button { grid-column: 2; grid-row: 1; border-radius: 10px; }
@@ -76,7 +79,7 @@
   @media (max-width: 800px) {
     .landing-page .site-header { height: 80px; }
     .hero-intro { padding: 38px 0 14px; }
-    .hero h1 { font-size: clamp(45px, 7.8vw, 63px); }
+    .hero h1 { font-size: clamp(45px, 7.8vw, 66px); }
     .hero-description { font-size: 14px; margin-top: 20px; }
     .hero-intro .eyebrow { font-size: 8px; margin-bottom: 20px; }
     .journey-peek { display: none; }
@@ -96,8 +99,8 @@
   @media (max-width: 580px) {
     .landing-page .site-header { height: 73px; }
     .hero-intro { padding: 32px 0 8px; }
-    .hero h1 { font-size: clamp(32px, 8.5vw, 47px); line-height: 1.1; letter-spacing: -.06em; }
-    .hero-description { font-size: 13px; max-width: 310px; margin-inline: auto; }
+    .hero h1 { font-size: clamp(38px, 10vw, 50px); line-height: 1.04; letter-spacing: -.052em; }
+    .hero-description { font-size: 14px; max-width: 350px; margin-inline: auto; }
     .hero-actions { gap: 14px 20px; margin-top: 22px; }
     .hero-actions .button-dark { padding: 15px 23px; min-height: 50px; }
     .hero-actions .text-link { font-size: 11px; gap: 10px; }
@@ -109,7 +112,6 @@
     .booking-card .card-heading h2 { font-size: 25px; }
     .booking-card .card-heading p { margin-top: 8px; }
     .booking-card .service-tabs { margin-bottom: 20px; }
-    #trip-form .location-fields { grid-template-columns: minmax(0, 1fr); gap: 10px; }
     #trip-form .swap-button { left: auto; right: 10px; transform: translateY(-50%); }
     #trip-form .field { padding-right: 45px; }
     .booking-card .preview-label { margin-inline: -18px; font-size: 7px; border-radius: 0 0 15px 15px; }

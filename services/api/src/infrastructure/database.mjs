@@ -7,6 +7,8 @@ export const DEFAULT_DATABASE = fileURLToPath(new URL('../../../../data/taxi-ai.
 const migrations = ['001_initial.sql', '002_chat.sql', '003_trip_lifecycle.sql', '004_voice_calls.sql', '005_locations.sql', '006_matching.sql', '007_payments.sql', '008_driver_onboarding.sql', '009_trip_safety.sql', '010_account_capabilities.sql', '011_device_sessions.sql', '012_vehicle_selections.sql', '013_admin_reporting_indexes.sql', '014_google_identity.sql', '015_account_email.sql', '016_transport_categories.sql', '017_mobile_work_notifications.sql'];
 migrations.push('018_vehicle_photo_checks.sql');
 migrations.push('019_eats.sql');
+migrations.push('020_driver_ratings.sql');
+migrations.push('021_eats_menu_photos.sql');
 export const SCHEMA_VERSION = migrations.length;
 
 export function transaction(db, run) {

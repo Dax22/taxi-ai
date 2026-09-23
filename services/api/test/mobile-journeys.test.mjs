@@ -59,6 +59,11 @@ test('native passenger and delivery journeys complete across all vehicle categor
     assert.equal(r.delivery?.dropoffPin,undefined);
     r=await act(d,r,'complete',policy.service==='delivery'?{deliveryPin:sender.delivery.dropoffPin}:{});
     assert.equal(r.status,'completed');assert.equal(parseWork(ok(await d.work())).current.length,0);assert.equal(r.delivery?.dropoffPin,undefined);
+    if(policy.service==='ride'){
+      const rated=parseJourney(ok(await c.send(`/journeys/${r.id}/rating`,{stars:5}))).ride;
+      assert.equal(rated.rating,5);
+      assert.equal(parseJourney(ok(await c.send(`/journeys/${r.id}`))).ride.rating,5);
+    }
     const finalChat=parseThread(ok(await c.send(`/journeys/${r.id}/chat`)));assert.equal(finalChat.canSend,false);
     assert.equal(ok(await c.send('/activity?mode=customer')).history.some((j)=>j.id===r.id),true);
     assert.equal(ok(await customer.send(`/api/rides/${r.id}`)).ride.status,'completed');

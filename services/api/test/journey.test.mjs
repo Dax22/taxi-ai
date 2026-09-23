@@ -108,6 +108,14 @@ test('full customer/driver/admin journey: approval, matching, chat, fare, PIN, r
   ride = await step(driver, ride, 'start', { pickupPin: pin });
   assert.equal((await customer.api.request(`/api/payments/rides/${ride.id}`)).payment, null);
   ride = await step(driver, ride, 'complete');
+  const ratingPath = `/api/rides/${ride.id}/rating`;
+  await assert.rejects(driver.api.rideCommand(ratingPath, { stars: 5 }));
+  assert.equal((await customer.api.rideCommand(ratingPath, { stars: 5 })).ride.rating, 5);
+  assert.equal((await customer.api.rideCommand(ratingPath, { stars: 5 })).ride.rating, 5, 'same rating is safe to retry');
+  await assert.rejects(customer.api.rideCommand(ratingPath, { stars: 4 }));
+  await assert.rejects(customer.api.rideCommand(ratingPath, { stars: 6 }));
+  await assert.rejects(outsider.api.rideCommand(ratingPath, { stars: 5 }));
+  assert.equal((await customer.api.request(`/api/rides/${ride.id}`)).ride.rating, 5);
   assert.equal((await customer.api.request(`/api/rides/${ride.id}/location`)).share, null);
   assert.equal((await customer.api.request('/api/calls', { callClient })).active, null);
   assert.equal((await customer.api.request(chatPath)).canSend, false);
@@ -163,5 +171,6 @@ test('full customer/driver/admin journey: approval, matching, chat, fare, PIN, r
   await customer.api.request('/api/auth/logout', { method: 'POST' }); customer.api.reset();
   await assert.rejects(customer.api.request(payPath + '/receipt'), { status: 401 });
   await customer.login(); assert.deepEqual((await customer.api.request(payPath + '/receipt')).receipt, receipt);
+  await h.restart(); assert.equal((await customer.api.request(`/api/rides/${ride.id}`)).ride.rating, 5);
   t.diagnostic('Cancellation, a fresh request, logout protection and receipt recovery passed.');
 });

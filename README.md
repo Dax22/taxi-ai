@@ -35,7 +35,7 @@ is not connected. Use fictional details and documents.
 - One personal login, Customer/Work mode switching and optional driver enrollment.
 - Taxi Ai Eats on web/mobile: restaurant menus, single-store carts, itemized test checkout,
   order history, My store and courier handover codes. [Try a food order](docs/eats.md).
-- One native system-font policy across app text, inputs, navigation, web and admin.
+- Self-hosted Manrope typography across app text, inputs, navigation, web and admin.
 - Native sign-in, Home/Activity/Work/Updates/Account navigation and device revocation.
 - Native driver availability, job claiming, fare consent, chat, pickup/drop-off verification
   and a durable updates inbox, with optional Expo phone alerts. See [native journeys](docs/mobile-journeys.md).
@@ -306,7 +306,7 @@ The terminal example runs with `npm run demo`. Read [the architecture](docs/arch
 ## Development and review
 
 The latest development branch is `feat/eats-ordering`. Version 0.24.0 / mobile
-0.8.0 adds Taxi Ai Eats and a shared system-font policy across app surfaces.
+0.8.0 adds Taxi Ai Eats and shared Manrope typography across app surfaces.
 Schema 19 preserves existing records and adds stores, menus, reviews, checkout
 quotes, food orders and retry records. See [Eats setup and acceptance](docs/eats.md)
 and [mobile setup](apps/mobile/README.md). Back up the database before changing

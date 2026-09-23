@@ -1,9 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
+import sharp from 'sharp';
 import { harness, participants, PASSWORD, requestRide } from './helpers.mjs';
 import { removeEatsFixtureTables } from './migration-fixtures.mjs';
 import { SCHEMA_VERSION } from '../src/infrastructure/database.mjs';
+import { readEatsResponse } from '../../../packages/shared/src/eats-contracts.mjs';
 
 const details = { name: 'Test Abuja Kitchen', cuisine: 'Nigerian', description: 'Fictional kitchen for ordering tests.', address: '10 Fictional Road, Wuse II', areaId: 'wuse-ii', prepMinutes: 25, minimumKobo: 100_000, deliveryFeeKobo: 150_000 };
 const item = { name: 'Jollof rice and chicken', description: 'Rice, tomato, peppers and grilled chicken. Test menu.', category: 'Meals', priceKobo: 250_000, available: true };
@@ -59,6 +61,76 @@ test('restaurant membership, manual approval and open state control menu publish
   await ok(f.seller, `/api/eats/stores/${f.store.id}/save`, { expectedVersion: f.store.version, details: { ...details, address: '20 Fictional Road, Wuse II' } });
   assert.equal((await ok(f.seller, '/api/eats/store')).store.status, 'pending');
   assert.deepEqual((await ok(f.customer, '/api/eats/restaurants')).restaurants, []);
+});
+
+test('private kitchen search and customer orders show only town; assigned courier gets pickup address', async (t) => {
+  const f = await fixture(t);
+  ({ store: f.store } = await ok(f.seller, `/api/eats/stores/${f.store.id}/save`, { expectedVersion: f.store.version,
+    details: { ...details, sellerType: 'private_kitchen' } }));
+  await f.open();
+  const catalog = await ok(f.customer, '/api/eats/restaurants?q=jollof');
+  assert.equal(catalog.restaurants.length, 1);
+  assert.equal(catalog.dishes.length, 1);
+  assert.equal(catalog.restaurants[0].town, 'Wuse II');
+  assert.equal(catalog.restaurants[0].address, undefined);
+  assert.equal(catalog.dishes[0].seller.address, undefined);
+  assert.equal((await ok(f.customer, `/api/eats/restaurants/${f.store.id}`)).store.address, undefined);
+  readEatsResponse(catalog);
+  const ownerView = readEatsResponse(await ok(f.seller, '/api/eats/store'));
+  assert.equal(ownerView.store.address, details.address);
+  readEatsResponse(await ok(f.admin, '/api/eats/admin/stores'));
+  const quote = await f.quote();
+  assert.equal(quote.restaurant.address, undefined);
+  assert.equal(quote.restaurant.town, 'Wuse II');
+  const ready = await f.ready();
+  assert.equal(ready.restaurant.address, details.address);
+  assert.equal((await ok(f.customer, `/api/eats/orders/${ready.id}`)).order.restaurant.address, undefined);
+  const available = (await ok(f.driver, '/api/eats/work')).available.find((job) => job.id === ready.id);
+  assert.ok(available);
+  assert.equal(available.restaurant.address, undefined);
+  const claimed = (await ok(f.driver, `/api/eats/orders/${ready.id}/claim`, { expectedVersion: ready.version })).order;
+  assert.equal(claimed.restaurant.address, details.address);
+});
+
+test('seller dish photos are re-encoded, owner-scoped, published after review, replaceable and removable on web and native', async (t) => {
+  const f = await fixture(t, { persistent: true });
+  f.h.db.exec('DROP TABLE eats_menu_photos; PRAGMA user_version=20;');
+  await f.h.restart();
+  assert.equal((await ok(f.seller, '/api/eats/store')).menu[0].id, f.menu[0].id);
+  const original = await sharp({ create: { width: 420, height: 320, channels: 3, background: '#b84b29' } }).png().toBuffer();
+  const image = { mimeType: 'image/png', base64: original.toString('base64') };
+  const path = `/api/eats/stores/${f.store.id}/photo`, itemId = f.menu[0].id;
+  const data = { expectedVersion: f.store.version, itemId, image }, key = randomUUID();
+  assert.equal((await f.stranger.post(path, data)).status, 403);
+  assert.equal((await f.seller.post(path, { ...data, image: { ...image, mimeType: 'image/jpeg' } })).status, 400);
+  let saved = await f.seller.post(path, data, key); assert.equal(saved.status, 200, JSON.stringify(saved.body));
+  assert.equal(saved.body.menu[0].photoVersion, saved.body.store.version);
+  assert.equal(JSON.stringify(saved.body).includes(image.base64), false);
+  readEatsResponse(saved.body); f.store = saved.body.store;
+  const replay = await f.seller.post(path, data, key); assert.equal(replay.status, 200); assert.equal(replay.body.replayed, true);
+  assert.equal((await f.seller.post(path, data)).body.error.code, 'STALE_VERSION');
+  const imageUrl = `/api/eats/images/${itemId}?v=${f.store.version}`;
+  const ownerImage = await fetch(f.h.base + imageUrl, { headers: { Cookie: f.seller.cookie } });
+  assert.equal(ownerImage.status, 200); assert.equal(ownerImage.headers.get('content-type'), 'image/jpeg');
+  const bytes = Buffer.from(await ownerImage.arrayBuffer()), metadata = await sharp(bytes).metadata();
+  assert.equal(metadata.format, 'jpeg'); assert.equal(metadata.exif, undefined);
+  assert.equal((await fetch(f.h.base + imageUrl, { headers: { Cookie: f.customer.cookie } })).status, 404);
+  await f.open();
+  assert.equal((await fetch(f.h.base + imageUrl, { headers: { Cookie: f.customer.cookie } })).status, 200);
+  assert.equal((await ok(f.customer, '/api/eats/restaurants?q=jollof')).dishes[0].photoVersion, saved.body.menu[0].photoVersion);
+  await f.h.restart();
+  assert.equal((await fetch(f.h.base + imageUrl, { headers: { Cookie: f.customer.cookie } })).status, 200);
+  const login = await f.seller.send('/api/mobile/v1/auth/login', { method: 'POST', data: { email: f.seller.user.email, password: PASSWORD, deviceName: 'Seller photo phone' }, headers: { Origin: null, Cookie: null, 'X-CSRF-Token': null } });
+  assert.equal(login.status, 200); const token = login.body.credentials.accessToken;
+  const native = (payload) => f.stranger.send(`/api/mobile/v1/eats/stores/${f.store.id}/photo`, { method: 'POST', data: payload,
+    headers: { Origin: null, Cookie: null, 'X-CSRF-Token': null, Authorization: `Bearer ${token}`, 'Idempotency-Key': randomUUID() } });
+  saved = await native({ expectedVersion: f.store.version, itemId, image });
+  assert.equal(saved.status, 200, JSON.stringify(saved.body)); f.store = saved.body.store;
+  const nativeImage = await fetch(f.h.base + `/api/mobile/v1/eats/images/${itemId}`, { headers: { Authorization: `Bearer ${token}` } });
+  assert.equal(nativeImage.status, 200); assert.deepEqual(Buffer.from(await nativeImage.arrayBuffer()), bytes);
+  saved = await native({ expectedVersion: f.store.version, itemId, image: null });
+  assert.equal(saved.status, 200); assert.equal(saved.body.menu[0].photoVersion, null);
+  assert.equal((await fetch(f.h.base + imageUrl, { headers: { Cookie: f.customer.cookie } })).status, 404);
 });
 
 test('kitchen pagination keeps an older unfinished order ahead of completed history without duplicates', async (t) => {

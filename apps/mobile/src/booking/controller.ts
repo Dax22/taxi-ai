@@ -1,4 +1,5 @@
 import { transportCategory, deliveryDetails } from '../../../../packages/shared/src/transport-categories.mjs';
+import { matchSampleArea } from '../../../../packages/shared/src/demo-booking.mjs';
 import type { VehicleCategoryId } from '../../../../packages/shared/src/vehicle-categories.mjs';
 import { isRequestOpen } from '../../../../packages/shared/src/mobile-booking.mjs';
 import type { Booking, BookingPreview, BookingRide, BookingRideResult, Place, RequestData } from '../../../../packages/shared/src/mobile-booking.mjs';
@@ -8,13 +9,14 @@ type Api = Pick<MobileClient, 'booking' | 'bookingRide' | 'searchPlaces' | 'rout
 type Endpoint = 'pickup' | 'destination';
 interface Search { query: string; selected: Place | null; results: Place[]; searching: boolean; searched: boolean; attribution: string }
 type Command = { kind: 'request'; key: string; data: RequestData } | { kind: 'cancel'; key: string; id: string; version: number };
+type LocatePickup = () => Promise<Place>;
 export interface DeliveryDraft { description: string; weightKg: string; recipientName: string; pickupInstructions: string; dropoffInstructions: string }
 const emptyDelivery = (): DeliveryDraft => ({ description: '', weightKg: '', recipientName: '', pickupInstructions: '', dropoffInstructions: '' });
 export interface BookingState {
   category: VehicleCategoryId; delivery: DeliveryDraft;
   settings: Booking | null; mode: 'route' | 'sample' | null; consent: boolean; pickup: Search; destination: Search;
-  pickupId: string; destinationId: string; preview: BookingPreview | null; lastRide: BookingRide | null;
-  loading: boolean; busy: 'preview' | 'request' | 'cancel' | null; uncertain: 'request' | 'cancel' | null;
+  pickupId: string; destinationId: string; sampleDestinationQuery: string; preview: BookingPreview | null; lastRide: BookingRide | null;
+  loading: boolean; locatingPickup: boolean; busy: 'preview' | 'request' | 'cancel' | null; uncertain: 'request' | 'cancel' | null;
   error: string; stale: boolean; now: number;
 }
 const emptySearch = (): Search => ({ query: '', selected: null, results: [], searching: false, searched: false, attribution: '' });
@@ -25,6 +27,7 @@ const code = (e: unknown): { code?: string; status?: number } => typeof e === 'o
 export class BookingController {
   private api: Api;
   private key: () => string;
+  private locatePickup: LocatePickup;
   private clock: () => number;
   private listeners = new Set<() => void>();
   private active = false;
@@ -34,8 +37,11 @@ export class BookingController {
   private command: Command | null = null;
   private anchor = { server: 0, local: 0 };
   private state: BookingState = { category: 'standard', delivery: emptyDelivery(), settings: null, mode: null, consent: false, pickup: emptySearch(), destination: emptySearch(),
-    pickupId: '', destinationId: '', preview: null, lastRide: null, loading: false, busy: null, uncertain: null, error: '', stale: true, now: 0 };
-  constructor(api: Api, key: () => string, clock: () => number = () => performance.now()) { this.api = api; this.key = key; this.clock = clock; }
+    pickupId: '', destinationId: '', sampleDestinationQuery: '', preview: null, lastRide: null, loading: false, locatingPickup: false, busy: null, uncertain: null, error: '', stale: true, now: 0 };
+  constructor(api: Api, key: () => string, clock: () => number = () => performance.now(),
+    locatePickup: LocatePickup = async () => { throw new Error('Current location is unavailable on this device.'); }) {
+    this.api = api; this.key = key; this.clock = clock; this.locatePickup = locatePickup;
+  }
   snapshot = () => this.state;
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
   private patch(value: Partial<BookingState>) { if (this.disposed) return; this.state = { ...this.state, ...value }; for (const fn of this.listeners) fn(); }
@@ -45,7 +51,7 @@ export class BookingController {
   activate() { if (this.disposed) return; this.active = true; void this.refresh(); }
   pause() {
     this.active = false; ++this.reads; ++this.searches.pickup; ++this.searches.destination;
-    this.patch({ stale: true, loading: false, pickup: { ...this.state.pickup, searching: false }, destination: { ...this.state.destination, searching: false } });
+    this.patch({ stale: true, loading: false, locatingPickup: false, pickup: { ...this.state.pickup, searching: false }, destination: { ...this.state.destination, searching: false } });
   }
   dispose() { this.pause(); this.disposed = true; this.listeners.clear(); }
   async refresh() {
@@ -63,7 +69,12 @@ export class BookingController {
       if (!this.active || read !== this.reads) return;
       const mode = this.state.mode === 'route' && settings.online.enabled ? 'route'
         : this.state.mode === 'sample' && settings.allowSample ? 'sample' : settings.online.enabled ? 'route' : settings.allowSample ? 'sample' : null;
+      const areaIds = new Set(settings.areas.map((area) => area.id));
+      const pickupId = areaIds.has(this.state.pickupId) ? this.state.pickupId : settings.areas[0]?.id ?? '';
+      const destinationId = areaIds.has(this.state.destinationId) && this.state.destinationId !== pickupId
+        ? this.state.destinationId : '';
       this.patch({ settings, lastRide, mode, stale: false, now: this.serverTime(settings.serverNow), error: this.command ? this.state.error : '',
+        pickupId, destinationId,
         ...(settings.current.length || settings.blockedBy || mode !== this.state.mode ? { preview: null } : {}) });
     } catch (e) { if (this.active && read === this.reads) this.patch({ stale: true, error: `Could not refresh your request. ${message(e)}` }); }
     finally { if (read === this.reads) this.patch({ loading: false }); }
@@ -94,7 +105,15 @@ export class BookingController {
   }
   sample(endpoint: Endpoint, id: string) {
     if (this.locked()) return;
-    this.patch({ [endpoint === 'pickup' ? 'pickupId' : 'destinationId']: id, preview: null, error: '' });
+    if (endpoint === 'destination') {
+      const area = this.state.settings?.areas.find((item) => item.id === id && item.id !== this.state.pickupId);
+      this.patch({ destinationId: area?.id ?? '', sampleDestinationQuery: area?.name ?? '', preview: null, error: '' });
+    } else this.patch({ pickupId: id, preview: null, error: '' });
+  }
+  editSampleDestination(query: string) {
+    if (this.locked()) return;
+    const area = matchSampleArea(this.state.settings?.areas ?? [], query);
+    this.patch({ sampleDestinationQuery: query, destinationId: area?.id !== this.state.pickupId ? area?.id ?? '' : '', preview: null, error: '' });
   }
   async search(endpoint: Endpoint) {
     if (!this.canPlan() || this.locked() || this.state.mode !== 'route' || !this.state.consent) return;
@@ -106,11 +125,21 @@ export class BookingController {
       if (this.active && read === this.searches[endpoint]) this.patch({ [endpoint]: { ...this.state[endpoint], results: result.places, searching: false, searched: true, attribution: result.attribution } });
     } catch (e) { if (this.active && read === this.searches[endpoint]) this.patch({ error: message(e), [endpoint]: { ...this.state[endpoint], searching: false } }); }
   }
+  async useCurrentPickup() {
+    if (!this.canPlan() || this.locked() || this.state.mode !== 'route' || !this.state.consent || this.state.locatingPickup) return;
+    const read = ++this.searches.pickup;
+    this.patch({ locatingPickup: true, error: '', preview: null, pickup: { ...this.state.pickup, results: [], searching: false, searched: false, attribution: '' } });
+    try {
+      const place = await this.locatePickup();
+      if (this.active && read === this.searches.pickup) this.patch({ pickup: { ...emptySearch(), query: place.name, selected: place }, preview: null });
+    } catch (e) { if (this.active && read === this.searches.pickup) this.patch({ error: message(e) }); }
+    finally { if (read === this.searches.pickup) this.patch({ locatingPickup: false }); }
+  }
   async preview() {
     if (!this.canPlan() || this.locked()) return;
     const { mode, consent, pickup, destination, pickupId, destinationId, category } = this.state;
-    if (mode === 'route' && (!consent || !pickup.selected || !destination.selected)) { this.patch({ error: 'Search and select both addresses before previewing the route.' }); return; }
-    if (mode === 'sample' && (!pickupId || !destinationId || pickupId === destinationId)) { this.patch({ error: 'Choose two different sample areas.' }); return; }
+    if (mode === 'route' && (!consent || !pickup.selected || !destination.selected)) { this.patch({ error: 'Use your current location for pickup and select a destination before previewing the route.' }); return; }
+    if (mode === 'sample' && (!pickupId || !destinationId || pickupId === destinationId)) { this.patch({ error: 'Type a destination from the listed sample Abuja areas, different from your pickup.' }); return; }
     if (!mode) return;
     ++this.reads; this.patch({ busy: 'preview', loading: false, error: '', preview: null });
     try {

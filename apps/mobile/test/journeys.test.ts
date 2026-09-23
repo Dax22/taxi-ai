@@ -14,6 +14,7 @@ function journey(){
   let now=0,key=0,ride=structuredClone(base);
   const calls:Array<{action:string;data:unknown;key:string}>=[],messages:Array<{body:string;key:string}>=[];
   const api:ConstructorParameters<typeof JourneyController>[0]={journey:async()=>({...env,ride:structuredClone(ride)}),thread:async()=>structuredClone(chat),
+    rateDriver:async(_id,stars)=>{ride={...ride,rating:stars};return{...env,ride};},
     journeyCommand:async(_id,action,data,key)=>{calls.push({action,data,key});ride={...ride,version:ride.version+1};return{...env,ride};},
     sendMessage:async(_id,body,key)=>{messages.push({body,key});return{...env,message:{id,sequence:1,body,createdAt:env.serverNow,fromYou:true}};},
     readMessages:async()=>({...env,readThrough:2,unread:0}),reportMessage:async()=>({...env}),};
@@ -21,6 +22,14 @@ function journey(){
   return{c,api,calls,messages,advance:(ms:number)=>{now+=ms;},replace:(next:Journey)=>{ride=next;}};
 }
 async function start(f:ReturnType<typeof journey>){f.c.activate();await settle();}
+
+test('a completed customer can submit one selected driver rating',async()=>{
+  const f=journey();f.replace({...base,status:'completed',canCancel:false,allowedActions:[],rating:null,
+    driver:{name:'James',vehicle:{model:'Toyota Camry',plate:'TEST-123',colour:'Black'}}});
+  await start(f);f.c.chooseRating(5);await f.c.rate();
+  assert.equal(f.c.snapshot().ride?.rating,5);
+  f.c.chooseRating(3);await f.c.rate();assert.equal(f.c.snapshot().ride?.rating,5);
+});
 
 test('acceptance pins exact displayed offer/version and uses server time, even before a timer tick',async()=>{
   const f=journey();await start(f);await f.c.act('accept',f.c.snapshot().ride!);

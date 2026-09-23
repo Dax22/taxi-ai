@@ -1,7 +1,7 @@
 import { cartQuantity } from './eats.mjs';
 import { readEatsResponse } from './eats-contracts.mjs';
-const empty = () => ({ user: null, screen: 'browse', restaurants: [], areas: [], restaurant: null, restaurantId: null, menu: [], cart: [],
-  address: { line: '', areaId: 'wuse-ii' }, instructions: '', quote: null, order: null, orderId: null,
+const empty = () => ({ user: null, screen: 'browse', query: '', restaurants: [], dishes: [], areas: [], restaurant: null, restaurantId: null, menu: [], cart: [],
+  address: { line: '', areaId: 'wuse-ii' }, deliveryConfirmed: false, instructions: '', quote: null, order: null, orderId: null,
   orders: [], nextBefore: null, store: null, storeMenu: [], storeOrders: [], storeNextBefore: null, work: null, reviewStores: [], review: null,
   loading: false, busy: false, uncertain: false, stale: true, error: '', notice: '', replaceRestaurantId: null, now: 0 });
 /** Shared screen state. Requests and credentials stay in each platform's transport. */
@@ -34,8 +34,8 @@ export function createEatsController({ api, makeKey, now = Date.now }) {
       try {
         let result;
         if (screen === 'browse') {
-          const [catalog, restaurant] = await Promise.all([read('/restaurants'), state.restaurantId ? read('/restaurants/' + state.restaurantId) : null]);
-          result = { restaurants: catalog.restaurants, areas: catalog.areas, ...(restaurant ? { restaurant: restaurant.store, menu: restaurant.menu } : {}) };
+          const [catalog, restaurant] = await Promise.all([read('/restaurants?q=' + encodeURIComponent(state.query)), state.restaurantId ? read('/restaurants/' + state.restaurantId) : null]);
+          result = { restaurants: catalog.restaurants, dishes: catalog.dishes ?? [], areas: catalog.areas, ...(restaurant ? { restaurant: restaurant.store, menu: restaurant.menu } : {}) };
           if (restaurant && state.quote && state.restaurant?.version !== restaurant.store.version) result.quote = null;
         } else if (screen === 'orders') { const response = await read('/orders' + (before ? '?before=' + before : '')); result = page(response, state.orders, state.nextBefore, before, quiet); }
         else if (screen === 'store') {
@@ -59,7 +59,7 @@ export function createEatsController({ api, makeKey, now = Date.now }) {
     emit(); await refresh(); return !state.stale;
   }
   async function selectRestaurant(id, replace = false) {
-    if (locked()) return false;
+    if (locked() || !state.deliveryConfirmed) return false;
     if (state.restaurantId !== id && state.cart.length && !replace) { state.replaceRestaurantId = id; emit(); return false; }
     if (state.restaurantId !== id) { state.cart = []; state.quote = null; state.restaurant = null; state.menu = []; state.restaurantId = id; }
     state.replaceRestaurantId = null; return navigate('browse');
@@ -101,14 +101,20 @@ export function createEatsController({ api, makeKey, now = Date.now }) {
     return execute({ path, data: structuredClone(data), key: makeKey(), goToOrder });
   }
   return Object.freeze({ context, navigate, refresh, selectRestaurant,
+    async search(query) { if (locked()) return; state.query = String(query).trim().slice(0, 100); generation++; polling = null; await refresh(); },
     snapshot: () => state, subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
     reset() { context(null); },
     tick() { if (state.quote && now() >= state.quote.expiresAt) { state.quote = null; state.notice = 'Checkout expired. Review the total again before ordering.'; } emit(); },
     retry: () => pending ? execute(pending) : Promise.resolve(false),
     keepRestaurant() { state.replaceRestaurantId = null; emit(); },
     quantity(itemId, quantity) { if (locked()) return; try { state.cart = cartQuantity(state.cart, itemId, quantity); state.quote = null; state.error = ''; } catch (error) { state.error = error.message; } emit(); },
-    delivery(address, instructions) { if (locked()) return; state.address = { ...address }; state.instructions = instructions; state.quote = null; emit(); },
-    checkout() { if (!state.restaurant) return Promise.resolve(false); return run('/quotes', { storeId: state.restaurant.id, expectedVersion: state.restaurant.version, items: state.cart, address: state.address, instructions: state.instructions }); },
+    delivery(address, instructions) { if (locked()) return; if (address.line !== state.address.line || address.areaId !== state.address.areaId) state.deliveryConfirmed = false;
+      state.address = { ...address }; state.instructions = instructions; state.quote = null; emit(); },
+    changeDelivery() { if (locked()) return; state.deliveryConfirmed = false; state.quote = null; emit(); },
+    confirmDelivery() { if (locked()) return false; if (state.address.line.trim().length < 8 || !state.areas.some((area) => area.id === state.address.areaId)) {
+      state.error = 'Enter your delivery address and choose an Abuja area first.'; emit(); return false;
+    } state.deliveryConfirmed = true; state.error = ''; emit(); return true; },
+    checkout() { if (!state.restaurant || !state.deliveryConfirmed) return Promise.resolve(false); return run('/quotes', { storeId: state.restaurant.id, expectedVersion: state.restaurant.version, items: state.cart, address: state.address, instructions: state.instructions }); },
     place() { return state.quote && now() < state.quote.expiresAt ? run('/orders', { quoteId: state.quote.id }, true) : Promise.resolve(false); },
     orderAction(order, action, extras = {}) { return run(`/orders/${order.id}/${action}`, { expectedVersion: order.version, ...extras }, action === 'claim'); },
     createStore(details) { return run('/stores', { details }); },

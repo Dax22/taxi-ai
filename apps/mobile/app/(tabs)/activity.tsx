@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { router } from 'expo-router';
-import { View } from 'react-native';
 import { Text } from '../../src/ui/typography';
 import { useSession } from '../../src/session/provider';
 import { useResource } from '../../src/ui/use-resource';
@@ -19,7 +18,7 @@ function RideCard({ ride }: { ride: RideSummary }) {
   </Card>;
 }
 function Journeys({ mode }: { mode: Mode }) {
-  const { client, setMode } = useSession();
+  const { client } = useSession();
   const resource = useResource(useCallback(async () => { await client.session(); return client.activity(mode); }, [client, mode]));
   const [more, setMore] = useState<RideSummary[]>([]), [cursor, setCursor] = useState<string | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState('');
   const generation = useRef(0);
@@ -33,17 +32,17 @@ function Journeys({ mode }: { mode: Mode }) {
   }
   return <><Notice message={resource.error || error}/>{resource.busy ? <Loading/> : <Button title="Refresh activity" secondary onPress={resource.reload}/>}
     {resource.value && <><Text style={styles.small}>Updated from your account. Refresh to see changes.</Text>
-      {resource.value.activeElsewhere.map((r) => <Card key={r.id}><Text style={styles.body}>You also have an active journey in {r.mode === 'work' ? 'Work' : 'Customer'}.</Text><Button title={`Switch to ${r.mode === 'work' ? 'Work' : 'Customer'}`} secondary onPress={() => setMode(r.mode)}/></Card>)}
-      <Text style={styles.h2}>Current journeys</Text>{mode === 'customer' && <Button title="Manage ride requests" secondary onPress={() => router.push('/book-ride')}/>}{resource.value.current.length ? resource.value.current.map((r) => <RideCard key={r.id} ride={r}/>) : <Text style={styles.body}>No current journeys in this mode.</Text>}
+      {resource.value.activeElsewhere.map((r) => <Card key={r.id}><Text style={styles.body}>You also have an active {r.mode === 'work' ? 'driver job' : 'customer journey'} on this account. View it on the website.</Text></Card>)}
+      <Text style={styles.h2}>Current journeys</Text>{mode === 'customer' && <Button title="Manage ride requests" secondary onPress={() => router.push('/book-ride')}/>}{resource.value.current.length ? resource.value.current.map((r) => <RideCard key={r.id} ride={r}/>) : <Text style={styles.body}>No current journeys yet.</Text>}
       <Text style={styles.h2}>Past journeys</Text>{resource.value.history.length || more.length ? [...resource.value.history, ...more].map((r) => <RideCard key={r.id} ride={r}/>) : <Text style={styles.body}>Your completed, cancelled and expired journeys will appear here.</Text>}
       {cursor && <Button title="Load older journeys" secondary busy={busy} onPress={() => void loadMore()}/>}</>}
   </>;
 }
 export default function Activity() {
-  const { user, mode, setMode } = useSession();
+  const { user, role, mode } = useSession();
   return <Screen><Heading title="Your activity." subtitle="The same saved journeys, across the app and website."/>
-    <Card><Text style={styles.h2}>Taxi Ai Eats orders</Text><Text style={styles.body}>Track your food, view past orders and check handover details.</Text><Button title="My food orders" secondary onPress={() => router.push({ pathname: '/eats', params: { section: 'orders' } })}/></Card>
-    <View style={styles.row}><Button title="Customer" secondary={mode !== 'customer'} onPress={() => setMode('customer')}/>{user?.driver && <Button title="Work" secondary={mode !== 'work'} onPress={() => setMode('work')}/>}</View>
-    <Journeys key={`${user?.id}:${mode}`} mode={mode}/>
+    {role === 'customer' && <Card><Text style={styles.h2}>Taxi Ai Eats orders</Text><Text style={styles.body}>Track your food, view past orders and check handover details.</Text><Button title="My food orders" secondary onPress={() => router.push({ pathname: '/eats', params: { section: 'orders' } })}/></Card>}
+    {role === 'driver' && !user?.driver ? <Card><Text style={styles.h2}>Complete your Driver setup</Text><Text style={styles.body}>Your driver journeys will appear here after you create your driver profile.</Text><Button title="Start driver application" onPress={() => router.push('/driver-application')}/></Card>
+      : <Journeys key={`${user?.id}:${mode}`} mode={mode}/>}
   </Screen>;
 }

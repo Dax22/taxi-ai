@@ -1,4 +1,5 @@
 import { readContacts, readSafety, readSafetyResult } from '../safety/contracts.ts';
+import { readPayment, readReceipt, readEarnings } from '../payments/contracts.ts';
 import { readTracking, readTrackingResult } from '../tracking/contracts.ts';
 import { readVehicleCheck,readVehicleChecks } from '../../../../packages/shared/src/vehicle-checks.mjs';
 import type { VehiclePhoto } from '../../../../packages/shared/src/vehicle-checks.mjs';
@@ -59,7 +60,7 @@ export class MobileClient {
   }
   private async send(path: string, { data, token, preview = this.saved?.previewAccess ?? '', key }: { data?: unknown; token?: string; preview?: string; key?: string } = {}) {
     if (!/^\/[a-z0-9/?=&_-]+$/i.test(path)) throw new Error('Invalid mobile API path.');
-    const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), path === '/driver/application/upload' ? 45_000 : path.startsWith('/vehicle-checks/') ? 35_000 : 12_000);
+    const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), path === '/driver/application/upload' ? 45_000 : path.startsWith('/vehicle-checks/') || /^\/eats\/stores\/[a-f0-9-]{36}\/photo$/.test(path) ? 35_000 : 12_000);
     try {
       const response = await this.fetchImpl(`${this.origin}/api/mobile/v1${path}`, { method: data === undefined ? 'GET' : 'POST',
         credentials: 'omit', redirect: 'error', signal: controller.signal,
@@ -95,6 +96,13 @@ export class MobileClient {
     this.credentials = null; this.saved = null; this.publish(null);
     await this.store(() => this.vault.clear());
     const result = parseSignIn(await this.send('/auth/login', { data: { email, password, deviceName }, preview }));
+    await this.adopt(result, epoch, preview);
+  }
+  async register(name: string, email: string, password: string, deviceName: string, preview = '') {
+    const epoch = ++this.epoch;
+    this.credentials = null; this.saved = null; this.publish(null);
+    await this.store(() => this.vault.clear());
+    const result = parseSignIn(await this.send('/auth/register', { data: { name, email, password, deviceName }, preview }));
     await this.adopt(result, epoch, preview);
   }
   async googleLogin(deviceName: string, chooseIdentity: (challenge: { nonce: string; webClientId: string }) => Promise<string | null>, preview = '') {
@@ -199,6 +207,14 @@ export class MobileClient {
   async safetyCommand(path: string, data: Record<string, unknown>, key: string) { return readSafetyResult(await this.request(`/safety/${path}`, data, key),path); }
   safetyLink(token: string) { if (!/^[a-f0-9]{64}$/.test(token)) throw new Error('Invalid share link.'); return `${this.origin}/trip-share#${token}`; }
   async journey(id: string) { return parseJourney(await this.request(`/journeys/${id}`)); }
+  async rateDriver(id: string, stars: number) { return parseJourney(await this.request(`/journeys/${id}/rating`, { stars })); }
+  async payment(id: string) { return readPayment(await this.request(`/payments/rides/${id}`)); }
+  async receipt(id: string) { return readReceipt(await this.request(`/payments/rides/${id}/receipt`)); }
+  async paymentCommand(id: string, action: 'start' | 'simulate', expectedVersion: number, key: string, attemptId?: string, outcome?: 'success' | 'failure') {
+    const path = action === 'start' ? `/payments/rides/${id}/start` : `/payments/rides/${id}/attempts/${attemptId}/simulate`;
+    return readPayment(await this.request(path, { expectedVersion, ...(action === 'simulate' ? { outcome } : {}) }, key));
+  }
+  async earnings(before?: string | null) { return readEarnings(await this.request(`/driver/earnings${before ? `?before=${before}` : ''}`)); }
   async journeyCommand(id: string, action: JourneyAction, data: JourneyData, key: string) { return parseJourney(await this.request(`/journeys/${id}/${action}`,data,key)); }
   async work(clientId: string) { return parseWork(await this.request(`/work?clientId=${clientId}`)); }
   async online(clientId: string, data: OnlineData, key: string) { return parseAvailability(await this.request(`/work/online?clientId=${clientId}`,data,key)); }
@@ -226,6 +242,12 @@ export class MobileClient {
   async eats(path: string, data?: unknown, key?: string) {
     if (!path.startsWith('/eats/')) throw new Error('Use an Eats API path.');
     return this.request(path, data, key);
+  }
+  eatsImageSource(id: string, version: number) {
+    if (!/^[a-f0-9-]{36}$/.test(id) || !Number.isSafeInteger(version) || version < 1) throw new Error('Invalid food photo.');
+    return { uri: `${this.origin}/api/mobile/v1/eats/images/${id}?v=${version}`,
+      headers: { ...(this.credentials ? { Authorization: `Bearer ${this.credentials.accessToken}` } : {}),
+        ...(this.saved?.previewAccess ? { 'X-Taxi-Ai-Preview-Access': this.saved.previewAccess } : {}) } };
   }
   async emailStatus() { return parseEmailStatus(await this.request('/account/email')); }
   private accepted(body: Record<string, unknown>) {

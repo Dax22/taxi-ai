@@ -9,10 +9,12 @@ export function version(value, expected) { check(Number.isSafeInteger(expected) 
 export function amount(value, name, max = 2_000_000) { check(Number.isSafeInteger(value) && value >= 0 && value <= max, 'INVALID_PRICE', `${name} must be a nonnegative amount within the test limit.`); return value; }
 export function area(id) { const value = DEMO_AREAS.find((a) => a.id === id); check(value, 'INVALID_AREA', 'Choose an Abuja delivery area.'); return value; }
 export function storeDetails(data) {
-  fields(data, ['name', 'cuisine', 'description', 'address', 'areaId', 'prepMinutes', 'minimumKobo', 'deliveryFeeKobo']);
+  const required = ['name', 'cuisine', 'description', 'address', 'areaId', 'prepMinutes', 'minimumKobo', 'deliveryFeeKobo'];
+  fields(data, [...required, 'sellerType'], required);
+  check(['restaurant', 'vendor', 'private_kitchen'].includes(data.sellerType ?? 'restaurant'), 'INVALID_SELLER_TYPE', 'Choose a restaurant, vendor or private kitchen.');
   check(EATS_CUISINES.includes(data.cuisine), 'INVALID_CUISINE', 'Choose a cuisine.'); area(data.areaId);
   check(Number.isSafeInteger(data.prepMinutes) && data.prepMinutes >= 10 && data.prepMinutes <= 120, 'INVALID_PREPARATION', 'Choose 10–120 minutes for preparation.');
-  return { name: label(data.name, 'Store name', 2, 80), cuisine: data.cuisine, description: label(data.description, 'Description', 2, 300),
+  return { name: label(data.name, 'Store name', 2, 80), sellerType: data.sellerType ?? 'restaurant', cuisine: data.cuisine, description: label(data.description, 'Description', 2, 300),
     address: label(data.address, 'Pickup address', 8, 240), areaId: data.areaId, prepMinutes: data.prepMinutes,
     minimumKobo: amount(data.minimumKobo, 'Minimum order', 5_000_000), deliveryFeeKobo: amount(data.deliveryFeeKobo, 'Delivery fee') };
 }
@@ -38,7 +40,8 @@ export function checkedBasket(store, menu, data) {
   let totals;
   try { totals = eatsTotals(lines, store.deliveryFeeKobo); } catch (error) { check(false, 'INVALID_CART', error.message); }
   check(totals.subtotalKobo >= store.minimumKobo, 'INVALID_CART', 'Add items to meet this restaurant’s minimum order.');
-  return { restaurant: { id: store.id, name: store.name, address: store.address, areaId: store.areaId, prepMinutes: store.prepMinutes }, lines, totals,
+  return { restaurant: { id: store.id, name: store.name, sellerType: store.sellerType ?? 'restaurant', town: area(store.areaId).name,
+      ...(store.sellerType === 'restaurant' || !store.sellerType ? { address: store.address } : {}), areaId: store.areaId, prepMinutes: store.prepMinutes }, lines, totals,
     address: { line: label(data.address.line, 'Delivery address and landmark', 8, 240), areaId: data.address.areaId },
     instructions: label(data.instructions, 'Delivery or kitchen instructions', 0, 240), isDemo: true, payment: { method: 'test', status: 'not_charged' } };
 }

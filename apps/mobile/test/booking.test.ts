@@ -14,7 +14,7 @@ const preview: BookingPreview = { kind: 'sample', pickup: pickup.name, destinati
   expiresAt: null, request: { pickupId: 'wuse-ii', destinationId: 'maitama' }, route: null };
 function deferred<T>() { let resolve!: (v: T) => void, reject!: (e: Error) => void; const promise = new Promise<T>((r, j) => { resolve = r; reject = j; }); return { resolve, reject, promise }; }
 function fixture() {
-  let time = 1200, key = 0;
+  let time = 1200, key = 0, locates = 0;
   const settings: Booking = { ...envelope, online: { enabled: true, searchHost: 'search.example.test', routeHost: 'route.example.test' },
     allowSample: true, areas: [{ id: 'wuse-ii', name: 'Wuse II' }, { id: 'maitama', name: 'Maitama' }], current: [], blockedBy: null };
   const api: ConstructorParameters<typeof BookingController>[0] = {
@@ -26,8 +26,10 @@ function fixture() {
     requestRide: async () => { settings.current = [ride]; return { ...envelope, ride }; },
     cancelRide: async () => { settings.current = []; return { ...envelope, ride: { ...ride, status: 'cancelled', canCancel: false, version: 2, expiresAt: null } }; },
   };
-  const controller = new BookingController(api, () => `command-key-${++key}`, () => time);
-  return { api, settings, controller, advance: (ms: number) => { time += ms; } };
+  const controller = new BookingController(api, () => `command-key-${++key}`, () => time, async () => {
+    locates++; return { ...pickup, name: 'Current location' };
+  });
+  return { api, settings, controller, advance: (ms: number) => { time += ms; }, locates: () => locates };
 }
 async function start(f: ReturnType<typeof fixture>) { f.controller.activate(); await settle(); }
 async function sample(f: ReturnType<typeof fixture>) {
@@ -57,6 +59,29 @@ test('edited routes require a new review and quote expiry uses server time plus 
   await c.submit(); assert.equal(f.settings.current.length, 0);
   c.select('pickup', pickup); await c.preview(); f.advance(900_000);
   await c.submit(); assert.match(c.snapshot().error, /expired/); assert.equal(f.settings.current.length, 0);
+  assert.equal(c.snapshot().preview, null);
+});
+
+test('route pickup comes from the current location action before previewing', async () => {
+  const f = fixture(); await start(f); const c = f.controller;
+  c.consent(); c.select('destination', destination); await c.preview();
+  assert.match(c.snapshot().error, /current location/); assert.equal(f.locates(), 0);
+  await c.useCurrentPickup(); assert.equal(f.locates(), 1);
+  assert.equal(c.snapshot().pickup.selected?.name, 'Current location');
+  await c.preview(); assert.equal(c.snapshot().preview?.kind, 'route');
+});
+
+test('typed sample destination must match an available area and editing removes an old preview', async () => {
+  const f = fixture(); await start(f); const c = f.controller;
+  c.chooseMode('sample');
+  assert.equal(c.snapshot().destinationId, '');
+  c.editSampleDestination('Mai'); await c.preview();
+  assert.match(c.snapshot().error, /Type a destination/);
+  c.editSampleDestination('  mAiTaMa  ');
+  assert.equal(c.snapshot().destinationId, 'maitama');
+  await c.preview(); assert.equal(c.snapshot().preview?.kind, 'sample');
+  c.editSampleDestination('Lagos');
+  assert.equal(c.snapshot().destinationId, '');
   assert.equal(c.snapshot().preview, null);
 });
 

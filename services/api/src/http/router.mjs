@@ -61,6 +61,10 @@ export function createApiRouter(application, { secure = false } = {}) {
       availabilityClient: request.headers['x-availability-client'],
       query: new URL(request.url, origin).searchParams });
     if (result.cookie) response.setHeader('Set-Cookie', result.cookie);
+    if (result.image) {
+      response.writeHead(200, { 'Content-Type': result.image.mimeType, 'Content-Length': result.image.content.length });
+      response.end(result.image.content); return;
+    }
     json(response, result.status ?? 200, { ...result.body, serverNow: clock() });
   };
 }

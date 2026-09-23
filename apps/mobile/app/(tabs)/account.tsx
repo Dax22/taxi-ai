@@ -8,7 +8,7 @@ import { useResource } from '../../src/ui/use-resource';
 import { EmailVerification } from '../../src/ui/email-verification';
 import { Button, Card, Heading, Loading, Notice, Pill, Screen, openWebsite, styles } from '../../src/ui/components';
 export default function Account() {
-  const { client, user, logout } = useSession();
+  const { client, user, role, logout } = useSession();
   const resource = useResource(useCallback(() => client.devices(), [client]));
   const [busy, setBusy] = useState(false), [error, setError] = useState('');
   async function revoke(id: string) {
@@ -17,10 +17,10 @@ export default function Account() {
     catch (e) { setError(e instanceof Error ? e.message : 'Could not sign out this device.'); }
     finally { setBusy(false); }
   }
-  return <Screen><Heading title="Your account." subtitle="One profile. Every service."/><Notice message={error || resource.error}/>
-    <Card><Text style={styles.h2}>{user?.name}</Text><Text style={styles.body}>{user?.email}</Text><Text style={styles.small}>Customer{user?.driver ? ' · Driver profile' : ''}</Text><Button title="Open web account" secondary onPress={() => void openWebsite(client.origin).catch(() => setError('Could not open the website.'))}/></Card>
-    <WorkProfileControls/>
-    <Card><Text style={styles.h2}>My store · Taxi Ai Eats</Text><Text style={styles.body}>Open a kitchen, manage your menu and handle food orders using this account.</Text><Button title="Open My store" onPress={() => router.push('/my-store')}/></Card>
+  return <Screen><Heading title="Your account." subtitle={`${role === 'driver' ? 'Driver' : 'Customer'} experience on this phone.`}/><Notice message={error || resource.error}/>
+    <Card><Text style={styles.h2}>{user?.name}</Text><Text style={styles.body}>{user?.email}</Text><Text style={styles.small}>{role === 'driver' ? 'Driver' : 'Customer'}</Text><Button title="Open web account" secondary onPress={() => void openWebsite(client.origin).catch(() => setError('Could not open the website.'))}/></Card>
+    {role === 'driver' && <WorkProfileControls/>}
+    {role === 'customer' && <Card><Text style={styles.h2}>Sell on Taxi Ai Eats</Text><Text style={styles.body}>Create a storefront for a restaurant, vendor business or private kitchen. Add your menu and manage food orders here.</Text><Button title="Open seller hub" onPress={() => router.push('/my-store')}/></Card>}
     <EmailVerification client={client}/>
     <Text style={styles.h2}>Signed-in devices</Text><Text style={styles.body}>Device names are labels you chose. Sign out anything you no longer use.</Text>
     {resource.busy ? <Loading/> : <Button title="Refresh devices" secondary onPress={resource.reload}/>}

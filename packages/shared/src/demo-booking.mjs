@@ -9,6 +9,12 @@ export const DEMO_AREAS = Object.freeze([
   Object.freeze({ id: 'airport', name: 'Abuja Airport' }),
 ]);
 
+export function matchSampleArea(areas, text) {
+  const query = text.trim().replace(/\s+/g, ' ').toLowerCase();
+  if (!query) return null;
+  return areas.find((area) => area.name.toLowerCase() === query || area.id === query) ?? null;
+}
+
 export function createDemoQuote(pickupId, destinationId) {
   const pickup = DEMO_AREAS.find((area) => area.id === pickupId);
   const destination = DEMO_AREAS.find((area) => area.id === destinationId);

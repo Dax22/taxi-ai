@@ -6,7 +6,7 @@ import { Button, Card, Heading, Screen, fare, styles } from '../src/ui/component
 export default function FoodWork() {
   const { state: s, controller: c, locked } = useEatsScreen('work');
   return <Screen><Heading title="Bring something good." subtitle="Collect ready food orders and deliver them around Abuja."/><FoodPreview/><FoodFeedback state={s} controller={c}/>
-    {!s.work?.online && !s.work?.current.length && <Card><Text style={styles.body}>{s.work?.eligible ? 'Go online in Work to see ready food orders. You can hold one ride, parcel job or food delivery at a time.' : 'A currently approved motorcycle, car, SUV or van is required for food deliveries.'}</Text><Button title="Open Work availability" secondary onPress={() => router.push('/work')}/></Card>}
+    {!s.work?.online && !s.work?.current.length && <Card><Text style={styles.body}>{s.work?.eligible ? 'Go online in Driver to see ready food orders. You can hold one ride, parcel job or food delivery at a time.' : 'A currently approved motorcycle, car, SUV or van is required for food deliveries.'}</Text><Button title="Open Driver availability" secondary onPress={() => router.push('/work')}/></Card>}
     <Text style={styles.h2}>Your current food delivery</Text><FoodOrders orders={s.work?.current ?? []} empty="No food delivery in progress."/>
     <Text style={styles.h2}>Ready for collection</Text><Text style={styles.small}>Pickup and drop-off areas are shown before you accept. The customer’s address is shared after assignment. Fees shown are test amounts, not a payout.</Text>
     {s.work?.online && !s.work.available.length && <Text style={styles.body}>No eligible ready orders. This screen refreshes while it is open.</Text>}

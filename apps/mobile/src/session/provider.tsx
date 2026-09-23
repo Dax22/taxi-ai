@@ -2,19 +2,20 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { PropsWithChildren } from 'react';
 import { AppState } from 'react-native';
 import { MobileClient, ApiError } from '../api/client.ts';
-import { secureVault } from './secure-vault';
+import { secureVault, savedAppRole, saveAppRole } from './secure-vault';
+import type { AppRole } from './secure-vault';
 import type { Account, Mode } from '../../../../packages/shared/src/mobile-contracts.mjs';
 
 interface SessionContextValue {
   client: MobileClient; user: Account | null; ready: boolean; blocked: boolean; startupError: string;
-  notice: string; mode: Mode; setMode(mode: Mode): Promise<boolean>; registerModeGuard(guard: (mode: Mode) => Promise<boolean>): () => void; restore(): Promise<void>; logout(): Promise<void>;
+  notice: string; role: AppRole | null; setupLoading: boolean; mode: Mode; chooseRole(role: AppRole): Promise<void>; restore(): Promise<void>; logout(): Promise<void>;
 }
 const SessionContext = createContext<SessionContextValue | null>(null);
 export function SessionProvider({ children }: PropsWithChildren) {
   const client = useMemo(() => new MobileClient({ origin: process.env.EXPO_PUBLIC_API_ORIGIN ?? (__DEV__ ? 'http://127.0.0.1:3000' : ''), vault: secureVault, development: __DEV__ }), []);
-  const [user, setUser] = useState<Account | null>(null), [mode, setMode] = useState<Mode>('customer');
-  const modeGuard = useRef<(mode: Mode) => Promise<boolean>>(async () => true);
-  const registerModeGuard = useCallback((guard: (mode: Mode) => Promise<boolean>) => { modeGuard.current=guard; return () => { if(modeGuard.current===guard)modeGuard.current=async()=>true; }; },[]);
+  const [user, setUser] = useState<Account | null>(null), [role, setRole] = useState<AppRole | null>(null);
+  const [setupLoading, setSetupLoading] = useState(false);
+  const accountId = useRef<string | null>(null);
   const [ready, setReady] = useState(false), [blocked, setBlocked] = useState(false);
   const [startupError, setStartupError] = useState(''), [notice, setNotice] = useState('');
   const restore = useCallback(async () => {
@@ -25,7 +26,21 @@ export function SessionProvider({ children }: PropsWithChildren) {
       else setStartupError(error instanceof Error ? error.message : 'Could not restore this device.');
     } finally { setReady(true); }
   }, [client]);
-  useEffect(() => client.subscribe((next) => { setUser(next); if (!next?.driver) setMode('customer'); }), [client]);
+  useEffect(() => {
+    let generation = 0;
+    return client.subscribe((next) => {
+      setUser(next);
+      if (accountId.current === (next?.id ?? null)) return;
+      accountId.current = next?.id ?? null;
+      const epoch = ++generation;
+      setRole(null);
+      if (!next) { setSetupLoading(false); return; }
+      setSetupLoading(true);
+      void savedAppRole(next.id).then((saved) => { if (epoch === generation) setRole(saved); })
+        .catch(() => { if (epoch === generation) setNotice('Could not read this phone’s account setup. Choose your app role again.'); })
+        .finally(() => { if (epoch === generation) setSetupLoading(false); });
+    });
+  }, [client]);
   useEffect(() => { void restore(); }, [restore]);
   useEffect(() => {
     let generation = 0;
@@ -41,15 +56,15 @@ export function SessionProvider({ children }: PropsWithChildren) {
     return () => { generation++; subscription.remove(); };
   }, [client]);
   const logout = useCallback(async () => {
-    setMode('customer'); setStartupError(''); setNotice('');
+    setStartupError(''); setNotice('');
     const warning = await client.logout(); if (warning) setNotice(warning);
   }, [client]);
-  return <SessionContext.Provider value={{ client, user, ready, blocked, startupError, notice, mode,
-    registerModeGuard, setMode: async (next) => {
-      const target=next === 'work' && !user?.driver ? 'customer' : next;
-      if(target===mode && target!=='customer')return true;
-      if(!await modeGuard.current(target)||client.account()?.id!==user?.id)return false;
-      setMode(target); return true;
-    }, restore, logout }}>{children}</SessionContext.Provider>;
+  const chooseRole = async (next: AppRole) => {
+    if (!user || role || client.account()?.id !== user.id) return;
+    await saveAppRole(user.id, next);
+    if (client.account()?.id === user.id) { setRole(next); setNotice(''); }
+  };
+  return <SessionContext.Provider value={{ client, user, ready, blocked, startupError, notice, role, setupLoading,
+    mode: role === 'driver' ? 'work' : 'customer', chooseRole, restore, logout }}>{children}</SessionContext.Provider>;
 }
 export function useSession() { const value = useContext(SessionContext); if (!value) throw new Error('Session provider is missing.'); return value; }

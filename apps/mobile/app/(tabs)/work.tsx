@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { router } from 'expo-router';
+import { Redirect, router } from 'expo-router';
 import { Text } from '../../src/ui/typography';
 import { useSession } from '../../src/session/provider';
 import { useWork } from '../../src/journeys/provider';
@@ -9,13 +9,15 @@ import { WorkProfileControls } from '../../src/ui/work-profile-controls';
 import { vehicleCategory } from '../../../../packages/shared/src/vehicle-categories.mjs';
 import { MATCH_REASON_LABELS } from '../../../../packages/shared/src/smart-matching.mjs';
 export default function Work(){
-  const {user,blocked}=useSession(),{state:s,controller:c}=useWork();const [area,setArea]=useState('');
+  const {user,role,blocked}=useSession(),{state:s,controller:c}=useWork();const [area,setArea]=useState('');
   const eligible=Boolean(user?.driver?.eligibility.eligible),locked=s.busy||s.uncertain||s.stale;
   const online=Boolean(s.availability?.online&&s.availability.expiresAt&&s.now<s.availability.expiresAt);
   useEffect(()=>{if(s.journey&&!blocked){const id=s.journey.id;c.clearJourney();router.push({pathname:'/journey',params:{id}});}},[s.journey,blocked,c]);
-  return <Screen><Pill>WORK</Pill><Heading title="Ready when you are." subtitle="Choose when to receive nearby requests."/><Notice message={s.error}/>
+  if (role !== 'driver') return <Redirect href="/"/>;
+  return <Screen><Pill>DRIVER</Pill><Heading title="Ready when you are." subtitle="Choose when to receive nearby requests."/><Notice message={s.error}/>
     {!user?.driver?<Card><Text style={styles.h2}>Drive or deliver with Taxi Ai.</Text><Button title="Start driver application" onPress={()=>router.push('/driver-application')}/></Card>:<>
       <WorkProfileControls/>
+      <Card><Text style={styles.h2}>Your earnings preview</Text><Text style={styles.body}>See completed fares and simulated payment status.</Text><Button title="Open earnings" secondary onPress={() => router.push('/earnings')}/></Card>
       <Card><Text style={styles.h2}>Deliver with Taxi Ai Eats</Text><Text style={styles.body}>Collect ready food orders with your approved motorcycle, car, SUV or van. Go online below, then check food deliveries.</Text><Button title="Food deliveries & current order" secondary onPress={() => router.push('/food-work')}/></Card>
       <Card><Pill>{online?(s.availability?.owned?'ONLINE ON THIS PHONE':'ONLINE ON ANOTHER DEVICE'):'OFFLINE'}</Pill>
         <Text style={styles.body}>{eligible?'Keep Taxi Ai open to receive requests. Leaving the app stops location updates and takes you offline.':'Complete your application and approval before taking new jobs.'}</Text>
@@ -25,7 +27,7 @@ export default function Work(){
         {s.uncertain&&<Button title="Retry the same work action" busy={s.busy} onPress={()=>void c.retry()}/>}
         <Button title="Refresh work" secondary busy={s.loading} disabled={s.busy} onPress={()=>void c.refresh()}/>
       </Card>
-      {s.work?.activeElsewhere.map((j)=><Card key={j.id}><Text style={styles.body}>You have a personal journey to finish.</Text><Button title="View personal journey" onPress={()=>router.push({pathname:'/journey',params:{id:j.id}})}/></Card>)}
+      {s.work?.activeElsewhere.map((j)=><Card key={j.id}><Text style={styles.body}>You have a personal journey to finish. Open it from your web account before accepting new requests.</Text></Card>)}
       {s.work?.current.map((j)=><Card key={j.id}><Pill>CURRENT JOB</Pill><Text style={styles.h2}>{j.pickup} → {j.destination}</Text><Button title="Open journey" onPress={()=>router.push({pathname:'/journey',params:{id:j.id}})}/></Card>)}
       <Heading title="Nearby requests." subtitle={online?'Eligible requests are ordered by pickup distance and customer waiting time.':'Go online to see available work.'}/>
       {online&&!s.work?.available.length&&<Text style={styles.body}>No matching requests yet. This screen refreshes while the app is open.</Text>}

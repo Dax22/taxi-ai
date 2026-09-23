@@ -15,40 +15,45 @@ const deferred = () => { let resolve, reject; const promise = new Promise((a, b)
 const customer = { id: 'customer', role: 'customer' }, driver = { id: 'driver', role: 'driver', driver: { status: 'approved' } };
 const ride = { id: 'ride', status: 'booked' };
 const pickup = { lat: 9.08, lng: 7.4, name: 'Pickup' }, destination = { lat: 9.1, lng: 7.45, name: 'Destination' };
+const currentPickup = { lat: pickup.lat, lng: pickup.lng, name: 'Current location' };
 
 function plannerSetup() {
-  const f = { requests: [], commands: [], books: [], time: 1000, states: [] };
+  const f = { requests: [], commands: [], books: [], time: 1000, states: [], locates: 0 };
   const client = {
     async request(path, options) { f.requests.push({ path, options }); if (f.requestHook) return f.requestHook(path, options);
       return path === '/api/locations' ? { settings: { enabled: true, mode: 'community' } } : { places: [pickup] }; },
     async command(path, data) { f.commands.push({ path, data }); if (f.commandHook) return f.commandHook(path, data);
       return { quote: { id: 'quote-one', expiresAt: 2000, route: { pickup, destination } } }; },
   };
-  f.c = createLocationPlanner({ client, serverNow: () => f.time,
+  const device = { supported: () => true, locate: async () => {
+    f.locates++; return f.locateHook ? f.locateHook() : { coords: { latitude: pickup.lat, longitude: pickup.lng, accuracy: 12 } };
+  } };
+  f.c = createLocationPlanner({ client, device, serverNow: () => f.time,
     view: { renderPlanner: (state) => f.states.push(state), resetPlanner() {}, selected() {} },
     onOnline: (enabled) => { f.online = enabled; }, onBook: async (id) => { f.books.push(id); return { ride }; },
   });
   return f;
 }
-async function enabled(f) { await f.c.setContext(customer, false); f.c.enable(); f.c.select('pickup', pickup); f.c.select('destination', destination); }
+async function enabled(f) { await f.c.setContext(customer, false); f.c.enable(); await f.c.useCurrentPickup(); f.c.select('destination', destination); }
 
-test('online search needs explicit enabling, manual submission and a customer; settings alone send no addresses', async () => {
+test('online search needs explicit enabling, manual destination submission and current pickup; settings alone send no addresses', async () => {
   const f = plannerSetup(); await f.c.setContext(customer, false);
-  await f.c.search('pickup', 'Wuse'); assert.equal(f.requests.length, 1); assert.equal(f.online, false);
-  f.c.enable(); await f.c.search('pickup', 'Wuse'); assert.equal(f.requests.length, 2);
-  assert.deepEqual(f.requests[1].options.data, { query: 'Wuse' });
-  f.c.select('pickup', pickup); assert.deepEqual(f.c.snapshot().pickup, pickup);
+  await f.c.search('destination', 'Maitama'); assert.equal(f.requests.length, 1); assert.equal(f.online, false);
+  f.c.enable(); await f.c.search('pickup', 'Wuse'); assert.equal(f.requests.length, 1);
+  await f.c.search('destination', 'Maitama'); assert.equal(f.requests.length, 2);
+  assert.deepEqual(f.requests[1].options.data, { query: 'Maitama' });
+  await f.c.useCurrentPickup(); assert.equal(f.locates, 1); assert.deepEqual(f.c.snapshot().pickup, currentPickup);
   f.c.reset(); assert.equal(f.c.snapshot().pickup, null); assert.equal(f.online, false);
-  await f.c.setContext(driver, false); f.c.enable(); await f.c.search('pickup', 'Wuse');
+  await f.c.setContext(driver, false); f.c.enable(); await f.c.search('destination', 'Wuse');
   assert.equal(f.requests.filter((r) => r.path.endsWith('/search')).length, 1);
 });
 
 test('late searches and quotes are discarded after input changes, map opt-out or account changes', async () => {
   const f = plannerSetup(); await enabled(f);
   const result = deferred(); f.requestHook = async () => result.promise;
-  const searching = f.c.search('pickup', 'Wuse'); f.c.clear('pickup'); result.resolve({ places: [pickup] }); await searching;
-  assert.deepEqual(f.c.snapshot().results.pickup, []);
-  f.c.select('pickup', pickup);
+  const searching = f.c.search('destination', 'Wuse'); f.c.clear('destination'); result.resolve({ places: [destination] }); await searching;
+  assert.deepEqual(f.c.snapshot().results.destination, []);
+  await f.c.useCurrentPickup();
   const quote = deferred(); f.commandHook = () => quote.promise;
   const pending = f.c.preview(); f.c.select('destination', { ...destination, lng: 7.46 });
   quote.resolve({ quote: { id: 'old', expiresAt: 2000 } }); await pending; assert.equal(f.c.snapshot().quote, null);
@@ -60,7 +65,7 @@ test('late searches and quotes are discarded after input changes, map opt-out or
 
 test('booking submits only the saved quote ID and rejects expired quotes or an existing open journey', async () => {
   const f = plannerSetup(); await enabled(f); await f.c.preview();
-  assert.deepEqual(f.commands[0].data, { pickup, destination, vehicleCategory: 'standard' });
+  assert.deepEqual(f.commands[0].data, { pickup: currentPickup, destination, vehicleCategory: 'standard' });
   f.time = 2000; await f.c.book(); assert.equal(f.books.length, 0);
   f.time = 1999; await f.c.book(); assert.deepEqual(f.books, ['quote-one']); assert.equal(f.c.snapshot().quote, null);
   await f.c.setContext(customer, true); await f.c.preview(); assert.equal(f.commands.length, 1);
@@ -163,7 +168,7 @@ test('a synchronously revoked watch is cleaned up, and browser geolocation adapt
 
 test('category changes invalidate both saved and in-flight quotes, including a selection before account load', async () => {
   const f = plannerSetup(); f.c.setCategory('suv'); await f.c.setContext(customer, false); f.c.enable();
-  f.c.select('pickup', pickup); f.c.select('destination', destination);
+  await f.c.useCurrentPickup(); f.c.select('destination', destination);
   const pending = deferred(); f.commandHook = () => pending.promise;
   const first = f.c.preview(); assert.equal(f.commands[0].data.vehicleCategory, 'suv');
   f.c.setCategory('truck'); pending.resolve({ quote: { id: 'old-suv-quote', expiresAt: 2000 } }); await first;

@@ -104,7 +104,7 @@ export function useDriverOnboarding(editVehicle = false) {
     if (!application || stale || application.busy || confirmation !== 'DELETE') return;
     const data = { expectedVersion: application.version, confirmation };
     const account = await client.deleteDriver(data.expectedVersion, confirmation, keyFor('delete-profile', data)); current();
-    if (account.driver) throw new ApiError('Your Work profile changed. Refresh it and confirm again.', 'STALE_VERSION', 409);
+    if (account.driver) throw new ApiError('Your Driver profile changed. Refresh it and confirm again.', 'STALE_VERSION', 409);
     retry.current = null; accept(null, account.name); onDeleted();
   });
   return { application, draft, setDraft, step, setStep, pending, loading, error, notice, stale, dirty, canEdit,

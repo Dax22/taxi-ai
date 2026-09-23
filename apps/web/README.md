@@ -8,7 +8,7 @@ management are described in [Google setup](../../docs/google-sign-in.md).
 Taxi Ai Eats is at `/eats`, with restaurant browsing, test checkout, My store and
 food delivery work. Follow [the Eats guide](../../docs/eats.md) to create a fictional
 menu, approve it and exercise customer–kitchen–courier handovers. All web/admin
-text and controls now share the native system-font policy.
+text and controls use the same locally bundled Manrope family as the native app.
 
 ## Client structure
 

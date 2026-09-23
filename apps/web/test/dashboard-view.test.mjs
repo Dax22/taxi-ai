@@ -66,6 +66,12 @@ test('Edit / change vehicle is in the driver profile card and stays usable after
 
 test('all categories book the selected service and delivery drafts clear at account boundaries', (t) => {
   const h = setup(t); h.view.render({ ...state(customer, []), sampleMatchingEnabled: true });
+  h.node('request-destination').value = 'Mai';
+  h.node('request-destination').handlers.input();
+  h.node('request-form').handlers.submit({ preventDefault() {} });
+  assert.equal(h.commands.length, 0, 'partial destination does not submit');
+  h.node('request-destination').value = '  mAiTaMa  ';
+  h.node('request-destination').handlers.input();
   const group = h.node('account-vehicle-categories').children[0];
   const category = (id) => group.children.find((button) => button.dataset.category === id);
   for (const id of ['standard', 'suv', 'van', 'truck', 'motorcycle']) {
@@ -83,12 +89,14 @@ test('all categories book the selected service and delivery drafts clear at acco
     }
     h.node('request-form').handlers.submit({ preventDefault() {} });
     assert.equal(h.commands.at(-1)[1].vehicleCategory, id);
+    assert.equal(h.commands.at(-1)[1].destinationId, 'maitama');
     assert.equal(Boolean(h.commands.at(-1)[1].delivery), delivery);
     h.node('delivery-description').value = ''; h.node('delivery-weight').value = ''; h.node('delivery-recipient').value = '';
   }
   h.node('delivery-recipient').value = 'Private draft';
   category('suv').handlers.click(); h.view.reset(); h.view.render(state(driver, []));
   assert.equal(category('standard')['aria-checked'], 'true'); assert.equal(h.node('delivery-recipient').value, '');
+  assert.equal(h.node('request-destination').value, '');
   assert.equal(h.node('vehicle-categories-panel').hidden, true); assert.equal(h.node('standard-ride-planner').hidden, true);
 });
 

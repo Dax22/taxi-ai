@@ -1,16 +1,16 @@
 import type { MobileClient } from '../api/client.ts';
 import type { Journey, JourneyAction, JourneyData, Thread, Message } from '../../../../packages/shared/src/mobile-journeys.mjs';
-type Api = Pick<MobileClient,'journey'|'journeyCommand'|'thread'|'sendMessage'|'readMessages'|'reportMessage'>;
-type Command = { kind: 'journey'; action: JourneyAction; data: JourneyData; key: string } | { kind: 'message'; body: string; key: string };
+type Api = Pick<MobileClient,'journey'|'journeyCommand'|'rateDriver'|'thread'|'sendMessage'|'readMessages'|'reportMessage'>;
+type Command = { kind: 'journey'; action: JourneyAction; data: JourneyData; key: string } | { kind: 'message'; body: string; key: string } | { kind: 'rating'; stars: number };
 export interface JourneyState { ride: Journey | null; thread: Thread | null; messages: Message[]; draft: string; amount: string; pin: string;
- busy: boolean; loading: boolean; stale: boolean; uncertain: boolean; error: string; now: number }
+ ratingChoice: number; busy: boolean; loading: boolean; stale: boolean; uncertain: boolean; error: string; now: number }
 const errorText = (e: unknown) => e instanceof Error ? e.message : 'Could not connect. Try again.';
 export function definiteFailure(e: unknown) { const v = e as { status?: number; code?: string }; return v && (typeof v.status === 'number' && v.status >= 400 && v.status < 500 || ['SESSION_CHANGED','UNAUTHENTICATED'].includes(v.code ?? '')); }
 export class JourneyController {
   private api: Api; readonly id: string; private key: () => string; private clock: () => number;
   private active = false; private disposed = false; private generation = 0; private command: Command | null = null;
   private anchor = { server: 0, local: 0 }; private listeners = new Set<() => void>();
-  private state: JourneyState = { ride: null, thread: null, messages: [], draft: '', amount: '', pin: '', busy: false, loading: false, stale: true, uncertain: false, error: '', now: 0 };
+  private state: JourneyState = { ride: null, thread: null, messages: [], draft: '', amount: '', pin: '', ratingChoice: 0, busy: false, loading: false, stale: true, uncertain: false, error: '', now: 0 };
   constructor(api: Api,id: string,key: () => string,clock = () => performance.now()) { this.api=api; this.id=id; this.key=key; this.clock=clock; }
   snapshot = () => this.state;
   subscribe = (fn: () => void) => { this.listeners.add(fn); return () => { this.listeners.delete(fn); }; };
@@ -21,6 +21,13 @@ export class JourneyController {
   pause() { this.active=false; this.generation++; this.patch({ stale:true,loading:false,pin:'' }); }
   dispose() { this.pause(); this.disposed=true; this.listeners.clear(); this.command=null; }
   edit(field: 'draft'|'amount'|'pin',value: string) { if (!this.state.busy && !this.command) this.patch({ [field]:value }); }
+  chooseRating(stars: number) { if (!this.state.busy && !this.command && Number.isInteger(stars) && stars >= 1 && stars <= 5) this.patch({ ratingChoice: stars, error: '' }); }
+  async rate() {
+    const ride = this.state.ride;
+    if (!this.active || this.command || this.state.busy || this.state.stale || !ride || ride.mode !== 'customer' || ride.status !== 'completed'
+      || ride.delivery || ride.rating || !this.state.ratingChoice) return;
+    this.command = { kind: 'rating', stars: this.state.ratingChoice }; await this.run();
+  }
   async refresh() {
     if (!this.active || this.state.busy || this.state.loading) return;
     const generation=++this.generation; this.patch({loading:true});
@@ -69,6 +76,9 @@ export class JourneyController {
       if (cmd.kind==='journey') {
         const result=await this.api.journeyCommand(this.id,cmd.action,cmd.data,cmd.key);
         this.patch({ride:result.ride,now:this.time(result.serverNow),pin:'',amount:cmd.action==='propose' ? '' : this.state.amount});
+      } else if (cmd.kind === 'rating') {
+        const result = await this.api.rateDriver(this.id,cmd.stars);
+        this.patch({ ride:result.ride, now:this.time(result.serverNow) });
       } else { await this.api.sendMessage(this.id,cmd.body,cmd.key); this.patch({draft:''}); }
       this.command=null; success=true; this.patch({uncertain:false});
     } catch(e) {

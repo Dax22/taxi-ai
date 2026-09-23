@@ -8,47 +8,47 @@ keyboard, accessibility and tablet QA remain pending.
 
 ## Included
 
-- Existing-account sign-in, secure session restore and per-device sign-out.
-- Home, Activity, Work, Updates and Account tabs; driver application, booking and journey screens.
+- In-app account creation and sign-in, one-time Customer or Driver setup saved securely per account on this phone, session restore and per-device sign-out.
+- Customer Home or Driver tab, plus Activity, Updates and Account; driver application, booking and journey screens. The app does not switch between Customer and Driver after setup.
 - **Book a ride or delivery**: Standard/SUV passenger trips and van/truck/motorcycle
   parcels with recipient details, category pricing and approved capacity matching; explicit Abuja search, route/fare review, shared ride requests,
   same-command retries, current status, registered vehicle and pre-start cancellation.
   Local sample journeys work without live providers. [Booking guide](../../docs/mobile-booking.md).
-- Separate customer/work activity with current and paginated past journeys.
+- Activity for the selected experience, with current and paginated past journeys.
 - Complete driver applications: guided make/year/model/colour dropdowns, years from
   2000 through the current year, Other fields for unlisted values,
   number plate, vehicle category, delivery load capacity, private PNG/JPEG uploads, expiry dates, review, corrections and resubmission.
 - Resume the car chosen during website **Apply to drive**, including its year and
   colour, before completing personal details. Native enrollment saves the same
   structured fields so interrupted applications can continue on either interface.
-- Shared rounded 3D-style vehicle icons in ten colours in Work and journey details.
+- Shared rounded 3D-style vehicle icons in ten colours in Driver and journey details.
   Illustrations are labelled; exact-model 3D assets are not included.
 - The same manual approval workflow as the web. Administrators review on the web.
 - Native device list and remote sign-out; web recovery at `/devices`.
 - Delivery requests and recipient drop-off codes.
+- Completed-trip test payments, saved receipts and a paginated Driver earnings preview use the same records as the website. Payment simulation only runs on the local development server; no money moves.
 - **Taxi Ai Eats** on Home, **My food orders** in Activity, **My store** in Account
-  and **Food deliveries** in Work, with the same restaurant/menu/order records as
+  and **Food deliveries** in Driver, with the same restaurant/menu/order records as
   the website. See [Eats setup](../../docs/eats.md) for the full test journey.
-- A shared native system-font family across text, fields, buttons and navigation.
+- Locally bundled Manrope typography across text, fields, buttons and navigation, matching the website and admin workspace.
 
-Native Work now supports foreground location, online/offline availability and job
+Native Driver now supports foreground location, online/offline availability and job
 claiming. Both participants negotiate fares, chat and finish rides/deliveries in the
 app, including pickup and drop-off verification. Updates has a durable inbox and
 optional configured Expo phone alerts. See [native journeys and push setup](../../docs/mobile-journeys.md).
 Native Safety / SOS now opens trusted contacts, revocable trip links and private test incident records. See [mobile safety](../../docs/mobile-safety.md).
 The driver can explicitly share foreground trip GPS from Journey or Safety; the customer and active trip links receive the latest position. See [native trip location](../../docs/mobile-trip-location.md).
 Booking and shared-driver-location views can show Google Maps on Android and Apple Maps on iOS. Android signed builds need the restricted Maps SDK key; see [native maps](../../docs/mobile-maps.md).
-Native calls, real payment controls, automatic crash detection and staff tools
-remain separate milestones. Eats has a polling order timeline; its live courier
+Native in-app audio calls and staff tools remain separate milestones. Real payment processing and automatic crash detection are unavailable on both clients. Eats has a polling order timeline; its live courier
 map and phone alerts remain future work.
 This is a connected foundation, not a store-ready transport service.
 
 ## Run locally on your Mac
 
-For vehicle changes, use **Work → Your Work profile → Edit / change vehicle**
+For vehicle changes, use **Driver → Your Driver profile → Edit / change vehicle**
 (also available in Account). Approved/submitted profiles ask for confirmation;
 saved vehicle changes require replacement vehicle documents and a new review.
-**Delete Work profile** opens a typed confirmation and retains Customer and past
+**Delete Driver profile** opens a typed confirmation and retains the account and past
 records. See [vehicle changes and deletion](../../docs/pickup-identity.md).
 
 Use **Node 24** (selected by the repository `.nvmrc`). Upgrade from Node 22.12.0
@@ -154,7 +154,7 @@ Read [vehicle identity and acceptance](../../docs/vehicle-identity.md),
 
 For the new ride flow, open **Home → Book a ride → Sample journey** while the
 backend is running, choose two areas, preview and request. Use a separate approved
-driver in native Work or on web to take the request. Open the journey in the app
+driver in the Driver app or on web to take the request. Open the journey in the app
 to negotiate, chat, confirm and complete. Provider and device acceptance steps
 are in the [booking guide](../../docs/mobile-booking.md).
 
@@ -164,10 +164,10 @@ Use [the signed preview setup and acceptance record](../../docs/device-preview.m
 for installable APK/ad hoc builds, Firebase client configuration, push credentials
 and the remaining live-host/device checks.
 
-1. Sign in with the same web account on iOS/Android. Confirm customer/work activity,
-   application status and pagination agree with web.
+1. Sign in with the same web account on iOS/Android, select Customer or Driver, then reopen the app.
+   Confirm it returns to the selected experience and activity, application status and pagination agree with web.
 2. Close/reopen, lock/unlock, lose network during refresh, background/foreground,
-   rotate, switch account/mode during slow responses and retry an enrollment.
+   rotate, switch accounts during slow responses and retry an enrollment.
    No prior account data should appear. A lost refresh response may require sign-in.
 3. Revoke a phone from `/devices`; its next request must reject access. Check local
    logout and remote-device logout independently.

@@ -1,15 +1,14 @@
 import { useEffect } from 'react';
-import { router, useLocalSearchParams } from 'expo-router';
+import { Redirect, useLocalSearchParams } from 'expo-router';
 import { transportCategory } from '../../../packages/shared/src/transport-categories.mjs';
 import type { DeliveryDraft } from '../src/booking/controller';
-import { Alert, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Alert, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { Text } from '../src/ui/typography';
 import { useSession } from '../src/session/provider';
 import { useBooking } from '../src/booking/use-booking';
 import { PlaceSearch } from '../src/booking/place-search';
 import { RoutePreview } from '../src/booking/route-preview';
 import { RequestCard } from '../src/booking/request-card';
-import { SelectField } from '../src/ui/select-field';
 import { Button, Card, Field, Heading, Loading, Notice, Pill, Screen, styles } from '../src/ui/components';
 import type { BookingRide } from '../../../packages/shared/src/mobile-booking.mjs';
 import { VehicleCategories } from '../src/ui/vehicle-categories';
@@ -17,12 +16,14 @@ import { vehicleCategory } from '../../../packages/shared/src/vehicle-categories
 import type { VehicleCategoryId } from '../../../packages/shared/src/vehicle-categories.mjs';
 
 function BookingScreen() {
-  const { setMode } = useSession(), { state: s, controller: c } = useBooking(), { width, fontScale } = useWindowDimensions();
+  const { state: s, controller: c } = useBooking(), { width, fontScale } = useWindowDimensions();
   const { category: initialCategory } = useLocalSearchParams<{ category?: string }>();
   useEffect(() => { if (vehicleCategory(initialCategory)) c.chooseCategory(initialCategory as VehicleCategoryId); }, [c, initialCategory]);
   const policy = transportCategory(s.category), delivery = policy?.service === 'delivery';
   const settings = s.settings, locked = !!s.busy || !!s.uncertain, disabled = locked || s.stale;
+  const planningDisabled = disabled || s.locatingPickup;
   const wide = width >= 820 && fontScale <= 1.3;
+  const samplePickup = settings?.areas.find((area) => area.id === s.pickupId);
   const cancel = (ride: BookingRide) => Alert.alert('Cancel this journey?', `${ride.pickup} → ${ride.destination}. You will need to create a new request if your plans change.`, [
     { text: 'Keep journey', style: 'cancel' }, { text: 'Cancel journey', style: 'destructive', onPress: () => void c.cancel(ride) },
   ]);
@@ -36,7 +37,7 @@ function BookingScreen() {
     {!settings && s.loading && <Loading/>}
     {shown.map((ride) => <RequestCard key={ride.id} ride={ride} now={s.now} disabled={disabled} onCancel={() => cancel(ride)}/>)}
     {settings?.blockedBy && <Card><Text style={styles.h2}>{settings.blockedBy === 'online' ? 'You’re online as a driver.' : 'You have active driver work.'}</Text>
-      <Text style={styles.body}>{settings.blockedBy === 'online' ? 'Go offline in Work before requesting your own ride.' : 'Finish or cancel your driver journey before requesting your own ride.'}</Text><Button title="Open Work" secondary onPress={() => void setMode('work').then((ok) => { if(ok)router.push('/work'); })}/></Card>}
+      <Text style={styles.body}>{settings.blockedBy === 'online' ? 'Go offline from your driver account on the website before requesting a ride.' : 'Finish or cancel your driver journey before requesting a ride.'}</Text></Card>}
     {settings && !settings.current.length && !settings.blockedBy && <VehicleCategories value={s.category} onChange={(id) => c.chooseCategory(id)} disabled={locked}/>}
     {settings && !settings.current.length && !settings.blockedBy && <>
       {delivery && <Card><Text style={styles.h2}>What are you sending?</Text>
@@ -48,13 +49,21 @@ function BookingScreen() {
           {settings.allowSample && <Button title="Sample journey" secondary={s.mode !== 'sample'} disabled={locked} onPress={() => c.chooseMode('sample')}/>}</View>
         <View style={[look.columns, wide && look.wide]}><View style={[look.column, wide && look.wideColumn]}><Card><Text style={styles.h2}>Plan your journey</Text>
           {s.mode === 'route' ? <>
-            {!s.consent ? <><Text style={styles.body}>Search Abuja streets and landmarks. Search terms go to {settings.online.searchHost ?? 'the configured address provider'}; selected pickup and destination coordinates go to {settings.online.routeHost ?? 'the configured routing provider'} for a route preview.</Text>
-              <Text style={styles.small}>Search happens when you tap Search. This screen does not track your phone’s location.</Text><Button title="Enable address search" disabled={disabled} onPress={() => c.consent()}/></>
-              : <><PlaceSearch endpoint="pickup" state={s} controller={c} disabled={disabled}/><PlaceSearch endpoint="destination" state={s} controller={c} disabled={disabled}/></>}
+            {!s.consent ? <><Text style={styles.body}>Taxi Ai uses your current location for pickup, then lets you search Abuja streets and landmarks for your destination. Your pickup and destination coordinates go to {settings.online.routeHost ?? 'the configured routing provider'} for a route preview.</Text>
+              <Text style={styles.small}>Your phone asks for permission only when you choose to use your current location.</Text><Button title="Enable current pickup & search" disabled={disabled} onPress={() => c.consent()}/></>
+              : <><View style={styles.stack}><Text style={styles.label}>PICKUP</Text>
+                <Text style={styles.body}>{s.pickup.selected ? `${s.pickup.selected.name} · ${s.pickup.selected.lat.toFixed(5)}, ${s.pickup.selected.lng.toFixed(5)}` : 'Use your phone’s current location as the pickup point.'}</Text>
+                <Button title={s.pickup.selected ? 'Update current location' : 'Use current location'} secondary={!!s.pickup.selected} busy={s.locatingPickup} disabled={disabled} onPress={() => void c.useCurrentPickup()}/></View>
+                <PlaceSearch endpoint="destination" state={s} controller={c} disabled={planningDisabled}/></>}
           </> : <><Text style={styles.body}>Try the request flow with sample Abuja areas and fictional fares.</Text>
-            <SelectField label="Pickup area" value={s.pickupId} options={settings.areas.map((a) => ({ value: a.id, label: a.name, disabled: a.id === s.destinationId }))} disabled={disabled} onChange={(id) => c.sample('pickup', id)}/>
-            <SelectField label="Destination area" value={s.destinationId} options={settings.areas.map((a) => ({ value: a.id, label: a.name, disabled: a.id === s.pickupId }))} disabled={disabled} onChange={(id) => c.sample('destination', id)}/></>}
-          {(s.mode === 'sample' || s.consent) && <Button title={s.preview ? 'Preview route again' : 'Preview route & fare'} secondary={!!s.preview} busy={s.busy === 'preview'} disabled={disabled} onPress={() => void c.preview()}/>}
+            <Text style={styles.small}>Pickup uses your current location. For this local sample fare, the preview pickup area is {samplePickup?.name ?? 'the first available sample area'}.</Text>
+            <Field label="Destination" placeholder="Type an Abuja area, e.g. Maitama" value={s.sampleDestinationQuery} editable={!disabled} maxLength={160}
+              autoCorrect={false} onChangeText={(query) => c.editSampleDestination(query)}/>
+            {!!s.sampleDestinationQuery.trim() && !s.destinationId && settings.areas.filter((area) => area.id !== s.pickupId && area.name.toLowerCase().includes(s.sampleDestinationQuery.trim().toLowerCase())).slice(0, 5).map((area) =>
+              <Pressable key={area.id} accessibilityRole="button" accessibilityLabel={`Use ${area.name} as destination`} disabled={disabled}
+                style={[styles.input, { paddingVertical: 16 }]} onPress={() => c.sample('destination', area.id)}><Text style={styles.body}>{area.name}</Text></Pressable>)}
+            <Text style={styles.small}>{s.destinationId ? 'Destination matched to a sample area.' : `Sample areas: ${settings.areas.filter((area) => area.id !== s.pickupId).map((area) => area.name).join(', ')}.`}</Text></>}
+          {(s.mode === 'sample' || s.consent) && <Button title={s.preview ? 'Preview route again' : 'Preview route & fare'} secondary={!!s.preview} busy={s.busy === 'preview'} disabled={planningDisabled} onPress={() => void c.preview()}/>}
         </Card></View>
         {s.preview && <View style={[look.column, wide && look.wideColumn]}><RoutePreview preview={s.preview} now={s.now} disabled={disabled} busy={s.busy === 'request'} onRequest={() => void c.submit()} onPreview={() => void c.preview()}/></View>}
         </View>
@@ -63,5 +72,5 @@ function BookingScreen() {
     <Text style={styles.small}>Request status refreshes every 10 seconds while this screen is open. You can also refresh above.</Text>
   </Screen>;
 }
-export default function BookRide() { const { user } = useSession(); return user ? <BookingScreen key={user.id}/> : null; }
+export default function BookRide() { const { user, role } = useSession(); return role === 'driver' ? <Redirect href="/work"/> : user ? <BookingScreen key={user.id}/> : null; }
 const look = StyleSheet.create({ columns: { gap: 20 }, wide: { flexDirection: 'row', alignItems: 'flex-start' }, column: { width: '100%', gap: 16 }, wideColumn: { flex: 1, width: undefined, minWidth: 0 } });

@@ -5,6 +5,7 @@ export function eatsRoutes(eats) {
     { method: 'GET', path: /^\/api\/eats\/restaurants$/, handle: ({ user, query }) => ({ body: eats.catalog(user, Object.fromEntries(query)) }) },
     { method: 'GET', path: new RegExp(`^${root}/restaurants/${uuid}$`), handle: ({ user, match }) => ({ body: eats.restaurant(user, match[1]) }) },
     { method: 'GET', path: /^\/api\/eats\/store$/, handle: ({ user }) => ({ body: eats.mine(user) }) },
+    { method: 'GET', path: new RegExp(`^${root}/images/${uuid}$`), handle: ({ user, match }) => ({ image: eats.image(user, match[1]) }) },
     { method: 'GET', path: /^\/api\/eats\/admin\/stores$/, handle: ({ user }) => ({ body: eats.reviewList(user) }) },
     { method: 'GET', path: /^\/api\/eats\/work$/, handle: ({ user }) => ({ body: eats.work(user) }) },
     { method: 'GET', path: /^\/api\/eats\/orders$/, handle: ({ user, query }) => ({ body: eats.orders(user, query.get('scope') ?? 'customer', query.get('before')) }) },
@@ -13,6 +14,8 @@ export function eatsRoutes(eats) {
       handle: ({ user, data, key }) => ({ body: eats.command(user, action, null, data, key) }) })),
     ...[['save', 'store-save'], ['menu', 'menu-save'], ['open', 'store-open'], ['review', 'store-review']].map(([path, action]) => ({ method: 'POST', path: new RegExp(`^${root}/stores/${uuid}/${path}$`),
       handle: ({ user, match, data, key }) => ({ body: eats.command(user, action, match[1], data, key) }) })),
+    { method: 'POST', path: new RegExp(`^${root}/stores/${uuid}/photo$`), maxBodyBytes: 2_800_000,
+      handle: async ({ user, match, data, key }) => ({ body: await eats.photoCommand(user, match[1], data, key) }) },
     { method: 'POST', path: new RegExp(`^${root}/orders/${uuid}/(accept|reject|prepare|ready|claim|pickup|arrive|deliver|cancel)$`),
       handle: ({ user, match, data, key }) => ({ body: eats.command(user, match[2], match[1], data, key) }) },
   ];

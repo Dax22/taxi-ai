@@ -2,7 +2,7 @@ const storeColumns = 'id, status, version, is_open AS isOpen, details_json AS de
 const orderColumns = `id, store_id AS storeId, customer_id AS customerId, courier_id AS courierId, status, version, snapshot_json AS snapshot,
   courier_json AS courier, pickup_pin AS pickupPin, delivery_pin AS deliveryPin, pin_failures AS pinFailures, pin_blocked_until AS pinBlockedUntil,
   events_json AS events, created_at AS createdAt, updated_at AS updatedAt`;
-const store = (row) => row ? { ...JSON.parse(row.details), ...row, details: undefined, isOpen: Boolean(row.isOpen) } : null;
+const store = (row) => row ? { sellerType: 'restaurant', ...JSON.parse(row.details), ...row, details: undefined, isOpen: Boolean(row.isOpen) } : null;
 const order = (row) => row ? { ...row, snapshot: JSON.parse(row.snapshot), courier: row.courier ? JSON.parse(row.courier) : null, events: JSON.parse(row.events) } : null;
 export function createEatsRepository(db) {
   return Object.freeze({
@@ -20,8 +20,16 @@ export function createEatsRepository(db) {
       db.prepare('UPDATE eats_stores SET status=?,version=?,is_open=?,details_json=?,review_note=?,updated_at=? WHERE id=?')
         .run(status, version, isOpen ? 1 : 0, JSON.stringify(profile), reviewNote, updatedAt, id);
     },
-    menu: (storeId) => db.prepare('SELECT id,details_json AS details FROM eats_menu WHERE store_id=? ORDER BY id').all(storeId).map((row) => ({ id: row.id, ...JSON.parse(row.details) })),
+    menu: (storeId) => db.prepare(`SELECT m.id,m.details_json AS details,p.version AS photoVersion FROM eats_menu m
+      LEFT JOIN eats_menu_photos p ON p.item_id=m.id WHERE m.store_id=? ORDER BY m.id`).all(storeId)
+      .map((row) => ({ id: row.id, ...JSON.parse(row.details), photoVersion: row.photoVersion ?? null })),
     menuItem: (id) => { const row = db.prepare('SELECT store_id AS storeId,details_json AS details FROM eats_menu WHERE id=?').get(id); return row ? { id, storeId: row.storeId, ...JSON.parse(row.details) } : null; },
+    photo: (itemId) => db.prepare('SELECT store_id AS storeId,content,version FROM eats_menu_photos WHERE item_id=?').get(itemId) ?? null,
+    photoBytes: (storeId) => db.prepare('SELECT COALESCE(SUM(size_bytes),0) AS bytes FROM eats_menu_photos WHERE store_id=?').get(storeId).bytes,
+    savePhoto(itemId, storeId, content, version) { db.prepare(`INSERT INTO eats_menu_photos(item_id,store_id,content,size_bytes,version) VALUES (?,?,?,?,?)
+      ON CONFLICT(item_id) DO UPDATE SET content=excluded.content,size_bytes=excluded.size_bytes,version=excluded.version`)
+      .run(itemId,storeId,content,content.length,version); },
+    removePhoto: (itemId) => db.prepare('DELETE FROM eats_menu_photos WHERE item_id=?').run(itemId),
     saveMenu(id, storeId, item) { db.prepare(`INSERT INTO eats_menu (id,store_id,available,details_json) VALUES (?,?,?,?)
       ON CONFLICT(id) DO UPDATE SET available=excluded.available,details_json=excluded.details_json`).run(id, storeId, item.available ? 1 : 0, JSON.stringify(item)); },
     quote: (id) => { const row = db.prepare('SELECT id,customer_id AS customerId,store_id AS storeId,store_version AS storeVersion,snapshot_json AS snapshot,expires_at AS expiresAt,order_id AS orderId FROM eats_quotes WHERE id=?').get(id); return row ? { ...row, snapshot: JSON.parse(row.snapshot) } : null; },

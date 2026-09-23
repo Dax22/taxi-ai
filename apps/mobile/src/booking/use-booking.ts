@@ -4,10 +4,11 @@ import { useFocusEffect } from 'expo-router';
 import { randomUUID } from 'expo-crypto';
 import { useSession } from '../session/provider';
 import { BookingController } from './controller';
+import { currentPickupPlace } from './location';
 
 export function useBooking() {
   const { client, user } = useSession();
-  const controller = useMemo(() => new BookingController(client, randomUUID), [client, user?.id]);
+  const controller = useMemo(() => new BookingController(client, randomUUID, undefined, currentPickupPlace), [client, user?.id]);
   const state = useSyncExternalStore(controller.subscribe, controller.snapshot);
   useFocusEffect(useCallback(() => {
     if (AppState.currentState === 'active') controller.activate();

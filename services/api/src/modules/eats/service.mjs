@@ -6,16 +6,20 @@ import { check } from '../../shared/errors.mjs';
 import { canonical, version, storeDetails, menuDetails, checkedBasket, area } from './domain.mjs';
 
 /** Stores and food orders own their state; other work is checked through injected ports. */
-export function createEatsService({ repository, getAccount, hasOtherWork, availabilityFor, onClaim, tokens, unitOfWork, audit, clock }) {
+export function createEatsService({ repository, getAccount, hasOtherWork, availabilityFor, onClaim, photoCodec, tokens, unitOfWork, audit, clock }) {
   const actor = (user) => { const fresh = getAccount(user?.id); check(fresh, 'UNAUTHENTICATED', 'Sign in to continue.'); return fresh; };
   const identifier = (id) => { check(typeof id === 'string' && /^[a-f0-9-]{36}$/.test(id), 'INVALID_ID', 'Choose a valid record.'); return id; };
   const storeRecord = (id) => { const value = repository.store(identifier(id)); check(value, 'NOT_FOUND', 'Restaurant not found.'); return value; };
   const member = (user, id) => repository.membership(user.id)?.storeId === id;
   const ownStore = (user, id) => { check(member(user, id), 'FORBIDDEN', 'Only this store’s owner can manage it.'); return storeRecord(id); };
+  const publicStore = (store) => {
+    const { address, reviewNote, ...visible } = store;
+    return { ...visible, town: area(store.areaId).name, ...((store.sellerType ?? 'restaurant') === 'restaurant' ? { address } : {}) };
+  };
   function storeView(user, id) {
     const store = storeRecord(id), managing = user.role === 'admin' || member(user, id);
     check(managing || store.status === 'approved', 'NOT_FOUND', 'Restaurant not found.');
-    return { store: { ...store, reviewNote: managing ? store.reviewNote : undefined }, menu: repository.menu(id).filter((item) => managing || item.available) };
+    return { store: managing ? { ...store, town: area(store.areaId).name } : publicStore(store), menu: repository.menu(id).filter((item) => managing || item.available) };
   }
   function roleFor(user, order) {
     if (user.role === 'admin') return 'admin';
@@ -28,7 +32,9 @@ export function createEatsService({ repository, getAccount, hasOtherWork, availa
     check(order, 'NOT_FOUND', 'Order not found.');
     const role = roleFor(user, order); check(role, 'NOT_FOUND', 'Order not found.');
     const active = !EATS_TERMINAL.includes(order.status), { address, ...snapshot } = order.snapshot;
-    return { id: order.id, status: order.status, version: order.version, ...snapshot, role, actions: eatsActions(order, role),
+    const restaurant = ['store','courier','admin'].includes(role)
+      ? { ...snapshot.restaurant, address: repository.store(order.storeId).address } : snapshot.restaurant;
+    return { id: order.id, status: order.status, version: order.version, ...snapshot, restaurant, role, actions: eatsActions(order, role),
       address: role === 'store' ? { areaId: address.areaId } : address,
       customerName: getAccount(order.customerId).name, courier: order.courier,
       ...(active && role === 'store' && ['ready', 'assigned'].includes(order.status) ? { pickupPin: order.pickupPin } : {}),
@@ -95,7 +101,7 @@ export function createEatsService({ repository, getAccount, hasOtherWork, availa
         fields(data, ['expectedVersion', ...allowed]); version(store, data.expectedVersion);
         if (action === 'store-save') {
           const next = storeDetails(data.details);
-          if (['name', 'address', 'areaId', 'cuisine'].some((field) => next[field] !== store[field])) { store.status = 'pending'; store.isOpen = false; store.reviewNote = 'Store details changed. A new review is required.'; }
+          if (['name', 'address', 'areaId', 'cuisine', 'sellerType'].some((field) => next[field] !== store[field])) { store.status = 'pending'; store.isOpen = false; store.reviewNote = 'Store details changed. A new review is required.'; }
           Object.assign(store, next);
         } else if (action === 'menu-save') {
           const item = menuDetails(data.item), old = data.itemId !== null ? repository.menuItem(identifier(data.itemId)) : null;
@@ -177,16 +183,62 @@ export function createEatsService({ repository, getAccount, hasOtherWork, availa
     });
     return project(user, result, replayed);
   }
-  return Object.freeze({ command, work, orders: list,
+  async function photoCommand(user, id, data, key) {
+    check(typeof key === 'string' && /^[A-Za-z0-9_-]{16,128}$/.test(key), 'INVALID_IDEMPOTENCY_KEY', 'A unique request key is required.');
+    fields(data, ['expectedVersion', 'itemId', 'image']);
+    id = identifier(id); const itemId = identifier(data.itemId);
+    user = actor(user); const owned = ownStore(user, id);
+    const fingerprint = tokens.digest(canonical({ action: 'photo-save', id, data }));
+    const prior = repository.command(user.id, key);
+    if (prior) { check(prior.fingerprint === fingerprint, 'KEY_REUSED', 'This key belongs to another action.'); return project(user, prior.result, true); }
+    version(owned, data.expectedVersion);
+    const content = data.image === null ? null : await photoCodec.normalize(data.image);
+    let replayed = false;
+    const result = unitOfWork(() => {
+      user = actor(user);
+      const previous = repository.command(user.id, key);
+      if (previous) { check(previous.fingerprint === fingerprint, 'KEY_REUSED', 'This key belongs to another action.'); replayed = true; return previous.result; }
+      const store = ownStore(user, id), item = repository.menuItem(itemId);
+      version(store, data.expectedVersion);
+      check(item?.storeId === store.id, 'NOT_FOUND', 'Menu item not found.');
+      const current = repository.photo(itemId);
+      if (content) {
+        const total = repository.photoBytes(store.id) - (current?.content.length ?? 0) + content.length;
+        check(total <= 30 * 1024 * 1024, 'PHOTO_STORAGE_FULL', 'This store has reached its menu photo limit.');
+        repository.savePhoto(itemId, store.id, content, store.version + 1);
+      } else repository.removePhoto(itemId);
+      store.version++; store.updatedAt = clock(); repository.saveStore(store);
+      const saved = { storeId: store.id };
+      audit.record(user.id, content ? 'eats.photo.saved' : 'eats.photo.removed', itemId, store.updatedAt);
+      repository.saveCommand(user.id, key, fingerprint, saved, store.updatedAt);
+      return saved;
+    });
+    return project(user, result, replayed);
+  }
+  function image(user, itemId) {
+    user = actor(user);
+    const item = repository.menuItem(identifier(itemId)), photo = repository.photo(itemId);
+    check(item && photo && photo.storeId === item.storeId, 'NOT_FOUND', 'Food photo not found.');
+    const store = repository.store(item.storeId);
+    check(store && (user.role === 'admin' || member(user, store.id) || store.status === 'approved' && item.available),
+      'NOT_FOUND', 'Food photo not found.');
+    return { content: Buffer.from(photo.content), mimeType: 'image/jpeg' };
+  }
+  return Object.freeze({ command, photoCommand, image, work, orders: list,
     catalog(user, query = {}) {
       user = actor(user); const q = String(query.q ?? '').trim().toLowerCase().slice(0, 100);
-      const stores = repository.stores().filter((s) => (!query.cuisine || s.cuisine === query.cuisine) && (!query.areaId || s.areaId === query.areaId)
-        && (!q || `${s.name} ${s.cuisine} ${s.description}`.toLowerCase().includes(q)));
-      return { restaurants: stores.map(({ reviewNote, ...s }) => s), areas: DEMO_AREAS, isDemo: true };
+      const stores = repository.stores().filter((s) => !query.cuisine || s.cuisine === query.cuisine);
+      const matches = (value) => !q || value.toLowerCase().includes(q);
+      const rows = stores.map((seller) => ({ seller: publicStore(seller), items: repository.menu(seller.id).filter((item) => item.available) }));
+      const dishes = rows.flatMap(({ seller, items }) => items.filter((item) => matches(`${item.name} ${item.description} ${item.category} ${seller.name} ${seller.cuisine}`))
+        .map((item) => ({ ...item, seller }))).slice(0, 60);
+      const restaurants = rows.filter(({ seller, items }) => matches(`${seller.name} ${seller.cuisine} ${seller.description}`)
+        || q && items.some((item) => matches(`${item.name} ${item.description} ${item.category}`))).map(({ seller }) => seller);
+      return { restaurants, dishes, areas: DEMO_AREAS, isDemo: true };
     },
     restaurant: (user, id) => storeView(actor(user), id),
     order: (user, id) => ({ order: orderView(actor(user), repository.order(id)) }),
     mine(user) { user = actor(user); const membership = repository.membership(user.id); return membership ? { ...storeView(user, membership.storeId), areas: DEMO_AREAS } : { store: null, menu: [], areas: DEMO_AREAS }; },
-    reviewList(user) { user = actor(user); requireRole(user, 'admin'); return { stores: repository.stores(true) }; },
+    reviewList(user) { user = actor(user); requireRole(user, 'admin'); return { stores: repository.stores(true).map((store) => ({ ...store, town: area(store.areaId).name })) }; },
   });
 }
