@@ -19,10 +19,20 @@ export function removeGuestFixtureTables(db) {
 
 /** Private dispatch points are introduced after the guest-ride fixtures. */
 export function removeNationwideEatsFixtureTables(db) {
+  removeSafetyMonitoringFixtureTables(db);
   for (const table of ['eats_order_dispatch_points', 'eats_store_dispatch_points']) {
     if (!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(table)) continue;
     if (db.prepare(`SELECT count(*) AS count FROM ${table}`).get().count) throw new Error(`Cannot downgrade a populated ${table} fixture.`);
     db.exec(`DROP TABLE ${table}`);
   }
   db.exec('DROP INDEX IF EXISTS eats_store_area; DROP INDEX IF EXISTS eats_ready_area;');
+}
+
+/** Safety monitoring is additive in schema 26; downgrade fixtures must remove its empty tables. */
+export function removeSafetyMonitoringFixtureTables(db) {
+  for (const table of ['safety_delivery_jobs','safety_auto_alerts','safety_monitor_sessions','safety_risk_zones','safety_monitor_commands']) {
+    if (!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(table)) continue;
+    if (db.prepare(`SELECT count(*) AS count FROM ${table}`).get().count) throw new Error(`Cannot downgrade a populated ${table} fixture.`);
+    db.exec(`DROP TABLE ${table}`);
+  }
 }

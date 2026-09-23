@@ -1,3 +1,4 @@
+import { safetyMonitoringRoutes } from '../modules/safety-monitoring/routes.mjs';
 import { MOBILE_API_VERSION } from '../../../../packages/shared/src/mobile-contracts.mjs';
 import { check } from '../shared/errors.mjs';
 import { fields } from '../shared/validation.mjs';
@@ -13,7 +14,8 @@ import { createMobileBooking } from './mobile-booking.mjs';
 import { eatsRoutes } from '../modules/eats/routes.mjs';
 
 /** Versioned native surface. Cookie identity and browser CSRF are never reused. */
-export function createMobileRouter({ devices, accounts, drivers, rides, eats, locations, availability, chat, notifications, safety, guestRides, vehicleChecks, payments, clock, rateLimiter, googleAuth, accountEmail }) {
+export function createMobileRouter({ devices, accounts, drivers, rides, eats, locations, availability, chat, notifications, safety, safetyMonitoring, guestRides, vehicleChecks, payments, clock, rateLimiter, googleAuth, accountEmail }) {
+  const monitorRoutes = safetyMonitoringRoutes(safetyMonitoring).filter(r=>!r.role);
   const foodRoutes = eatsRoutes(eats);
   const booking = createMobileBooking({ rides, locations, availability, clock });
   const journeys = createMobileJourneys({ rides, availability, chat, clock });
@@ -82,6 +84,11 @@ export function createMobileRouter({ devices, accounts, drivers, rides, eats, lo
     else if (path === '/work' || path.startsWith('/work/') || path.startsWith('/journeys/')) body = journeys({ path, write, user: session.user,
       accessToken, query, data, key: request.headers['idempotency-key'] });
     else if (path.startsWith('/vehicle-checks/')) body = await mobileVehicleChecks({ vehicleChecks,session,path,write,data,key:request.headers['idempotency-key'] });
+    else if (path.startsWith('/safety-monitoring/')) {
+      const route=monitorRoutes.find(r=>r.method===request.method && r.path.test('/api'+path));
+      check(route,'NOT_FOUND','Monitoring endpoint not found.');
+      body=route.handle({user:session.user,nativeSessionId:session.id,match:('/api'+path).match(route.path),data,key:request.headers['idempotency-key']}).body;
+    }
     else if (path.startsWith('/safety/')) body = mobileSafety({ safety, session, path, write, data, key: request.headers['idempotency-key'] });
     else if (path.startsWith('/guest-rides/')) body = mobileGuestRides({ guestRides, session, path, write, data, key: request.headers['idempotency-key'] });
     else if (path.startsWith('/tracking/')) body = mobileTracking({ locations, session, path, write, query, data, key: request.headers['idempotency-key'] });

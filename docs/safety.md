@@ -1,5 +1,11 @@
 # Trip Safety preview
 
+The manual SOS flow documented below remains a simulator. A separate opt-in
+**Safety monitoring · experimental** panel now supports foreground motion/audio
+signals, persistent cancel countdowns and configurable gateway delivery. See
+[safety monitoring](safety-monitoring.md) for its actual capabilities and setup.
+
+
 Version 0.13.0 adds trusted contacts, manual test SOS, private incident review,
 simulated contact notifications and expiring trip links. Everything runs locally
 without provider credentials. The responsive web screens support customer, driver

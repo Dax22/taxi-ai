@@ -6,14 +6,12 @@ it stacks with the artwork first. Original images remain fully visible.
 
 Copy reflects the implementation: optional AI vehicle photo comparison, rule-based
 Kemmy journey guidance and route-based fare suggestions. The multilingual card
-has been replaced with planned crash detection and automatic alerts, opt-in
-in-car scream/panic detection with emergency sharing, and dangerous-location
-warnings. Emergency sharing is proposed to include passenger and driver details
-and trip location, with permission, for saved family contacts and supported
-emergency helplines. These cards describe planned capabilities, not active
-monitoring or live emergency dispatch. Current safety notifications remain
-simulated; see `docs/safety.md`. The section does not label the deterministic
-fare or Kemmy logic as an AI model or promise live traffic prediction.
+has been replaced with experimental foreground possible-crash and loud-distress
+checks, panic alerts and reviewed location warnings. Sound level is not described
+as a validated scream classifier. Contact delivery requires an explicitly configured
+gateway, and emergency escalation requires a connected partner. The homepage cards
+now say Experimental/Preview. See [safety monitoring](../safety-monitoring.md).
+Fare and Kemmy guidance remain deterministic, not a trained AI model.
 
 ## Artwork
 

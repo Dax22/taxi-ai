@@ -1,3 +1,4 @@
+import { createSafetyMonitoring } from './dashboard/safety-monitoring.mjs';
 import { createOnboardingController } from './dashboard/onboarding-controller.mjs';
 import { createOnboardingView } from './dashboard/onboarding-view.mjs';
 import { driverFiles } from './dashboard/driver-files.mjs';
@@ -80,7 +81,7 @@ const safetyView = createSafetyView({ onAdd: (data) => safety.add(data), onRemov
   onRaise: (data) => safety.raise(data), onShare: (minutes) => safety.share(minutes), onRevoke: (link) => safety.revoke(link),
   onCopy: () => safety.copy(), onOpen: (id) => safety.open(id), onPage: (...args) => safety.page(...args),
   onReview: (...args) => safety.review(...args), onSimulate: (...args) => safety.simulate(...args) });
-const safety = createSafetyController({ client, view: safetyView, origin: location.origin,
+const safety = createSafetyController({ client, monitor: createSafetyMonitoring({client}), view: safetyView, origin: location.origin,
   copy: (value) => navigator.clipboard.writeText(value) });
 const guests = createGuestRidesPanel({ client, origin: location.origin,
   now: () => serverTime.now + performance.now() - serverTime.received,

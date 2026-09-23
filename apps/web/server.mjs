@@ -1,3 +1,4 @@
+import { createSafetyAlertProvider } from '../../services/api/src/infrastructure/safety-alert-provider.mjs';
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
@@ -67,6 +68,10 @@ const routes = new Map([
   ['/shared/vehicle-check-controller.mjs', ['../../packages/shared/src/vehicle-check-controller.mjs', 'text/javascript; charset=utf-8']],
   ['/dashboard/safety-format.mjs', ['public/dashboard/safety-format.mjs', 'text/javascript; charset=utf-8']],
   ['/dashboard/trip-share-controller.mjs', ['public/dashboard/trip-share-controller.mjs', 'text/javascript; charset=utf-8']],
+  ['/shared/safety-monitoring-controller.mjs', ['../../packages/shared/src/safety-monitoring-controller.mjs', 'text/javascript; charset=utf-8']],
+  ['/shared/safety-monitoring.mjs', ['../../packages/shared/src/safety-monitoring.mjs', 'text/javascript; charset=utf-8']],
+  ['/dashboard/safety-monitoring.mjs', ['public/dashboard/safety-monitoring.mjs', 'text/javascript; charset=utf-8']],
+  ['/dashboard/safety-sensors.mjs', ['public/dashboard/safety-sensors.mjs', 'text/javascript; charset=utf-8']],
   ['/shared/safety.mjs', ['../../packages/shared/src/safety.mjs', 'text/javascript; charset=utf-8']],
   ['/vehicle.css', ['public/vehicle.css', 'text/css; charset=utf-8']],
   ['/vehicle-categories.css', ['public/vehicle-categories.css', 'text/css; charset=utf-8']],
@@ -152,11 +157,12 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
   mapProvider = createMapProvider({ env: { ...process.env, TAXI_AI_MAPS_MODE: process.env.TAXI_AI_MAPS_MODE ?? (runtime.mode === 'staging' ? 'off' : 'community') } }),
   telemetry = createTelemetry({ enabled: runtime.mode === 'staging' }),
   accountMail = createAccountMail({ config: createEmailConfig(process.env,runtime) }),
+  safetyAlertProvider = createSafetyAlertProvider({env:process.env}),
   pushProvider = createPushProvider({ env: process.env }),
   vehicleVisionProvider = createVehicleVisionProvider({ env:process.env }),
   googleProvider = createGoogleProvider({ config: createGoogleConfig(process.env, runtime), clock }) } = {}) {
   if (runtime.mode === 'staging' && callConfig.mode === 'local') throw new Error('Staging calls require off or a configured relay.');
-  const application = createApplication({ db, clock, callConfig, mapProvider, googleProvider, accountMail, pushProvider, vehicleVisionProvider, allowSimulation: runtime.mode === 'local' });
+  const application = createApplication({ db, clock, callConfig, mapProvider, googleProvider, accountMail, pushProvider, vehicleVisionProvider, safetyAlertProvider, allowSimulation: runtime.mode === 'local' });
   const handleApi = createApiRouter(application, { secure: runtime.mode === 'staging' });
   const handleMobile = createMobileRouter(application);
   const handleGoogleCallback = createGoogleCallback(application, runtime.mode === 'staging');
@@ -164,6 +170,7 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
   const cleanup = setInterval(() => {
     try { application.rides.sweep(); application.availability.sweep(); application.calls.sweep(); application.locations.sweep(); application.safety.sweep(); application.guestRides.sweep(); application.vehicleChecks.sweep(); application.devices.sweep(); application.googleAuth.sweep(); }
     catch { telemetry.event('maintenance_failed'); }
+    void application.safetyMonitoring.deliverPending().catch(() => telemetry.event('safety_delivery_failed'));
     void application.accountEmail.deliverPending().catch(() => telemetry.event('maintenance_failed'));
     void application.notifications.deliverPending().catch(() => telemetry.event('maintenance_failed'));
   }, 5000);
@@ -180,7 +187,7 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
     try {
       pathname = new URL(request.url, 'http://localhost').pathname;
       if (pathname === '/app' && mapProvider.mode !== 'off') response.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-      response.setHeader('Permissions-Policy', `camera=${pathname === '/app' ? '(self)' : '()'}, microphone=${pathname === '/app' && callConfig.mode !== 'off' ? '(self)' : '()'}, geolocation=${['/app', '/eats'].includes(pathname) ? '(self)' : '()'}`);
+      response.setHeader('Permissions-Policy', `camera=${pathname === '/app' ? '(self)' : '()'}, microphone=${pathname === '/app' ? '(self)' : '()'}, geolocation=${['/app', '/eats'].includes(pathname) ? '(self)' : '()'}, accelerometer=${pathname === '/app' ? '(self)' : '()'}, gyroscope=${pathname === '/app' ? '(self)' : '()'}`);
     } catch {
       response.writeHead(400);
       response.end('Bad request');
@@ -234,7 +241,7 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
   server.requestTimeout = 15_000;
   server.headersTimeout = 10_000;
   server.beginShutdown = () => { health.beginShutdown(); clearInterval(cleanup); application.accountEmail.stop(); };
-  server.on('close', () => { clearInterval(cleanup); application.accountEmail.stop(); application.notifications.stop(); db.close(); });
+  server.on('close', () => { clearInterval(cleanup); application.accountEmail.stop(); application.notifications.stop(); void application.safetyMonitoring.stop().finally(() => db.close()); });
   return server;
 }
 

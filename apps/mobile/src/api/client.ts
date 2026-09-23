@@ -188,6 +188,8 @@ export class MobileClient {
   async cancelRide(id: string, expectedVersion: number, key: string) {
     return parseBookingRide(await this.request(`/booking/requests/${id}/cancel`, { expectedVersion, reason: 'plans_changed' }, key));
   }
+  async safetyMonitoring(id:string) { return this.request(`/safety-monitoring/rides/${id}`); }
+  async safetyMonitoringCommand(id:string,action:string,data:unknown,key:string) { return this.request(`/safety-monitoring/rides/${id}/${action}`,data,key); }
   async safetyContacts() { return readContacts(await this.request('/safety/contacts')); }
   async vehicleChecks(id:string) { return readVehicleChecks(await this.request(`/vehicle-checks/rides/${id}`),id); }
   async checkVehicle(id:string,data:{image:VehiclePhoto;consentVersion:string},key:string) {

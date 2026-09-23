@@ -1,3 +1,4 @@
+import { safetyMonitoringRoutes } from '../modules/safety-monitoring/routes.mjs';
 import { deviceSessionRoutes } from '../modules/device-sessions/routes.mjs';
 import { check } from '../shared/errors.mjs';
 import { hasCapability } from '../shared/policies.mjs';
@@ -25,6 +26,7 @@ export function createApiRouter(application, { secure = false } = {}) {
   const { accounts, devices, drivers, rides, chat, calls, locations, availability, payments, safety, rateLimiter, clock } = application;
   const cookie = (token, age) => sessionCookie(token, age, secure);
   const routes = [...accountEmailRoutes(application.accountEmail, cookie), ...googleAuthRoutes(application.googleAuth, accounts, secure), ...adminConsoleRoutes(application.adminConsole, accounts, cookie), ...deviceSessionRoutes(devices), ...accountRoutes(accounts, cookie), ...driverRoutes(drivers), ...rideRoutes(rides), ...chatRoutes(chat), ...callRoutes(calls), ...locationRoutes(locations), ...availabilityRoutes(availability), ...paymentRoutes(payments), ...safetyRoutes(safety)];
+  routes.push(...safetyMonitoringRoutes(application.safetyMonitoring));
   routes.push(...vehicleCheckRoutes(application.vehicleChecks));
   routes.push(...eatsRoutes(application.eats));
   routes.push(...guestRideRoutes(application.guestRides));

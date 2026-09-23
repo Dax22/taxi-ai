@@ -1,3 +1,4 @@
+import { removeSafetyMonitoringFixtureTables } from './migration-fixtures.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -95,6 +96,7 @@ test('private kitchen search and customer orders show only town; assigned courie
 
 test('seller dish photos are re-encoded, owner-scoped, published after review, replaceable and removable on web and native', async (t) => {
   const f = await fixture(t, { persistent: true });
+  removeSafetyMonitoringFixtureTables(f.h.db);
   f.h.db.exec('DROP TABLE eats_menu_photos; PRAGMA user_version=24;');
   await f.h.restart();
   assert.equal((await ok(f.seller, '/api/eats/store')).menu[0].id, f.menu[0].id);

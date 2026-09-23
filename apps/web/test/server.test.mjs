@@ -22,9 +22,9 @@ test('the local site serves HTML, modules and artwork with correct content types
       ...['eats', 'eats-controller', 'eats-contracts'].map((name) => [`/shared/${name}.mjs`, 'text/javascript']),
       ['/trip-share', 'text/html'], ['/trip-share.mjs', 'text/javascript'], ['/shared/safety.mjs', 'text/javascript'],
       ['/guest-trip', 'text/html'], ['/guest-trip.mjs', 'text/javascript'],
-      ...['guest-rides', 'guest-rides-controller'].map((name) => [`/shared/${name}.mjs`, 'text/javascript']),
+      ...['safety-monitoring', 'safety-monitoring-controller', 'guest-rides', 'guest-rides-controller'].map((name) => [`/shared/${name}.mjs`, 'text/javascript']),
       ...['guest-rides-panel', 'guest-rides-transport', 'guest-trip-controller'].map((name) => [`/dashboard/${name}.mjs`, 'text/javascript']),
-      ...['safety-controller', 'safety-view', 'safety-format', 'trip-share-controller'].map((name) => [`/dashboard/${name}.mjs`, 'text/javascript']),
+      ...['safety-monitoring', 'safety-sensors', 'safety-controller', 'safety-view', 'safety-format', 'trip-share-controller'].map((name) => [`/dashboard/${name}.mjs`, 'text/javascript']),
       ['/dashboard.css', 'text/css'], ['/dashboard.mjs', 'text/javascript'], ['/styles.css', 'text/css'],
       ['/homepage.css', 'text/css'],
       ['/homepage-carousel.mjs', 'text/javascript'],
@@ -66,7 +66,7 @@ test('camera and microphone are account-only; explicit work geolocation is also 
     for (const path of ['/', '/app', '/app?preview=1', '/eats', '/api/session', '/trip-share', '/guest-trip']) {
       const result = await fetch(base + path);
       const policy = result.headers.get('permissions-policy');
-      assert.equal(policy, `camera=${path.startsWith('/app') ? '(self)' : '()'}, microphone=${path.startsWith('/app') && mode !== 'off' ? '(self)' : '()'}, geolocation=${path.startsWith('/app') || path === '/eats' ? '(self)' : '()'}`);
+      assert.equal(policy, `camera=${path.startsWith('/app') ? '(self)' : '()'}, microphone=${path.startsWith('/app') ? '(self)' : '()'}, geolocation=${path.startsWith('/app') || path === '/eats' ? '(self)' : '()'}, accelerometer=${path.startsWith('/app') ? '(self)' : '()'}, gyroscope=${path.startsWith('/app') ? '(self)' : '()'}`);
       assert.match(result.headers.get('content-security-policy'), /media-src 'self' blob:/);
       assert.match(result.headers.get('content-security-policy'), /img-src 'self' https:\/\/tile.openstreetmap.org/);
       assert.match(result.headers.get('content-security-policy'), /connect-src 'self'/);
