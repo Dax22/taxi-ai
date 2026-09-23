@@ -190,6 +190,33 @@ test('discovery applies geographic scope before store and ready-order caps so bu
   assert.deepEqual((await ok(f.driver, '/work')).available.map((o) => o.id), [localOrder.id]);
 });
 
+test('GPS candidate scans cross equal-time pages of out-of-radius corners and cap only eligible nearby orders', async (t) => {
+  const f = await fixture(t), k = await f.kitchen(), template = await k.ready();
+  const insertOrder = f.h.db.prepare(`INSERT INTO eats_orders (id,store_id,customer_id,status,snapshot_json,events_json,created_at,updated_at)
+    SELECT ?,store_id,customer_id,'ready',snapshot_json,events_json,?,? FROM eats_orders WHERE id=?`);
+  const insertPoint = f.h.db.prepare('INSERT INTO eats_order_dispatch_points (order_id,lat,lng) VALUES (?,?,?)');
+  const idFor = (prefix, index) => `${prefix}-0000-4000-8000-${String(index).padStart(12, '0')}`;
+  const add = (id, point) => {
+    insertOrder.run(id, f.h.now - 1, f.h.now - 1, template.id);
+    insertPoint.run(id, point.lat, point.lng);
+  };
+  // Both coordinate deltas fit a 10 km bounding square; their diagonal distance
+  // exceeds 10 km. Equal timestamps force the scan to advance by ID as well.
+  const corner = { lat: LAGOS_POINT.lat + 0.08, lng: LAGOS_POINT.lng + 0.08 };
+  for (let i = 1; i <= 275; i++) add(idFor('00000000', i), corner);
+  const eligible = Array.from({ length: 120 }, (_, i) => idFor('10000000', i + 1));
+  add(eligible[0], LAGOS_POINT);
+  f.h.db.prepare("UPDATE eats_orders SET status='preparing' WHERE id=?").run(template.id);
+  await f.driver.online({ mode: 'gps', ...LAGOS_POINT });
+  const sparse = await ok(f.driver, '/work');
+  assert.deepEqual(sparse.available.map((order) => order.id), [eligible[0]]); noPrivatePoint(sparse);
+  for (const id of eligible.slice(1)) add(id, LAGOS_POINT);
+  const first = await ok(f.driver, '/work'), repeated = await ok(f.driver, '/work');
+  assert.deepEqual(first.available.map((order) => order.id), eligible.slice(0, 100));
+  assert.deepEqual(repeated.available.map((order) => order.id), eligible.slice(0, 100));
+  noPrivatePoint(first); noPrivatePoint(repeated);
+});
+
 test('sample couriers remain restricted to their exact demonstration pickup area even without GPS pins', async (t) => {
   const f = await fixture(t), wuse = await f.kitchen('wuse-ii', null), maitama = await f.kitchen('maitama', null);
   const localOrder = await wuse.ready(), otherOrder = await maitama.ready();

@@ -89,7 +89,7 @@ export function createEatsView(controller, { geolocation = createGeolocation() }
   function renderStoreLocation() {
     const root = field('store-delivery-areas'); root.replaceChildren();
     for (const areaId of coverage) { const row = text('div', undefined, 'food-actions'); row.append(text('span', foodAreaLabel(areaId)), button('Remove', () => { coverage = coverage.filter((id) => id !== areaId); storeDirty = true; renderStoreLocation(); }, true)); root.append(row); }
-    field('dispatch-status').textContent = dispatchError || (locating ? 'Getting your pickup location…' : dispatchPoint ? 'Private pickup location selected. Save the store to apply it.' : 'No private pickup location set. Save as a draft or offer customer pickup; courier delivery in a new town needs this location before approval.');
+    field('dispatch-status').textContent = dispatchError || (locating ? 'Getting your pickup location…' : dispatchPoint ? 'Private pickup location selected. Save the store to apply it.' : 'No private pickup location set. Save as a draft or offer customer pickup; courier delivery in a new town needs this location before opening for delivery.');
     if (!geolocation.supported() && !dispatchPoint && !dispatchError) field('dispatch-status').textContent += ' Location access needs a supported browser on HTTPS or localhost.';
     field('dispatch-locate').disabled = locked() || !geolocation.supported(); field('dispatch-clear').disabled = locked() || !dispatchPoint;
     field('coverage-add').disabled = locked() || coverage.length >= 50;

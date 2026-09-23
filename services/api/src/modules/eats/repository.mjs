@@ -14,7 +14,6 @@ const store = (row, deliveryAreas) => {
 const order = (row) => row ? { ...row, snapshot: JSON.parse(row.snapshot), courier: row.courier ? JSON.parse(row.courier) : null, events: JSON.parse(row.events) } : null;
 export function createEatsRepository(db, { deliveryAreas, legacyAreaIds: EATS_LEGACY_AREA_IDS, distanceMeters }) {
   const readStore = (row) => store(row, deliveryAreas);
-  db.function('eats_distance_metres', { deterministic: true }, (lat, lng, targetLat, targetLng) => distanceMeters({ lat, lng }, { lat: targetLat, lng: targetLng }));
   return Object.freeze({
     store: (id) => readStore(db.prepare(`SELECT ${storeColumns} FROM eats_stores WHERE id = ?`).get(id)),
     stores(admin = false, { areaId = null, deliveryAreaId = null, openOnly = false, excludeMemberId = null, fulfillment = '' } = {}) {
@@ -79,12 +78,32 @@ export function createEatsRepository(db, { deliveryAreas, legacyAreaIds: EATS_LE
         .all(userId,before?.id ?? null,before?.createdAt ?? null,before?.createdAt ?? null,before?.id ?? null).map(order);
     },
     ready(position, radius, userId) {
-      const clause = position.mode === 'sample' ? "json_extract(snapshot_json,'$.restaurant.areaId')=?"
-        : 'EXISTS(SELECT 1 FROM eats_order_dispatch_points p WHERE p.order_id=eats_orders.id AND eats_distance_metres(p.lat,p.lng,?,?)<=?)';
-      const params = position.mode === 'sample' ? [position.areaId] : [position.position.lat, position.position.lng, radius];
-      return db.prepare(`SELECT ${orderColumns} FROM eats_orders WHERE status='ready' AND COALESCE(json_extract(snapshot_json, '$.fulfillment'), 'delivery')='delivery'
-        AND customer_id<>? AND store_id NOT IN (SELECT store_id FROM eats_memberships WHERE user_id=?) AND ${clause}
-        ORDER BY created_at,id LIMIT 100`).all(userId, userId, ...params).map(order);
+      const eligibility = "status='ready' AND COALESCE(json_extract(snapshot_json, '$.fulfillment'), 'delivery')='delivery' AND customer_id<>? AND store_id NOT IN (SELECT store_id FROM eats_memberships WHERE user_id=?)";
+      if (position.mode === 'sample') return db.prepare(`SELECT ${orderColumns} FROM eats_orders WHERE ${eligibility}
+        AND json_extract(snapshot_json,'$.restaurant.areaId')=? ORDER BY created_at,id LIMIT 100`).all(userId, userId, position.areaId).map(order);
+
+      // The supported Node 22.12 SQLite API has neither user-defined functions
+      // nor statement iterators. Read bounded keyset pages, then apply the same
+      // exact distance rule used on claim before counting a job toward the cap.
+      // This conservative box contains the radius at every Nigerian latitude.
+      const point = position.position, latitudeSpan = radius / 110_000;
+      const longitudeSpan = latitudeSpan / Math.cos((Math.abs(point.lat) + latitudeSpan) * Math.PI / 180);
+      const statement = db.prepare(`SELECT ${orderColumns}, p.lat AS dispatchLat, p.lng AS dispatchLng
+        FROM eats_orders JOIN eats_order_dispatch_points p ON p.order_id=eats_orders.id WHERE ${eligibility}
+        AND p.lat BETWEEN ? AND ? AND p.lng BETWEEN ? AND ?
+        AND (? IS NULL OR created_at>? OR (created_at=? AND id>?)) ORDER BY created_at,id LIMIT 100`);
+      const available = []; let cursor = null;
+      while (available.length < 100) {
+        const candidates = statement.all(userId, userId, point.lat - latitudeSpan, point.lat + latitudeSpan,
+          point.lng - longitudeSpan, point.lng + longitudeSpan, cursor?.id ?? null, cursor?.createdAt ?? null, cursor?.createdAt ?? null, cursor?.id ?? null);
+        for (const { dispatchLat, dispatchLng, ...row } of candidates) {
+          if (distanceMeters(point, { lat: dispatchLat, lng: dispatchLng }) <= radius) available.push(order(row));
+          if (available.length === 100) break;
+        }
+        if (candidates.length < 100) break;
+        cursor = candidates.at(-1);
+      }
+      return available;
     },
     orderDispatchPoint: (id) => db.prepare('SELECT lat,lng FROM eats_order_dispatch_points WHERE order_id=?').get(id) ?? null,
     activeCourier: (id) => db.prepare(`SELECT ${orderColumns} FROM eats_orders WHERE courier_id=? AND status IN ('assigned','picked_up','arrived')`).all(id).map(order),

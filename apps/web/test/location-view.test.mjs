@@ -89,6 +89,18 @@ test('planner binds actual HTML controls, renders plain-text places and prevents
   assert.deepEqual(actions.pop(), ['Search', 'pickup', 'Wuse']);
   node('location-latitude').value = '9.08'; node('location-longitude').value = '7.4'; node('location-pin-name').value = ' Test pin ';
   node('location-coordinate-form').fire('submit'); assert.deepEqual(actions.pop(), ['Pick', { lat: 9.08, lng: 7.4, name: 'Test pin' }]);
+  // The shipped numeric inputs must allow nationwide points before browser validation lets the submit handler run.
+  for (const point of [{ lat: 6.6018, lng: 3.3515, name: 'Lagos' }, { lat: 12.0022, lng: 8.592, name: 'Kano' }]) {
+    for (const [id, value] of [['location-latitude', point.lat], ['location-longitude', point.lng]]) {
+      const input = html.match(new RegExp(`<input\\b[^>]*id="${id}"[^>]*>`))?.[0];
+      const minimum = Number(input?.match(/\bmin="([^"]+)"/)?.[1]), maximum = Number(input?.match(/\bmax="([^"]+)"/)?.[1]);
+      assert.ok(Number.isFinite(minimum) && Number.isFinite(maximum), `${id} has numeric HTML bounds`);
+      assert.ok(value >= minimum && value <= maximum, `${point.name} passes ${id} browser range validation`);
+      node(id).value = String(value);
+    }
+    node('location-pin-name').value = point.name;
+    node('location-coordinate-form').fire('submit'); assert.deepEqual(actions.pop(), ['Pick', point]);
+  }
   view.renderPlanner({ ...state, expired: true }); assert.equal(node('location-book').disabled, true); assert.match(node('location-expiry').textContent, /expired/);
   view.renderPlanner({ ...state, blocked: true }); assert.equal(node('location-preview').disabled, true); assert.equal(node('location-book').disabled, true);
   view.resetPlanner(); assert.equal(node('location-pickup-query').value, ''); assert.equal(node('location-pickup-results').children.length, 0);
