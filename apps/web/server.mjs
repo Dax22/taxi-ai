@@ -126,6 +126,8 @@ const routes = new Map([
   ['/assets/eats-jollof.jpg', ['public/assets/eats-jollof.jpg', 'image/jpeg']],
   ['/assets/eats-egusi.jpg', ['public/assets/eats-egusi.jpg', 'image/jpeg']],
   ['/assets/eats-suya.jpg', ['public/assets/eats-suya.jpg', 'image/jpeg']],
+  ['/assets/ai-journey-features.webp', ['public/assets/ai-journey-features.webp', 'image/webp']],
+  ['/assets/ai-journey-features-small.webp', ['public/assets/ai-journey-features-small.webp', 'image/webp']],
   ['/assets/taxi-ai-phone-preview.svg', ['public/assets/taxi-ai-phone-preview.svg', 'image/svg+xml']],
   ['/assets/city-route-hero.webp', ['public/assets/city-route-hero.webp', 'image/webp']],
   ['/assets/city-route-hero-small.webp', ['public/assets/city-route-hero-small.webp', 'image/webp']],

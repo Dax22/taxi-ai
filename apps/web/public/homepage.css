@@ -137,3 +137,22 @@
 @media (max-width: 440px) { .header-end { gap: 10px; } .download-nav { max-width: 74px; line-height: 1.2; } }
 
 @media (max-width: 580px) { .landing-page .site-header { height: auto; min-height: 73px; padding-block: 14px; flex-wrap: wrap; gap: 14px; } .landing-page .header-end { flex: 1; justify-content: flex-end; } }
+
+/* AI feature overview follows the mobile-app section. */
+.ai-features-section { display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(0, 1fr); gap: clamp(28px, 5vw, 76px); align-items: center; padding-block: 48px 80px; }
+.ai-features-visual { margin: 0; overflow: hidden; border-radius: 28px; background: #f7f8f4; }
+.ai-features-visual picture, .ai-features-visual img { display: block; width: 100%; }
+.ai-features-visual img { height: auto; }
+.ai-features-copy { min-width: 0; }
+.ai-features-copy .eyebrow { color: #79600a; }
+.ai-features-copy h2 { font-size: clamp(32px, 3.3vw, 48px); letter-spacing: -.045em; line-height: 1.08; margin: 16px 0 20px; }
+.ai-features-intro { max-width: 520px; color: var(--muted); font-size: 15px; line-height: 1.7; }
+.ai-feature-list { display: grid; gap: 24px; list-style: none; padding: 0; margin: 30px 0 0; }
+.ai-feature-list li { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 16px; align-items: start; }
+.ai-feature-icon { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 14px; color: #5b4805; background: #fff0ba; }
+.ai-feature-icon svg { width: 24px; height: 24px; }
+.ai-feature-list h3 { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 16px; line-height: 1.4; letter-spacing: -.015em; margin: 0 0 7px; }
+.ai-feature-list p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.7; }
+.ai-feature-planned { display: inline-block; border: 1px solid #dce2d7; border-radius: 999px; padding: 3px 8px; font-size: 10px; font-weight: 600; color: #626c5d; background: #f3f5ef; letter-spacing: 0; }
+@media (max-width: 900px) { .ai-features-section { grid-template-columns: minmax(0, 1fr); gap: 32px; padding-block: 24px 56px; }.ai-features-visual { max-width: 680px; width: 100%; margin-inline: auto; }.ai-features-copy { max-width: 680px; margin-inline: auto; width: 100%; } }
+@media (max-width: 580px) { .ai-features-visual { border-radius: 20px; }.ai-feature-list { gap: 22px; }.ai-feature-list li { gap: 12px; }.ai-feature-list h3 { font-size: 15px; } }

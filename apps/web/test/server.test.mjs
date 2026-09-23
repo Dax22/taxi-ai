@@ -52,7 +52,7 @@ test('the local site serves HTML, modules and artwork with correct content types
         ['', '-small'].map((size) => [`/assets/${name}-hero${size}.webp`, 'image/webp'])),
       ['/assets/autonomous-concept.webp', 'image/webp'],
       ['/assets/autonomous-concept-small.webp', 'image/webp'], ['/favicon.svg?v=amber', 'image/svg+xml'],
-      ['/assets/taxi-ai-mark.svg', 'image/svg+xml'], ['/assets/taxi-ai-phone-preview.svg', 'image/svg+xml'], ['/assets/kemmy-avatar.png', 'image/png']]) {
+      ['/assets/taxi-ai-mark.svg', 'image/svg+xml'], ['/assets/taxi-ai-phone-preview.svg', 'image/svg+xml'], ['/assets/ai-journey-features.webp', 'image/webp'], ['/assets/ai-journey-features-small.webp', 'image/webp'], ['/assets/kemmy-avatar.png', 'image/png']]) {
       const response = await fetch(base + path);
       assert.equal(response.status, 200, path);
       assert.ok(response.headers.get('content-type').startsWith(type), path);
