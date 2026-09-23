@@ -252,9 +252,9 @@ testers or marking the consolidation ready to merge:
 2. On the selected HTTPS host, confirm unauthorized users cannot view HTML/assets
    or APIs, the app port is not reachable, account cookies are Secure and tester
    removal takes effect after app recreation. Run a restore drill.
-3. Verify actual Abuja address results/routes and public-provider limits. Test
+3. Verify actual Nigerian address results/routes in multiple cities and public-provider limits. Test
    real in-area GPS, denied permission, stale fixes, Stop, logout and trip closure.
-   GPS outside the Abuja rectangle is intentionally rejected; simulated locations
+   GPS outside Nigeria is intentionally rejected; simulated locations
    do not establish physical-device accuracy.
 4. With a provisioned relay, verify real two-way audio and microphone cleanup on
    Chrome/Safari and target phones/tablets across separate networks. Signaling
@@ -274,7 +274,7 @@ document bytes and review history. They are not anonymised or encrypted by the a
 Availability positions and ownership are removed from snapshots.
 
 Sample-area matching and new sample requests are local-only. Hosted staging
-requires fresh Abuja GPS and provider-backed route requests. With maps disabled,
+requires fresh Nigerian GPS and provider-backed route requests. With maps disabled,
 users cannot create new routed requests; configure the provider for a hosted ride
 test. Availability GPS does not enable map tiles or trip tracking automatically.
 See [matching](matching.md) for controls, expiry and device review.

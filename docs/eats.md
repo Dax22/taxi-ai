@@ -4,6 +4,8 @@ The meal-builder update adds location-first dish search, combined delivery order
 website and iOS/Android app. This is a development preview with fictional stores
 and test orders. Checkout never collects money and does not dispatch a real delivery.
 It is a Taxi Ai workflow, with no DoorDash service or API dependency.
+The [nationwide update](nationwide.md) supports state/town entry throughout Nigeria,
+explicit local delivery coverage and private pickup points for nearby couriers.
 
 ## Entry points
 
@@ -30,7 +32,7 @@ Reference pages: [DoorDash](https://www.doordash.com/),
 No ratings, sales, promotions or operating merchants are invented.
 
 Web and mobile start with **First, where should we deliver?** Enter a delivery
-address/landmark and choose a supported Abuja town or area. Only after that step
+address/landmark and choose a Nigerian state and enter the delivery town or local area. Only after that step
 does **What do you want to eat?** appear. Type a combination such as “jollof rice,
 chicken and plantain” to search actual menu names, ingredients and sections. The
 results show seller-set prices, seller type, kitchen/town, available portions,
@@ -56,7 +58,7 @@ actual listing. Seller photos remain attached to the seller's own food.
 
 On web choose **Sell from home**; on mobile use **Eats → Sell from home** or
 **Account → Sell from home**. Choose **Home kitchen**, enter a kitchen name, story,
-Abuja town/area, then choose delivery, customer pickup or both and select the
+state and town/area, then choose delivery, customer pickup or both and select the
 areas served. Food vendors and home kitchens do not enter a street address on their profile.
 Only restaurants enter and display a full business address. Add the menu, record remaining portions and complete staff review before
 opening. The owner can close to new orders whenever they are not cooking.
@@ -85,8 +87,12 @@ option, then sort by name, preparation time or delivery fee. Open kitchens are
 shown first. These are deterministic filters, not an AI recommendation agent.
 Legacy kitchen filters describe where a kitchen is located. Dish search and
 checkout enforce the seller’s selected delivery areas; neither provides a live ETA.
-For compatibility, existing kitchens that have not set delivery areas retain all
-supported Abuja areas. New web/mobile profiles default to their own area.
+For compatibility, existing kitchens that have not set delivery areas retain only their original seven
+Abuja sample areas. New web/mobile profiles default to their own area.
+Town names are normalized within their selected state. Enter the same local area
+that a kitchen declares in its coverage; alternate spellings are not geocoded or
+automatically merged. An empty result means no eligible listed food matches that
+area/search, rather than a fabricated national delivery option.
 Web and native use the same font policy as the rest of Taxi Ai: system-ui on web,
 System on iOS and sans-serif on Android.
 
@@ -96,6 +102,14 @@ New food-vendor and home-kitchen profiles store an empty address. When marking f
 cook enters a private collection point/landmark for that order, which can be a
 meeting point instead of a home address. It is stored separately from the public
 profile. Only restaurants keep their business address public.
+Owners can separately opt in to saving the current device location for nearby
+courier matching. This private point does not appear in public profiles or order
+views; it is copied into private order storage at placement and requires store
+review when changed. Without it, a kitchen's orders cannot attract GPS couriers.
+New kitchens outside the legacy sample areas require this point before opening
+for delivery or accepting delivery orders; pickup-only kitchens do not.
+Use the action while at the intended pickup place. Customer pickup remains available
+without a courier point.
 
 | Viewer/stage | Vendor/home-kitchen collection point | Handover code |
 | --- | --- | --- |
@@ -176,7 +190,7 @@ reassignment and exceptional recovery still need an operational support workflow
   time. Claiming a food job atomically stops availability. Active food work also
   blocks vehicle changes, Work profile deletion and competing journey actions.
   Sample matching checks the restaurant's area; GPS availability currently exposes
-  ready Abuja orders without route-distance ranking.
+  ready orders within 10 km of their private pickup point; availability is rechecked at claim.
 - Store membership, customer ownership and assigned courier identity are checked
   server-side. Unassigned couriers see pickup/drop-off areas and a test delivery
   fee, without the customer's street address. Store views omit that street address.

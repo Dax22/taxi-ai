@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { TEST_NOW, harness, participants, requestRide, PASSWORD } from './helpers.mjs';
+import { distanceMeters } from '../../../packages/shared/src/locations.mjs';
 
 const pickup = { lat: 9.081234, lng: 7.401234, name: 'Private test pickup' };
 const destination = { lat: 9.1, lng: 7.45, name: 'Private test destination' };
@@ -19,6 +20,39 @@ async function routed(customer, point = pickup) {
 }
 const list = async (driver) => (await driver.send('/api/rides')).body.available;
 const claim = (driver, ride, key) => driver.post(`/api/rides/${ride.id}/claim`, { expectedVersion: ride.version }, key);
+
+test('nationwide GPS eligibility keeps Lagos, Kano and Port Harcourt driver matching local, including after radius expansion', async (t) => {
+  const provider = { ...mapProvider, route: async (a, b) => ({ distanceMeters: Math.ceil(distanceMeters(a, b) * 1.2), durationSeconds: 600,
+    coordinates: [[a.lng, a.lat], [b.lng, b.lat]] }) };
+  const { h, customer, drivers } = await setup(t, { mapProvider: provider }, 3);
+  const cities = [{ lat: 6.5244, lng: 3.3792, name: 'Lagos' }, { lat: 12.0022, lng: 8.592, name: 'Kano' },
+    { lat: 4.8156, lng: 7.0498, name: 'Port Harcourt' }];
+  const requests = [];
+  for (let i = 0; i < cities.length; i++) {
+    const city = cities[i], rider = i === 0 ? customer : h.client();
+    if (i !== 0) await rider.register(`national-customer-${i}`);
+    const quoted = await rider.post('/api/locations/quotes', { pickup: city, destination: { ...city, lat: city.lat + 0.01, name: `${city.name} destination` } });
+    assert.equal(quoted.status, 201, JSON.stringify(quoted.body));
+    const created = await rider.post('/api/rides', { quoteId: quoted.body.quote.id });
+    assert.equal(created.status, 201, JSON.stringify(created.body)); requests.push(created.body.ride);
+    await drivers[i].online({ mode: 'gps', lat: city.lat, lng: city.lng });
+  }
+  for (let i = 0; i < drivers.length; i++) {
+    assert.deepEqual((await list(drivers[i])).map((ride) => ride.id), [requests[i].id]);
+    assert.equal((await claim(drivers[i], requests[(i + 1) % requests.length])).body.error.code, 'OUTSIDE_MATCH_AREA');
+  }
+  h.advance(60_000);
+  for (let i = 0; i < drivers.length; i++) {
+    await drivers[i].online({ mode: 'gps', lat: cities[i].lat, lng: cities[i].lng });
+    assert.deepEqual((await list(drivers[i])).map((ride) => ride.id), [requests[i].id]);
+  }
+  const online = (await drivers[0].send('/api/availability')).body.availability;
+  for (const point of [{ lat: 6.3703, lng: 2.3912 }, { lat: 10.591, lng: 14.3159 }]) {
+    const result = await drivers[0].availability(`/api/availability/${online.id}/position`, { sequence: 2, position: gps(h.now, point) });
+    assert.equal(result.status, 400); assert.equal(result.body.error.code, 'INVALID_LOCATION');
+  }
+  assert.deepEqual((await list(drivers[0])).map((ride) => ride.id), [requests[0].id], 'rejected foreign GPS cannot replace the last valid location');
+});
 
 test('ranked API requests balance waiting and distance while preserving private projections and explicit claiming', async (t) => {
   const { h, customer, driver } = await setup(t);

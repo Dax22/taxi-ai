@@ -1,5 +1,5 @@
 const metadata = {
-  overview: ['Overview', 'Abuja operations, at a glance.'], accounts: ['Accounts', 'Know the people behind every journey.'],
+  overview: ['Overview', 'Nigeria operations, at a glance.'], accounts: ['Accounts', 'Know the people behind every journey.'],
   account: ['Account details', 'One profile. A complete view of their Taxi Ai activity.'], trips: ['Trips', 'Follow each request from its first offer to its final status.'],
   trip: ['Trip details', 'The people, vehicle and fare behind this journey.'], analytics: ['Analytics', 'Understand demand, journey outcomes and completed fares.'],
 };

@@ -114,7 +114,7 @@ export class BookingController {
   async search(endpoint: Endpoint) {
     if (!this.canPlan() || this.locked() || this.state.mode !== 'route' || !this.state.consent) return;
     const query = this.state[endpoint].query.trim();
-    if (query.length < 3 || query.length > 160) { this.patch({ error: 'Enter an Abuja address or landmark, between 3 and 160 characters.' }); return; }
+    if (query.length < 3 || query.length > 160) { this.patch({ error: 'Enter a Nigerian address or landmark, between 3 and 160 characters.' }); return; }
     const read = ++this.searches[endpoint]; this.patch({ [endpoint]: { ...this.state[endpoint], results: [], searching: true }, error: '' });
     try {
       const result = await this.api.searchPlaces(query);

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { ABUJA_CENTER } from '../../../packages/shared/src/locations.mjs';
+import { NIGERIA_CENTER } from '../../../packages/shared/src/locations.mjs';
 
 const uri = (source) => `data:text/javascript,${encodeURIComponent(source)}`;
 function imports(source) {
@@ -54,8 +54,8 @@ test('map opt-in gates all external tiles; re-renders preserve caching and late 
   assert.match(root.children.at(-1).textContent, /could not load/);
   const canvas = descendants(root).find((n) => n.tag === 'svg');
   canvas.fire('click', { clientX: 220, clientY: 110 });
-  assert.ok(Math.abs(picked[0].lat - ABUJA_CENTER.lat) < 0.00001);
-  assert.ok(Math.abs(picked[0].lng - ABUJA_CENTER.lng) < 0.00001);
+  assert.ok(Math.abs(picked[0].lat - NIGERIA_CENTER.lat) < 0.00001);
+  assert.ok(Math.abs(picked[0].lng - NIGERIA_CENTER.lng) < 0.00001);
   assert.equal(canvas.fire('keydown', { key: 'ArrowRight' }), true);
   canvas.fire('keydown', { key: 'Enter' }); assert.ok(picked[1].lng > picked[0].lng);
   map.reset(); images[0].fire('error'); canvas.fire('click', { clientX: 220, clientY: 110 });
@@ -118,9 +118,9 @@ test('the driver marker uses the trip vehicle colour only with a reported positi
   const vehicle = { model:'Toyota Corolla',plate:'TEST-123',colour:'Blue' };
   const cars = () => descendants(root).filter((n) => n.tag === 'image' && n.attributes.href.startsWith('/assets/vehicles/'));
   map.render({ enabled:true,tiles,vehicle }); assert.equal(cars().length,0);
-  map.render({ enabled:true,tiles,vehicle,driver:ABUJA_CENTER,stale:true });
+  map.render({ enabled:true,tiles,vehicle,driver:NIGERIA_CENTER,stale:true });
   assert.equal(cars().length,1); assert.equal(cars()[0].attributes.href,'/assets/vehicles/sedan-blue.png');
   assert.equal(cars()[0].attributes.opacity,'.55');
   assert.ok(descendants(root).some((n) => n.tag === 'g' && n.attributes.class === 'map-marker map-marker-stale'));
-  map.render({ enabled:false,tiles,vehicle,driver:ABUJA_CENTER }); assert.equal(cars().length,0);
+  map.render({ enabled:false,tiles,vehicle,driver:NIGERIA_CENTER }); assert.equal(cars().length,0);
 });

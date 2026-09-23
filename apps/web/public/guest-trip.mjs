@@ -20,7 +20,7 @@ const viewer = createGuestTripController({ client, token, now: () => serverTime.
       ['Pickup', trip.pickup], ['Destination', trip.destination], ['Trip', trip.reference],
       ['Status', RIDE_STATUS_LABELS[trip.status]], ['Driver', trip.driver.name],
       ['Vehicle / plate', `${trip.driver.vehicle.colour ?? ''} ${trip.driver.vehicle.model} · ${trip.driver.vehicle.plate}`.trim()],
-      ['Last shared location', safetyLocation(trip.location)], ['Link expires', `${safetyTime(data.expiresAt)} (Abuja)`]]) {
+      ['Last shared location', safetyLocation(trip.location)], ['Link expires', `${safetyTime(data.expiresAt)} (WAT)`]]) {
       $('guest-details').append(element('dt', label), element('dd', value));
     }
     if (trip.pickupPin && ['booked', 'on_way', 'arrived'].includes(trip.status)) {

@@ -1,3 +1,4 @@
+import { foodLocationLabel } from '../src/eats/location-fields';
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { Text } from '../src/ui/typography';
@@ -19,7 +20,7 @@ export default function FoodOrder() {
   }
   return <Screen><FoodPreview/><FoodFeedback state={s} controller={c}/>
     {o && <><Pill>{`FOOD ORDER · ${o.id.slice(0,8).toUpperCase()}`}</Pill><Heading title={EATS_STATUS[o.status]} subtitle={o.restaurant.name}/>
-      <Card><Text style={styles.h2}>Order details</Text><Text style={styles.body}>{o.fulfillment === 'pickup' ? 'Customer pickup · collect from the kitchen' : 'Delivery'}</Text><Text style={styles.body}>Customer · {o.customerName}</Text><Text style={styles.body}>{o.restaurant.addressHidden ? `Kitchen area · ${o.restaurant.areaId}. A private collection point is shared when food is ready.` : `Collect from · ${o.restaurant.address}`}</Text>{o.address.line && <Text style={styles.body}>Deliver to · {o.address.line}</Text>}{!!o.instructions && <Text style={styles.body}>Instructions · {o.instructions}</Text>}
+      <Card><Text style={styles.h2}>Order details</Text><Text style={styles.body}>{o.fulfillment === 'pickup' ? 'Customer pickup · collect from the kitchen' : 'Delivery'}</Text><Text style={styles.body}>Customer · {o.customerName}</Text><Text style={styles.body}>{o.restaurant.addressHidden ? `Kitchen area · ${foodLocationLabel(o.restaurant.areaId)}. A private collection point is shared when food is ready.` : `Collect from · ${o.restaurant.address}`}</Text>{o.address.line && <Text style={styles.body}>Deliver to · {o.address.line} · {foodLocationLabel(o.address.areaId)}</Text>}{!!o.instructions && <Text style={styles.body}>Instructions · {o.instructions}</Text>}
         {o.courier && <><Text style={styles.h2}>Your courier · {o.courier.name}</Text><Text style={styles.body}>{o.courier.vehicle.colour} {o.courier.vehicle.model} · {o.courier.vehicle.plate}</Text></>}
         {(o.pickupPin || o.deliveryPin) && <><Text style={styles.body}>{o.pickupPin ? 'Kitchen pickup code. Share only when handing the food to the assigned courier.' : o.fulfillment === 'pickup' ? 'Your pickup code. Show the kitchen when collecting your food.' : 'Your delivery code. Share only when you receive the food.'}</Text><Text selectable style={food.pin}>{o.pickupPin ?? o.deliveryPin}</Text></>}
       </Card>

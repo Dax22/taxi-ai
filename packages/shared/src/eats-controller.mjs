@@ -1,8 +1,9 @@
 import { cartQuantity } from './eats.mjs';
 import { readEatsResponse } from './eats-contracts.mjs';
 import { mealGroups, mealQuantity } from './eats-meals.mjs';
-const empty = () => ({ user: null, screen: 'browse', restaurants: [], areas: [], restaurant: null, restaurantId: null, menu: [], cart: [],
-  address: { line: '', areaId: 'wuse-ii' }, instructions: '', fulfillment: 'delivery', quote: null, order: null, orderId: null,
+import { resolveFoodArea } from './nigeria-areas.mjs';
+const empty = () => ({ user: null, screen: 'browse', restaurants: [], catalogAreaId: '', areas: [], restaurant: null, restaurantId: null, menu: [], cart: [],
+  address: { line: '', areaId: '' }, instructions: '', fulfillment: 'delivery', quote: null, order: null, orderId: null,
   deliveryConfirmed: false, foodQuery: '', foods: [], foodCount: 0, foodNextOffset: null, foodLoading: false, mealBasket: [], mealCheckout: null,
   orders: [], nextBefore: null, store: null, storeMenu: [], storeOrders: [], storeNextBefore: null, work: null, reviewStores: [], review: null,
   loading: false, busy: false, uncertain: false, stale: true, error: '', notice: '', replaceRestaurantId: null, now: 0 });
@@ -47,7 +48,9 @@ export function createEatsController({ api, makeKey, now = Date.now }) {
         let result;
         if (screen === 'browse') {
           const selected = state.restaurantId ? read('/restaurants/' + state.restaurantId).catch((error) => { if (error.status === 404) return { store: null, menu: [] }; throw error; }) : null;
-          const [catalog, restaurant, food] = await Promise.all([read('/restaurants'), selected, state.deliveryConfirmed ? refreshFoods(quiet ? state.foods.length : 0, epoch) : null]);
+          const catalogFilters = [state.deliveryConfirmed && state.fulfillment === 'delivery' ? 'deliveryAreaId=' + encodeURIComponent(state.address.areaId) : '', state.catalogAreaId ? 'areaId=' + encodeURIComponent(state.catalogAreaId) : '', 'fulfillment=' + state.fulfillment].filter(Boolean);
+          const catalogPath = '/restaurants' + (catalogFilters.length ? '?' + catalogFilters.join('&') : '');
+          const [catalog, restaurant, food] = await Promise.all([read(catalogPath), selected, state.deliveryConfirmed && state.fulfillment === 'delivery' ? refreshFoods(quiet ? state.foods.length : 0, epoch) : null]);
           const basket = state.mealBasket.map((line) => ({ ...line, store: catalog.restaurants.find((store) => store.id === line.store.id) ?? line.store }));
           result = { restaurants: catalog.restaurants, areas: catalog.areas, mealBasket: basket, ...(restaurant ? { restaurant: restaurant.store, menu: restaurant.menu } : {}) };
           if (restaurant && !restaurant.store) Object.assign(result, { restaurantId: null, quote: null });
@@ -137,13 +140,19 @@ export function createEatsController({ api, makeKey, now = Date.now }) {
   }
   return Object.freeze({ context, navigate, refresh, selectRestaurant,
     findMeals,
+    browseLocation(areaId) {
+      if (locked()) return Promise.resolve(false);
+      if (areaId !== '' && !resolveFoodArea(areaId)) { state.error = 'Choose a Nigerian state and enter the kitchen town or area.'; emit(); return Promise.resolve(false); }
+      state.catalogAreaId = areaId; state.restaurants = []; return navigate('browse');
+    },
     confirmDelivery(address) {
       if (locked()) return Promise.resolve(false);
-      if (typeof address.line !== 'string' || address.line.trim().length < 8 || address.line.trim().length > 240 || !state.areas.some((area) => area.id === address.areaId)) {
-        state.error = 'Enter a delivery address and landmark, then choose the town or area.'; emit(); return Promise.resolve(false);
+      if (typeof address.line !== 'string' || address.line.trim().length < 8 || address.line.trim().length > 240 || !resolveFoodArea(address.areaId)) {
+        state.error = 'Enter a delivery address and landmark, then choose the state and town or area.'; emit(); return Promise.resolve(false);
       }
+      if (state.address.areaId !== address.areaId) { state.mealBasket = []; state.cart = []; state.restaurant = null; state.restaurantId = null; state.menu = []; state.catalogAreaId = ''; state.restaurants = []; state.foods = []; state.foodCount = 0; state.foodNextOffset = null; }
       state.address = { line: address.line.trim(), areaId: address.areaId }; state.deliveryConfirmed = true; state.fulfillment = 'delivery'; state.mealCheckout = state.quote = null; state.error = ''; emit();
-      return findMeals(state.foodQuery);
+      return navigate('browse');
     },
     editDelivery() { if (locked()) return; generation++; polling = null; state.deliveryConfirmed = false; state.foods = []; state.foodLoading = state.loading = false; state.mealCheckout = state.quote = null; emit(); },
     mealQuantity(food, quantity) { if (locked()) return; try { state.mealBasket = mealQuantity(state.mealBasket, food, quantity); state.mealCheckout = null; state.error = ''; } catch (error) { state.error = error.message; } emit(); },
@@ -164,14 +173,25 @@ export function createEatsController({ api, makeKey, now = Date.now }) {
       }
       const uri = await photos.get(id); return owner === identity && state.user ? uri : null;
     },
-    fulfillment(value) { if (locked() || !['delivery', 'pickup'].includes(value)) return; state.fulfillment = value; state.quote = null; emit(); },
+    fulfillment(value) {
+      if (locked() || !['delivery', 'pickup'].includes(value) || value === state.fulfillment) return;
+      generation++; polling = null; state.loading = state.foodLoading = false; state.fulfillment = value; state.quote = null; state.restaurants = []; emit();
+      if (state.screen === 'browse') void refresh({ quiet: true });
+    },
     snapshot: () => state, subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
     reset() { context(null); },
     tick() { if (state.quote && now() >= state.quote.expiresAt || state.mealCheckout && now() >= state.mealCheckout.expiresAt) { state.quote = state.mealCheckout = null; state.notice = 'Checkout expired. Review the total again before ordering.'; } emit(); },
     retry: () => pending ? execute(pending) : Promise.resolve(false),
     keepRestaurant() { state.replaceRestaurantId = null; emit(); },
     quantity(itemId, quantity) { if (locked()) return; try { state.cart = cartQuantity(state.cart, itemId, quantity); state.quote = null; state.error = ''; } catch (error) { state.error = error.message; } emit(); },
-    delivery(address, instructions) { if (locked()) return; state.address = { ...address }; state.instructions = instructions; state.quote = state.mealCheckout = null; emit(); },
+    delivery(address, instructions) {
+      if (locked()) return;
+      if (state.address.areaId !== address.areaId) {
+        generation++; polling = null; state.loading = state.foodLoading = false; state.deliveryConfirmed = false;
+        state.foods = []; state.foodCount = 0; state.foodNextOffset = null; state.mealBasket = []; state.restaurants = []; state.catalogAreaId = '';
+      }
+      state.address = { ...address }; state.instructions = instructions; state.quote = state.mealCheckout = null; emit();
+    },
     checkout() { if (!state.restaurant) return Promise.resolve(false); return run('/quotes', { storeId: state.restaurant.id, expectedVersion: state.restaurant.version, items: state.cart, fulfillment: state.fulfillment, address: state.address, instructions: state.instructions }); },
     place() { return state.quote && now() < state.quote.expiresAt ? run('/orders', { quoteId: state.quote.id }, true) : Promise.resolve(false); },
     orderAction(order, action, extras = {}) { return run(`/orders/${order.id}/${action}`, { expectedVersion: order.version, ...extras }, action === 'claim'); },

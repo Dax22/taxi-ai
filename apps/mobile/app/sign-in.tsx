@@ -25,7 +25,7 @@ export default function SignIn() {
     catch (e) { setError(e instanceof Error ? e.message : 'Google sign-in failed.'); }
     finally { setBusy(false); }
   }
-  return <Screen><Logo/><Pill>ABUJA · APP PREVIEW</Pill><Heading title={'Your city.\nYour terms.'} subtitle="One account for your journeys and your work."/>
+  return <Screen><Logo/><Pill>NIGERIA · APP PREVIEW</Pill><Heading title={'Your city.\nYour terms.'} subtitle="One account for your journeys and your work."/>
     <Notice message={error || notice}/><Card>{recovering ? <PasswordRecovery client={client} initialEmail={email} preview={() => previewHeader(tester.trim(), key.trim())} back={() => setRecovering(false)}/> : <><Text style={styles.h2}>Welcome back.</Text><Text style={styles.body}>One account on the website and your phone.</Text>
       {googleAvailable() && <><GoogleButton onPress={() => void continueWithGoogle()} busy={busy} disabled={name.trim().length < 2}/><Text style={styles.small}>Creates your Taxi Ai account if you’re new. Or sign in with email below.</Text></>}
       <Field label="Email address" value={email} onChangeText={setEmail} autoCapitalize="none" autoCorrect={false} keyboardType="email-address" autoComplete="email" editable={!busy}/>

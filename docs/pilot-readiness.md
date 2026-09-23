@@ -82,7 +82,7 @@ window for the customer and driver; ordinary tabs share an account cookie.
 | Two ordinary tabs change to a different account | Old trip, plate, fare, PIN, chat, location and receipt disappear on the next detected session change | Client fixtures pass; browser review pending |
 | Slow/offline connection during account change or refresh | No previous account data returns; no queued command runs as the new account | Client fixtures pass; browser review pending |
 | Keyboard and 390/768/1440 px layouts | Forms, errors and controls remain usable without overflow | Pending real browser review |
-| Live Abuja GPS and maps | Explicit consent; denied/stale fixes handled; correct locations/routes | Pending in-area device/provider review |
+| Live Nigeria GPS and maps | Explicit consent; denied/stale fixes handled; correct locations/routes | Pending in-area device/provider review |
 | Two-way audio on different networks | Call/answer/mute/end work and microphone stops on logout | Pending configured TURN and device review |
 | Print / Save as PDF | One readable receipt, with simulation notice and correct amount | Pending real browser review |
 

@@ -21,6 +21,8 @@ import { createDeliveriesRepository } from './modules/deliveries/repository.mjs'
 import { createDeliveriesService } from './modules/deliveries/service.mjs';
 import { createRidesService } from './modules/rides/service.mjs';
 import { createEatsRepository } from './modules/eats/repository.mjs';
+import { deliveryAreas, EATS_LEGACY_AREA_IDS } from '../../../packages/shared/src/eats.mjs';
+import { distanceMeters } from '../../../packages/shared/src/locations.mjs';
 import { normaliseFoodPhoto } from './infrastructure/food-photo-codec.mjs';
 import { createEatsService } from './modules/eats/service.mjs';
 import { createChatRepository } from './modules/chat/repository.mjs';
@@ -64,7 +66,7 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
   const driverRepository = createDriversRepository(db);
   const rideRepository = createRidesRepository(db);
   const guestRepository = createGuestRidesRepository(db);
-  const eatsRepository = createEatsRepository(db);
+  const eatsRepository = createEatsRepository(db, { deliveryAreas, legacyAreaIds: EATS_LEGACY_AREA_IDS, distanceMeters });
   const hasDriverWork = (id) => rideRepository.hasDriverWork(id) || eatsRepository.hasWork(id);
   let drivers, devices, accountEmail;
   const accounts = createAccountsService({ repository: accountRepository,

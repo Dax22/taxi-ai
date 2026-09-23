@@ -11,7 +11,7 @@ keyboard, accessibility and tablet QA remain pending.
 - Existing-account sign-in, secure session restore and per-device sign-out.
 - Home, Activity, Work, Updates and Account tabs; driver application, booking and journey screens.
 - **Book a ride or delivery**: Standard/SUV passenger trips and van/truck/motorcycle
-  parcels with recipient details, category pricing and approved capacity matching; explicit Abuja search, route/fare review, shared ride requests,
+  parcels with recipient details, category pricing and approved capacity matching; explicit Nigeria-wide address search, route/fare review, shared ride requests,
   same-command retries, current status, registered vehicle and pre-start cancellation.
   Local sample journeys work without live providers. [Booking guide](../../docs/mobile-booking.md).
 - **Book for someone else** on Standard/SUV: identify the adult passenger and confirm
@@ -40,9 +40,19 @@ keyboard, accessibility and tablet QA remain pending.
   **My store** manages kitchen details, remaining portions and incoming orders.
   Eats asks for the delivery location first, then searches listed dishes and prices.
   Combine food from up to five kitchens, review each kitchen’s fees and place the
-  orders together. Home kitchens and food vendors need only a town; restaurants
-  list their business address. Private sellers share a collection point when
+  orders together. Home kitchens and food vendors publicly list their town and state;
+  restaurants list their business address. Private sellers share a collection point when
   food is ready. The page uses overhead Nigerian-food artwork. See [Eats setup](../../docs/eats.md) for the full test journey.
+- **Nigeria-wide locations**: ride address searches and GPS accept locations across
+  Nigeria. Eats asks for a state/FCT and any town or local area; no Abuja location
+  is preselected. Kitchens explicitly choose the towns they deliver to, initially
+  only their own. Delivery sellers outside the legacy sample areas must add a private
+  pickup GPS point at their kitchen before opening for delivery or accepting delivery orders;
+  incomplete drafts and pickup-only kitchens can be saved without one. The point
+  is kept off customer-facing profiles and needs review. Changing the kitchen town
+  clears a previously selected pickup point.
+  Local availability still depends on approved drivers and kitchens. Development
+  sample rides retain their original Abuja fixtures.
 - A shared native system-font family across text, fields, buttons and navigation.
 
 Native Work now supports foreground location, online/offline availability and job

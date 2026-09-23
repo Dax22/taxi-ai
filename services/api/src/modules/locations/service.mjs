@@ -2,7 +2,7 @@ import { check } from '../../shared/errors.mjs';
 import { fields, label } from '../../shared/validation.mjs';
 import { requireRole } from '../../shared/policies.mjs';
 import { transportCategory } from '../../../../../packages/shared/src/transport-categories.mjs';
-import { ABUJA_BOUNDS, insideAbuja, canShareLocation } from '../../../../../packages/shared/src/locations.mjs';
+import { NIGERIA_BOUNDS, insideNigeria, canShareLocation } from '../../../../../packages/shared/src/locations.mjs';
 import { key, clientIdentity, endpoints, point, checkedRoute, directQuote, position, QUOTE_MS, FRESH_MS, SHARE_MS } from './domain.mjs';
 
 export function createLocationsService({ repository, provider, getAccount, sessionOwner, nativeAccessOwner = () => null, nativeSessionOwner = () => null, getRideContext, unitOfWork, tokens, audit, clock }) {
@@ -27,13 +27,13 @@ export function createLocationsService({ repository, provider, getAccount, sessi
     return { user, userId: user.id, sessionHash, clientHash };
   }
   const planningContext = (input) => context(input, false, true);
-  function settings(input) { planningContext(input); return { ...provider.describe(), bounds: ABUJA_BOUNDS, quoteSeconds: QUOTE_MS / 1000 }; }
+  function settings(input) { planningContext(input); return { ...provider.describe(), bounds: NIGERIA_BOUNDS, quoteSeconds: QUOTE_MS / 1000 }; }
   async function search(input, data) {
     planningContext(input); fields(data, ['query']);
     const query = label(data.query, 'Address search', 3, 160);
-    const found = await provider.search(query, ABUJA_BOUNDS);
+    const found = await provider.search(query, NIGERIA_BOUNDS);
     planningContext(input); // A logout during provider I/O must not deliver a stale account result.
-    const places = found.filter((item) => insideAbuja(item) && typeof item.name === 'string' && item.name.trim().length >= 2
+    const places = found.filter((item) => insideNigeria(item) && typeof item.name === 'string' && item.name.trim().length >= 2
       && !/[\u0000-\u001f\u007f]/u.test(item.name)).map(point);
     return { places, attribution: '© OpenStreetMap contributors · Photon search' };
   }

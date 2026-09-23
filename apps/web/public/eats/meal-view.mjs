@@ -1,3 +1,4 @@
+import { createFoodLocationFields, foodAreaLabel } from './location-fields.mjs';
 import { $, element } from '../dashboard/dom.mjs';
 import { EATS_SELLERS, foodAvailable, foodStock, isPrivateKitchen } from '/shared/eats.mjs';
 import { formatNaira } from '/shared/demo-booking.mjs';
@@ -11,9 +12,10 @@ export function createMealView(controller, { button, mealPhoto, totals }) {
     const key = JSON.stringify(value); if (keys.get(id) === key) return;
     keys.set(id, key); const root = field(id); root.replaceChildren(); build(root);
   };
+  const location = createFoodLocationFields({ state: field('state'), town: field('town') });
   field('location-form').addEventListener('submit', (event) => {
     event.preventDefault();
-    void controller.confirmDelivery({ line: field('address').value, areaId: field('area').value }).then((ok) => { if (ok) field('query').focus(); });
+    void controller.confirmDelivery({ line: field('address').value, areaId: location.value() }).then((ok) => { if (ok) field('query').focus(); });
   });
   field('change').addEventListener('click', () => { controller.editDelivery(); field('address').focus(); });
   field('search-form').addEventListener('submit', (event) => { event.preventDefault(); void controller.findMeals(field('query').value); });
@@ -24,7 +26,7 @@ export function createMealView(controller, { button, mealPhoto, totals }) {
   return { render(next) {
     state = next;
     if (owner !== state.user?.id) {
-      owner = state.user?.id; keys.clear();
+      owner = state.user?.id; keys.clear(); location.set('');
       for (const id of ['query', 'address', 'instructions']) field(id).value = '';
       for (const id of ['results', 'lines', 'quotes']) field(id).replaceChildren();
     }
@@ -34,11 +36,10 @@ export function createMealView(controller, { button, mealPhoto, totals }) {
     field('location-fields').disabled = locked() || state.foodLoading;
     field('builder').hidden = field('destination').hidden = !state.deliveryConfirmed;
     $('food-kitchen-browser').hidden = !state.deliveryConfirmed;
-    field('destination-text').textContent = `${state.address.line} · ${state.areas.find((a) => a.id === state.address.areaId)?.name ?? ''}`;
+    field('destination-text').textContent = `${state.address.line} · ${foodAreaLabel(state.address.areaId)}`;
     field('change').disabled = state.busy || state.uncertain;
-    update('area', state.areas, (root) => { for (const a of state.areas) { const o = element('option', a.name); o.value = a.id; root.append(o); } root.value = state.address.areaId; });
     const addressKey = JSON.stringify(state.address);
-    if (keys.get('address-value') !== addressKey) { keys.set('address-value', addressKey); field('address').value = state.address.line; field('area').value = state.address.areaId; }
+    if (keys.get('address-value') !== addressKey) { keys.set('address-value', addressKey); field('address').value = state.address.line; location.set(state.address.areaId); }
     field('query').disabled = field('find').disabled = locked() || state.foodLoading;
     field('instructions').disabled = locked();
     if (document.activeElement !== field('instructions')) field('instructions').value = state.instructions;
@@ -53,7 +54,7 @@ export function createMealView(controller, { button, mealPhoto, totals }) {
         const { store, item } = food, row = element('article', undefined, 'food-dish');
         if (item.photoId) row.append(mealPhoto(item.photoId, item.name, 'food-dish-photo'));
         const info = element('div', undefined, 'food-dish-info');
-        const town = state.areas.find((a) => a.id === store.areaId)?.name ?? store.areaId;
+        const town = foodAreaLabel(store.areaId);
         info.append(element('span', `${EATS_SELLERS[store.sellerType ?? 'restaurant']} · ${town}`, 'food-kitchen-type'), element('h3', item.name), element('p', store.name, 'food-dish-seller'), element('p', item.description, 'small-note'));
         if (item.allergens) info.append(element('p', `Allergens: ${item.allergens}`, 'small-note'));
         if (!isPrivateKitchen(store.sellerType)) info.append(element('p', store.address, 'small-note'));

@@ -119,6 +119,16 @@ test('booking contracts reject malformed fares, foreign coordinates and unsafe c
   assert.throws(() => parseBookingRide({ ...envelope, ride: { ...ride, status: 'in_progress', canCancel: true } }));
 });
 
+test('native route reviews accept Nigerian cities beyond Abuja and reject cross-border geometry', () => {
+  for (const [lng, lat] of [[3.35, 6.6], [8.52, 12.0], [7.51, 6.45]]) {
+    const routePreview = { ...preview, kind: 'route', request: { quoteId: ride.id }, expiresAt: 1_100_000,
+      route: { distanceMeters: 2000, durationSeconds: 600, coordinates: [[lng, lat], [lng + 0.01, lat + 0.01]] } };
+    assert.equal(parsePreview({ ...envelope, preview: routePreview }).preview.kind, 'route');
+    assert.throws(() => parsePreview({ ...envelope, preview: { ...routePreview,
+      route: { ...routePreview.route, coordinates: [[lng, lat], [14.32, 10.59]] } } }));
+  }
+});
+
 test('route drawing preserves equal axes, fits endpoints and never invents a straight road between preview points', () => {
   const drawing = routeDrawing([[7.4, 9.08], [7.43, 9.08], [7.43, 9.1]]);
   const points = drawing.line.split(' ').map((pair) => pair.split(',').map(Number));

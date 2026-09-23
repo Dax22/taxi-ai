@@ -12,14 +12,14 @@ test('platform maps keep iOS on Apple and refuse unconfigured native Android map
   assert.equal(nativeMapPolicy('android', false, true).available, true);
   assert.equal(nativeMapPolicy('web', true, true).available, false);
 });
-test('Abuja route fitting preserves coordinate order, includes every bend, and handles stationary GPS', () => {
-  const points = [{ lat: 9.0, lng: 7.3 }, { lat: 9.2, lng: 7.6 }, { lat: 9.1, lng: 7.4 }];
+test('Nigeria route fitting preserves coordinate order, includes every bend, and handles stationary GPS', () => {
+  const points = [{ lat: 6.45, lng: 3.39 }, { lat: 6.52, lng: 3.45 }, { lat: 6.5, lng: 3.41 }];
   const region = mapRegion(points)!;
   for (const p of points) {
     assert.ok(Math.abs(p.lat - region.latitude) < region.latitudeDelta / 2);
     assert.ok(Math.abs(p.lng - region.longitude) < region.longitudeDelta / 2);
   }
-  assert.deepEqual(coordinate(points[0]), { latitude: 9.0, longitude: 7.3 });
+  assert.deepEqual(coordinate(points[0]), { latitude: 6.45, longitude: 3.39 });
   const single = mapRegion([points[0]])!;
   assert.ok(single.latitudeDelta > 0 && single.longitudeDelta > 0);
   assert.equal(mapRegion([]), null);

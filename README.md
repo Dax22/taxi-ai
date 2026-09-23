@@ -1,6 +1,6 @@
 # Taxi Ai
 
-Rides, Taxi Ai Eats and courier delivery, starting in Abuja, Nigeria.
+Rides, Taxi Ai Eats and courier delivery across Nigeria.
 
 Target product: **one Taxi Ai mobile app and one website**, with the same account
 and Customer, Drive & deliver and My store modes. A person can have multiple
@@ -14,7 +14,7 @@ and [mobile setup](apps/mobile/README.md).
 ## What works today
 
 The yellow Taxi Ai website now includes **local customer, driver and administrator
-accounts** at `/app`. Customers choose an Abuja address or map pin, preview a road
+accounts** at `/app`. Customers choose a Nigerian address or map pin, preview a road
 route and request a test journey; an approved online driver near the pickup can
 select the request, make offers and agree a fare with the customer from a separate
 browser session. The customer can confirm a booking, and the driver can record
@@ -43,7 +43,7 @@ is not connected. Use fictional details and documents.
 - Native sign-in, Home/Activity/Work/Updates/Account navigation and device revocation.
 - Native driver availability, job claiming, fare consent, chat, pickup/drop-off verification
   and a durable updates inbox, with optional Expo phone alerts. See [native journeys](docs/mobile-journeys.md).
-- Native **Book a ride**: Abuja address search, route/fare review, shared ride requests,
+- Native **Book a ride**: Nigeria-wide address search, route/fare review, shared ride requests,
   status recovery and pre-start cancellation. See [mobile booking](docs/mobile-booking.md).
 - Optional Google sign-up/sign-in for web and native development builds, with
   explicit password-confirmed linking for existing accounts. Configure your own
@@ -82,7 +82,7 @@ is not connected. Use fictional details and documents.
   fare cards; reported messages appear in the local administrator dashboard.
 - In-app audio call controls: call, answer, decline, mute, hang up and recent
   call history. Local WebRTC preview with an optional TURN relay adapter.
-- Opt-in Abuja address search, map pins, road distance and estimated driving time.
+- Opt-in Nigeria-wide address search, map pins, road distance and estimated driving time.
 - Saved route quotes with an illustrative fare formula; explicit negotiation still
   determines the final fare. Quotes expire after 15 minutes.
 - Permission-based driver GPS for assigned participants, with explicitly created
@@ -179,7 +179,7 @@ Customer/driver password recovery is available once [email delivery](docs/accoun
 2. Open a different browser/profile or one private window and sign in as the
    approved driver and select **Work**. Two ordinary tabs share a login; use separate sessions.
 3. In **Your availability**, choose **Share location and go online** for a routed
-   request, using an Abuja device near the pickup. For a local sample request,
+   request, using a device in Nigeria near the pickup. For a local sample request,
    select the same sample pickup area and click **Go online in sample area**.
    Keep this driver page visible. Then select **Start negotiation** and offer ₦5,000.
    Claiming stops availability; trip location sharing remains a separate choice.
@@ -187,7 +187,7 @@ Customer/driver password recovery is available once [email delivery](docs/accoun
 5. The customer reviews the driver/fare and clicks **Confirm test booking**.
    Only the customer sees the six-digit pickup PIN.
    The driver may now click **Share my location** in Journey map and allow browser
-   location access. GPS must be within the Abuja preview area and accurate within
+   location access. GPS must be within Nigeria and accurate within
    200 metres. No location access starts automatically; Stop sharing stops the
    device watcher immediately. GPS controls work independently of online tiles.
 6. The driver clicks **On my way**, then **I have arrived**, enters the customer’s
@@ -309,11 +309,13 @@ The terminal example runs with `npm run demo`. Read [the architecture](docs/arch
 
 ## Development and review
 
-The latest development branch is `feat/guest-rides`, stacked on
-`feat/eats-meal-builder`. It adds booking for an adult friend, separates passenger
-details from the booker's fare/payment authority, and provides private passenger
-links on web and mobile. Schema 22 preserves existing records and adds guest-ride
-storage. Links are shared manually; automated SMS and real payments are not connected.
+The latest development branch is `feat/nigeria-wide-coverage`, stacked on
+`feat/guest-rides`. It removes the Abuja-only geography restrictions and adds
+state/town selection, explicit kitchen coverage and nearby food-courier matching
+through private pickup locations. Schema 23 preserves existing records and adds
+private dispatch points. Nationwide location support does not imply live service
+in every town. Automated SMS and real payments are not connected.
+See [nationwide coverage](docs/nationwide.md).
 See [guest-ride setup and acceptance](docs/guest-rides.md),
 [Eats setup](docs/eats.md) and [mobile setup](apps/mobile/README.md).
 Back up the database before changing branches; older releases may not support the

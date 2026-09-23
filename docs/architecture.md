@@ -58,7 +58,7 @@ See [vehicle photo checks](vehicle-photo-checks.md) for configuration and limits
 | Rides | Requests, fares, bookings, pickup verification, progress, cancellation and history | `rides`, `fare_events`, `idempotency`, `ride_trips`, `ride_activity` |
 | Guest rides | Immutable guest passenger snapshots, booker-owned link management and limited public trip views | `guest_ride_passengers`, `guest_ride_links`, `guest_ride_commands` |
 | Deliveries | Parcel validation, category/capacity eligibility and drop-off verification | `delivery_orders` |
-| Eats | Store membership/review, dish search, menus, combined test checkout, kitchen and courier food handovers | `eats_stores`, `eats_memberships`, `eats_reviews`, `eats_menu`, `eats_quotes`, `eats_orders`, `eats_commands`, `eats_photos`, `eats_checkouts`, `eats_collection_points` |
+| Eats | Store membership/review, dish search, menus, combined test checkout, kitchen and courier food handovers | `eats_stores`, `eats_memberships`, `eats_reviews`, `eats_menu`, `eats_quotes`, `eats_orders`, `eats_commands`, `eats_photos`, `eats_checkouts`, `eats_collection_points`, `eats_store_dispatch_points`, `eats_order_dispatch_points` |
 | Notifications | Account-scoped inbox, device opt-in and durable push/receipt retries | `account_notifications`, `push_registrations`, `push_jobs` |
 | Vehicle checks | Optional photo observations, comparison, retry reservation and expiry | `vehicle_photo_checks` |
 | Chat | Participant messages, read markers, retries and reports | `chat_messages`, `chat_reads`, `chat_commands`, `chat_reports` |
@@ -167,7 +167,7 @@ consent. Returned snapshots are copies, not mutable internal state.
 
 Amounts are positive safe integer kobo. Suggestions are nonbinding; sample quotes
 are fictional. Route quotes use an explicit illustrative formula, not an AI
-estimator or a validated Abuja market rate. Server-persisted events reconstruct the fare
+estimator or a validated local market rate. Server-persisted events reconstruct the fare
 model; clients cannot upload snapshots or set event clocks. Ride versions also
 include claiming/cancelling before a fare conversation; fare-event versions track
 only the shared model. Their distinct sequences are validated separately.
@@ -242,6 +242,11 @@ The shared link controller preserves exact retries and holds raw secrets only in
 memory; public link reads return a separate allowlisted trip projection. Completion,
 cancellation, replacement, revocation and session expiry end access. Snapshot copies
 clear guest-link secrets and active state along with other transient capabilities.
+Schema 23 adds private store pickup locations and immutable order dispatch points.
+Nigeria-wide country validation and canonical state/town identifiers live in pure
+shared modules. The Eats service enforces declared delivery areas and nearby GPS
+courier matching; a change in national scope never grants an old store nationwide
+coverage. Existing sample IDs remain readable. See [nationwide coverage](nationwide.md).
 Mode selection remains per client; authorization, ownership and worker capacity
 remain server-side. Workspace resets and retry keys are now scoped to account
 and Customer/Work mode. Calls/GPS/availability use a separate session client and
@@ -291,6 +296,9 @@ The location service receives account/session and narrow ride-context ports.
 timeouts, response caps, caching and per-provider request pacing. The domain
 validates bounded points, route geometry/distance/time and computes integer-kobo
 suggestions. No browser-supplied distance or fare can become a route quote.
+Search uses the Nigeria country filter and search extent; shared polygon validation
+guards coordinates independently of the provider. Local matching radii remain
+unchanged when routes and GPS are accepted elsewhere in Nigeria.
 
 External I/O runs outside synchronous database transactions. Quote creation then
 rechecks the live session, role, retry fingerprint and per-user limit inside the

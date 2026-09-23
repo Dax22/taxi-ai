@@ -3,7 +3,7 @@ import { ScrollView, View } from 'react-native';
 import { router } from 'expo-router';
 import { Text } from '../ui/typography';
 import { Button, Card, Field, Heading, Pill, fare, styles } from '../ui/components';
-import { SelectField } from '../ui/select-field';
+import { FoodLocationFields, foodLocationLabel } from './location-fields';
 import { EATS_SELLERS, foodAvailable, foodStock, isPrivateKitchen } from '../../../../packages/shared/src/eats.mjs';
 import type { EatsController, EatsState } from '../../../../packages/shared/src/eats-controller.mjs';
 import { DiscoveryChip, FoodHero, FoodPhoto, discovery } from './discovery';
@@ -12,7 +12,7 @@ import { FoodMoney, food } from './components';
 export function MealBuilder({ state: s, controller: c, locked, onMenus, onPlaced }: { state: EatsState; controller: EatsController; locked: boolean; onMenus(): void; onPlaced(): void }) {
   const [address, setAddress] = useState(s.address.line), [area, setArea] = useState(s.address.areaId), [query, setQuery] = useState(s.foodQuery);
   useEffect(() => { setAddress(s.address.line); setArea(s.address.areaId); }, [s.address.line, s.address.areaId]);
-  const town = (id: string) => s.areas.find((a) => a.id === id)?.name ?? id;
+  const town = foodLocationLabel;
   const admin = s.user?.role === 'admin';
   const search = (value = query) => { setQuery(value); void c.findMeals(value); };
   return <>
@@ -20,8 +20,9 @@ export function MealBuilder({ state: s, controller: c, locked, onMenus, onPlaced
     {!s.deliveryConfirmed ? <Card>
       <Heading title="First, where should we deliver?" subtitle="Choose your location to see dishes available for delivery."/>
       <Field label="Delivery address and landmark" value={address} onChangeText={setAddress} placeholder="Street, building and a nearby landmark" maxLength={240} editable={!locked && !s.foodLoading}/>
-      <SelectField label="Town or area" value={area} onChange={setArea} options={s.areas.map((a) => ({ value: a.id, label: a.name }))} disabled={locked || s.foodLoading}/>
-      <Button title="Find food near me" busy={s.foodLoading} disabled={locked || address.trim().length < 8 || !s.areas.length} onPress={() => void c.confirmDelivery({ line: address, areaId: area })}/>
+      <FoodLocationFields label="Delivery" value={area} onChange={setArea} disabled={locked || s.foodLoading}/>
+      <Text style={styles.small}>Choose any Nigerian state or FCT and enter your town or local area. Menus depend on kitchens serving that location.</Text>
+      <Button title="Find food near me" busy={s.foodLoading} disabled={locked || address.trim().length < 8 || !area} onPress={() => void c.confirmDelivery({ line: address, areaId: area })}/>
     </Card> : <>
       <Card><Text style={styles.label}>DELIVERING TO</Text><Text style={styles.body}>{s.address.line} · {town(s.address.areaId)}</Text><Button title="Change location" secondary disabled={s.busy || s.uncertain} onPress={() => c.editDelivery()}/></Card>
       <Heading title="What do you want to eat?" subtitle="Mix dishes from restaurants, food vendors and home kitchens."/>
@@ -31,7 +32,7 @@ export function MealBuilder({ state: s, controller: c, locked, onMenus, onPlaced
         {['Jollof rice', 'Egusi & pounded yam', 'Suya', 'Plantain', 'Moi moi'].map((value) => <DiscoveryChip key={value} label={value} selected={query === value} disabled={locked || s.foodLoading} onPress={() => search(value)}/>)}
       </ScrollView>
       <Text accessibilityLiveRegion="polite" style={styles.small}>{s.foodLoading ? 'Finding dishes for your delivery area…' : `${s.foodCount} available dishes${s.foodQuery ? ` matching “${s.foodQuery}”` : ''} · prices set by the sellers`}</Text>
-      {!s.foodLoading && !s.foods.length && <Card><Text style={styles.h2}>Let’s find your next favourite.</Text><Text style={styles.body}>No dishes are available for this search yet. Try another dish or delivery area.</Text></Card>}
+      {!s.foodLoading && !s.foods.length && <Card><Text style={styles.h2}>Let’s find your next favourite.</Text><Text style={styles.body}>No kitchens currently offer matching dishes for this town or area. Check the spelling of your location or try another dish.</Text></Card>}
       {s.foods.map((option) => {
         const { item, store } = option, quantity = s.mealBasket.find((l) => l.item.id === item.id)?.quantity ?? 0;
         return <Card key={item.id}>
@@ -60,7 +61,7 @@ export function MealBuilder({ state: s, controller: c, locked, onMenus, onPlaced
         <Field label="Kitchen or delivery notes (optional)" value={s.instructions} onChangeText={(value) => c.delivery(s.address, value)} maxLength={240} multiline editable={!locked}/>
         <Button title="Review total" busy={s.busy} disabled={locked || s.foodLoading || !s.mealBasket.length || admin} onPress={() => void c.reviewMeal()}/>
       </Card>
-      {s.mealCheckout && <Card><Heading title="Review your meal" subtitle={`Delivery to ${s.address.line}`}/>
+      {s.mealCheckout && <Card><Heading title="Review your meal" subtitle={`Delivery to ${s.address.line} · ${town(s.address.areaId)}`}/>
         {s.mealCheckout.quotes.map((quote) => <View key={quote.id} style={food.menuRow}><Text style={styles.h2}>{quote.restaurant.name}</Text>{quote.lines.map((line) => <Text key={line.itemId} style={styles.body}>{line.quantity} × {line.name} · {fare(line.quantity * line.priceKobo)}</Text>)}<FoodMoney value={quote.totals}/></View>)}
         <Text style={styles.h2}>Combined total · {fare(s.mealCheckout.totals.totalKobo)}</Text>
         <Text style={styles.small}>Total held until {new Date(s.mealCheckout.expiresAt).toLocaleTimeString()}. Separate deliveries from each kitchen. Test checkout · no payment is collected.</Text>

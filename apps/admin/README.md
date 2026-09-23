@@ -28,7 +28,7 @@ private session when testing staff and customer accounts simultaneously.
 | `/admin/accounts/:id` | Audited profile read, vehicle, lifetime passenger/driving totals and paginated history |
 | `/admin/trips` | Search and filter all journeys by status, payment and request date |
 | `/admin/trips/:id` | Audited trip read, participants, saved vehicle, agreed fare, payment reference and timeline |
-| `/admin/analytics` | Abuja date ranges, daily charts and tables, outcomes, completion/cancellation rates and top routes |
+| `/admin/analytics` | Nigeria date ranges (WAT), daily charts and tables, outcomes, completion/cancellation rates and top routes |
 
 All pages support direct links, normal browser navigation and refresh. Keyset
 pagination includes old trips beyond the customer workspace's shorter list.

@@ -1,5 +1,6 @@
-import { EATS_CUISINES, EATS_SELLERS, foodAvailable, eatsTotals, isPrivateKitchen } from '../../../../../packages/shared/src/eats.mjs';
-import { DEMO_AREAS } from '../../../../../packages/shared/src/demo-booking.mjs';
+import { EATS_CUISINES, EATS_SELLERS, foodAvailable, eatsTotals, isPrivateKitchen, deliveryAreas } from '../../../../../packages/shared/src/eats.mjs';
+import { resolveFoodArea } from '../../../../../packages/shared/src/nigeria-areas.mjs';
+import { insideNigeria } from '../../../../../packages/shared/src/locations.mjs';
 import { check } from '../../shared/errors.mjs';
 import { fields, label } from '../../shared/validation.mjs';
 
@@ -7,20 +8,26 @@ export const canonical = (value) => JSON.stringify(value, (_, item) => item && t
   ? Object.fromEntries(Object.keys(item).sort().map((key) => [key, item[key]])) : item);
 export function version(value, expected) { check(Number.isSafeInteger(expected) && expected >= 0, 'INVALID_VERSION', 'Use the version shown on screen.'); check(value.version === expected, 'STALE_VERSION', 'This changed. Refresh and review the saved details.'); }
 export function amount(value, name, max = 2_000_000) { check(Number.isSafeInteger(value) && value >= 0 && value <= max, 'INVALID_PRICE', `${name} must be a nonnegative amount within the test limit.`); return value; }
-export function area(id) { const value = DEMO_AREAS.find((a) => a.id === id); check(value, 'INVALID_AREA', 'Choose an Abuja delivery area.'); return value; }
+export function area(id) { const value = resolveFoodArea(id); check(value, 'INVALID_AREA', 'Choose a Nigerian state and enter the town or area.'); return value; }
+export function dispatchPoint(value) {
+  if (value === null || value === undefined) return null;
+  fields(value, ['lat', 'lng']);
+  check(insideNigeria(value), 'INVALID_LOCATION', 'Choose a kitchen dispatch location within Nigeria.');
+  return { lat: Number(value.lat.toFixed(6)), lng: Number(value.lng.toFixed(6)) };
+}
 export function storeDetails(data, previous = {}) {
   const required = ['name', 'cuisine', 'description', 'areaId', 'prepMinutes', 'minimumKobo', 'deliveryFeeKobo'];
-  fields(data, [...required, 'address', 'sellerType', 'deliveryEnabled', 'pickupEnabled', 'deliveryAreaIds'], required);
+  fields(data, [...required, 'address', 'sellerType', 'deliveryEnabled', 'pickupEnabled', 'deliveryAreaIds', 'dispatchPoint'], required);
   const sellerType = data.sellerType ?? previous.sellerType ?? 'restaurant';
   const deliveryEnabled = data.deliveryEnabled ?? previous.deliveryEnabled ?? true, pickupEnabled = data.pickupEnabled ?? previous.pickupEnabled ?? false;
   check(Object.hasOwn(EATS_SELLERS, sellerType), 'INVALID_STORE', 'Choose restaurant, food vendor or home kitchen.');
   check(typeof deliveryEnabled === 'boolean' && typeof pickupEnabled === 'boolean' && (deliveryEnabled || pickupEnabled), 'INVALID_STORE', 'Offer delivery, customer pickup, or both.');
   check(EATS_CUISINES.includes(data.cuisine), 'INVALID_CUISINE', 'Choose a cuisine.'); area(data.areaId);
-  const deliveryAreaIds = data.deliveryAreaIds ?? previous.deliveryAreaIds ?? DEMO_AREAS.map((a) => a.id);
-  check(Array.isArray(deliveryAreaIds) && deliveryAreaIds.length <= DEMO_AREAS.length && new Set(deliveryAreaIds).size === deliveryAreaIds.length && (!deliveryEnabled || deliveryAreaIds.length > 0), 'INVALID_AREA', 'Choose the towns or areas you deliver to.');
+  const deliveryAreaIds = data.deliveryAreaIds ?? (previous.areaId === data.areaId ? deliveryAreas(previous) : [data.areaId]);
+  check(Array.isArray(deliveryAreaIds) && deliveryAreaIds.length <= 50 && new Set(deliveryAreaIds).size === deliveryAreaIds.length && (!deliveryEnabled || deliveryAreaIds.length > 0), 'INVALID_AREA', 'Choose up to 50 towns or areas you deliver to.');
   deliveryAreaIds.forEach(area);
   check(Number.isSafeInteger(data.prepMinutes) && data.prepMinutes >= 10 && data.prepMinutes <= 120, 'INVALID_PREPARATION', 'Choose 10–120 minutes for preparation.');
-  return { sellerType, deliveryEnabled, pickupEnabled, deliveryAreaIds, name: label(data.name, 'Kitchen name', 2, 80), cuisine: data.cuisine, description: label(data.description, 'Description', 2, 300),
+  return { sellerType, deliveryEnabled, pickupEnabled, deliveryAreaIds, dispatchPoint: dispatchPoint(Object.hasOwn(data, 'dispatchPoint') ? data.dispatchPoint : previous.areaId === data.areaId ? previous.dispatchPoint : null), name: label(data.name, 'Kitchen name', 2, 80), cuisine: data.cuisine, description: label(data.description, 'Description', 2, 300),
     address: isPrivateKitchen(sellerType) ? '' : label(data.address, 'Restaurant address', 8, 240), areaId: data.areaId, prepMinutes: data.prepMinutes,
     minimumKobo: amount(data.minimumKobo, 'Minimum order', 5_000_000), deliveryFeeKobo: amount(data.deliveryFeeKobo, 'Delivery fee') };
 }
@@ -42,8 +49,9 @@ export function checkedBasket(store, menu, data) {
   check(['delivery', 'pickup'].includes(fulfillment), 'INVALID_CART', 'Choose delivery or customer pickup.');
   check(fulfillment === 'pickup' ? store.pickupEnabled : store.deliveryEnabled !== false, 'STORE_UNAVAILABLE', 'This kitchen does not offer that order option.');
   version(store, data.expectedVersion);
-  fields(data.address, ['line', 'areaId']); area(data.address.areaId);
-  check(fulfillment !== 'delivery' || !store.deliveryAreaIds || store.deliveryAreaIds.includes(data.address.areaId), 'STORE_UNAVAILABLE', 'This kitchen does not deliver to the selected town or area.');
+  fields(data.address, ['line', 'areaId']);
+  if (fulfillment === 'delivery') area(data.address.areaId);
+  check(fulfillment !== 'delivery' || deliveryAreas(store).includes(data.address.areaId), 'STORE_UNAVAILABLE', 'This kitchen does not deliver to the selected town or area.');
   check(Array.isArray(data.items) && data.items.length > 0 && data.items.length <= 20, 'INVALID_CART', 'Choose 1–20 menu items.');
   check(new Set(data.items.map((i) => i?.itemId)).size === data.items.length, 'INVALID_CART', 'Combine duplicate items into one quantity.');
   const lines = data.items.map((line) => {

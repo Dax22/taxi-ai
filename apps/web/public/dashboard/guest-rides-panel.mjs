@@ -23,7 +23,7 @@ export function createGuestRidesPanel({ client, origin, now = Date.now, onSessio
     $('guest-link-status').textContent = message || (state.uncertain
       ? 'The connection ended before confirmation. Retry the same action to learn its result. Do not create a different link yet.'
       : working ? 'Checking your private link…' : !state.value ? 'Link status is unavailable. Refresh to retry.'
-        : link?.active && link.expiresAt > now() ? `Link active until ${safetyTime(link.expiresAt)} (Abuja).${secret ? ' Copy or share it privately with your friend.' : ' The link text is no longer available here. Replace it to get a new one.'}`
+        : link?.active && link.expiresAt > now() ? `Link active until ${safetyTime(link.expiresAt)} (WAT).${secret ? ' Copy or share it privately with your friend.' : ' The link text is no longer available here. Replace it to get a new one.'}`
           : link ? 'The previous link has ended or was revoked. Replace it to create a new link.'
             : state.value.canCreate ? 'Your booking is confirmed. Create a private link for your friend.' : 'Confirm this guest booking before creating a link.');
     for (const id of ['create', 'replace', 'revoke', 'refresh', 'confirm-replace', 'keep', 'copy', 'share']) $('guest-link-' + id).disabled = locked;
