@@ -29,6 +29,11 @@ control, and no automatic rotation or transition animation when reduced motion i
 Keyboard focus and manual navigation stop automatic rotation; hover and a hidden
 browser tab suspend it. Scene changes preserve the image area's aspect ratio.
 
+The artwork spans the full page width, with no maximum width or side gutters on
+desktop or mobile. The heading, controls and booking form retain their normal
+content spacing. Percentage widths avoid horizontal overflow from scrollbar width;
+all scenes keep their 2:1 proportions without stretching.
+
 Manual checks: visit `/` on desktop and a phone-sized viewport, select each scene,
 navigate with Tab and Enter, pause/resume, and enable reduced motion. Confirm the
 booking form below still works independently. Browser visual verification is pending
