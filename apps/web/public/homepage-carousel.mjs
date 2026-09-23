@@ -6,19 +6,17 @@ export function createHomepageCarousel(root, {
 } = {}) {
   if (!root || !documentRef || !windowRef) return null;
   const slides = [...root.querySelectorAll('[data-carousel-slide]')];
-  const selectors = [...root.querySelectorAll('[data-carousel-select]')];
   const controls = root.querySelector('[data-carousel-controls]');
   const rotation = root.querySelector('[data-carousel-rotation]');
   const previous = root.querySelector('[data-carousel-previous]');
   const next = root.querySelector('[data-carousel-next]');
   const status = root.querySelector('[data-carousel-status]');
-  if (slides.length < 2 || selectors.length !== slides.length || !controls || !rotation || !previous || !next || !status) return null;
+  if (slides.length < 2 || !controls || !rotation || !previous || !next || !status) return null;
 
   const motion = windowRef.matchMedia?.('(prefers-reduced-motion: reduce)');
   const listeners = [];
   let current = 0;
   let playing = !motion?.matches;
-  let hovering = false;
   let timer = null;
   let destroyed = false;
   let pointerAction = null;
@@ -35,7 +33,7 @@ export function createHomepageCarousel(root, {
 
   function schedule() {
     clearTimer();
-    if (destroyed || !playing || hovering || documentRef.hidden || motion?.matches) return;
+    if (destroyed || !playing || documentRef.hidden || motion?.matches) return;
     timer = windowRef.setTimeout(() => {
       timer = null;
       show(current + 1);
@@ -44,7 +42,8 @@ export function createHomepageCarousel(root, {
 
   function updateRotation() {
     rotation.disabled = Boolean(motion?.matches);
-    rotation.textContent = motion?.matches ? 'Motion off' : playing ? 'Pause slides' : 'Play slides';
+    rotation.textContent = motion?.matches ? '−' : playing ? 'Ⅱ' : '▶';
+    rotation.title = motion?.matches ? 'Automatic slides are off: reduced motion is enabled' : playing ? 'Pause slides' : 'Play slides automatically';
     rotation.setAttribute('aria-label', motion?.matches
       ? 'Motion off: automatic slides are disabled because reduced motion is enabled'
       : playing ? 'Pause slides' : 'Play slides automatically');
@@ -63,7 +62,6 @@ export function createHomepageCarousel(root, {
     if (manual) playing = false;
     warmImage(current);
     slides.forEach((slide, i) => { slide.hidden = i !== current; });
-    selectors.forEach((button, i) => button.setAttribute('aria-pressed', String(i === current)));
     // Automatic changes do not interrupt a screen reader. Manual selection is announced.
     if (manual) status.textContent = `${slides[current].dataset.slideName}, slide ${current + 1} of ${slides.length}.`;
     warmImage((current + 1) % slides.length);
@@ -72,7 +70,6 @@ export function createHomepageCarousel(root, {
 
   listen(previous, 'click', () => show(current - 1, true));
   listen(next, 'click', () => show(current + 1, true));
-  selectors.forEach((button, index) => listen(button, 'click', () => show(index, true)));
 
   // A pointer press on Pause must still pause after its focus event stops rotation.
   listen(rotation, 'pointerdown', () => { pointerAction = !playing; });
@@ -85,18 +82,13 @@ export function createHomepageCarousel(root, {
     updateRotation();
   });
   listen(root, 'focusin', () => { playing = false; updateRotation(); });
-  listen(root, 'pointerenter', (event) => {
-    if (event.pointerType === 'touch') return;
-    hovering = true;
-    schedule();
-  });
-  listen(root, 'pointerleave', () => { hovering = false; schedule(); });
+  // Keep rotating when the mouse rests on the full-width artwork. Focus and the
+  // explicit pause control remain available for people who need a still scene.
   listen(documentRef, 'visibilitychange', schedule);
   if (motion?.addEventListener) listen(motion, 'change', () => { playing = false; updateRotation(); });
 
   // Honour focus that arrived before this module finished loading.
   if (root.contains(documentRef.activeElement)) playing = false;
-  hovering = root.matches?.(':hover') ?? false;
   controls.hidden = false;
   show(0);
 

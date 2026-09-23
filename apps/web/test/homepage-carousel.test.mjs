@@ -11,7 +11,6 @@ class Element extends EventTarget {
 function setup({ reduced = false, focused = false } = {}) {
   const root = new Element(), documentRef = new Element(), motion = new Element();
   const controls = new Element(), rotation = new Element(), previous = new Element(), next = new Element(), status = new Element();
-  const selectors = Array.from({ length: 4 }, () => new Element());
   const names = ['City rides', 'Airport drop-off', 'Food delivery', 'Courier delivery'];
   const slides = names.map((name) => {
     const slide = new Element();
@@ -20,7 +19,7 @@ function setup({ reduced = false, focused = false } = {}) {
     slide.querySelector = () => slide.image;
     return slide;
   });
-  root.querySelectorAll = (selector) => selector === '[data-carousel-slide]' ? slides : selectors;
+  root.querySelectorAll = (selector) => selector === '[data-carousel-slide]' ? slides : [];
   const nodes = new Map([
     ['[data-carousel-controls]', controls], ['[data-carousel-rotation]', rotation],
     ['[data-carousel-previous]', previous], ['[data-carousel-next]', next], ['[data-carousel-status]', status],
@@ -37,7 +36,7 @@ function setup({ reduced = false, focused = false } = {}) {
     clearTimeout(id) { timers.delete(id); },
   };
   const carousel = createHomepageCarousel(root, { documentRef, windowRef });
-  return { root, documentRef, motion, controls, rotation, previous, next, status, selectors, slides, timers, carousel,
+  return { root, documentRef, motion, controls, rotation, previous, next, status, slides, timers, carousel,
     active: () => slides.findIndex((slide) => !slide.hidden),
     tick() {
       assert.equal(timers.size, 1);
@@ -46,7 +45,7 @@ function setup({ reduced = false, focused = false } = {}) {
   };
 }
 
-test('manual navigation wraps, selects the named scene and announces only the selected slide', () => {
+test('overlay navigation wraps and announces only the manually selected slide', () => {
   const f = setup();
   assert.equal(f.active(), 0);
   assert.equal(f.controls.hidden, false);
@@ -58,19 +57,23 @@ test('manual navigation wraps, selects the named scene and announces only the se
   assert.equal(f.timers.size, 0);
   f.next.emit('click');
   assert.equal(f.active(), 0);
-  f.selectors[2].emit('click');
+  f.next.emit('click'); f.next.emit('click');
   assert.equal(f.active(), 2);
-  assert.deepEqual(f.selectors.map((button) => button.attributes['aria-pressed']), ['false', 'false', 'true', 'false']);
+  assert.equal(f.status.textContent, 'Food delivery, slide 3 of 4.');
   assert.equal(f.slides.filter((slide) => !slide.hidden).length, 1);
 });
 
-test('automatic slides stay quiet and hover or a hidden document pauses with a fresh interval on return', () => {
+test('automatic slides loop without interaction, continue on hover, and pause in a hidden document', () => {
   const f = setup();
   assert.equal([...f.timers.values()][0].delay, 6500);
   f.tick(); assert.equal(f.active(), 1);
   assert.equal(f.status.textContent, '');
   f.root.emit('pointerenter', { pointerType: 'mouse' });
-  assert.equal(f.timers.size, 0);
+  assert.equal(f.timers.size, 1);
+  f.tick(); assert.equal(f.active(), 2);
+  f.tick(); assert.equal(f.active(), 3);
+  f.tick(); assert.equal(f.active(), 0);
+  f.tick(); assert.equal(f.active(), 1);
   f.root.emit('pointerleave');
   assert.equal(f.timers.size, 1);
   f.documentRef.hidden = true; f.documentRef.emit('visibilitychange');
@@ -85,13 +88,13 @@ test('focus stops rotation until Play is explicitly activated; leaving or return
   const f = setup();
   f.root.emit('focusin');
   assert.equal(f.timers.size, 0);
-  assert.equal(f.rotation.textContent, 'Play slides');
+  assert.equal(f.rotation.attributes['aria-label'], 'Play slides automatically');
   f.root.emit('pointerleave');
   f.documentRef.emit('visibilitychange');
   assert.equal(f.timers.size, 0);
   f.rotation.emit('click', { detail: 0 });
   assert.equal(f.timers.size, 1);
-  assert.equal(f.rotation.textContent, 'Pause slides');
+  assert.equal(f.rotation.attributes['aria-label'], 'Pause slides');
   f.tick(); assert.equal(f.active(), 1);
   f.root.emit('focusin');
   assert.equal(f.timers.size, 0);
@@ -104,7 +107,7 @@ test('clicking Pause does not accidentally restart after the pointer focuses the
   f.root.emit('focusin');
   f.rotation.emit('click', { detail: 1 });
   assert.equal(f.timers.size, 0);
-  assert.equal(f.rotation.textContent, 'Play slides');
+  assert.equal(f.rotation.attributes['aria-label'], 'Play slides automatically');
   f.rotation.emit('pointerdown');
   f.rotation.emit('click', { detail: 1 });
   assert.equal(f.timers.size, 1);
