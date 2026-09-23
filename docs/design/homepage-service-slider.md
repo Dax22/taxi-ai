@@ -41,21 +41,20 @@ announced to screen readers. Without JavaScript, the first scene stays visible.
 
 Artwork reaches both edges of the page with no side gutters, maximum-width cap or
 image distortion. The slider starts immediately beneath the navigation with zero
-external top margin. One persistent text overlay carries the headline and links
+external top margin. One persistent overlay carries the service eyebrow and links
 across all scenes; its primary action is “Book a ride” and links to `/app`.
 The fare-demo link continues to target `#book`.
 
 The full-image white gradient is removed so all four scenes retain their original
-colours. A tight text shadow outlines the headline and secondary link without
-covering the surrounding artwork. The supporting paragraph is removed.
+colours. A tight text shadow outlines the small overlay text and secondary link without
+covering the surrounding artwork. The headline and supporting paragraph are removed.
 Desktop minimum height scales from 480px to 640px (previously 580px to 780px);
 tablet and phone minimums are 560px and 500px. Reduced content padding also shortens
 the hero while still allowing it to grow for enlarged text.
-Desktop typography scales fluidly; at 800px and below, the copy sits higher in the
-same hero and the complete
+At 800px and below, the controls sit higher in the same hero and the complete
 2:1 artwork sits along its bottom edge. The content remains in the grid flow so
 wrapped or enlarged text increases the hero height instead of being clipped.
-The decorative journey card was removed to avoid overlapping the new headline.
+The decorative journey card is also removed to keep the artwork clear.
 Keyboard focus on either overlay link pauses rotation, as it does for the controls.
 Booking content below keeps its normal spacing.
 

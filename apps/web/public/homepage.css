@@ -11,10 +11,8 @@
   .hero-copy { max-width: 660px; pointer-events: auto; }
   .hero-intro .eyebrow { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; color: #454b43; }
   .hero-intro .tiny-dot { background: var(--brand); }
-  .hero h1 { font-size: clamp(44px, 4.8vw, 72px); line-height: 1.06; letter-spacing: -.055em; font-weight: 600; text-wrap: balance; overflow-wrap: break-word; }
   /* Protect the letter edges without washing out any part of the artwork. */
-  .hero h1, .hero-intro .eyebrow, .hero-actions .text-link, .hero-preview-note { text-shadow: 0 1px 2px #fff, 0 0 4px #fff; }
-  .hero h1 span { color: var(--ink); }
+  .hero-intro .eyebrow, .hero-actions .text-link, .hero-preview-note { text-shadow: 0 1px 2px #fff, 0 0 4px #fff; }
   .hero-actions { display: flex; align-items: center; justify-content: flex-start; flex-wrap: wrap; gap: 16px 28px; margin-top: 28px; }
   .hero-actions .button-primary { border-radius: 999px; padding: 17px 26px; min-height: 54px; font-size: 15px; }
   .hero-actions .text-link { gap: 12px; min-height: 48px; }
@@ -82,7 +80,6 @@
     .hero-copy { max-width: 620px; }
     .hero-slide-viewport { min-height: 560px; }
     .hero-image { object-fit: contain; object-position: center bottom; }
-    .hero h1 { font-size: clamp(40px, 7vw, 58px); }
     .hero-intro .eyebrow { font-size: 10px; margin-bottom: 20px; }
     .booking-card { margin-top: 24px; padding: 22px 22px 0; }
     .booking-card .preview-label { margin-inline: -22px; }
@@ -99,7 +96,6 @@
   @media (max-width: 580px) {
     .landing-page .site-header { height: 73px; }
     .hero-intro { padding-block: 28px 200px; }
-    .hero h1 { font-size: clamp(36px, 9vw, 48px); line-height: 1.08; letter-spacing: -.045em; }
     .hero-actions { gap: 10px 20px; margin-top: 24px; }
     .hero-actions .button-primary { padding: 15px 24px; min-height: 52px; }
     .hero-actions .text-link { font-size: 12px; gap: 10px; }
