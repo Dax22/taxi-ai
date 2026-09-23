@@ -27,6 +27,7 @@ test('the local site serves HTML, modules and artwork with correct content types
       ...['safety-controller', 'safety-view', 'safety-format', 'trip-share-controller'].map((name) => [`/dashboard/${name}.mjs`, 'text/javascript']),
       ['/dashboard.css', 'text/css'], ['/dashboard.mjs', 'text/javascript'], ['/styles.css', 'text/css'],
       ['/homepage.css', 'text/css'],
+      ['/homepage-carousel.mjs', 'text/javascript'],
       ['/dashboard/api-client.mjs', 'text/javascript'], ['/dashboard/auth-form.mjs', 'text/javascript'],
       ['/dashboard/page-controller.mjs', 'text/javascript'],
       ['/dashboard/dom.mjs', 'text/javascript'], ['/dashboard/views.mjs', 'text/javascript'],
@@ -47,6 +48,8 @@ test('the local site serves HTML, modules and artwork with correct content types
       ['/app.mjs', 'text/javascript'], ['/shared/fare-negotiation.mjs', 'text/javascript'],
       ['/shared/demo-booking.mjs', 'text/javascript'], ['/assets/city-route-hero.webp', 'image/webp'],
       ['/assets/city-route-hero-small.webp', 'image/webp'],
+      ...['airport-dropoff', 'food-delivery', 'courier-delivery'].flatMap((name) =>
+        ['', '-small'].map((size) => [`/assets/${name}-hero${size}.webp`, 'image/webp'])),
       ['/assets/autonomous-concept.webp', 'image/webp'],
       ['/assets/autonomous-concept-small.webp', 'image/webp'], ['/favicon.svg?v=amber', 'image/svg+xml'],
       ['/assets/taxi-ai-mark.svg', 'image/svg+xml']]) {
