@@ -5,9 +5,15 @@ Artwork is on the left, icon-led feature descriptions on the right; below 900px
 it stacks with the artwork first. Original images remain fully visible.
 
 Copy reflects the implementation: optional AI vehicle photo comparison, rule-based
-Kemmy journey guidance, route-based fare suggestions, and planned multilingual
-AI support. The section does not label the deterministic fare or Kemmy logic as
-an AI model or promise live traffic prediction.
+Kemmy journey guidance and route-based fare suggestions. The multilingual card
+has been replaced with planned crash detection and automatic alerts, opt-in
+in-car scream/panic detection with emergency sharing, and dangerous-location
+warnings. Emergency sharing is proposed to include passenger and driver details
+and trip location, with permission, for saved family contacts and supported
+emergency helplines. These cards describe planned capabilities, not active
+monitoring or live emergency dispatch. Current safety notifications remain
+simulated; see `docs/safety.md`. The section does not label the deterministic
+fare or Kemmy logic as an AI model or promise live traffic prediction.
 
 ## Artwork
 
