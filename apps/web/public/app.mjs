@@ -14,7 +14,7 @@ const currentPickupId = 'wuse-ii';
 const previewDestinationId = 'maitama';
 const categories = createVehicleCategoryPicker($('home-vehicle-categories'), { onSelect(category) {
   $('trip-form').hidden = !category.ridePreview;
-  $('standard-fare-note').textContent = `${category.name} preview · Current pickup · Illustrative fare`;
+  $('standard-fare-note').textContent = `${category.name} preview · Sample pickup · Illustrative fare`;
   $('category-booking-link').href = `/app?category=${category.id}`;
   $('category-booking-link').textContent = `Book ${category.name} in your account ↗`;
   $('trip-error').textContent = '';
@@ -67,7 +67,7 @@ $('trip-form').addEventListener('submit', (event) => {
       suggestedFareKobo: quote.suggestedFareKobo,
     });
     role = 'customer';
-    $('summary-pickup').textContent = 'Current location';
+    $('summary-pickup').textContent = 'Wuse II · sample pickup';
     $('summary-destination').textContent = destination;
     $('suggested-fare').textContent = formatNaira(quote.suggestedFareKobo);
     $('fare-amount').value = String(quote.suggestedFareKobo / 100);

@@ -38,7 +38,7 @@ fix for GPS matching. Leaving/backgrounding stops renewal and attempts to go
 offline; if a connection is lost, the existing server lease expires. Returning
 requires explicit Go online. There is no background tracking or native trip map.
 A location permission dialog may pause the app; after allowing it, choose Go
-online again if prompted. A precise fix must satisfy the existing Abuja, freshness
+online again if prompted. A precise fix must satisfy the Nigeria coverage, freshness
 and accuracy rules. Permission denial leaves the driver offline.
 
 A lease binds to the stable native device family and app client ID, so access-token

@@ -10,7 +10,7 @@ Optional private hosting uses a separate staging mode documented in
 
 ## Code boundaries
 
-`src/application.mjs` wires the accounts, google-auth, device-sessions, drivers, rides, chat, calls, locations, availability, payments, safety and admin-console modules. Each module
+`src/application.mjs` wires the accounts, google-auth, device-sessions, drivers, rides, guest-rides, chat, calls, locations, availability, payments, safety and admin-console modules. Each module
 contains a service, repository and route factory; rides also has pure domain
 helpers. Services receive repositories, clock and cross-module operations as
 explicit dependencies. They do not import HTTP or database adapters. Repositories
@@ -41,7 +41,7 @@ preserved. No reset is required. Earlier code refuses the upgraded file; use a s
 - CSRF: exact configured Host/Origin checks, JSON writes and a session-bound CSRF
   header for authenticated mutations. Login/registration also require Origin.
 - Authorization: actors, capabilities and staff privileges come from the session/database.
-  UI modes grant no access. Trip actions check the stored passenger/driver IDs. Only an approved
+  UI modes grant no access. Trip actions check the stored booker/driver IDs. Only an approved
   online driver within the matching area can claim; only the customer and assigned driver can negotiate or read
   a request. Unknown and unrelated request IDs both return 404.
 - Privacy: available requests show sample areas or approximate two-decimal
@@ -130,6 +130,25 @@ the client refreshes without automatically accepting a replacement price.
 All ride writes need session + CSRF + idempotency key. JSON errors contain a stable
 `error.code` and readable `error.message`; internal details are not returned.
 
+Guest bookings add optional `passenger: { kind: 'guest', name, phone, consent: true }`
+to `POST /api/rides` and native `/api/mobile/v1/booking/requests`. Omitting it keeps
+the existing self-booking behaviour. Passenger ride categories only; a guest does
+not become an account participant or payer. Schema 22 stores the immutable details
+separately from the ride.
+
+| Guest route | Access / purpose |
+| --- | --- |
+| `GET /api/guest-rides/:id` | Booker; link metadata and creation eligibility |
+| `POST /api/guest-rides/:id/link` | Booker; `{ expectedLinkId: null }` initially, or the latest link ID to replace |
+| `POST /api/guest-rides/:id/revoke` | Booker; `{ linkId, expectedVersion }` |
+| `POST /api/guest-trip/view` | Read-only capability; `{ token }`, limited route/driver/status/PIN projection |
+
+The management routes also exist under `/api/mobile/v1/guest-rides` with native
+session authentication. Guest reads require same-origin JSON, but no account.
+Management writes retain authentication and idempotency checks; browser writes
+also require CSRF. Raw link tokens are returned only once, and links are manually
+shared. See [guest booking and link recovery](../../docs/guest-rides.md).
+
 Register a dedicated customer account and run `npm run admin -- registered-email`
 to bootstrap the first administrator locally. This command revokes that account's
 sessions, refuses an account with ride history or a driver capability, and refuses if an admin exists.
@@ -165,13 +184,18 @@ SDP and ownership hashes, releases both participant locks and preserves a metada
 history entry. Call actions never alter fares. See [the voice guide](../../docs/voice.md)
 for all endpoints, timeouts, local testing and optional coturn configuration.
 
-## Abuja locations
+## Nigeria-wide locations
 
 `modules/locations/` owns route quotes and explicit driver sharing. Its injected
 map adapter supplies Photon address results and OSRM road routes; all pricing is
 computed server-side with a clearly labelled illustrative policy. Provider I/O
 runs outside database transactions and rechecks authorization before saving.
 The ride service binds a nonexpired quote inside the ride-creation transaction.
+Nigeria-wide search and GPS use the shared country polygon rather than the former
+Abuja rectangle. Driver matching remains local to the pickup. Eats uses canonical
+state/town IDs, explicit seller coverage and private pickup coordinates for local
+courier eligibility; schema 23 preserves existing records. See
+[nationwide contracts and limitations](../../docs/nationwide.md).
 
 Sharing starts only after booking and only for its assigned approved driver.
 Updates are bound to a session and browser-window nonce, with monotonic sequences,

@@ -1,14 +1,15 @@
 import { transportCategory, deliveryDetails } from './transport-categories.mjs';
 import { envelope, parseVehicle } from './mobile-contracts.mjs';
-import { insideAbuja } from './locations.mjs';
+import { insideNigeria } from './locations.mjs';
 import { RIDE_STATUS_LABELS, canCancelRide } from './trip-lifecycle.mjs';
+import { readPassenger } from './guest-rides.mjs';
 
 const record = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const text = (v, max = 160) => typeof v === 'string' && v.length > 0 && v.length <= max;
 const number = (v) => Number.isSafeInteger(v) && v >= 0;
 const positive = (v) => number(v) && v > 0;
 const uuid = (v) => typeof v === 'string' && /^[a-f0-9-]{36}$/.test(v);
-const point = (v) => record(v) && text(v.name) && insideAbuja(v);
+const point = (v) => record(v) && text(v.name) && insideNigeria(v);
 const only = (v, keys) => Object.keys(v).every((key) => keys.includes(key));
 function expect(ok) { if (!ok) throw new Error('Taxi Ai returned an incompatible booking response. Please try again later.'); }
 export function isRequestOpen(status) { return Object.hasOwn(RIDE_STATUS_LABELS, status) && !['completed','cancelled','expired'].includes(status); }
@@ -19,6 +20,7 @@ function ride(r) {
     && (r.expiresAt === null || number(r.expiresAt)) && r.canCancel === canCancelRide(r.status));
   expect(r.driver === null || (record(r.driver) && text(r.driver.name)));
   expect(transportCategory(r.vehicleCategory));
+  readPassenger(r.passenger, r.vehicleCategory);
   if (transportCategory(r.vehicleCategory).service === 'delivery') {
     expect(record(r.delivery));
     const { verifiedAt, pinBlockedUntil, dropoffPin, ...details } = r.delivery;
@@ -52,11 +54,11 @@ export function parsePreview(value) {
     && text(p.request.pickupId, 50) && text(p.request.destinationId, 50) && p.request.pickupId !== p.request.destinationId
     && only(p.request, ['pickupId','destinationId','vehicleCategory']));
   else expect(number(p.expiresAt) && uuid(p.request.quoteId) && only(p.request, ['quoteId','vehicleCategory']) && record(p.route)
-    && positive(p.route.distanceMeters) && p.route.distanceMeters <= 300_000 && (transportCategory(category).service === 'delivery'
+    && positive(p.route.distanceMeters) && p.route.distanceMeters <= 2_500_000 && (transportCategory(category).service === 'delivery'
       ? p.route.distanceKind === 'straight_line' && p.route.durationSeconds === null
-      : (p.route.distanceKind === undefined || p.route.distanceKind === 'road') && positive(p.route.durationSeconds) && p.route.durationSeconds <= 28_800)
+      : (p.route.distanceKind === undefined || p.route.distanceKind === 'road') && positive(p.route.durationSeconds) && p.route.durationSeconds <= 172_800)
     && Array.isArray(p.route.coordinates) && p.route.coordinates.length >= 2 && p.route.coordinates.length <= 1201
-    && p.route.coordinates.every((c) => Array.isArray(c) && c.length === 2 && insideAbuja({ lng: c[0], lat: c[1] })));
+    && p.route.coordinates.every((c) => Array.isArray(c) && c.length === 2 && insideNigeria({ lng: c[0], lat: c[1] })));
   return value;
 }
 export function parseBookingRide(value) { envelope(value); ride(value.ride); return value; }

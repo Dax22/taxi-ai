@@ -160,7 +160,7 @@ export function createOnboardingView({ onAction, onDownload, onClose }) {
     for (const [kind, spec] of Object.entries(DRIVER_DOCUMENTS)) {
       const doc = app.documents.find((item) => item.kind === kind), row = element('li', undefined, 'onboarding-document');
       const content = element('div'); content.append(element('strong', spec.label));
-      content.append(element('p', doc ? `${doc.name} · ${Math.ceil(doc.sizeBytes / 1024)} KiB${doc.expiresOn ? ` · expires ${doc.expiresOn} (Abuja)` : ''}` : 'Not uploaded', 'small-note'));
+      content.append(element('p', doc ? `${doc.name} · ${Math.ceil(doc.sizeBytes / 1024)} KiB${doc.expiresOn ? ` · expires ${doc.expiresOn} (WAT)` : ''}` : 'Not uploaded', 'small-note'));
       if (doc && !owner) content.append(element('p', doc.readByReviewer ? 'Downloaded by you · inspect it before recording a check' : 'Download required for review', 'small-note'));
       row.append(content);
       if (doc) {

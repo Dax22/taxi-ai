@@ -3,7 +3,8 @@ import { parseBookingRide } from './mobile-booking.mjs';
 import { transportCategory } from './transport-categories.mjs';
 import { NOTIFICATION_LABELS } from './notification-labels.mjs';
 import { validMatchRecommendation } from './smart-matching.mjs';
-import { insideAbuja } from './locations.mjs';
+import { insideNigeria } from './locations.mjs';
+import { readPassenger } from './guest-rides.mjs';
 const object = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const text = (v,max=240) => typeof v === 'string' && v.length > 0 && v.length <= max;
 const integer = (v) => Number.isSafeInteger(v) && v >= 0;
@@ -14,6 +15,7 @@ const nullableTime = (v) => v === null || integer(v);
 function expect(ok) { if (!ok) throw new Error('Taxi Ai returned an incompatible journey response. Refresh and try again.'); }
 function journey(r,env) {
   parseBookingRide({ ...env,ride:r });
+  readPassenger(r.passenger, r.vehicleCategory, { allowPhone: r.mode === 'customer' });
   expect(mode(r.mode) && text(r.customerName) && typeof r.chatReady === 'boolean' && nullableTime(r.pinBlockedUntil)
     && (r.pickupPin === null || r.mode === 'customer' && typeof r.pickupPin === 'string' && /^\d{6}$/.test(r.pickupPin))
     && (r.mode !== 'work' || r.delivery?.dropoffPin === undefined)
@@ -22,10 +24,10 @@ function journey(r,env) {
   expect(r.offer === null || object(r.offer) && text(r.offer.id,100) && positive(r.offer.amountKobo) && integer(r.offer.expiresAt) && typeof r.offer.fromYou === 'boolean');
   expect(r.rating === undefined || r.rating === null || r.status === 'completed' && Number.isInteger(r.rating) && r.rating >= 1 && r.rating <= 5);
   expect(r.startedAt === undefined || nullableTime(r.startedAt));
-  expect(r.route === undefined || r.route === null || object(r.route) && insideAbuja(r.route.pickup) && insideAbuja(r.route.destination)
+  expect(r.route === undefined || r.route === null || object(r.route) && insideNigeria(r.route.pickup) && insideNigeria(r.route.destination)
     && positive(r.route.distanceMeters) && (r.route.durationSeconds === null || positive(r.route.durationSeconds))
     && Array.isArray(r.route.coordinates) && r.route.coordinates.length >= 2 && r.route.coordinates.length <= 1201
-    && r.route.coordinates.every((pair) => Array.isArray(pair) && pair.length === 2 && insideAbuja({ lng: pair[0], lat: pair[1] })));
+    && r.route.coordinates.every((pair) => Array.isArray(pair) && pair.length === 2 && insideNigeria({ lng: pair[0], lat: pair[1] })));
   return r;
 }
 function availability(a) {

@@ -21,14 +21,14 @@ export function createLocationView({ onEnable, onUsePickup, onSearch, onClear, o
     $('planner-blocked').hidden = !state.blocked;
     $('planner-content').hidden = !state.online;
     $('planner-provider-note').textContent = state.settings?.enabled
-      ? `Current pickup uses your browser location. Destination search uses ${state.settings.searchHost}; route points go to ${state.settings.routeHost}. Map areas load via ${state.settings.tileHost}. Enable only if you want to use these services.`
+      ? `Current pickup uses your browser location. Address searches use ${state.settings.searchHost}; route points go to ${state.settings.routeHost}. Map areas load via ${state.settings.tileHost}. Enable only if you want to use these services.`
       : state.settings ? 'Online maps are disabled. You can use the sample-area demo below.' : 'Checking map availability…';
     $('location-pickup-fields').disabled = state.blocked || !state.online || state.booking;
     locked('location-pickup-current', state.locatingPickup || state.blocked || !state.online || state.booking || !state.supported);
     $('location-pickup-current').textContent = state.locatingPickup ? 'Reading your location…' : state.pickup ? 'Update current location' : 'Use current location';
     $('location-pickup-selected').textContent = state.locatingPickup ? 'Waiting for a fresh GPS fix…'
       : state.pickup ? `${state.pickup.name} · ${state.pickup.lat.toFixed(5)}, ${state.pickup.lng.toFixed(5)}` : 'Current location has not been set yet.';
-    for (const side of ['destination']) {
+    for (const side of ['pickup', 'destination']) {
       $(`location-${side}-fields`).disabled = state.blocked || !state.online || state.booking;
       locked(`location-${side}-search`, state.searching[side] || state.blocked || !state.online || state.booking);
       $(`location-${side}-selected`).textContent = state[side] ? `${state[side].name} · ${state[side].lat.toFixed(5)}, ${state[side].lng.toFixed(5)}` : `Choose ${side}.`;
@@ -41,6 +41,7 @@ export function createLocationView({ onEnable, onUsePickup, onSearch, onClear, o
         }
       }
     }
+    for (const side of ['pickup', 'destination']) { $(`location-target-${side}`).checked = state.target === side; $(`location-target-${side}`).disabled = state.blocked || !state.online || state.booking; }
     $('location-coordinate-fields').disabled = !state.online || state.blocked || state.booking;
     locked('location-preview', !state.pickup || !state.destination || state.blocked || state.quoting || state.booking || !state.online);
     $('location-preview').textContent = state.quoting ? 'Preparing your preview…' : 'Preview route and suggested fare';
@@ -105,6 +106,9 @@ export function createLocationView({ onEnable, onUsePickup, onSearch, onClear, o
       vehicle: state.ride.driver?.vehicle, stale, focusKey: state.ride.id });
   }
   $('location-pickup-current').addEventListener('click', onUsePickup);
+  $('location-pickup-form').addEventListener('submit', (event) => { event.preventDefault(); onSearch('pickup', $('location-pickup-query').value); });
+  $('location-pickup-query').addEventListener('input', () => onClear('pickup'));
+  for (const side of ['pickup', 'destination']) $(`location-target-${side}`).addEventListener('change', () => onTarget(side));
   $('location-destination-form').addEventListener('submit', (event) => { event.preventDefault(); onSearch('destination', $('location-destination-query').value); });
   $('location-destination-query').addEventListener('input', () => onClear('destination'));
   $('location-coordinate-form').addEventListener('submit', (event) => {
@@ -125,10 +129,10 @@ export function createLocationView({ onEnable, onUsePickup, onSearch, onClear, o
   $('kemmy-rate').addEventListener('click', () => { if (tracking?.ride && ratingChoice && !tracking.ride.rating) onRate(tracking.ride.id, ratingChoice); });
   return Object.freeze({ renderPlanner, renderTracking,
     setOnline(enabled, configuration) { online = enabled; settings = configuration; if (tracking) renderTracking(tracking); },
-    selected(side, point) { if (side === 'destination') $('location-destination-query').value = point.name; },
+    selected(side, point) { $(`location-${side}-query`).value = point.name; },
     resetPlanner() {
       planner = null; plannerMap.reset(); $('location-planner').hidden = true;
-      $('location-pickup-selected').textContent = ''; resultKeys.pickup = '';
+      $('location-pickup-query').value = ''; $('location-pickup-results').replaceChildren(); $('location-pickup-selected').textContent = ''; resultKeys.pickup = '';
       $('location-destination-query').value = ''; $('location-destination-results').replaceChildren(); $('location-destination-selected').textContent = ''; resultKeys.destination = '';
       for (const id of ['location-latitude', 'location-longitude', 'location-pin-name']) $(id).value = '';
       $('location-quote').hidden = true; $('planner-error').textContent = '';

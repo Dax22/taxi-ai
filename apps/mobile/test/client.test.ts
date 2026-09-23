@@ -23,6 +23,53 @@ function client(fetcher: (url: string, options: RequestInit) => Promise<Response
   return { app: new MobileClient({ origin: 'https://taxi.example.test', vault: v.port, fetchImpl: ((url, options) => fetcher(String(url), options ?? {})) as typeof fetch }), ...v };
 }
 
+test('guest link commands retain the exact body and key through access refresh without persisting a private token', async () => {
+  const calls: RequestInit[] = [], secret = 'c'.repeat(64);
+  const { app, storage } = client(async (url, options) => {
+    if (url.endsWith('/auth/login')) return response(auth());
+    if (url.endsWith('/auth/refresh')) return response(auth(2));
+    calls.push(options);
+    return new Headers(options.headers).get('Authorization') === `Bearer ${auth().credentials.accessToken}` ? unauthorized()
+      : ok({ guest: { rideId: id, canCreate: true, link: { id, version: 1, active: true, expiresAt: 60000 } }, token: secret });
+  });
+  await app.login(user.email, 'Test password', 'Phone');
+  const result = await app.guestRides(`/guest-rides/${id}/link`, { expectedLinkId: null }, 'original-guest-link-key');
+  assert.equal(result.token, secret); assert.equal(calls.length, 2); assert.equal(calls[0].body, calls[1].body);
+  for (const attempt of calls) assert.equal(new Headers(attempt.headers).get('Idempotency-Key'), 'original-guest-link-key');
+  assert.equal(storage.value!.includes(secret), false); assert.equal(storage.value!.includes('guest-rides'), false);
+  await assert.rejects(app.guestRides('/safety/contacts'), /guest ride API path/);
+});
+
+test('guest link metadata or token arriving after logout cannot enter another account', async () => {
+  let finish!: (value: Response) => void;
+  const { app } = client(async (url) => {
+    if (url.endsWith('/auth/login')) return response(auth());
+    if (url.includes('/guest-rides/')) return new Promise((resolve) => { finish = resolve; });
+    return ok();
+  });
+  await app.login(user.email, 'Test password', 'Phone');
+  const pending = app.guestRides(`/guest-rides/${id}/link`, { expectedLinkId: null }, 'guest-link-key'), rejected = assert.rejects(pending, { code: 'SESSION_CHANGED' });
+  await app.logout(); finish(ok({ token: 'c'.repeat(64) })); await rejected;
+  assert.equal(app.account(), null);
+});
+
+test('the mobile activity boundary rejects guest phone numbers in Work current and past journeys', async () => {
+  let history = false, includePhone = true;
+  const { app } = client(async (url) => {
+    if (url.endsWith('/auth/login')) return response(auth());
+    const ride = { ...bookingRide, vehicleCategory: 'standard', createdAt: 1000, isDemo: true,
+      passenger: { kind: 'guest', name: 'Demo Passenger', ...(includePhone ? { phone: '+2348012345678' } : {}) } };
+    return ok({ current: history ? [] : [ride], history: history ? [ride] : [], activeElsewhere: [], nextBefore: null });
+  });
+  await app.login(user.email, 'Test password', 'Phone');
+  assert.equal((await app.activity('customer')).current[0].passenger?.kind, 'guest');
+  await assert.rejects(app.activity('work'), /incompatible guest ride response/);
+  history = true;
+  await assert.rejects(app.activity('work'), /incompatible guest ride response/);
+  includePhone = false;
+  assert.equal((await app.activity('work')).history[0].passenger?.kind, 'guest');
+});
+
 test('Work deletion sends explicit confirmation and version, publishes the customer account and leaves credentials intact', async () => {
   const writes: Array<{ url: string; options: RequestInit }> = [];
   const { app, storage } = client(async (url, options) => {

@@ -9,6 +9,7 @@ export function FoodFeedback({ state, controller }: { state: EatsState; controll
   async function retry() {
     if (await controller.retry()) {
       const next = controller.snapshot();
+      if (next.screen === 'orders') router.navigate({ pathname: '/eats', params: { section: 'orders' } });
       if (next.screen === 'order' && next.orderId) router.navigate({ pathname: '/food-order', params: { id: next.orderId } });
     }
   }
@@ -20,7 +21,7 @@ export function FoodMoney({ value }: { value: FoodTotals }) {
   return <View style={styles.stack}>{([['Food subtotal', value.subtotalKobo], ['Delivery', value.deliveryFeeKobo], ['Service fee · 5%, capped at ₦1,000', value.serviceFeeKobo], ['Order total', value.totalKobo]] as const).map(([label, amount]) => <View key={label} style={food.money}><Text style={[styles.body, food.moneyLabel]}>{label}</Text><Text style={label === 'Order total' ? styles.h2 : styles.body}>{fare(amount)}</Text></View>)}</View>;
 }
 export function FoodOrders({ orders, empty = 'No food orders yet.' }: { orders: FoodOrder[]; empty?: string }) {
-  return <>{!orders.length && <Text style={styles.body}>{empty}</Text>}{orders.map((o) => <Card key={o.id}><Pill>{EATS_STATUS[o.status].toUpperCase()}</Pill><Text style={styles.h2}>{o.restaurant.name}</Text><Text style={styles.body}>{o.lines.reduce((n, i) => n + i.quantity, 0)} items · {fare(o.totals.totalKobo)}</Text><Text style={styles.small}>{new Date(o.createdAt).toLocaleString()}</Text><Button title="Open food order" secondary onPress={() => router.push({ pathname: '/food-order', params: { id: o.id } })}/></Card>)}</>;
+  return <>{!orders.length && <Text style={styles.body}>{empty}</Text>}{orders.map((o) => <Card key={o.id}><Pill>{EATS_STATUS[o.status].toUpperCase()}</Pill><Text style={styles.h2}>{o.restaurant.name}</Text><Text style={styles.body}>{o.fulfillment === 'pickup' ? 'Customer pickup · ' : 'Delivery · '}{o.lines.reduce((n, i) => n + i.quantity, 0)} items · {fare(o.totals.totalKobo)}</Text><Text style={styles.small}>{new Date(o.createdAt).toLocaleString()}</Text><Button title="Open food order" secondary onPress={() => router.push({ pathname: '/food-order', params: { id: o.id } })}/></Card>)}</>;
 }
 export const food = StyleSheet.create({
   hero: { padding: 24, backgroundColor: colors.yellow, borderRadius: 26, gap: 14 },

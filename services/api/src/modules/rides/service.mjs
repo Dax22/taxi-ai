@@ -2,6 +2,7 @@ import { createDemoQuote } from '../../../../../packages/shared/src/demo-booking
 import { TRIP_TRANSITIONS, CANCELLATION_REASONS, canCancelRide } from '../../../../../packages/shared/src/trip-lifecycle.mjs';
 import { distanceMeters } from '../../../../../packages/shared/src/locations.mjs';
 import { transportCategory, categoryFare } from '../../../../../packages/shared/src/transport-categories.mjs';
+import { passengerDetails, passengerView } from '../../../../../packages/shared/src/guest-rides.mjs';
 import { REQUEST_MS, EXPAND_MS, searchRadius } from '../../../../../packages/shared/src/matching.mjs';
 import { rankEligibleMatches } from '../../../../../packages/shared/src/smart-matching.mjs';
 import { check } from '../../shared/errors.mjs';
@@ -13,7 +14,7 @@ import { requireParticipant, requireVersion, restoreNegotiation, canonical } fro
  * Ride use cases depend on repository operations and explicit ports, not SQLite
  * or HTTP objects. unitOfWork must encompass state, fare, audit and retry writes.
  */
-export function createRidesService({ repository, deliveries, getAccount, unitOfWork, audit, tokens, clock, onRideClosed = () => {}, onTripCompleted = () => {},
+export function createRidesService({ repository, deliveries, passengerForRide, savePassenger, getAccount, unitOfWork, audit, tokens, clock, onRideClosed = () => {}, onTripCompleted = () => {},
   routeForRide = () => null, quoteForRide, bindQuote, availabilityFor = () => null, onClaim = () => {}, onEvent = () => {}, availableDriverIds = () => [], hasOtherWork = () => false, allowSimulation = false }) {
   // Expiry commits independently of a command that may fail afterward.
   function sweep() {
@@ -50,6 +51,7 @@ export function createRidesService({ repository, deliveries, getAccount, unitOfW
       pickup: quote.pickup, destination: quote.destination, suggestedFareKobo: ride.suggestedFareKobo,
       currency: 'NGN', isDemo: true, route, vehicleCategory: ride.vehicleCategory, service: transportCategory(ride.vehicleCategory).service,
       delivery: deliveries.view(ride, user, trip?.status ?? ride.status), createdAt: ride.createdAt, updatedAt: ride.updatedAt,
+      passenger: passengerView(passengerForRide(ride.id), { isBooker: ride.customerId === user.id, bookerName: getAccount(ride.customerId).name }),
       customer: peer(ride.customerId), driver: ride.driverSnapshotJson ? JSON.parse(ride.driverSnapshotJson) : peer(ride.driverId, true),
       negotiation: negotiationFor(ride)?.snapshot() ?? null,
       matching: ride.requestExpiresAt ? { expiresAt: ride.requestExpiresAt, expandedAt: ride.createdAt + EXPAND_MS,
@@ -142,9 +144,11 @@ export function createRidesService({ repository, deliveries, getAccount, unitOfW
     requireRole(user, 'customer');
     const routed = Boolean(data && Object.hasOwn(data, 'quoteId'));
     const required = routed ? ['quoteId'] : ['pickupId', 'destinationId'];
-    fields(data, [...required, 'vehicleCategory', 'delivery'], required);
+    fields(data, [...required, 'vehicleCategory', 'delivery', 'passenger'], required);
     const category = data.vehicleCategory === undefined ? 'standard' : data.vehicleCategory;
     check(transportCategory(category), 'INVALID_CATEGORY', 'Choose a vehicle category.');
+    let passenger;
+    try { passenger = passengerDetails(data.passenger, category); } catch (error) { check(false, 'INVALID_PASSENGER', error.message); }
     const delivery = deliveries.validate(category, data.delivery);
     let quote;
     if (routed) {
@@ -163,6 +167,7 @@ export function createRidesService({ repository, deliveries, getAccount, unitOfW
     repository.insert({ id, customerId: user.id, pickupId: quote.pickup.id,
       destinationId: quote.destination.id, suggestedFareKobo: quote.suggestedFareKobo, vehicleCategory: category, now, expiresAt: now + REQUEST_MS });
     deliveries.create(id, delivery);
+    savePassenger(id, passenger);
     if (routed) bindQuote(user.id, data.quoteId, id, now);
     audit.record(user.id, 'ride.requested', id, now);
     return id;
@@ -227,7 +232,7 @@ export function createRidesService({ repository, deliveries, getAccount, unitOfW
     let reason = null;
     if (action === 'confirm') {
       requireRole(user, 'customer');
-      check(ride.customerId === user.id, 'FORBIDDEN', 'Only the passenger on this trip can confirm it.');
+      check(ride.customerId === user.id, 'FORBIDDEN', 'Only the booking account can confirm this trip.');
       check(ride.status === 'agreed' && !ride.trip, 'INVALID_TRIP_STATE', 'An agreed fare is required before confirming this booking.');
       const driver = getAccount(ride.driverId);
       requireEligibleDriver(driver);
@@ -359,5 +364,11 @@ export function createRidesService({ repository, deliveries, getAccount, unitOfW
     return { rideId: id, customerId: ride.customerId, driverId: ride.driverId, status: ride.trip?.status ?? ride.status, pickup: route.pickup.name, destination: route.destination.name,
       driver: ride.driverSnapshotJson ? JSON.parse(ride.driverSnapshotJson) : peer(ride.driverId, true) };
   }
-  return Object.freeze({ get, list, history, mutate, rate, conversationContext, conversationIds, paymentContext, safetyContext, sweep });
+  // Read-only port for the guest use case; the caller owns any surrounding transaction.
+  function guestContext(user, id) {
+    const ride = record(id); requireParticipant(ride, user);
+    return { ...safetyContext(user, id), passenger: passengerForRide(id), bookerName: getAccount(ride.customerId).name,
+      pickupPin: ride.trip?.pickupPin ?? null };
+  }
+  return Object.freeze({ get, list, history, mutate, rate, conversationContext, conversationIds, paymentContext, safetyContext, guestContext, sweep });
 }

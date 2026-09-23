@@ -5,7 +5,7 @@ says a feature is implemented, it remains planned.
 
 ## Launch market and services
 
-- Brand: **Taxi Ai**. Initial operating area: Abuja, Nigeria.
+- Brand: **Taxi Ai**. Geographic scope: Nigeria; availability depends on local drivers, kitchens and delivery coverage.
 - Currency: NGN. Store monetary amounts as integer kobo (100 kobo = 1 naira).
 - Taxi Ai rides: customer requests a driver for a car journey.
 - **Taxi Ai Eats**: food ordering from participating vendors, with delivery by
@@ -94,7 +94,7 @@ enabled silently.
 
 ## Decisions still needed
 
-- First Abuja coverage zones and onboarding process.
+- Town-level service availability and onboarding across Nigeria.
 - Production payment, mapping and internet-calling providers. The local map
   preview uses public Photon/OSRM/OSM services; this is not a production selection.
 - Fare estimator inputs, business limits, platform commission and cancellation rules.

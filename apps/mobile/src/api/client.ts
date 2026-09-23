@@ -173,7 +173,7 @@ export class MobileClient {
     if (epoch !== this.epoch) throw changed(); return result;
   }
   async session() { const epoch = this.epoch, body = await this.request('/session'); if (epoch !== this.epoch) throw changed(); const user = parseAccount(body.user); this.publish(user); return user; }
-  async activity(mode: Mode, before?: string | null) { return parseActivity(await this.request(`/activity?mode=${mode}${before ? `&before=${encodeURIComponent(before)}` : ''}`)); }
+  async activity(mode: Mode, before?: string | null) { return parseActivity(await this.request(`/activity?mode=${mode}${before ? `&before=${encodeURIComponent(before)}` : ''}`), mode); }
   async booking() { return parseBooking(await this.request('/booking')); }
   async searchPlaces(query: string) { return parsePlaces(await this.request('/booking/search', { query })); }
   async routePreview(pickup: Place, destination: Place, key: string, vehicleCategory: VehicleCategoryId = 'standard') {
@@ -248,6 +248,10 @@ export class MobileClient {
     return { uri: `${this.origin}/api/mobile/v1/eats/images/${id}?v=${version}`,
       headers: { ...(this.credentials ? { Authorization: `Bearer ${this.credentials.accessToken}` } : {}),
         ...(this.saved?.previewAccess ? { 'X-Taxi-Ai-Preview-Access': this.saved.previewAccess } : {}) } };
+  }
+  async guestRides(path: string, data?: unknown, key?: string) {
+    if (!path.startsWith('/guest-rides/')) throw new Error('Use a guest ride API path.');
+    return this.request(path, data, key);
   }
   async emailStatus() { return parseEmailStatus(await this.request('/account/email')); }
   private accepted(body: Record<string, unknown>) {

@@ -1,4 +1,5 @@
 import type { VehicleCategoryId } from './vehicle-categories.mjs';
+import type { PassengerView } from './guest-rides.mjs';
 export const MOBILE_API_VERSION: 1;
 export type Mode = 'customer' | 'work';
 export interface Eligibility { eligible: boolean; missing: string[]; expired: string[] }
@@ -8,7 +9,7 @@ export interface Account { id: string; name: string; email: string; emailVerifie
 export interface Credentials { sessionId: string; accessToken: string; refreshToken: string; accessExpiresAt: number; refreshExpiresAt: number }
 export interface Envelope { apiVersion: 1; serverNow: number; [key: string]: unknown }
 export interface SignIn extends Envelope { user: Account; credentials: Credentials }
-export interface RideSummary { vehicleCategory?: VehicleCategoryId; id: string; status: string; pickup: string; destination: string;
+export interface RideSummary { vehicleCategory?: VehicleCategoryId; passenger?: PassengerView; id: string; status: string; pickup: string; destination: string;
   fareKobo: number | null; suggestedFareKobo: number; createdAt: number; isDemo: boolean;
   driver?: { id: string; name: string; vehicle: Vehicle } | null }
 export interface Activity extends Envelope { current: RideSummary[]; history: RideSummary[];
@@ -35,7 +36,7 @@ export function parseAccount(value: unknown): Account;
 export interface EmailStatus { enabled: boolean; verified: boolean; email: string }
 export function parseEmailStatus(value: unknown): EmailStatus;
 export function parseSignIn(value: unknown): SignIn;
-export function parseActivity(value: unknown): Activity;
+export function parseActivity(value: unknown, mode?: Mode): Activity;
 export function parseDevices(value: unknown): Device[];
 export function parseApplication(value: unknown): DriverApplication;
 export function parseOnboarding(value: unknown): DriverOnboarding;

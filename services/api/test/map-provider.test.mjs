@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createMapProvider } from '../src/infrastructure/map-provider.mjs';
-const bounds = { west: 7.1, south: 8.8, east: 7.65, north: 9.25 };
+import { NIGERIA_BOUNDS } from '../../../packages/shared/src/locations.mjs';
+const bounds = NIGERIA_BOUNDS;
 const places = { features: [{ geometry: { type: 'Point', coordinates: [7.4, 9.08] }, properties: { name: 'Wuse', city: 'Abuja' } }] };
 test('Photon search encodes and bounds user text, deduplicates inflight work, caches and rate limits all accounts together', async () => {
   let now = 1000, resolve;
@@ -14,12 +15,25 @@ test('Photon search encodes and bounds user text, deduplicates inflight work, ca
   assert.deepEqual(await first, await second); assert.equal(requests.length, 1);
   await provider.search('Wuse & cafe', bounds); assert.equal(requests.length, 1);
   assert.equal(requests[0].url.searchParams.get('q'), 'Wuse & cafe');
-  assert.equal(requests[0].url.searchParams.get('bbox'), '7.1,8.8,7.65,9.25');
+  assert.equal(requests[0].url.searchParams.get('bbox'), `${bounds.west},${bounds.south},${bounds.east},${bounds.north}`);
   assert.equal(requests[0].url.searchParams.get('countrycode'), 'NG');
   assert.match(requests[0].options.headers['User-Agent'], /TaxiAi/); assert.equal(requests[0].options.redirect, 'error');
   await assert.rejects(provider.search('Maitama', bounds), { code: 'MAPS_BUSY' });
   now += 1100; const third = provider.search('Maitama', bounds); resolve(Response.json(places)); await third;
   assert.equal(requests.length, 2);
+});
+test('Nigeria search keeps nationwide results and rejects foreign country metadata before domain coordinate validation', async () => {
+  const feature = (name, lat, lng, countrycode = 'NG') => ({ geometry: { type: 'Point', coordinates: [lng, lat] }, properties: { name, countrycode } });
+  let searched;
+  const provider = createMapProvider({ env: {}, fetchImpl: async (url) => {
+    searched = url;
+    return Response.json({ features: [feature('Lagos', 6.5244, 3.3792), feature('Kano', 12.0022, 8.592),
+      feature('Port Harcourt', 4.8156, 7.0498), feature('Cotonou', 6.3703, 2.3912, 'BJ'),
+      feature('Maroua', 10.591, 14.3159, 'CM'), feature('Wrong country label', 9.0765, 7.3986, 'CM')] });
+  } });
+  assert.deepEqual((await provider.search('town', bounds)).map((p) => p.name), ['Lagos', 'Kano', 'Port Harcourt']);
+  assert.equal(searched.searchParams.get('countrycode'), 'NG');
+  assert.equal(searched.searchParams.get('bbox'), `${bounds.west},${bounds.south},${bounds.east},${bounds.north}`);
 });
 test('OSRM uses car routes, bounded snapping and GeoJSON; upstream failures never become fictional road routes', async () => {
   let url;

@@ -8,6 +8,9 @@ journey engine; a deliveries module owns parcel details and handover verificatio
 The Eats module owns restaurant menus, store membership, test checkout and food
 fulfilment. It shares worker capacity with journeys through injected ports.
 See [Eats architecture and acceptance](eats.md).
+The guest-rides module owns immutable passenger details and revocable trip links;
+the booking account retains fare, trip-management and payment authority.
+See [booking for someone else](guest-rides.md).
 See [ADR 0001](decisions/0001-modular-monolith.md) for the decision and tradeoffs.
 
 The target product is now one app and website with Customer, Drive & deliver
@@ -53,8 +56,9 @@ See [vehicle photo checks](vehicle-photo-checks.md) for configuration and limits
 | Account email | Verification and recovery actions, durable delivery intentions and bounded retries | `account_email_tokens`, `account_email_jobs` |
 | Drivers | Private applications, documents, manual review and expiry eligibility | `drivers`, `driver_applications`, `driver_documents`, `driver_document_reads`, `driver_application_events`, `driver_application_commands` |
 | Rides | Requests, fares, bookings, pickup verification, progress, cancellation and history | `rides`, `fare_events`, `idempotency`, `ride_trips`, `ride_activity` |
+| Guest rides | Immutable guest passenger snapshots, booker-owned link management and limited public trip views | `guest_ride_passengers`, `guest_ride_links`, `guest_ride_commands` |
 | Deliveries | Parcel validation, category/capacity eligibility and drop-off verification | `delivery_orders` |
-| Eats | Store membership/review, menus, test checkout, kitchen and courier food handovers | `eats_stores`, `eats_memberships`, `eats_reviews`, `eats_menu`, `eats_quotes`, `eats_orders`, `eats_commands` |
+| Eats | Store membership/review, dish search, menus, combined test checkout, kitchen and courier food handovers | `eats_stores`, `eats_memberships`, `eats_reviews`, `eats_menu`, `eats_quotes`, `eats_orders`, `eats_commands`, `eats_photos`, `eats_checkouts`, `eats_collection_points`, `eats_store_dispatch_points`, `eats_order_dispatch_points` |
 | Notifications | Account-scoped inbox, device opt-in and durable push/receipt retries | `account_notifications`, `push_registrations`, `push_jobs` |
 | Vehicle checks | Optional photo observations, comparison, retry reservation and expiry | `vehicle_photo_checks` |
 | Chat | Participant messages, read markers, retries and reports | `chat_messages`, `chat_reads`, `chat_commands`, `chat_reports` |
@@ -163,7 +167,7 @@ consent. Returned snapshots are copies, not mutable internal state.
 
 Amounts are positive safe integer kobo. Suggestions are nonbinding; sample quotes
 are fictional. Route quotes use an explicit illustrative formula, not an AI
-estimator or a validated Abuja market rate. Server-persisted events reconstruct the fare
+estimator or a validated local market rate. Server-persisted events reconstruct the fare
 model; clients cannot upload snapshots or set event clocks. Ride versions also
 include claiming/cancelling before a fare conversation; fare-event versions track
 only the shared model. Their distinct sequences are validated separately.
@@ -224,6 +228,25 @@ Customer/Work modes share account use cases and versioned API contracts. Eats
 and My store are separate native screens using the same authenticated account. Device sessions, secure credential storage and
 expiry/revocation are implemented separately from browser cookies. Native views
 and device adapters remain platform-aware. Schema 19 implements one owner membership per store/account in the Eats module.
+Schema 20 adds home-kitchen defaults and normalized photos; batch reservations,
+order transitions and command records commit atomically. Image decoding is an
+injected infrastructure port outside the transaction, with session revalidation
+before saving. Private vendor and home-kitchen addresses are projected by participant and order stage.
+Schema 21 adds combined checkout and order-specific collection points. Vendor and
+home-kitchen profiles now use only a town/area; private collection details are supplied when
+food is ready. Dish search checks delivery coverage against published menus, and
+combined checkout commits every kitchen's order and stock reservation together.
+Schema 22 adds guest passenger snapshots and session-bound guest links without
+changing existing ride ownership. A missing passenger snapshot means a self booking.
+The shared link controller preserves exact retries and holds raw secrets only in
+memory; public link reads return a separate allowlisted trip projection. Completion,
+cancellation, replacement, revocation and session expiry end access. Snapshot copies
+clear guest-link secrets and active state along with other transient capabilities.
+Schema 23 adds private store pickup locations and immutable order dispatch points.
+Nigeria-wide country validation and canonical state/town identifiers live in pure
+shared modules. The Eats service enforces declared delivery areas and nearby GPS
+courier matching; a change in national scope never grants an old store nationwide
+coverage. Existing sample IDs remain readable. See [nationwide coverage](nationwide.md).
 Mode selection remains per client; authorization, ownership and worker capacity
 remain server-side. Workspace resets and retry keys are now scoped to account
 and Customer/Work mode. Calls/GPS/availability use a separate session client and
@@ -273,6 +296,9 @@ The location service receives account/session and narrow ride-context ports.
 timeouts, response caps, caching and per-provider request pacing. The domain
 validates bounded points, route geometry/distance/time and computes integer-kobo
 suggestions. No browser-supplied distance or fare can become a route quote.
+Search uses the Nigeria country filter and search extent; shared polygon validation
+guards coordinates independently of the provider. Local matching radii remain
+unchanged when routes and GPS are accepted elsewhere in Nigeria.
 
 External I/O runs outside synchronous database transactions. Quote creation then
 rechecks the live session, role, retry fingerprint and per-user limit inside the

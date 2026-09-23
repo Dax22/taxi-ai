@@ -6,20 +6,21 @@ import { readBody } from './body.mjs';
 import { json } from './responses.mjs';
 import { createMobileJourneys, mobileNotifications } from './mobile-journeys.mjs';
 import { mobileSafety } from './mobile-safety.mjs';
+import { mobileGuestRides } from './mobile-guest-rides.mjs';
 import { mobileVehicleChecks } from './mobile-vehicle-checks.mjs';
 import { mobileTracking } from './mobile-tracking.mjs';
 import { createMobileBooking } from './mobile-booking.mjs';
 import { eatsRoutes } from '../modules/eats/routes.mjs';
 
 /** Versioned native surface. Cookie identity and browser CSRF are never reused. */
-export function createMobileRouter({ devices, accounts, drivers, rides, eats, locations, availability, chat, notifications, safety, vehicleChecks, payments, clock, rateLimiter, googleAuth, accountEmail }) {
+export function createMobileRouter({ devices, accounts, drivers, rides, eats, locations, availability, chat, notifications, safety, guestRides, vehicleChecks, payments, clock, rateLimiter, googleAuth, accountEmail }) {
   const foodRoutes = eatsRoutes(eats);
   const booking = createMobileBooking({ rides, locations, availability, clock });
   const journeys = createMobileJourneys({ rides, availability, chat, clock });
   function summary(ride) {
     return { id: ride.id, status: ride.status, pickup: ride.pickup.name, destination: ride.destination.name,
       fareKobo: ride.trip?.fareKobo ?? ride.negotiation?.agreement?.amountKobo ?? null,
-      vehicleCategory: ride.vehicleCategory, suggestedFareKobo: ride.suggestedFareKobo, createdAt: ride.createdAt, isDemo: ride.isDemo,
+      vehicleCategory: ride.vehicleCategory, passenger: ride.passenger, suggestedFareKobo: ride.suggestedFareKobo, createdAt: ride.createdAt, isDemo: ride.isDemo,
       driver: ride.driver ? { id: ride.driver.id, name: ride.driver.name, vehicle: ride.driver.vehicle } : null };
   }
   // An explicit owner-only projection keeps reviewer identities, hashes and audit internals off native clients.
@@ -43,8 +44,7 @@ export function createMobileRouter({ devices, accounts, drivers, rides, eats, lo
       clock(), auth ? 30 : foodImage ? 600 : 120, auth ? 10 * 60_000 : 60_000);
     let data;
     if (write) {
-      data = await readBody(request, path === '/driver/application/upload' || /^\/vehicle-checks\/rides\/[a-f0-9-]{36}$/.test(path)
-        || /^\/eats\/stores\/[a-f0-9-]{36}\/photo$/.test(path) ? 2_800_000 : path === '/auth/google' ? 20_000 : 4096);
+      data = await readBody(request, path === '/driver/application/upload' || /^\/eats\/stores\/[a-f0-9-]{36}\/(menu|photo)$/.test(path) || /^\/vehicle-checks\/rides\/[a-f0-9-]{36}$/.test(path) ? 2_800_000 : path === '/auth/google' ? 20_000 : 4096);
       if (!auth) { session = devices.sessionFor(accessToken); check(session, 'UNAUTHENTICATED', 'Sign in to continue.'); }
     }
     const query = new URL(request.url, origin).searchParams;
@@ -65,11 +65,8 @@ export function createMobileRouter({ devices, accounts, drivers, rides, eats, lo
     else if (path.startsWith('/eats/')) {
       const route = foodRoutes.find((entry) => entry.method === request.method && entry.path.test('/api' + path));
       check(route, 'NOT_FOUND', 'Eats endpoint not found.');
-      const result = await route.handle({ user: session.user, query, data, key: request.headers['idempotency-key'], match: ('/api' + path).match(route.path) });
-      if (result.image) {
-        response.writeHead(200, { 'Content-Type': result.image.mimeType, 'Content-Length': result.image.content.length });
-        response.end(result.image.content); return;
-      }
+      const result = await route.handle({ user: session.user, query, data, key: request.headers['idempotency-key'], match: ('/api' + path).match(route.path), reauthenticate: () => { const fresh = devices.sessionFor(accessToken); check(fresh, 'UNAUTHENTICATED', 'Sign in to continue.'); return fresh.user; } });
+      if (result.image) { response.writeHead(200, { 'Content-Type': result.image.mimeType, 'Content-Length': result.image.content.length }); response.end(result.image.content); return; }
       body = result.body;
     }
     else if (!write && /^\/payments\/rides\/[a-f0-9-]{36}$/.test(path)) body = payments.get(session.user.id, path.split('/')[3]);
@@ -86,6 +83,7 @@ export function createMobileRouter({ devices, accounts, drivers, rides, eats, lo
       accessToken, query, data, key: request.headers['idempotency-key'] });
     else if (path.startsWith('/vehicle-checks/')) body = await mobileVehicleChecks({ vehicleChecks,session,path,write,data,key:request.headers['idempotency-key'] });
     else if (path.startsWith('/safety/')) body = mobileSafety({ safety, session, path, write, data, key: request.headers['idempotency-key'] });
+    else if (path.startsWith('/guest-rides/')) body = mobileGuestRides({ guestRides, session, path, write, data, key: request.headers['idempotency-key'] });
     else if (path.startsWith('/tracking/')) body = mobileTracking({ locations, session, path, write, query, data, key: request.headers['idempotency-key'] });
     else if (path === '/notifications' || path.startsWith('/notifications/')) body = mobileNotifications({ notifications, user: session.user, sessionId: session.id, path, write, query, data });
     else if (!write && path === '/activity') {

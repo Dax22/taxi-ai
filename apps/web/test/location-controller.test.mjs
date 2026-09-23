@@ -36,16 +36,17 @@ function plannerSetup() {
 }
 async function enabled(f) { await f.c.setContext(customer, false); f.c.enable(); await f.c.useCurrentPickup(); f.c.select('destination', destination); }
 
-test('online search needs explicit enabling, manual destination submission and current pickup; settings alone send no addresses', async () => {
+test('online search needs explicit enabling, explicit address submission or current pickup; settings alone send no addresses', async () => {
   const f = plannerSetup(); await f.c.setContext(customer, false);
   await f.c.search('destination', 'Maitama'); assert.equal(f.requests.length, 1); assert.equal(f.online, false);
-  f.c.enable(); await f.c.search('pickup', 'Wuse'); assert.equal(f.requests.length, 1);
-  await f.c.search('destination', 'Maitama'); assert.equal(f.requests.length, 2);
-  assert.deepEqual(f.requests[1].options.data, { query: 'Maitama' });
+  f.c.enable(); await f.c.search('pickup', 'Wuse'); assert.equal(f.requests.length, 2);
+  assert.deepEqual(f.requests[1].options.data, { query: 'Wuse' });
+  await f.c.search('destination', 'Maitama'); assert.equal(f.requests.length, 3);
+  assert.deepEqual(f.requests[2].options.data, { query: 'Maitama' });
   await f.c.useCurrentPickup(); assert.equal(f.locates, 1); assert.deepEqual(f.c.snapshot().pickup, currentPickup);
   f.c.reset(); assert.equal(f.c.snapshot().pickup, null); assert.equal(f.online, false);
   await f.c.setContext(driver, false); f.c.enable(); await f.c.search('destination', 'Wuse');
-  assert.equal(f.requests.filter((r) => r.path.endsWith('/search')).length, 1);
+  assert.equal(f.requests.filter((r) => r.path.endsWith('/search')).length, 2);
 });
 
 test('late searches and quotes are discarded after input changes, map opt-out or account changes', async () => {
@@ -176,4 +177,29 @@ test('category changes invalidate both saved and in-flight quotes, including a s
   f.commandHook = null; await f.c.preview(); assert.equal(f.commands.at(-1).data.vehicleCategory, 'truck');
   assert.ok(f.c.snapshot().quote); f.c.setCategory('motorcycle'); assert.equal(f.c.snapshot().quote, null);
   f.c.reset(); assert.equal(f.c.snapshot().vehicleCategory, 'standard');
+});
+
+
+test('the web route planner accepts Lagos and Kano pins while rejecting neighbouring countries', async () => {
+  const f = plannerSetup(); await f.c.setContext(customer, false); f.c.enable();
+  const lagos = { lat: 6.6018, lng: 3.3515, name: 'Ikeja' }, kano = { lat: 12.0022, lng: 8.592, name: 'Kano' };
+  f.c.select('pickup', lagos); f.c.select('destination', kano); await f.c.preview();
+  assert.deepEqual(f.commands[0].data, { pickup: lagos, destination: kano, vehicleCategory: 'standard' });
+  f.c.select('pickup', { lat: 6.3667, lng: 2.4333, name: 'Cotonou' });
+  assert.deepEqual(f.c.snapshot().pickup, lagos); assert.match(f.c.snapshot().error, /Nigeria/);
+});
+
+test('an address selection cancels a pending GPS pickup and a newer GPS request invalidates an in-flight quote', async () => {
+  const f = plannerSetup(); await enabled(f);
+  const gps = deferred(); f.locateHook = () => gps.promise;
+  const pending = f.c.useCurrentPickup(); f.c.select('pickup', pickup);
+  assert.equal(f.states.at(-1).locatingPickup, false);
+  gps.resolve({ coords: { latitude: 6.45, longitude: 3.4, accuracy: 10 } }); await pending;
+  assert.deepEqual(f.c.snapshot().pickup, pickup);
+  const quote = deferred(); f.commandHook = () => quote.promise;
+  const preview = f.c.preview(), second = deferred(); f.locateHook = () => second.promise;
+  const current = f.c.useCurrentPickup(); quote.resolve({ quote: { id: 'outdated', expiresAt: 2000 } }); await preview;
+  assert.equal(f.c.snapshot().quote, null);
+  second.resolve({ coords: { latitude: 6.45, longitude: 3.4, accuracy: 10 } }); await current;
+  assert.equal(f.c.snapshot().pickup.lat, 6.45); assert.equal(f.states.at(-1).locatingPickup, false);
 });

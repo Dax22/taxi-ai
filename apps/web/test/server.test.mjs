@@ -16,14 +16,18 @@ async function withServer(run, mode = 'local', maps = 'community') {
 test('the local site serves HTML, modules and artwork with correct content types', async () => {
   await withServer(async (base) => {
     for (const [path, type] of [['/', 'text/html'], ['/app', 'text/html'],
-      ['/eats', 'text/html'], ['/eats/sell', 'text/html'], ['/eats.css', 'text/css'], ['/typography.css', 'text/css'],
-      ['/assets/fonts/manrope-latin-wght-normal.woff2', 'font/woff2'], ['/assets/fonts/manrope-latin-ext-wght-normal.woff2', 'font/woff2'], ['/eats.mjs', 'text/javascript'],
-      ['/eats/view.mjs', 'text/javascript'], ['/eats/transport.mjs', 'text/javascript'],
+      ['/eats', 'text/html'], ['/eats.css', 'text/css'], ['/typography.css', 'text/css'], ['/eats.mjs', 'text/javascript'],
+      ['/eats/view.mjs', 'text/javascript'], ['/eats/location-fields.mjs', 'text/javascript'],
+      ['/shared/nigeria-areas.mjs', 'text/javascript'], ['/shared/nigeria-boundary.mjs', 'text/javascript'], ['/eats/transport.mjs', 'text/javascript'],
       ...['eats', 'eats-controller', 'eats-contracts'].map((name) => [`/shared/${name}.mjs`, 'text/javascript']),
       ['/trip-share', 'text/html'], ['/trip-share.mjs', 'text/javascript'], ['/shared/safety.mjs', 'text/javascript'],
+      ['/guest-trip', 'text/html'], ['/guest-trip.mjs', 'text/javascript'],
+      ...['guest-rides', 'guest-rides-controller'].map((name) => [`/shared/${name}.mjs`, 'text/javascript']),
+      ...['guest-rides-panel', 'guest-rides-transport', 'guest-trip-controller'].map((name) => [`/dashboard/${name}.mjs`, 'text/javascript']),
       ...['safety-controller', 'safety-view', 'safety-format', 'trip-share-controller'].map((name) => [`/dashboard/${name}.mjs`, 'text/javascript']),
       ['/dashboard.css', 'text/css'], ['/dashboard.mjs', 'text/javascript'], ['/styles.css', 'text/css'],
       ['/homepage.css', 'text/css'],
+      ['/homepage-carousel.mjs', 'text/javascript'],
       ['/dashboard/api-client.mjs', 'text/javascript'], ['/dashboard/auth-form.mjs', 'text/javascript'],
       ['/dashboard/page-controller.mjs', 'text/javascript'],
       ['/dashboard/dom.mjs', 'text/javascript'], ['/dashboard/views.mjs', 'text/javascript'],
@@ -35,7 +39,7 @@ test('the local site serves HTML, modules and artwork with correct content types
       ['/dashboard/call-controller.mjs', 'text/javascript'], ['/dashboard/call-media.mjs', 'text/javascript'],
       ['/dashboard/call-view.mjs', 'text/javascript'], ['/shared/call-lifecycle.mjs', 'text/javascript'],
       ...['map-view', 'location-planner', 'location-view', 'location-sharing', 'geolocation', 'availability-controller', 'availability-view', 'payments-controller', 'payments-view'].map((name) => [`/dashboard/${name}.mjs`, 'text/javascript']),
-      ['/shared/payments.mjs', 'text/javascript'], ['/shared/kemmy.mjs', 'text/javascript'],
+      ['/eats/sell', 'text/html'], ['/assets/fonts/manrope-latin-wght-normal.woff2', 'font/woff2'], ['/assets/fonts/manrope-latin-ext-wght-normal.woff2', 'font/woff2'], ['/shared/payments.mjs', 'text/javascript'], ['/shared/kemmy.mjs', 'text/javascript'],
       ['/shared/locations.mjs', 'text/javascript'], ['/shared/matching.mjs', 'text/javascript'],
       ['/dashboard/conversation-model.mjs', 'text/javascript'],
       ['/dashboard/conversation-controller.mjs', 'text/javascript'],
@@ -44,6 +48,8 @@ test('the local site serves HTML, modules and artwork with correct content types
       ['/app.mjs', 'text/javascript'], ['/shared/fare-negotiation.mjs', 'text/javascript'],
       ['/shared/demo-booking.mjs', 'text/javascript'], ['/assets/city-route-hero.webp', 'image/webp'],
       ['/assets/city-route-hero-small.webp', 'image/webp'],
+      ...['airport-dropoff', 'food-delivery', 'courier-delivery'].flatMap((name) =>
+        ['', '-small'].map((size) => [`/assets/${name}-hero${size}.webp`, 'image/webp'])),
       ['/assets/autonomous-concept.webp', 'image/webp'],
       ['/assets/autonomous-concept-small.webp', 'image/webp'], ['/favicon.svg?v=amber', 'image/svg+xml'],
       ['/assets/taxi-ai-mark.svg', 'image/svg+xml'], ['/assets/kemmy-avatar.png', 'image/png']]) {
@@ -57,7 +63,7 @@ test('the local site serves HTML, modules and artwork with correct content types
 
 test('camera and microphone are account-only; explicit work geolocation is also permitted in Eats; only configured tiles can load externally', async () => {
   for (const mode of ['local', 'off']) await withServer(async (base) => {
-    for (const path of ['/', '/app', '/app?preview=1', '/eats', '/api/session', '/trip-share']) {
+    for (const path of ['/', '/app', '/app?preview=1', '/eats', '/api/session', '/trip-share', '/guest-trip']) {
       const result = await fetch(base + path);
       const policy = result.headers.get('permissions-policy');
       assert.equal(policy, `camera=${path.startsWith('/app') ? '(self)' : '()'}, microphone=${path.startsWith('/app') && mode !== 'off' ? '(self)' : '()'}, geolocation=${path.startsWith('/app') || path === '/eats' ? '(self)' : '()'}`);

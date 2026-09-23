@@ -351,3 +351,10 @@
   overflow-wrap: anywhere;
 }
 .vehicle-check-photo { width: 100%; height: auto; max-height: 240px; object-fit: contain; }
+.guest-consent { display: flex; align-items: flex-start; gap: .7rem; margin-top: 1rem; line-height: 1.6; }
+.guest-consent input { width: auto; margin-top: .35rem; flex: 0 0 auto; }
+#guest-passenger-fields { min-width: 0; }
+#guest-link-url { font-family: monospace; font-size: .85rem; }
+#guest-link-panel .review-actions { flex-wrap: wrap; }
+#guest-details dd { overflow-wrap: anywhere; }
+#guest-pin { font-size: clamp(2rem, 8vw, 3.4rem); letter-spacing: .2em; font-weight: 800; }

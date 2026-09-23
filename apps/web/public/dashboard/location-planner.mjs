@@ -1,5 +1,5 @@
 import { transportCategory } from '/shared/transport-categories.mjs';
-import { insideAbuja } from '/shared/locations.mjs';
+import { insideNigeria } from '/shared/locations.mjs';
 
 /** Draft coordinates and quotes are isolated by account and selection revision. */
 export function createLocationPlanner({ client, view, onBook, onOnline, device = null, serverNow = Date.now }) {
@@ -28,11 +28,11 @@ export function createLocationPlanner({ client, view, onBook, onOnline, device =
   function enable() { if (!settings?.enabled || !user) return; online = !online; if (!online) { revision++; quoting = locatingPickup = false; searching = { pickup: false, destination: false }; searches.pickup++; searches.destination++; } onOnline(online, settings); render(); }
   function clear(side) {
     if (!['pickup', 'destination'].includes(side)) return;
-    if (side === 'pickup') pickup = null; else destination = null;
+    if (side === 'pickup') { pickup = null; locatingPickup = false; } else destination = null;
     results[side] = []; searches[side]++; searching[side] = false; revision++; quote = null; quoting = false; error = ''; render();
   }
   function select(side, value) {
-    if (!online || user?.role !== 'customer' || blocked || booking || !insideAbuja(value)) { error = 'Choose a point inside the Abuja preview area when you have no open request.'; render(); return; }
+    if (!online || user?.role !== 'customer' || blocked || booking || !insideNigeria(value)) { error = 'Choose a point inside Nigeria when you have no open request.'; render(); return; }
     clear(side);
     const selected = { lat: Number(value.lat.toFixed(6)), lng: Number(value.lng.toFixed(6)),
       name: value.name ?? `${side === 'pickup' ? 'Pickup' : 'Destination'} pin ${value.lat.toFixed(5)}, ${value.lng.toFixed(5)}` };
@@ -40,25 +40,25 @@ export function createLocationPlanner({ client, view, onBook, onOnline, device =
     view.selected(side, selected); render();
   }
   async function search(side, query) {
-    if (!online || user?.role !== 'customer' || blocked || side !== 'destination') return;
+    if (!online || user?.role !== 'customer' || blocked || !['pickup', 'destination'].includes(side)) return;
     clear(side); const epoch = generation, request = ++searches[side]; searching[side] = true; render();
     try {
       const response = await client.request('/api/locations/search', { method: 'POST', data: { query } });
       if (generation !== epoch || searches[side] !== request) return;
-      results[side] = response.places; error = results[side].length ? '' : 'No result in the Abuja preview area. Try a landmark or place a pin.';
+      results[side] = response.places; error = results[side].length ? '' : 'No result in Nigeria. Try a landmark or place a pin.';
     } catch (cause) { if (generation === epoch && searches[side] === request) error = cause.message; }
     finally { if (generation === epoch && searches[side] === request) { searching[side] = false; render(); } }
   }
   async function useCurrentPickup() {
     if (!online || user?.role !== 'customer' || blocked || booking || locatingPickup) return;
     if (!device?.supported()) { error = 'Current location needs browser geolocation on HTTPS or localhost.'; render(); return; }
-    const epoch = generation, request = ++searches.pickup; locatingPickup = true; error = ''; quote = null; render();
+    clear('pickup'); const epoch = generation, request = ++searches.pickup; locatingPickup = true; error = ''; render();
     try {
       const fix = await device.locate();
       const coords = fix.coords ?? {};
       const value = { lat: Number(coords.latitude), lng: Number(coords.longitude), name: 'Current location' };
       if (!Number.isFinite(coords.accuracy) || coords.accuracy <= 0 || coords.accuracy > 200) throw new Error('Your pickup location is not accurate enough yet. Try again in an open area.');
-      if (!insideAbuja(value)) throw new Error('Your current pickup must be inside the Abuja preview area.');
+      if (!insideNigeria(value)) throw new Error('Your current pickup must be inside Nigeria.');
       if (generation !== epoch || searches.pickup !== request) return;
       pickup = { lat: Number(value.lat.toFixed(6)), lng: Number(value.lng.toFixed(6)), name: value.name };
       results.pickup = []; searching.pickup = false; revision++; quote = null; error = ''; view.selected('pickup', pickup);
@@ -84,7 +84,7 @@ export function createLocationPlanner({ client, view, onBook, onOnline, device =
     finally { if (generation === epoch) { booking = false; render(); } }
   }
   return Object.freeze({ setCategory(id) { if (!booking && transportCategory(id) && id !== vehicleCategory) { vehicleCategory = id; revision++; quote = null; quoting = false; error = ''; render(); } }, setContext, reset, enable, clear, select, search, useCurrentPickup, preview, book,
-    setTarget(value) { if (value === 'destination') { target = value; render(); } },
+    setTarget(value) { if (['pickup', 'destination'].includes(value)) { target = value; render(); } },
     pick(value) { select(target, value); }, tick: render,
     snapshot: () => ({ pickup, destination, quote, online, results, error, vehicleCategory }),
   });

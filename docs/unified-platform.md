@@ -230,12 +230,12 @@ and reconciliation; do not promise exactly-once external delivery.
 
 Monitor critical journey failures, latency, crash-free sessions, stale tracking,
 worker conflicts, stuck orders and payment/notification reconciliation. Agree
-measurable service targets and expected Abuja pilot load before launch; do not
+measurable service targets and expected pilot load by city before launch; do not
 invent a reliability percentage. Exercise backup restoration, load limits,
 dependency outages and recoverable deployment failure. Module boundaries do not
 isolate every outage within the current single process/database.
 
-Optimize for representative Abuja devices and networks: compact responses,
+Optimize for representative Nigerian devices and networks: compact responses,
 paginated lists, compressed assets, feature loading and adaptive refresh. Keep
 active work legible during weak connectivity. Minimize sensitive data in local
 caches, logs and notification previews; scope telemetry to diagnostic needs.

@@ -240,3 +240,47 @@ test('delivery handover controls require the code, respect lockout, and erase it
   h.node('delivery-pin-form').handlers.submit({ preventDefault() {} }); assert.equal(h.commands.length, 1);
   h.view.reset(); assert.equal(h.node('driver-delivery-pin').value, ''); assert.equal(h.node('detail-delivery').textContent, '');
 });
+
+test('guest passenger consent gates booking; repeated renders preserve the exact draft and account/category changes clear it', (t) => {
+  const h = setup(t), empty = { ...state(customer, []), sampleMatchingEnabled: true };
+  h.view.render(empty);
+  assert.equal(h.node('passenger-panel').hidden, false);
+  h.node('request-destination').value = 'Maitama'; h.node('request-destination').handlers.input();
+  h.node('passenger-kind').value = 'guest'; h.node('passenger-kind').handlers.change();
+  h.node('passenger-name').value = 'Test Friend'; h.node('passenger-phone').value = '08012345678';
+  h.node('request-form').handlers.submit({ preventDefault() {} }); assert.equal(h.commands.length, 0);
+  assert.match(h.node('page-error').textContent, /adult/);
+  h.node('passenger-consent').checked = true;
+  h.node('passenger-phone').handlers.input(); assert.equal(h.node('passenger-consent').checked, false);
+  h.node('passenger-consent').checked = true;
+  h.node('request-form').handlers.submit({ preventDefault() {} });
+  const payload = h.commands.at(-1)[1];
+  assert.deepEqual(payload.passenger, { kind: 'guest', name: 'Test Friend', phone: '+2348012345678', consent: true });
+  h.view.setBusy(true); h.view.render(empty); h.view.setBusy(false);
+  assert.equal(h.node('passenger-name').value, 'Test Friend');
+  h.node('request-form').handlers.submit({ preventDefault() {} }); assert.deepEqual(h.commands.at(-1)[1], payload);
+  h.view.rideCreated(); assert.equal(h.node('passenger-name').value, ''); assert.equal(h.node('passenger-kind').value, 'self');
+  const categories = h.node('account-vehicle-categories').children[0].children;
+  categories.find((button) => button.dataset.category === 'van').handlers.click();
+  assert.equal(h.node('passenger-panel').hidden, true); assert.equal(h.node('passenger-name').value, '');
+  h.node('delivery-description').value = 'Test parcel'; h.node('delivery-weight').value = '1'; h.node('delivery-recipient').value = 'Recipient';
+  assert.equal(Object.hasOwn(h.view.requestOptions(), 'passenger'), false);
+  categories.find((button) => button.dataset.category === 'suv').handlers.click();
+  assert.deepEqual(h.view.requestOptions().passenger, { kind: 'self' });
+  h.node('passenger-kind').value = 'guest'; h.node('passenger-kind').handlers.change(); h.node('passenger-name').value = 'Private draft';
+  h.view.render({ ...empty, user: { ...customer, id: 'other-account' } });
+  assert.equal(h.node('passenger-name').value, ''); assert.equal(h.node('passenger-kind').value, 'self');
+});
+
+test('guest rider is labelled separately from booker, contact is owner-only, and pickup guidance addresses the actual passenger', (t) => {
+  const h = setup(t), guest = { ...ride, passenger: { kind: 'guest', name: 'Test Friend', phone: '+2348012345678' } };
+  h.view.render(state(customer, [guest]));
+  assert.match(h.node('detail-passenger').textContent, /Passenger: Test Friend.*Booked by: Passenger/);
+  assert.match(h.node('detail-passenger').textContent, /\+2348012345678/);
+  assert.match(h.node('pickup-pin-guidance').textContent, /Do not send the PIN to the driver remotely/);
+  assert.match(h.node('ride-list').children[0].children[0].children[2].textContent, /Passenger: Test Friend/);
+  h.view.render(state(driver, [guest]));
+  assert.ok(!h.node('detail-passenger').textContent.includes('+2348012345678'));
+  assert.match(h.node('pickup-pin-help').textContent, /passenger, Test Friend/);
+  h.view.reset(); assert.equal(h.node('detail-passenger').textContent, '');
+});

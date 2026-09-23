@@ -1,6 +1,6 @@
 # Taxi Ai
 
-Rides, Taxi Ai Eats and courier delivery, starting in Abuja, Nigeria.
+Rides, Taxi Ai Eats and courier delivery across Nigeria.
 
 Target product: **one Taxi Ai mobile app and one website**, with the same account
 and Customer, Drive & deliver and My store modes. A person can have multiple
@@ -8,13 +8,16 @@ approved capabilities. This direction is documented in the
 [unified platform plan](docs/unified-platform.md). The first milestone is implemented:
 one website account with Customer and Work modes for rides. The first iOS/Android
 app now shares sign-in, profiles, booking, driver availability, fare negotiation,
-chat and complete ride/delivery journeys. Taxi Ai Eats now adds restaurant browsing, checkout, My store and courier handovers as a test flow. See [Eats setup](docs/eats.md). See [unified accounts](docs/unified-accounts.md)
+chat and complete ride/delivery journeys. Taxi Ai Eats asks for a delivery location first, searches dishes and prices from restaurants, food vendors and home kitchens, and combines food into one checkout with separate kitchen deliveries. It also supports batch portions, meal photos, customer pickup, My store and handover codes as a test flow. See [Eats setup](docs/eats.md). See [unified accounts](docs/unified-accounts.md)
 and [mobile setup](apps/mobile/README.md).
+
+For the resolved VS Code/slider merge and database upgrade steps, see
+[the integration guide](docs/vscode-slider-integration.md).
 
 ## What works today
 
 The yellow Taxi Ai website now includes **local customer, driver and administrator
-accounts** at `/app`. Customers choose an Abuja address or map pin, preview a road
+accounts** at `/app`. Customers choose a Nigerian address or map pin, preview a road
 route and request a test journey; an approved online driver near the pickup can
 select the request, make offers and agree a fare with the customer from a separate
 browser session. The customer can confirm a booking, and the driver can record
@@ -33,13 +36,17 @@ private documents and recorded manual checks; external identity/licence verifica
 is not connected. Use fictional details and documents.
 
 - One personal login, Customer/Work mode switching and optional driver enrollment.
-- Taxi Ai Eats on web/mobile: restaurant menus, single-store carts, itemized test checkout,
-  order history, My store and courier handover codes. [Try a food order](docs/eats.md).
+- Book a passenger ride for an adult friend on web/mobile, with separate booker
+  and passenger details and a private, revocable trip/PIN link shared manually.
+  The booker retains fare and payment authority. [Guest-ride setup](docs/guest-rides.md).
+- Taxi Ai Eats on web/mobile: location-first dish search, combined kitchen orders,
+  restaurants/vendors/home kitchens, town-only vendor and home-kitchen profiles, meal photos and finite
+  portions, delivery or pickup, test checkout and My store. [Try a food order](docs/eats.md).
 - Self-hosted Manrope typography across app text, inputs, navigation, web and admin.
 - Native sign-in, Home/Activity/Work/Updates/Account navigation and device revocation.
 - Native driver availability, job claiming, fare consent, chat, pickup/drop-off verification
   and a durable updates inbox, with optional Expo phone alerts. See [native journeys](docs/mobile-journeys.md).
-- Native **Book a ride**: Abuja address search, route/fare review, shared ride requests,
+- Native **Book a ride**: Nigeria-wide address search, route/fare review, shared ride requests,
   status recovery and pre-start cancellation. See [mobile booking](docs/mobile-booking.md).
 - Optional Google sign-up/sign-in for web and native development builds, with
   explicit password-confirmed linking for existing accounts. Configure your own
@@ -78,7 +85,7 @@ is not connected. Use fictional details and documents.
   fare cards; reported messages appear in the local administrator dashboard.
 - In-app audio call controls: call, answer, decline, mute, hang up and recent
   call history. Local WebRTC preview with an optional TURN relay adapter.
-- Opt-in Abuja address search, map pins, road distance and estimated driving time.
+- Opt-in Nigeria-wide address search, map pins, road distance and estimated driving time.
 - Saved route quotes with an illustrative fare formula; explicit negotiation still
   determines the final fare. Quotes expire after 15 minutes.
 - Permission-based driver GPS for assigned participants, with explicitly created
@@ -175,7 +182,7 @@ Customer/driver password recovery is available once [email delivery](docs/accoun
 2. Open a different browser/profile or one private window and sign in as the
    approved driver and select **Work**. Two ordinary tabs share a login; use separate sessions.
 3. In **Your availability**, choose **Share location and go online** for a routed
-   request, using an Abuja device near the pickup. For a local sample request,
+   request, using a device in Nigeria near the pickup. For a local sample request,
    select the same sample pickup area and click **Go online in sample area**.
    Keep this driver page visible. Then select **Start negotiation** and offer ₦5,000.
    Claiming stops availability; trip location sharing remains a separate choice.
@@ -183,7 +190,7 @@ Customer/driver password recovery is available once [email delivery](docs/accoun
 5. The customer reviews the driver/fare and clicks **Confirm test booking**.
    Only the customer sees the six-digit pickup PIN.
    The driver may now click **Share my location** in Journey map and allow browser
-   location access. GPS must be within the Abuja preview area and accurate within
+   location access. GPS must be within Nigeria and accurate within
    200 metres. No location access starts automatically; Stop sharing stops the
    device watcher immediately. GPS controls work independently of online tiles.
 6. The driver clicks **On my way**, then **I have arrived**, enters the customer’s
@@ -305,12 +312,17 @@ The terminal example runs with `npm run demo`. Read [the architecture](docs/arch
 
 ## Development and review
 
-The latest development branch is `feat/eats-ordering`. Version 0.24.0 / mobile
-0.8.0 adds Taxi Ai Eats and shared Manrope typography across app surfaces.
-Schema 19 preserves existing records and adds stores, menus, reviews, checkout
-quotes, food orders and retry records. See [Eats setup and acceptance](docs/eats.md)
-and [mobile setup](apps/mobile/README.md). Back up the database before changing
-branches; older releases may not support the existing schema.
+The latest development branch is `feat/nigeria-wide-coverage`, stacked on
+`feat/guest-rides`. It removes the Abuja-only geography restrictions and adds
+state/town selection, explicit kitchen coverage and nearby food-courier matching
+through private pickup locations. Schema 23 preserves existing records and adds
+private dispatch points. Nationwide location support does not imply live service
+in every town. Automated SMS and real payments are not connected.
+See [nationwide coverage](docs/nationwide.md).
+See [guest-ride setup and acceptance](docs/guest-rides.md),
+[Eats setup](docs/eats.md) and [mobile setup](apps/mobile/README.md).
+Back up the database before changing branches; older releases may not support the
+existing schema.
 Read [CONTRIBUTING.md](CONTRIBUTING.md) for the GitHub/VS Code workflow and where
 new code belongs. `npm run check` validates syntax and module conventions;
 `npm test` checks behaviour; `npm run verify` runs both. GitHub Actions is configured

@@ -144,6 +144,16 @@ test('booking contracts reject malformed fares, foreign coordinates and unsafe c
   assert.throws(() => parseBookingRide({ ...envelope, ride: { ...ride, status: 'in_progress', canCancel: true } }));
 });
 
+test('native route reviews accept Nigerian cities beyond Abuja and reject cross-border geometry', () => {
+  for (const [lng, lat] of [[3.35, 6.6], [8.52, 12.0], [7.51, 6.45]]) {
+    const routePreview = { ...preview, kind: 'route', request: { quoteId: ride.id }, expiresAt: 1_100_000,
+      route: { distanceMeters: 2000, durationSeconds: 600, coordinates: [[lng, lat], [lng + 0.01, lat + 0.01]] } };
+    assert.equal(parsePreview({ ...envelope, preview: routePreview }).preview.kind, 'route');
+    assert.throws(() => parsePreview({ ...envelope, preview: { ...routePreview,
+      route: { ...routePreview.route, coordinates: [[lng, lat], [14.32, 10.59]] } } }));
+  }
+});
+
 test('route drawing preserves equal axes, fits endpoints and never invents a straight road between preview points', () => {
   const drawing = routeDrawing([[7.4, 9.08], [7.43, 9.08], [7.43, 9.1]]);
   const points = drawing.line.split(' ').map((pair) => pair.split(',').map(Number));
@@ -182,4 +192,65 @@ test('native contracts distinguish direct delivery estimates from passenger rout
   assert.throws(() => parsePreview({ ...direct, preview: { ...direct.preview, request: { quoteId: ride.id, vehicleCategory: 'suv' } } }));
   assert.throws(() => parsePreview({ ...direct, preview: { ...direct.preview, route: { ...direct.preview.route, durationSeconds: 600 } } }));
   assert.throws(() => parseBookingRide({ ...envelope, ride: { ...ride, vehicleCategory: 'motorcycle', delivery: null } }));
+});
+
+test('guest requests require consent, normalize contact details and keep one immutable payload through retry', async () => {
+  const f = fixture(); await start(f); await sample(f); const c = f.controller;
+  c.choosePassenger('guest'); c.editPassenger('name', '  Demo Passenger  '); c.editPassenger('phone', '08012345678');
+  const attempts: Array<{ data: unknown; key: string }> = [];
+  f.api.requestRide = async (data, key) => { attempts.push(structuredClone({ data, key })); throw new Error('Lost confirmation'); };
+  await c.submit(); assert.equal(attempts.length, 0); assert.ok(c.snapshot().error);
+  c.consentPassenger(true); await c.submit();
+  assert.equal(c.snapshot().uncertain, 'request');
+  assert.deepEqual(attempts[0].data, { ...preview.request, vehicleCategory: 'standard', passenger: { kind: 'guest', name: 'Demo Passenger', phone: '+2348012345678', consent: true } });
+  c.editPassenger('name', 'Another person'); c.choosePassenger('self'); c.chooseCategory('van');
+  assert.equal(c.snapshot().passenger.name, '  Demo Passenger  '); assert.equal(c.snapshot().category, 'standard');
+  await c.retry(); assert.deepEqual(attempts[1], attempts[0]);
+  f.api.requestRide = async () => { f.settings.current = [ride]; return { ...envelope, ride }; };
+  await c.retry(); await settle(); assert.deepEqual(c.snapshot().passenger, { kind: 'self', name: '', phone: '', consent: false });
+  c.dispose();
+});
+
+test('changing a guest identity resets consent; self and category changes erase all guest details', async () => {
+  const f = fixture(); await start(f); const c = f.controller;
+  c.choosePassenger('guest'); c.editPassenger('name', 'Demo Passenger'); c.editPassenger('phone', '08012345678'); c.consentPassenger(true);
+  c.editPassenger('phone', '08022345678'); assert.equal(c.snapshot().passenger.consent, false);
+  c.consentPassenger(true); c.choosePassenger('self');
+  assert.deepEqual(c.snapshot().passenger, { kind: 'self', name: '', phone: '', consent: false });
+  c.choosePassenger('guest'); c.editPassenger('name', 'Another Guest'); c.chooseCategory('suv');
+  assert.deepEqual(c.snapshot().passenger, { kind: 'self', name: '', phone: '', consent: false });
+  c.choosePassenger('guest'); c.editPassenger('name', 'Delivery must not see me'); c.chooseCategory('van');
+  c.choosePassenger('guest'); c.editPassenger('name', 'Blocked in delivery');
+  assert.deepEqual(c.snapshot().passenger, { kind: 'self', name: '', phone: '', consent: false });
+  c.chooseCategory('standard'); await sample(f);
+  let submitted: unknown;
+  f.api.requestRide = async (data) => { submitted = data; return { ...envelope, ride }; };
+  await c.submit(); assert.deepEqual(submitted, { ...preview.request, vehicleCategory: 'standard', passenger: { kind: 'self' } });
+  c.dispose();
+});
+
+test('guest data cannot cross into a delivery request after changing categories', async () => {
+  const f = fixture(); await start(f); const c = f.controller;
+  c.choosePassenger('guest'); c.editPassenger('name', 'Private Passenger'); c.editPassenger('phone', '08012345678'); c.consentPassenger(true);
+  c.chooseCategory('van');
+  f.api.samplePreview = async (_from, _to, category) => ({ ...envelope, preview: { ...preview, vehicleCategory: category, request: { ...preview.request, vehicleCategory: category } } });
+  c.editDelivery('description', 'Test parcel'); c.editDelivery('weightKg', '3'); c.editDelivery('recipientName', 'Parcel recipient'); await sample(f);
+  let submitted: unknown;
+  f.api.requestRide = async (data) => { submitted = structuredClone(data); return { ...envelope, ride }; };
+  await c.submit();
+  assert.equal(Object.hasOwn(submitted as object, 'passenger'), false);
+  assert.equal(JSON.stringify(submitted).includes('Private Passenger'), false); assert.equal(JSON.stringify(submitted).includes('08012345678'), false);
+  c.dispose();
+});
+
+test('disposing a guest booking clears contact drafts and ignores late request responses', async () => {
+  const f = fixture(); await start(f); await sample(f); const c = f.controller, result = deferred<BookingRideResult>();
+  c.choosePassenger('guest'); c.editPassenger('name', 'Private Passenger'); c.editPassenger('phone', '08012345678'); c.consentPassenger(true);
+  f.api.requestRide = () => result.promise;
+  const pending = c.submit(); c.dispose();
+  result.resolve({ ...envelope, ride: { ...ride, passenger: { kind: 'guest', name: 'Private Passenger', phone: '+2348012345678' } } });
+  await pending;
+  assert.deepEqual(c.snapshot().passenger, { kind: 'self', name: '', phone: '', consent: false });
+  assert.equal(c.snapshot().lastRide, null); assert.equal(c.snapshot().settings, null); assert.equal(c.snapshot().uncertain, null);
+  const next = new BookingController(f.api, () => 'new-account'); assert.equal(next.snapshot().passenger.kind, 'self'); next.dispose();
 });

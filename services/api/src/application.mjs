@@ -2,6 +2,8 @@ import { createDeviceSessionsRepository } from './modules/device-sessions/reposi
 import { createDeviceSessionsService } from './modules/device-sessions/service.mjs';
 import { createSafetyRepository } from './modules/safety/repository.mjs';
 import { createSafetyService } from './modules/safety/service.mjs';
+import { createGuestRidesRepository } from './modules/guest-rides/repository.mjs';
+import { createGuestRidesService } from './modules/guest-rides/service.mjs';
 import { MAX_DRIVER_FILE_BYTES } from '../../../packages/shared/src/driver-onboarding.mjs';
 import { createDriverDocumentCodec } from './infrastructure/driver-document-codec.mjs';
 import { transaction } from './infrastructure/database.mjs';
@@ -19,6 +21,9 @@ import { createDeliveriesRepository } from './modules/deliveries/repository.mjs'
 import { createDeliveriesService } from './modules/deliveries/service.mjs';
 import { createRidesService } from './modules/rides/service.mjs';
 import { createEatsRepository } from './modules/eats/repository.mjs';
+import { deliveryAreas, EATS_LEGACY_AREA_IDS } from '../../../packages/shared/src/eats.mjs';
+import { distanceMeters } from '../../../packages/shared/src/locations.mjs';
+import { normaliseFoodPhoto } from './infrastructure/food-photo-codec.mjs';
 import { createEatsService } from './modules/eats/service.mjs';
 import { normalizeDishPhoto } from './infrastructure/eats-photo-codec.mjs';
 import { createChatRepository } from './modules/chat/repository.mjs';
@@ -61,7 +66,8 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
   const accountRepository = createAccountsRepository(db);
   const driverRepository = createDriversRepository(db);
   const rideRepository = createRidesRepository(db);
-  const eatsRepository = createEatsRepository(db);
+  const guestRepository = createGuestRidesRepository(db);
+  const eatsRepository = createEatsRepository(db, { deliveryAreas, legacyAreaIds: EATS_LEGACY_AREA_IDS, distanceMeters });
   const hasDriverWork = (id) => rideRepository.hasDriverWork(id) || eatsRepository.hasWork(id);
   let drivers, devices, accountEmail;
   const accounts = createAccountsService({ repository: accountRepository,
@@ -80,11 +86,12 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
   drivers = createDriversService({ repository: driverRepository,
     getAccount: accounts.profile, hasDriverWork, codec: createDriverDocumentCodec(MAX_DRIVER_FILE_BYTES),
     tokens, unitOfWork, audit, clock });
-  let calls, locations, payments, safety, notifications;
+  let calls, locations, payments, safety, guestRides, notifications;
   const availability = createAvailabilityService({ repository: createAvailabilityRepository(db),
     getAccount: accounts.profile, sessionOwner: accounts.sessionOwner, nativeSessionFor: devices.sessionFor, nativeSessionOwner: devices.sessionOwner, isBusy: (id) => rideRepository.hasNegotiation(id) || rideRepository.hasCustomerWork(id, clock()) || eatsRepository.hasWork(id),
     unitOfWork, tokens, audit, clock, allowSimulation });
   const rides = createRidesService({ repository: rideRepository,
+    passengerForRide: guestRepository.passenger, savePassenger: guestRepository.savePassenger,
     hasOtherWork: eatsRepository.hasWork,
     getAccount: accounts.profile, unitOfWork, audit, tokens, clock,
     deliveries: createDeliveriesService({ repository: createDeliveriesRepository(db), tokens }),
@@ -98,7 +105,7 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
         mode: userId === ride.customerId ? 'customer' : 'work', eventKey, now });
     },
     onTripCompleted: (data) => payments.recordCompletion(data),
-    onRideClosed: (id, now) => { calls.closeRide(id, now); locations.closeRide(id, now); safety.closeRide(id, now); } });
+    onRideClosed: (id, now) => { calls.closeRide(id, now); locations.closeRide(id, now); safety.closeRide(id, now); guestRides.closeRide(id, now); } });
   const chat = createChatService({ repository: createChatRepository(db), getAccount: accounts.profile,
     getRideContext: rides.conversationContext, listConversationIds: rides.conversationIds, unitOfWork, audit, tokens, clock,
     onMessage: ({ ride, message }) => {
@@ -134,11 +141,13 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
   safety = createSafetyService({ repository: createSafetyRepository(db), getAccount: accounts.profile, getTrip: rides.safetyContext,
     vehicleCheckEvidence:vehicleChecks.evidence,
     locationForTrip: locations.safetyPosition, sessionOwner: accounts.sessionOwner, nativeSessionOwner: devices.sessionOwner, unitOfWork, tokens, audit, clock, allowSimulation });
+  guestRides = createGuestRidesService({ repository: guestRepository, getAccount: accounts.profile, getTrip: rides.guestContext,
+    locationForTrip: locations.safetyPosition, sessionOwner: accounts.sessionOwner, nativeSessionOwner: devices.sessionOwner, unitOfWork, tokens, audit, clock });
   const adminConsole = createAdminConsoleService({ repository: createAdminConsoleRepository(db), audit, clock, unitOfWork });
   const eats = createEatsService({ repository: eatsRepository, getAccount: accounts.profile, photoCodec: { normalize: normalizeDishPhoto },
     hasOtherWork: (id) => rideRepository.hasDriverWork(id) || rideRepository.hasCustomerWork(id, clock()),
-    availabilityFor: availability.positionFor, onClaim: availability.onClaim, tokens, unitOfWork, audit, clock });
+    availabilityFor: availability.positionFor, onClaim: availability.onClaim, tokens, unitOfWork, audit, clock, normalisePhoto: normaliseFoodPhoto });
   const googleAuth = createGoogleAuthService({ repository: createGoogleAuthRepository(db), provider: googleProvider,
     accounts, devices, tokens, unitOfWork, clock });
-  return Object.freeze({ accounts, devices, drivers, rides, eats, chat, calls, locations, availability, payments, safety, vehicleChecks, adminConsole, googleAuth, accountEmail, notifications, rateLimiter, clock });
+  return Object.freeze({ accounts, devices, drivers, rides, eats, chat, calls, locations, availability, payments, safety, guestRides, vehicleChecks, adminConsole, googleAuth, accountEmail, notifications, rateLimiter, clock });
 }

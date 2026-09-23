@@ -1,6 +1,6 @@
-# Abuja locations — local development preview
+# Nigeria-wide locations — development preview
 
-The account dashboard can search Abuja addresses, select map pins, save a road
+The account dashboard can search Nigerian addresses, select map pins, save a road
 route quote and share the assigned driver's browser-reported location during a
 confirmed test trip. Fare negotiation, chat, voice controls and pickup PINs use
 their existing rules. This milestone does not dispatch a vehicle, take payment,
@@ -40,10 +40,13 @@ discarded after stopping or changing accounts/journeys.
 
 ## Coverage, route time and pricing
 
-The development rectangle is longitude **7.10–7.65**, latitude **8.80–9.25**.
-This is a deliberately bounded Abuja preview area, not an official administrative
-boundary or the launch coverage commitment. All route geometry must remain in
-it. Address coverage depends on the provider's OpenStreetMap data. Road snapping
+The shared Nigeria boundary now validates address results, pickup/destination
+points, road geometry and driver GPS. A bounding box narrows provider search;
+the polygon check excludes neighboring-country points inside that box.
+This is a software coverage gate, not a promise of available local drivers or
+an authoritative border survey. See [nationwide coverage](nationwide.md) for the
+boundary data source and limits. Address coverage depends on the provider's
+OpenStreetMap data. Road snapping
 is limited to 250 m; endpoints and returned geometry are checked server-side.
 
 OSRM supplies car-road distance and estimated driving time. The display excludes
@@ -51,7 +54,11 @@ live traffic and the driver's arrival time at pickup. It is not a live ETA model
 Routing does not establish a road's current accessibility or suitability for
 real operations. Motorcycle delivery routing is a future Eats/courier decision.
 
-The policy `abuja-preview-v1` uses **₦500 base + ₦200/km + ₦30/minute**, with a
+New road quotes are bounded to 2,500 km and 48 hours; driver matching remains
+within the existing local radius of the pickup. National route support does not
+automatically offer distant drivers a journey or guarantee an interstate service.
+
+The policy `nigeria-preview-v1` uses **₦500 base + ₦200/km + ₦30/minute**, with a
 **₦1,000 minimum**, rounded up to **₦50**. Distance is rounded up to metres and
 duration to seconds; each component is rounded up to integer kobo before the
 final fare increment. For a fixture route of 7 km and 20 minutes, it suggests
@@ -87,7 +94,7 @@ public services are not a production SLA or an unlimited resource.
 - [Photon's public demo guidance](https://github.com/komoot/photon) permits
   reasonable request volume but warns of throttling and no availability guarantee.
   Search uses its [API contract](https://github.com/komoot/photon/blob/master/docs/api-v1.md),
-  an NG country filter, the preview bounding box and a maximum of eight results.
+  an NG country filter, the Nigeria bounding box and a maximum of eight results.
 - [FOSSGIS routing policy](https://routing.openstreetmap.de/about.html) limits
   its demo to one request per second. The adapter identifies Taxi Ai, rejects
   bursts inside 1,100 ms per provider kind, coalesces duplicate in-flight requests
@@ -207,7 +214,8 @@ access was used after the environment blocked local previews.
    readable labels/attribution, screen-reader error/status announcements and
    overlapping controls. Resizing a desktop browser is a layout check only.
 2. Confirm no external map requests or GPS permission prompt before explicit
-   enabling. Enable maps, search known public Abuja landmarks, check result
+   enabling. Enable maps, search known public landmarks in Lagos, Kano, Port Harcourt
+   and Abuja, check result
    relevance, place pins with mouse and keyboard, and verify the provider route.
    Test no results, out-of-area pins, no nearby road and provider failure.
 3. Confirm suggestion breakdown/distance/time and the lack of live traffic or
@@ -218,7 +226,7 @@ access was used after the environment blocked local previews.
    acceptance. Test refresh/restart and attempts to reuse another user's quote.
 5. Confirm no GPS starts from map enabling or booking. Deny permission, grant
    it, stop during the prompt and try an inaccurate fix. Sharing requires an
-   Abuja position; a device elsewhere is correctly rejected. Developer-tool
+   Nigerian position; a device outside Nigeria is rejected. Developer-tool
    coordinate overrides can exercise UI states but do not validate real GPS.
 6. Where real in-area GPS is available, share as the assigned driver. Check
    accuracy/age, stale indicators, Stop, sign-out, another window's Stop, trip

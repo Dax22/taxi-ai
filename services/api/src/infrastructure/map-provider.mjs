@@ -57,7 +57,8 @@ export function createMapProvider({ env = process.env, fetchImpl = globalThis.fe
         bbox: `${bounds.west},${bounds.south},${bounds.east},${bounds.north}` })) url.searchParams.set(name, value);
       const result = await json(url, 'search', 60 * 60_000);
       check(result && (!result.type || result.type === 'FeatureCollection') && Array.isArray(result.features), 'MAPS_UNAVAILABLE', 'Address search returned an invalid response.');
-      return result.features.slice(0, 8).filter((f) => f?.geometry?.type === 'Point').map((f) => {
+      return result.features.filter((f) => f?.geometry?.type === 'Point'
+        && (!f.properties?.countrycode || String(f.properties.countrycode).toUpperCase() === 'NG')).slice(0, 8).map((f) => {
         const p = f.properties ?? {};
         const name = [...new Set([p.name, [p.housenumber, p.street].filter((v) => typeof v === 'string').join(' '), p.district, p.city, p.state]
           .filter((v) => typeof v === 'string' && v.trim()))].join(', ').slice(0, 160);

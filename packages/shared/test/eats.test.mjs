@@ -22,3 +22,18 @@ test('food action hints follow participant roles and stop at terminal states', (
   assert.deepEqual(eatsActions({ status: 'assigned' }, 'courier'), ['pickup']);
   for (const role of ['customer', 'store', 'courier', 'admin']) assert.deepEqual(eatsActions({ status: 'delivered' }, role), []);
 });
+
+test('home-kitchen discovery respects delivery options, filters, stock labels and customer pickup actions', async () => {
+  const { discoverKitchens, foodAvailable, foodStock } = await import('../src/eats.mjs');
+  const kitchens = [
+    { name: 'Zest', cuisine: 'Nigerian', description: 'Rice', areaId: 'wuse-ii', sellerType: 'home_kitchen', isOpen: true, pickupEnabled: true, deliveryEnabled: false, prepMinutes: 20, deliveryFeeKobo: 0 },
+    { name: 'Bistro', cuisine: 'Grills', description: 'Chicken', areaId: 'maitama', isOpen: true, prepMinutes: 30, deliveryFeeKobo: 100 },
+    { name: 'Auntie', cuisine: 'Nigerian', description: 'Rice', areaId: 'wuse-ii', sellerType: 'home_kitchen', isOpen: false, pickupEnabled: true, prepMinutes: 10, deliveryFeeKobo: 10 },
+  ];
+  assert.deepEqual(discoverKitchens(kitchens, { fulfillment: 'pickup', sellerType: 'home_kitchen', openOnly: true }).map((s) => s.name), ['Zest']);
+  assert.deepEqual(discoverKitchens(kitchens, { fulfillment: 'delivery' }).map((s) => s.name), ['Bistro', 'Auntie']);
+  assert.deepEqual(discoverKitchens(kitchens, { fulfillment: '', q: ' rice ', areaId: 'wuse-ii', sort: 'prep' }).map((s) => s.name), ['Zest', 'Auntie']);
+  assert.equal(foodAvailable({ available: true, portionsRemaining: 0 }), false); assert.equal(foodStock({ available: true, portionsRemaining: 3 }), '3 portions left');
+  assert.deepEqual(eatsActions({ status: 'ready', fulfillment: 'pickup' }, 'courier'), []);
+  assert.deepEqual(eatsActions({ status: 'ready', fulfillment: 'pickup' }, 'store'), ['complete_pickup']);
+});

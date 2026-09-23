@@ -9,6 +9,7 @@ import { useBooking } from '../src/booking/use-booking';
 import { PlaceSearch } from '../src/booking/place-search';
 import { RoutePreview } from '../src/booking/route-preview';
 import { RequestCard } from '../src/booking/request-card';
+import { PassengerForm } from '../src/booking/passenger-form';
 import { Button, Card, Field, Heading, Loading, Notice, Pill, Screen, styles } from '../src/ui/components';
 import type { BookingRide } from '../../../packages/shared/src/mobile-booking.mjs';
 import { VehicleCategories } from '../src/ui/vehicle-categories';
@@ -28,7 +29,7 @@ function BookingScreen() {
     { text: 'Keep journey', style: 'cancel' }, { text: 'Cancel journey', style: 'destructive', onPress: () => void c.cancel(ride) },
   ]);
   const shown = settings?.current.length ? settings.current : s.lastRide ? [s.lastRide] : [];
-  return <Screen><Pill>RIDES & DELIVERIES · ABUJA</Pill><Heading title="Where to?" subtitle="Your route. Your choice. A fare you both agree."/>
+  return <Screen><Pill>RIDES & DELIVERIES · NIGERIA</Pill><Heading title="Where to?" subtitle="Your route. Your choice. A fare you both agree."/>
     <Text style={styles.small}>Development preview · no live rides or payments.</Text><Notice message={s.error}/>
     {s.uncertain && <Card><Text style={styles.h2}>Let’s confirm that action.</Text><Text style={styles.body}>The connection ended before confirmation arrived. Retrying reuses the original action to avoid creating a duplicate request.</Text>
       <Button title={s.uncertain === 'request' ? 'Retry the same request' : 'Retry the same cancellation'} busy={!!s.busy} onPress={() => void c.retry()}/></Card>}
@@ -40,23 +41,21 @@ function BookingScreen() {
       <Text style={styles.body}>{settings.blockedBy === 'online' ? 'Go offline from your driver account on the website before requesting a ride.' : 'Finish or cancel your driver journey before requesting a ride.'}</Text></Card>}
     {settings && !settings.current.length && !settings.blockedBy && <VehicleCategories value={s.category} onChange={(id) => c.chooseCategory(id)} disabled={locked}/>}
     {settings && !settings.current.length && !settings.blockedBy && <>
+      {!delivery && <PassengerForm passenger={s.passenger} controller={c} disabled={disabled}/>}
       {delivery && <Card><Text style={styles.h2}>What are you sending?</Text>
         {([['description', 'Parcel description and size'], ['weightKg', 'Total weight (kg)'], ['recipientName', 'Recipient name'], ['pickupInstructions', 'Pickup instructions (optional)'], ['dropoffInstructions', 'Drop-off instructions (optional)']] as [keyof DeliveryDraft, string][]).map(([field, label]) => <Field key={field} label={label} value={s.delivery[field]} editable={!disabled} keyboardType={field === 'weightKg' ? 'decimal-pad' : 'default'} maxLength={field === 'weightKg' ? 10 : field === 'recipientName' ? 100 : 240} onChangeText={(value) => c.editDelivery(field, value)}/>)}
         <Text style={styles.small}>{vehicleCategory(s.category)?.name} preview limit: {policy?.maxLoadKg} kg. Matching also checks the driver’s approved load capacity. Confirm the load fits before collection.</Text><Text style={styles.small}>After pickup, share the drop-off code privately with your recipient. They give it to the driver at handover. This preview does not contact the recipient.</Text>
       </Card>}
       {!s.mode ? <Card><Text style={styles.h2}>Route planning is unavailable.</Text><Text style={styles.body}>Address search and sample routes are disabled in this environment. Please check again later.</Text></Card> : <>
-        <View style={styles.row}>{settings.online.enabled && <Button title="Abuja address" secondary={s.mode !== 'route'} disabled={locked} onPress={() => c.chooseMode('route')}/>}
+        <View style={styles.row}>{settings.online.enabled && <Button title="Search addresses" secondary={s.mode !== 'route'} disabled={locked} onPress={() => c.chooseMode('route')}/>}
           {settings.allowSample && <Button title="Sample journey" secondary={s.mode !== 'sample'} disabled={locked} onPress={() => c.chooseMode('sample')}/>}</View>
         <View style={[look.columns, wide && look.wide]}><View style={[look.column, wide && look.wideColumn]}><Card><Text style={styles.h2}>Plan your journey</Text>
           {s.mode === 'route' ? <>
-            {!s.consent ? <><Text style={styles.body}>Taxi Ai uses your current location for pickup, then lets you search Abuja streets and landmarks for your destination. Your pickup and destination coordinates go to {settings.online.routeHost ?? 'the configured routing provider'} for a route preview.</Text>
-              <Text style={styles.small}>Your phone asks for permission only when you choose to use your current location.</Text><Button title="Enable current pickup & search" disabled={disabled} onPress={() => c.consent()}/></>
-              : <><View style={styles.stack}><Text style={styles.label}>PICKUP</Text>
-                <Text style={styles.body}>{s.pickup.selected ? `${s.pickup.selected.name} · ${s.pickup.selected.lat.toFixed(5)}, ${s.pickup.selected.lng.toFixed(5)}` : 'Use your phone’s current location as the pickup point.'}</Text>
-                <Button title={s.pickup.selected ? 'Update current location' : 'Use current location'} secondary={!!s.pickup.selected} busy={s.locatingPickup} disabled={disabled} onPress={() => void c.useCurrentPickup()}/></View>
-                <PlaceSearch endpoint="destination" state={s} controller={c} disabled={planningDisabled}/></>}
+            {!s.consent ? <><Text style={styles.body}>Search streets and landmarks across Nigeria. Include the town and state for more precise results. Search terms go to {settings.online.searchHost ?? 'the configured address provider'}; selected pickup and destination coordinates go to {settings.online.routeHost ?? 'the configured routing provider'} for a route preview.</Text>
+              <Text style={styles.small}>Search happens when you tap Search. Current pickup requests a one-time phone location only when you choose it.</Text><Button title="Enable address search" disabled={disabled} onPress={() => c.consent()}/></>
+              : <><Button title="Use current location for pickup" busy={s.locatingPickup} disabled={planningDisabled} onPress={() => void c.useCurrentPickup()}/><PlaceSearch endpoint="pickup" state={s} controller={c} disabled={disabled}/><PlaceSearch endpoint="destination" state={s} controller={c} disabled={planningDisabled}/></>}
           </> : <><Text style={styles.body}>Try the request flow with sample Abuja areas and fictional fares.</Text>
-            <Text style={styles.small}>Pickup uses your current location. For this local sample fare, the preview pickup area is {samplePickup?.name ?? 'the first available sample area'}.</Text>
+            <Text style={styles.small}>This local demo uses a fixed pickup area: {samplePickup?.name ?? 'the first available sample area'}.</Text>
             <Field label="Destination" placeholder="Type an Abuja area, e.g. Maitama" value={s.sampleDestinationQuery} editable={!disabled} maxLength={160}
               autoCorrect={false} onChangeText={(query) => c.editSampleDestination(query)}/>
             {!!s.sampleDestinationQuery.trim() && !s.destinationId && settings.areas.filter((area) => area.id !== s.pickupId && area.name.toLowerCase().includes(s.sampleDestinationQuery.trim().toLowerCase())).slice(0, 5).map((area) =>
@@ -65,7 +64,7 @@ function BookingScreen() {
             <Text style={styles.small}>{s.destinationId ? 'Destination matched to a sample area.' : `Sample areas: ${settings.areas.filter((area) => area.id !== s.pickupId).map((area) => area.name).join(', ')}.`}</Text></>}
           {(s.mode === 'sample' || s.consent) && <Button title={s.preview ? 'Preview route again' : 'Preview route & fare'} secondary={!!s.preview} busy={s.busy === 'preview'} disabled={planningDisabled} onPress={() => void c.preview()}/>}
         </Card></View>
-        {s.preview && <View style={[look.column, wide && look.wideColumn]}><RoutePreview preview={s.preview} now={s.now} disabled={disabled} busy={s.busy === 'request'} onRequest={() => void c.submit()} onPreview={() => void c.preview()}/></View>}
+        {s.preview && <View style={[look.column, wide && look.wideColumn]}><RoutePreview preview={s.preview} now={s.now} disabled={disabled} busy={s.busy === 'request'} passengerName={!delivery && s.passenger.kind === 'guest' ? s.passenger.name.trim() : undefined} onRequest={() => void c.submit()} onPreview={() => void c.preview()}/></View>}
         </View>
       </>}
     </>}

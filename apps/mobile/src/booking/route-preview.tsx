@@ -7,8 +7,8 @@ import { Button, Card, colors, fare, Pill, styles } from '../ui/components';
 import { routeDrawing } from './route-drawing';
 import { NativeMap } from '../maps/native-map';
 
-export function RoutePreview({ preview, now, disabled, busy, onRequest, onPreview }: {
-  preview: BookingPreview; now: number; disabled: boolean; busy: boolean; onRequest(): void; onPreview(): void;
+export function RoutePreview({ preview, now, disabled, busy, onRequest, onPreview, passengerName }: {
+  preview: BookingPreview; now: number; disabled: boolean; busy: boolean; onRequest(): void; onPreview(): void; passengerName?: string;
 }) {
   const expired = preview.expiresAt !== null && now >= preview.expiresAt;
   const drawing = preview.route ? routeDrawing(preview.route.coordinates) : null;
@@ -28,6 +28,7 @@ export function RoutePreview({ preview, now, disabled, busy, onRequest, onPrevie
       </Svg>
     </View><Text style={styles.small}>Route outline on a decorative grid · not a street map.</Text></>}/>}
     <View style={styles.stack}><Text style={styles.body}>A · {preview.pickup}</Text><Text style={styles.body}>B · {preview.destination}</Text></View>
+    {passengerName && <Text style={styles.body}>Passenger · {passengerName} · Booked by you</Text>}
     {preview.route?.distanceKind === 'straight_line' ? <><Text style={styles.body}>{(preview.route.distanceMeters / 1000).toFixed(1)} km in a straight line</Text><Text style={styles.small}>Direct-distance delivery estimate, not a road route or driving ETA. Confirm access and timing with the driver.</Text></> : preview.route ? <><View style={styles.row}><Text style={styles.body}>{(preview.route.distanceMeters / 1000).toFixed(1)} km</Text><Text style={styles.body}>About {Math.ceil((preview.route.durationSeconds ?? 0) / 60)} min driving</Text></View>
       <Text style={styles.small}>Route data: © OpenStreetMap contributors · OSRM. Travel time excludes traffic and driver arrival.</Text></>
       : <Text style={styles.small}>Sample areas for local testing. No road route or travel time is calculated.</Text>}

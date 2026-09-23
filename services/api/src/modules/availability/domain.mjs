@@ -1,7 +1,7 @@
 import { check } from '../../shared/errors.mjs';
 import { fields } from '../../shared/validation.mjs';
 import { DEMO_AREAS } from '../../../../../packages/shared/src/demo-booking.mjs';
-import { insideAbuja } from '../../../../../packages/shared/src/locations.mjs';
+import { insideNigeria } from '../../../../../packages/shared/src/locations.mjs';
 import { POSITION_MS } from '../../../../../packages/shared/src/matching.mjs';
 
 export function commandKey(value) {
@@ -16,7 +16,7 @@ export function sequence(value) {
 }
 export function position(value, now) {
   fields(value, ['lat', 'lng', 'accuracy', 'capturedAt']);
-  check(insideAbuja(value), 'INVALID_LOCATION', 'Your location is outside the Abuja preview area. Use an Abuja device for GPS matching.');
+  check(insideNigeria(value), 'INVALID_LOCATION', 'Your location must be in Nigeria to find nearby requests.');
   check(Number.isFinite(value.accuracy) && value.accuracy > 0 && value.accuracy <= 200, 'INVALID_LOCATION', 'Wait for a GPS fix accurate to within 200 metres.');
   check(Number.isSafeInteger(value.capturedAt) && value.capturedAt <= now + 5000 && value.capturedAt > now - POSITION_MS,
     'INVALID_LOCATION', 'A fresh GPS fix is required to go online.');

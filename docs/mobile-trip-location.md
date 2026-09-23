@@ -34,7 +34,7 @@ a fare, creating a link or opening Safety does not consent to trip sharing.
   invalidates sharing. Only the latest point is stored, without a route history.
   A saved incident can retain its earlier snapshot after sharing ends.
 
-GPS must be inside the existing Abuja preview rectangle, be under 30 seconds
+GPS must be inside Nigeria, be under 30 seconds
 old and report accuracy within 200 metres. Fix age is translated to server time;
 stale or implausible timestamps are rejected. These checks validate the report,
 not the device's actual physical location. The app displays reported location,

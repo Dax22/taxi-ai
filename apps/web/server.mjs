@@ -37,13 +37,15 @@ const routes = new Map([
   ['/eats', ['public/eats.html', 'text/html; charset=utf-8']],
   ['/eats/sell', ['public/eats.html', 'text/html; charset=utf-8']],
   ['/eats.mjs', ['public/eats.mjs', 'text/javascript; charset=utf-8']],
+  ['/assets/eats-hero.png', ['public/assets/eats-hero.png', 'image/png']],
   ['/eats.css', ['public/eats.css', 'text/css; charset=utf-8']],
+  ['/eats/meal-view.mjs', ['public/eats/meal-view.mjs', 'text/javascript; charset=utf-8']],
+  ['/eats/location-fields.mjs', ['public/eats/location-fields.mjs', 'text/javascript; charset=utf-8']],
+  ['/shared/nigeria-areas.mjs', ['../../packages/shared/src/nigeria-areas.mjs', 'text/javascript; charset=utf-8']],
   ['/eats/view.mjs', ['public/eats/view.mjs', 'text/javascript; charset=utf-8']],
   ['/eats/transport.mjs', ['public/eats/transport.mjs', 'text/javascript; charset=utf-8']],
   ['/typography.css', ['public/typography.css', 'text/css; charset=utf-8']],
-  ['/assets/fonts/manrope-latin-wght-normal.woff2', ['public/assets/fonts/manrope-latin-wght-normal.woff2', 'font/woff2']],
-  ['/assets/fonts/manrope-latin-ext-wght-normal.woff2', ['public/assets/fonts/manrope-latin-ext-wght-normal.woff2', 'font/woff2']],
-  ...['eats', 'eats-contracts', 'eats-controller'].map((name) => [`/shared/${name}.mjs`, [`../../packages/shared/src/${name}.mjs`, 'text/javascript; charset=utf-8']]),
+  ...['eats', 'eats-contracts', 'eats-controller', 'eats-meals'].map((name) => [`/shared/${name}.mjs`, [`../../packages/shared/src/${name}.mjs`, 'text/javascript; charset=utf-8']]),
   ['/account-access', ['public/account-access.html', 'text/html; charset=utf-8']],
   ['/account-access.mjs', ['public/account-access.mjs', 'text/javascript; charset=utf-8']],
   ['/account-recovery', ['public/account-recovery.html', 'text/html; charset=utf-8']],
@@ -53,6 +55,10 @@ const routes = new Map([
   ['/dashboard/sign-in-methods.mjs', ['public/dashboard/sign-in-methods.mjs', 'text/javascript; charset=utf-8']],
   ['/trip-share', ['public/trip-share.html', 'text/html; charset=utf-8']],
   ['/trip-share.mjs', ['public/trip-share.mjs', 'text/javascript; charset=utf-8']],
+  ['/guest-trip', ['public/guest-trip.html', 'text/html; charset=utf-8']],
+  ['/guest-trip.mjs', ['public/guest-trip.mjs', 'text/javascript; charset=utf-8']],
+  ...['guest-rides-panel', 'guest-rides-transport', 'guest-trip-controller'].map((name) => [`/dashboard/${name}.mjs`, [`public/dashboard/${name}.mjs`, 'text/javascript; charset=utf-8']]),
+  ...['guest-rides', 'guest-rides-controller'].map((name) => [`/shared/${name}.mjs`, [`../../packages/shared/src/${name}.mjs`, 'text/javascript; charset=utf-8']]),
   ['/dashboard/safety-controller.mjs', ['public/dashboard/safety-controller.mjs', 'text/javascript; charset=utf-8']],
   ['/dashboard/safety-view.mjs', ['public/dashboard/safety-view.mjs', 'text/javascript; charset=utf-8']],
   ['/dashboard/vehicle-checks.mjs', ['public/dashboard/vehicle-checks.mjs', 'text/javascript; charset=utf-8']],
@@ -69,6 +75,7 @@ const routes = new Map([
   ['/shared/vehicle-categories.mjs', ['../../packages/shared/src/vehicle-categories.mjs', 'text/javascript; charset=utf-8']],
   ...VEHICLE_CATEGORIES.filter((category) => category.id !== 'standard').map((category) => [category.assetPath, [`public${category.assetPath}`, 'image/png']]),
   ['/dashboard/vehicle-card.mjs', ['public/dashboard/vehicle-card.mjs', 'text/javascript; charset=utf-8']],
+  ['/shared/nigeria-boundary.mjs', ['../../packages/shared/src/nigeria-boundary.mjs', 'text/javascript; charset=utf-8']],
   ['/shared/vehicle-profile.mjs', ['../../packages/shared/src/vehicle-profile.mjs', 'text/javascript; charset=utf-8']],
   ['/shared/pickup-identity.mjs', ['../../packages/shared/src/pickup-identity.mjs', 'text/javascript; charset=utf-8']],
   ['/shared/vehicle-registration.mjs', ['../../packages/shared/src/vehicle-registration.mjs', 'text/javascript; charset=utf-8']],
@@ -107,7 +114,10 @@ const routes = new Map([
   ['/dashboard/chat-reports-view.mjs', ['public/dashboard/chat-reports-view.mjs', 'text/javascript; charset=utf-8']],
   ['/styles.css', ['public/styles.css', 'text/css; charset=utf-8']],
   ['/homepage.css', ['public/homepage.css', 'text/css; charset=utf-8']],
+  ['/homepage-carousel.mjs', ['public/homepage-carousel.mjs', 'text/javascript; charset=utf-8']],
   ['/app.mjs', ['public/app.mjs', 'text/javascript; charset=utf-8']],
+  ['/assets/fonts/manrope-latin-wght-normal.woff2', ['public/assets/fonts/manrope-latin-wght-normal.woff2', 'font/woff2']],
+  ['/assets/fonts/manrope-latin-ext-wght-normal.woff2', ['public/assets/fonts/manrope-latin-ext-wght-normal.woff2', 'font/woff2']],
   ['/favicon.svg', ['public/favicon.svg', 'image/svg+xml']],
   ['/assets/taxi-ai-mark.svg', ['public/assets/taxi-ai-mark.svg', 'image/svg+xml']],
   ['/assets/google-sign-in.png', ['public/assets/google-sign-in.png', 'image/png']],
@@ -118,6 +128,8 @@ const routes = new Map([
   ['/assets/eats-suya.jpg', ['public/assets/eats-suya.jpg', 'image/jpeg']],
   ['/assets/city-route-hero.webp', ['public/assets/city-route-hero.webp', 'image/webp']],
   ['/assets/city-route-hero-small.webp', ['public/assets/city-route-hero-small.webp', 'image/webp']],
+  ...['airport-dropoff', 'food-delivery', 'courier-delivery'].flatMap((name) =>
+    ['', '-small'].map((size) => [`/assets/${name}-hero${size}.webp`, [`public/assets/${name}-hero${size}.webp`, 'image/webp']])),
   ['/assets/autonomous-concept.webp', ['public/assets/autonomous-concept.webp', 'image/webp']],
   ['/assets/autonomous-concept-small.webp', ['public/assets/autonomous-concept-small.webp', 'image/webp']],
   ['/shared/driver-onboarding.mjs', ['../../packages/shared/src/driver-onboarding.mjs', 'text/javascript; charset=utf-8']],
@@ -147,7 +159,7 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
   const handleGoogleCallback = createGoogleCallback(application, runtime.mode === 'staging');
   const health = createHealth(db);
   const cleanup = setInterval(() => {
-    try { application.rides.sweep(); application.availability.sweep(); application.calls.sweep(); application.locations.sweep(); application.safety.sweep(); application.vehicleChecks.sweep(); application.devices.sweep(); application.googleAuth.sweep(); }
+    try { application.rides.sweep(); application.availability.sweep(); application.calls.sweep(); application.locations.sweep(); application.safety.sweep(); application.guestRides.sweep(); application.vehicleChecks.sweep(); application.devices.sweep(); application.googleAuth.sweep(); }
     catch { telemetry.event('maintenance_failed'); }
     void application.accountEmail.deliverPending().catch(() => telemetry.event('maintenance_failed'));
     void application.notifications.deliverPending().catch(() => telemetry.event('maintenance_failed'));
@@ -161,7 +173,7 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
     response.setHeader('Cache-Control', 'no-store');
     response.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
     if (runtime.mode === 'staging') response.setHeader('Strict-Transport-Security', 'max-age=86400');
-    response.setHeader('Content-Security-Policy', `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'${mapProvider.mode === 'off' ? '' : ` ${mapProvider.tileOrigin}`}; media-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'`);
+    response.setHeader('Content-Security-Policy', `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'${pathname === '/eats' ? ' data:' : ''}${mapProvider.mode === 'off' ? '' : ` ${mapProvider.tileOrigin}`}; media-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'`);
     try {
       pathname = new URL(request.url, 'http://localhost').pathname;
       if (pathname === '/app' && mapProvider.mode !== 'off') response.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
