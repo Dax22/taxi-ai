@@ -7,16 +7,15 @@
   .landing-page .site-header { border-bottom: 0; height: 86px; }
   .landing-page .header-end .button { border-radius: 999px; }
   .landing-page .desktop-nav .tiny-dot { background: var(--brand); }
-  .hero-intro { grid-area: 1 / 1; align-self: center; padding-block: 64px 88px; text-align: left; position: relative; z-index: 2; pointer-events: none; }
-  .hero-copy { max-width: 660px; pointer-events: auto; }
-  .hero-intro .eyebrow { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; color: #454b43; }
+  /* CSS inch equivalents: tagline 48px from the top, button 96px from the bottom. */
+  .hero-intro { grid-area: 1 / 1; align-self: stretch; display: flex; padding-block: 48px 96px; text-align: center; position: relative; z-index: 2; pointer-events: none; }
+  .hero-copy { width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: space-between; gap: 32px; min-width: 0; }
+  .hero-intro .eyebrow { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 0; color: #454b43; }
   .hero-intro .tiny-dot { background: var(--brand); }
   /* Protect the letter edges without washing out any part of the artwork. */
-  .hero-intro .eyebrow, .hero-actions .text-link, .hero-preview-note { text-shadow: 0 1px 2px #fff, 0 0 4px #fff; }
-  .hero-actions { display: flex; align-items: center; justify-content: flex-start; flex-wrap: wrap; gap: 16px 28px; margin-top: 28px; }
-  .hero-actions .button-primary { border-radius: 999px; padding: 17px 26px; min-height: 54px; font-size: 15px; }
-  .hero-actions .text-link { gap: 12px; min-height: 48px; }
-  .hero-preview-note { color: #545952; font-size: 11px; margin-top: 18px; }
+  .hero-intro .eyebrow { text-shadow: 0 1px 2px #fff, 0 0 4px #fff; }
+  .hero-actions { display: flex; align-items: center; justify-content: center; width: 100%; margin: 0; }
+  .hero-actions .button-primary { pointer-events: auto; border-radius: 999px; padding: 17px 26px; min-height: 54px; font-size: 15px; }
   .hero-stage { position: relative; }
   /* Artwork starts directly at the header and reaches both page edges.
      The in-flow overlay lets the hero grow when text wraps or is enlarged. */
@@ -78,11 +77,8 @@
   }
   @media (max-width: 800px) {
     .landing-page .site-header { height: 80px; }
-    .hero-intro { align-self: start; padding-block: 36px 260px; }
-    .hero-copy { max-width: 620px; }
     .hero-slide-viewport { min-height: 560px; }
     .hero-image { object-fit: contain; object-position: center bottom; }
-    .hero-intro .eyebrow { font-size: 10px; margin-bottom: 20px; }
     .booking-card { margin-top: 24px; padding: 22px 22px 0; }
     .booking-card .preview-label { margin-inline: -22px; }
     #trip-form { grid-template-columns: minmax(0, 1fr); }
@@ -97,11 +93,7 @@
   }
   @media (max-width: 580px) {
     .landing-page .site-header { height: 73px; }
-    .hero-intro { padding-block: 28px 200px; }
-    .hero-actions { gap: 10px 20px; margin-top: 24px; }
     .hero-actions .button-primary { padding: 15px 24px; min-height: 52px; }
-    .hero-actions .text-link { font-size: 12px; gap: 10px; }
-    .hero-preview-note { font-size: 10px; }
     .hero-slide-viewport { min-height: 500px; }
     .hero-carousel-controls { bottom: 12px; right: 12px; }
     .hero-art-note { font-size: 7px; margin-inline: 16px; }
