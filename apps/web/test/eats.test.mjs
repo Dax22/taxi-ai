@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { createEatsController } from '../../../packages/shared/src/eats-controller.mjs';
 import { readEatsResponse } from '../../../packages/shared/src/eats-contracts.mjs';
+import { foodAreaId } from '../../../packages/shared/src/nigeria-areas.mjs';
 import { mealTotals } from '../../../packages/shared/src/eats-meals.mjs';
 import { createEatsTransport } from '../public/eats/transport.mjs';
 const uuid = (n) => `00000000-0000-4000-a000-${String(n).padStart(12, '0')}`;
@@ -17,7 +18,7 @@ const flush = () => new Promise((resolve) => setImmediate(resolve));
 function fixture() {
   let now = 1000, key = 0, restaurant = structuredClone(store);
   const writes = [], api = { async request(path) {
-    if (path === '/eats/restaurants') return { restaurants: [restaurant], areas: [{ id: 'wuse-ii', name: 'Wuse II' }] };
+    if (path === '/eats/restaurants' || path.startsWith('/eats/restaurants?')) return { restaurants: [restaurant], areas: [{ id: 'wuse-ii', name: 'Wuse II' }] };
     if (path.startsWith('/eats/restaurants/')) return { store: restaurant, menu };
     if (path.startsWith('/eats/orders/')) return { order };
     if (path === '/eats/orders') return { orders: [order], nextBefore: null };
@@ -104,7 +105,14 @@ const html = await readFile(new URL('../public/eats.html', import.meta.url), 'ut
 const imports = (source) => source
   .replace("'../dashboard/dom.mjs'", `'${new URL('../public/dashboard/dom.mjs', import.meta.url)}'`)
   .replace("'/shared/eats.mjs'", `'${new URL('../../../packages/shared/src/eats.mjs', import.meta.url)}'`)
+  .replace("'/shared/nigeria-areas.mjs'", `'${new URL('../../../packages/shared/src/nigeria-areas.mjs', import.meta.url)}'`)
+  .replace("'/shared/locations.mjs'", `'${new URL('../../../packages/shared/src/locations.mjs', import.meta.url)}'`)
+  .replace("'../dashboard/geolocation.mjs'", `'${new URL('../public/dashboard/geolocation.mjs', import.meta.url)}'`)
+  .replace("'./location-fields.mjs'", `'data:text/javascript;base64,${Buffer.from(locationSource).toString('base64')}'`)
   .replace("'/shared/demo-booking.mjs'", `'${new URL('../../../packages/shared/src/demo-booking.mjs', import.meta.url)}'`);
+const locationSource = (await readFile(new URL('../public/eats/location-fields.mjs', import.meta.url), 'utf8'))
+  .replace("'../dashboard/dom.mjs'", `'${new URL('../public/dashboard/dom.mjs', import.meta.url)}'`)
+  .replace("'/shared/nigeria-areas.mjs'", `'${new URL('../../../packages/shared/src/nigeria-areas.mjs', import.meta.url)}'`);
 const mealSource = imports(await readFile(new URL('../public/eats/meal-view.mjs', import.meta.url), 'utf8'));
 const viewSource = imports(await readFile(new URL('../public/eats/view.mjs', import.meta.url), 'utf8'))
   .replace("'./meal-view.mjs'", `'data:text/javascript;base64,${Buffer.from(mealSource).toString('base64')}'`);
@@ -133,7 +141,7 @@ test('shipped Eats page connects menu buttons, delivery form and checkout to the
   assert.equal(node('shopping').hidden, false);
   node('menu-list').children[0].children[1].children[2].handlers.click();
   assert.equal(f.c.snapshot().cart[0].quantity, 1);
-  node('address').value = quote.address.line; node('area').value = quote.address.areaId;
+  node('address').value = quote.address.line; node('state').value = 'fct'; node('town').value = 'Wuse II';
   node('checkout-form').handlers.submit({ preventDefault() {} }); await flush();
   assert.equal(node('quote').hidden, false); assert.equal(node('place').disabled, false);
   assert.deepEqual(f.writes.at(-1).data.address, quote.address);
@@ -194,7 +202,7 @@ for (const sellerType of ['restaurant', 'food_vendor', 'home_kitchen']) test(`we
   node('store-type').value = sellerType; node('store-type').handlers.change();
   assert.equal(node('store-address-row').hidden, privateKitchen);
   assert.equal(node('store-address').required, !privateKitchen);
-  node('store-address').value = '17 Fictional Street Wuse II';
+  node('store-address').value = '17 Fictional Street Wuse II'; node('store-state').value = 'fct'; node('store-town').value = 'Wuse II'; node('store-town').handlers.input();
   node('store-minimum').value = '0'; node('store-fee').value = '1500';
   node('store-form').handlers.submit({ preventDefault() {} }); await flush();
   assert.equal(f.writes.at(-1).data.details.address, privateKitchen ? '' : '17 Fictional Street Wuse II');
@@ -210,7 +218,7 @@ function mealFixture() {
   f.api.request = async (path) => {
     reads.push(path);
     if (path.startsWith('/eats/foods?')) return { foods, foodCount: foods.length, nextOffset: null, area: { id: 'wuse-ii', name: 'Wuse II' } };
-    if (path === '/eats/restaurants') return { restaurants: [store, second], areas: [{ id: 'wuse-ii', name: 'Wuse II' }] };
+    if (path === '/eats/restaurants' || path.startsWith('/eats/restaurants?')) return { restaurants: [store, second], areas: [{ id: 'wuse-ii', name: 'Wuse II' }] };
     if (path === '/eats/orders') return { orders, nextBefore: null };
     return oldRead(path);
   };
@@ -223,7 +231,7 @@ test('shipped meal builder asks for location first, searches menu dishes, combin
   await f.c.navigate('browse');
   assert.equal(node('meal-builder').hidden, true); assert.equal(node('kitchen-browser').hidden, true);
   assert.equal(f.reads.some((p) => p.startsWith('/eats/foods')), false);
-  node('meal-address').value = quote.address.line; node('meal-area').value = 'wuse-ii';
+  node('meal-address').value = quote.address.line; node('meal-state').value = 'fct'; node('meal-town').value = 'Wuse II';
   node('meal-location-form').handlers.submit({ preventDefault() {} }); await flush();
   assert.equal(node('meal-builder').hidden, false); assert.equal(node('meal-location-form').hidden, true);
   node('meal-query').value = 'jollof and plantain'; node('meal-search-form').handlers.submit({ preventDefault() {} }); await flush();
@@ -294,4 +302,75 @@ test('loaded dish pages refresh availability and a removed individual kitchen ca
   const currentRead = f.api.request;
   f.api.request = async (path) => { if (path.startsWith('/eats/restaurants/')) throw Object.assign(new Error('Kitchen unavailable'), { status: 404 }); return currentRead(path); };
   assert.equal(await f.c.reviewMeal(), true); assert.equal(f.c.snapshot().restaurant, null); assert.ok(f.c.snapshot().mealCheckout);
+});
+
+
+test('nationwide Eats asks for a state and town, keeps incomplete typing, and searches the chosen locality', async (t) => {
+  const node = dom(t), f = mealFixture(), view = createEatsView(f.c); f.c.subscribe(() => view.render(f.c.snapshot()));
+  await f.c.navigate('browse');
+  assert.equal(node('meal-state').children.length, 38);
+  node('meal-state').value = 'lagos'; node('meal-town').value = 'Ikorodu'; node('meal-address').value = '20 Fictional Road';
+  node('meal-location-form').handlers.submit({ preventDefault() {} }); await flush();
+  assert.equal(f.c.snapshot().address.areaId, foodAreaId('lagos', 'Ikorodu'));
+  assert.ok(f.reads.some((path) => path.includes(encodeURIComponent(foodAreaId('lagos', 'Ikorodu')))));
+  assert.match(node('meal-destination-text').textContent, /Ikorodu, Lagos/);
+  node('state').value = 'kaduna'; node('state').handlers.change();
+  node('town').value = 'Z'; node('town').handlers.input();
+  assert.equal(node('state').value, 'kaduna'); assert.equal(node('town').value, 'Z');
+  node('town').value = 'Zaria'; node('town').handlers.input();
+  assert.equal(f.c.snapshot().address.areaId, foodAreaId('kaduna', 'Zaria'));
+});
+
+test('nationwide kitchen creation starts blank and delivery coverage is explicit and local', async (t) => {
+  const node = dom(t), f = fixture(), view = createEatsView(f.c); f.c.subscribe(() => view.render(f.c.snapshot()));
+  await f.c.navigate('store');
+  assert.equal(node('store-state').value, ''); assert.equal(node('store-town').value, '');
+  assert.equal(node('store-delivery-areas').children.length, 0);
+  node('store-state').value = 'oyo'; node('store-town').value = 'Ibadan'; node('store-town').handlers.input();
+  assert.equal(node('store-delivery-areas').children.length, 1);
+  node('coverage-state').value = 'oyo'; node('coverage-town').value = 'Akobo'; node('coverage-add').handlers.click();
+  assert.equal(node('store-delivery-areas').children.length, 2);
+  node('store-type').value = 'home_kitchen'; node('store-form').handlers.submit({ preventDefault() {} }); await flush();
+  assert.deepEqual(f.writes.at(-1).data.details.deliveryAreaIds, [foodAreaId('oyo', 'Ibadan'), foodAreaId('oyo', 'Akobo')]);
+  assert.equal(f.writes.at(-1).data.details.address, ''); assert.equal(f.writes.at(-1).data.details.dispatchPoint, null);
+});
+
+test('kitchen pickup GPS needs an explicit action and is private in the owner command', async (t) => {
+  const node = dom(t), f = fixture(); let locates = 0;
+  const point = { lat: 6.6018, lng: 3.3515 }, geolocation = { supported: () => true, async locate() { locates++; return { coords: { latitude: point.lat, longitude: point.lng, accuracy: 20 } }; } };
+  let saved = null; const originalRead = f.api.request;
+  f.api.request = async (path) => path === '/eats/store' ? { store: saved, menu: [], areas: [] } : path.startsWith('/eats/orders?') ? { orders: [], nextBefore: null } : originalRead(path);
+  f.api.command = async (path, data, key) => { f.writes.push({ path, data, key }); saved = { ...store, ...data.details, version: (saved?.version ?? 0) + 1 }; return { store: saved, menu: [] }; };
+  const view = createEatsView(f.c, { geolocation }); f.c.subscribe(() => view.render(f.c.snapshot())); await f.c.navigate('store');
+  assert.equal(locates, 0); node('store-state').value = 'lagos'; node('store-town').value = 'Ikeja'; node('store-town').handlers.input();
+  await node('dispatch-locate').handlers.click(); assert.equal(locates, 1);
+  node('store-form').handlers.submit({ preventDefault() {} }); await flush();
+  assert.deepEqual(f.writes.at(-1).data.details.dispatchPoint, point);
+  assert.equal(node('dispatch-status').textContent.includes(String(point.lat)), false);
+  node('dispatch-clear').handlers.click(); node('store-form').handlers.submit({ preventDefault() {} }); await flush();
+  assert.equal(f.writes.at(-1).data.details.dispatchPoint, null);
+});
+
+test('a delayed kitchen GPS response cannot populate a different account', async (t) => {
+  const node = dom(t), f = fixture(), pending = deferred();
+  const view = createEatsView(f.c, { geolocation: { supported: () => true, locate: () => pending.promise } }); f.c.subscribe(() => view.render(f.c.snapshot())); await f.c.navigate('store');
+  const locate = node('dispatch-locate').handlers.click();
+  f.c.context({ ...user, id: uuid(80) }); await f.c.navigate('store');
+  pending.resolve({ coords: { latitude: 6.6018, longitude: 3.3515, accuracy: 20 } }); await locate;
+  assert.match(node('dispatch-status').textContent, /No private pickup location/);
+  assert.equal(node('store-state').value, ''); assert.equal(node('store-town').value, '');
+});
+
+test('kitchen town filtering queries the server and leaves the delivery address and meal intact', async (t) => {
+  const node = dom(t), f = mealFixture(), view = createEatsView(f.c); f.c.subscribe(() => view.render(f.c.snapshot()));
+  await f.c.navigate('browse'); await f.c.confirmDelivery(quote.address); f.c.mealQuantity(f.foods[0], 1);
+  const initialReads = f.reads.length;
+  node('state-filter').value = 'lagos'; node('town-filter').value = 'Ikeja';
+  assert.equal(f.reads.length, initialReads);
+  node('kitchen-filter-apply').handlers.click(); await flush();
+  assert.ok(f.reads.some((path) => path.startsWith('/eats/restaurants?') && new URL(path, 'https://test.invalid').searchParams.get('areaId') === foodAreaId('lagos', 'Ikeja')));
+  assert.deepEqual(f.c.snapshot().address, quote.address); assert.equal(f.c.snapshot().mealBasket.length, 1);
+  assert.match(node('kitchen-filter-status').textContent, /Ikeja, Lagos/);
+  node('kitchen-filter-clear').handlers.click(); await flush();
+  assert.equal(f.c.snapshot().catalogAreaId, ''); assert.equal(node('state-filter').value, ''); assert.equal(node('town-filter').value, '');
 });

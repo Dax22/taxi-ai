@@ -5,7 +5,7 @@ import { harness, participants, PASSWORD, requestRide } from './helpers.mjs';
 import { removeEatsFixtureTables, removeGuestFixtureTables } from './migration-fixtures.mjs';
 import { SCHEMA_VERSION } from '../src/infrastructure/database.mjs';
 
-const details = { name: 'Test Abuja Kitchen', cuisine: 'Nigerian', description: 'Fictional kitchen for ordering tests.', address: '10 Fictional Road, Wuse II', areaId: 'wuse-ii', prepMinutes: 25, minimumKobo: 100_000, deliveryFeeKobo: 150_000 };
+const details = { name: 'Test Abuja Kitchen', cuisine: 'Nigerian', description: 'Fictional kitchen for ordering tests.', address: '10 Fictional Road, Wuse II', areaId: 'wuse-ii', deliveryAreaIds: ['wuse-ii', 'maitama'], prepMinutes: 25, minimumKobo: 100_000, deliveryFeeKobo: 150_000 };
 const item = { name: 'Jollof rice and chicken', description: 'Rice, tomato, peppers and grilled chicken. Test menu.', category: 'Meals', priceKobo: 250_000, available: true };
 
 test('schema 18 upgrades add empty Eats storage while preserving existing accounts, documents and journeys', async (t) => {

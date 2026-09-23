@@ -54,7 +54,7 @@ and document IDs/hashes/expiry dates are recorded together in an application eve
 Downloads prove access, not that a person performed a meaningful check. The prototype
 trusts the administrator’s attestations; it cannot establish document authenticity.
 
-Expiry is the exclusive end of the stated day in Abuja (UTC+1). Eligibility is
+Expiry is the exclusive end of the stated day in Nigeria (WAT, UTC+1). Eligibility is
 checked on going online, availability updates and matching, selecting a new request,
 customer booking confirmation, and starting a trip. Expiry removes online
 availability. A trip already in progress can still finish; history, earnings,

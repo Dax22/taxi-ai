@@ -4,7 +4,7 @@ import { RIDE_STATUS_LABELS } from '/shared/trip-lifecycle.mjs';
 import { vehicleCategory } from '/shared/vehicle-categories.mjs';
 import { vehiclePresentation } from '/shared/vehicle-profile.mjs';
 
-const dates = [{ name: 'from', label: 'From · Abuja date', type: 'date' }, { name: 'to', label: 'To · Abuja date', type: 'date' }];
+const dates = [{ name: 'from', label: 'From · Nigeria date (WAT)', type: 'date' }, { name: 'to', label: 'To · Nigeria date (WAT)', type: 'date' }];
 const search = { name: 'q', label: 'Search', type: 'search', placeholder: 'Name or reference' };
 const status = { name: 'status', label: 'Journey status', options: [['all', 'All statuses'], ...Object.entries(RIDE_STATUS_LABELS)] };
 const payment = { name: 'payment', label: 'Payment', options: [['all', 'All payments'], ['not_due', 'Not due'], ['unpaid', 'Unpaid'], ['pending', 'Pending'], ['failed', 'Failed'], ['paid', 'Paid · simulated']] };
@@ -19,7 +19,7 @@ function tripTable(items, caption = 'Journeys, newest request first') {
   }), caption);
 }
 function reportingNote(range) {
-  return el('p', `Requests created ${range.from} to ${range.to}, inclusive, in Abuja time. Trip and payment statuses are current at refresh. Completed fares count only completed trips; they are not platform revenue or driver payouts.`, 'definition-note');
+  return el('p', `Requests created ${range.from} to ${range.to}, inclusive, in Nigeria time (WAT). Trip and payment statuses are current at refresh. Completed fares count only completed trips; they are not platform revenue or driver payouts.`, 'definition-note');
 }
 function summaryCards(summary) {
   return cards([
@@ -108,7 +108,7 @@ function trip(data) {
     ['Requested', date(item.createdAt)], ['Completed', date(item.completedAt)], ['Payment status', badge(item.paymentStatus)], ['Payment reference', item.paymentReference ?? 'Not available']]));
   box.append(el('p', 'An agreed fare is not proof of payment. Payment status on this preview is simulated.', 'definition-note'));
   fragment.append(box);
-  const columns = el('div', null, 'two-column even-columns'), timeline = panel('Journey timeline', 'Recorded operational events · Abuja time'), list = el('ol', null, 'timeline');
+  const columns = el('div', null, 'two-column even-columns'), timeline = panel('Journey timeline', 'Recorded operational events · Nigeria time (WAT)'), list = el('ol', null, 'timeline');
   const events = [{ type: 'Requested', createdAt: item.createdAt, actorName: item.customer.name },
     ...(item.matchedAt ? [{ type: 'Driver assigned', createdAt: item.matchedAt, actorName: item.driver?.name }] : []), ...data.activity];
   for (const event of events) {
@@ -120,7 +120,7 @@ function trip(data) {
 }
 function analytics(data, route) {
   const fragment = el('div'); fragment.append(filterForm(route, dates, data.range), summaryCards(data.summary));
-  const journeys = panel('How journeys are moving', 'Request cohort · daily activity in Abuja time'); journeys.append(trend(data.daily)); fragment.append(journeys);
+  const journeys = panel('How journeys are moving', 'Request cohort · daily activity in Nigeria time (WAT)'); journeys.append(trend(data.daily)); fragment.append(journeys);
   const fares = panel('Fare and payment trends', 'Naira · completed fares and simulated payments, grouped by request date'); fares.append(trend(data.daily, true)); fragment.append(fares);
   const columns = el('div', null, 'two-column even-columns'), distribution = panel('Journey outcomes', 'Current status of requests from the selected period'); distribution.append(statuses(data.statuses));
   const performance = panel('Service & payment summary'); performance.append(detailsList([

@@ -23,14 +23,14 @@ review workspace, linked from the sidebar.
 
 | Metric | Definition |
 | --- | --- |
-| Request cohort | Requests created within the chosen inclusive Abuja dates; default 30 days, maximum 366; statuses are current at refresh |
+| Request cohort | Requests created within the chosen inclusive Nigeria (WAT) dates; default 30 days, maximum 366; statuses are current at refresh |
 | Account totals | All current non-admin accounts; new accounts are counted within the selected period |
 | Completed trip cost / driving fares | Sum of agreed fares for completed trips only; passenger and driver participation are shown separately |
 | Paid · simulated | One current paid simulation per completed journey; failed/retried attempts do not multiply the total |
 | Outstanding · simulated | Completed fares whose current payment status is unpaid, pending or failed |
 | Completion / cancellation rate | Current completed / cancelled requests divided by every request in the cohort; expiration is separate; empty denominators display a dash |
 | Average completed fare | Completed fares divided by completed trip count, rounded down to one kobo |
-| Daily chart / routes | Same request cohort; zero-filled Abuja days, exact value tables and eight most-requested routes |
+| Daily chart / routes | Same request cohort; zero-filled WAT days, exact value tables and eight most-requested routes |
 | Profile totals | Lifetime participation totals; filtering its trip table does not change these totals |
 
 All amounts are NGN. Individual fares remain integer kobo; totals use BigInt and
@@ -82,7 +82,7 @@ Uber's [RideCheck explanation](https://www.uber.com/us/en/newsroom/ridecheck/)
 describes trip GPS and phone sensors detecting possible crashes, unusual stops
 and trips going off course, followed by check-ins and support options. This
 historical US announcement does not establish availability or emergency-service
-integration in Abuja.
+integration in Nigeria.
 
 Taxi Ai can implement comparable categories of oversight in stages. The proposal
 below is our design, not a representation of Uber's internal system. No device

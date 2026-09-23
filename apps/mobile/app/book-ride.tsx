@@ -28,7 +28,7 @@ function BookingScreen() {
     { text: 'Keep journey', style: 'cancel' }, { text: 'Cancel journey', style: 'destructive', onPress: () => void c.cancel(ride) },
   ]);
   const shown = settings?.current.length ? settings.current : s.lastRide ? [s.lastRide] : [];
-  return <Screen><Pill>RIDES & DELIVERIES · ABUJA</Pill><Heading title="Where to?" subtitle="Your route. Your choice. A fare you both agree."/>
+  return <Screen><Pill>RIDES & DELIVERIES · NIGERIA</Pill><Heading title="Where to?" subtitle="Your route. Your choice. A fare you both agree."/>
     <Text style={styles.small}>Development preview · no live rides or payments.</Text><Notice message={s.error}/>
     {s.uncertain && <Card><Text style={styles.h2}>Let’s confirm that action.</Text><Text style={styles.body}>The connection ended before confirmation arrived. Retrying reuses the original action to avoid creating a duplicate request.</Text>
       <Button title={s.uncertain === 'request' ? 'Retry the same request' : 'Retry the same cancellation'} busy={!!s.busy} onPress={() => void c.retry()}/></Card>}
@@ -46,11 +46,11 @@ function BookingScreen() {
         <Text style={styles.small}>{vehicleCategory(s.category)?.name} preview limit: {policy?.maxLoadKg} kg. Matching also checks the driver’s approved load capacity. Confirm the load fits before collection.</Text><Text style={styles.small}>After pickup, share the drop-off code privately with your recipient. They give it to the driver at handover. This preview does not contact the recipient.</Text>
       </Card>}
       {!s.mode ? <Card><Text style={styles.h2}>Route planning is unavailable.</Text><Text style={styles.body}>Address search and sample routes are disabled in this environment. Please check again later.</Text></Card> : <>
-        <View style={styles.row}>{settings.online.enabled && <Button title="Abuja address" secondary={s.mode !== 'route'} disabled={locked} onPress={() => c.chooseMode('route')}/>}
+        <View style={styles.row}>{settings.online.enabled && <Button title="Search addresses" secondary={s.mode !== 'route'} disabled={locked} onPress={() => c.chooseMode('route')}/>}
           {settings.allowSample && <Button title="Sample journey" secondary={s.mode !== 'sample'} disabled={locked} onPress={() => c.chooseMode('sample')}/>}</View>
         <View style={[look.columns, wide && look.wide]}><View style={[look.column, wide && look.wideColumn]}><Card><Text style={styles.h2}>Plan your journey</Text>
           {s.mode === 'route' ? <>
-            {!s.consent ? <><Text style={styles.body}>Search Abuja streets and landmarks. Search terms go to {settings.online.searchHost ?? 'the configured address provider'}; selected pickup and destination coordinates go to {settings.online.routeHost ?? 'the configured routing provider'} for a route preview.</Text>
+            {!s.consent ? <><Text style={styles.body}>Search streets and landmarks across Nigeria. Include the town and state for more precise results. Search terms go to {settings.online.searchHost ?? 'the configured address provider'}; selected pickup and destination coordinates go to {settings.online.routeHost ?? 'the configured routing provider'} for a route preview.</Text>
               <Text style={styles.small}>Search happens when you tap Search. This screen does not track your phone’s location.</Text><Button title="Enable address search" disabled={disabled} onPress={() => c.consent()}/></>
               : <><PlaceSearch endpoint="pickup" state={s} controller={c} disabled={disabled}/><PlaceSearch endpoint="destination" state={s} controller={c} disabled={disabled}/></>}
           </> : <><Text style={styles.body}>Try the request flow with sample Abuja areas and fictional fares.</Text>

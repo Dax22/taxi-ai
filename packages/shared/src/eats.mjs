@@ -2,6 +2,11 @@
 export const EATS_CUISINES = Object.freeze(['Nigerian', 'Grills', 'Burgers', 'Pizza', 'Healthy', 'Bakery', 'Drinks']);
 export const EATS_STATUS = Object.freeze({ placed: 'Waiting for the kitchen', accepted: 'Order accepted', preparing: 'Preparing your food', ready: 'Ready for pickup', assigned: 'Courier collecting your food', picked_up: 'On the way', arrived: 'Your courier is here', delivered: 'Completed', cancelled: 'Cancelled', rejected: 'Declined by kitchen' });
 export const EATS_SELLERS = Object.freeze({ restaurant: 'Restaurant', food_vendor: 'Food vendor', home_kitchen: 'Home kitchen' });
+export const EATS_DISPATCH_RADIUS_METERS = 10_000;
+// Missing coverage on a saved pre-national profile keeps its original preview
+// coverage. It must never grow when nationwide locations become available.
+export const EATS_LEGACY_AREA_IDS = Object.freeze(['wuse-ii', 'maitama', 'garki', 'asokoro', 'jabi', 'gwarinpa', 'airport']);
+export function deliveryAreas(store) { return store.deliveryAreaIds ?? (EATS_LEGACY_AREA_IDS.includes(store.areaId) ? EATS_LEGACY_AREA_IDS : [store.areaId]); }
 /** Only restaurants publish street addresses; other sellers share order-specific collection points. */
 export function isPrivateKitchen(sellerType) { return sellerType === 'food_vendor' || sellerType === 'home_kitchen'; }
 export function foodAvailable(item) { return item.available && (item.portionsRemaining == null || item.portionsRemaining > 0); }

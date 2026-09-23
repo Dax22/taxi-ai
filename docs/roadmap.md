@@ -109,7 +109,7 @@ Audio calling is implemented in the following milestone.
 Follow [the voice guide](voice.md) for manual browser and cross-network validation.
 No relay service is provisioned and no working-audio claim is made by automated tests.
 
-## 2e — Abuja locations (implemented; provider/browser/GPS review pending)
+## 2e — Nigeria-wide locations (implemented; provider/browser/GPS review pending)
 
 - Explicit online-map consent, manual address search and keyboard/click map pins.
 - Server-owned road-route quotes with distance, estimated driving time and an
@@ -117,6 +117,9 @@ No relay service is provisioned and no working-audio claim is made by automated 
 - Driver-controlled GPS on confirmed trips, participant-only visibility and
   session/window ownership, stale indicators and automatic expiry/cleanup.
 - Configurable Photon/OSRM/tile adapters and schema-five data preservation.
+- Nigeria-wide boundary validation, state/town Eats locations, explicit local
+  coverage and private pickup points for nearby food couriers. Schema 23 preserves
+  earlier records; [nationwide acceptance](nationwide.md) remains part of release review.
 
 Follow [the location guide](locations.md) for public-provider limits and manual
 checks. No claim of verified live routes, browser GPS or production tracking is

@@ -1,5 +1,6 @@
 import { EATS_STATUS, EATS_CUISINES, EATS_SELLERS, eatsTotals } from './eats.mjs';
 import { mealTotals } from './eats-meals.mjs';
+import { insideNigeria } from './locations.mjs';
 const object = (v) => v && typeof v === 'object' && !Array.isArray(v);
 const string = (v) => typeof v === 'string';
 const id = (v) => string(v) && /^[a-f0-9-]{36}$/.test(v);
@@ -11,12 +12,14 @@ function store(s) {
   valid(['name','description','address','areaId'].every((key) => string(s[key])) && EATS_CUISINES.includes(s.cuisine));
   seller(s); valid(['deliveryEnabled', 'pickupEnabled'].every((k) => s[k] === undefined || typeof s[k] === 'boolean'));
   valid(s.deliveryAreaIds === undefined || Array.isArray(s.deliveryAreaIds) && s.deliveryAreaIds.length <= 50 && s.deliveryAreaIds.every(string));
+  valid(s.dispatchPoint == null || object(s.dispatchPoint) && insideNigeria(s.dispatchPoint) && Object.keys(s.dispatchPoint).every((key) => ['lat', 'lng'].includes(key)));
   valid(s.coverPhotoId == null || id(s.coverPhotoId));
   valid(integer(s.prepMinutes) && integer(s.minimumKobo) && integer(s.deliveryFeeKobo));
 }
 function menu(m) { valid(Array.isArray(m) && m.length <= 100); for (const i of m) valid(object(i) && id(i.id) && string(i.name) && string(i.description) && string(i.category) && integer(i.priceKobo) && typeof i.available === 'boolean' && (i.portionsRemaining == null || integer(i.portionsRemaining) && i.portionsRemaining <= 1000) && (i.allergens === undefined || string(i.allergens)) && (i.photoId == null || id(i.photoId))); }
 function snapshot(o) {
   valid(object(o) && id(o.id) && object(o.restaurant) && id(o.restaurant.id) && ['name','address','areaId'].every((k) => string(o.restaurant[k])));
+  valid(!Object.hasOwn(o.restaurant, 'dispatchPoint'));
   seller(o.restaurant); valid(o.fulfillment === undefined || ['delivery', 'pickup'].includes(o.fulfillment));
   valid(object(o.address) && string(o.address.areaId) && (o.address.line === undefined || string(o.address.line)) && string(o.instructions));
   valid(o.isDemo === true && o.payment?.method === 'test' && o.payment.status === 'not_charged');
@@ -42,7 +45,7 @@ export function readEatsResponse(body) {
   if (Object.hasOwn(body, 'foods')) {
     known = true; valid(Array.isArray(body.foods) && body.foods.length <= 60 && integer(body.foodCount) && body.foodCount <= 20_000 && body.foodCount >= body.foods.length && (body.nextOffset === null || integer(body.nextOffset) && body.nextOffset > 0 && body.nextOffset < body.foodCount));
     valid(object(body.area) && string(body.area.id) && string(body.area.name));
-    for (const food of body.foods) { valid(object(food)); store(food.store); menu([food.item]); }
+    for (const food of body.foods) { valid(object(food)); store(food.store); valid(!Object.hasOwn(food.store, 'dispatchPoint')); menu([food.item]); }
   }
   if (Object.hasOwn(body, 'checkout')) {
     known = true; const c = body.checkout;
@@ -52,7 +55,7 @@ export function readEatsResponse(body) {
     const totals = mealTotals(c.quotes); valid(object(c.totals) && Object.keys(totals).every((key) => c.totals[key] === totals[key]));
   }
   if (Object.hasOwn(body, 'photo')) { known = true; const p = body.photo; valid(object(p) && id(p.id) && p.mimeType === 'image/jpeg' && string(p.base64) && p.base64.length > 0 && p.base64.length <= 466_668 && p.base64.length % 4 === 0 && /^[A-Za-z0-9+/]+={0,2}$/.test(p.base64)); }
-  for (const key of ['restaurants', 'stores']) if (Object.hasOwn(body, key)) { known = true; valid(Array.isArray(body[key]) && body[key].length <= 200); body[key].forEach(store); }
+  for (const key of ['restaurants', 'stores']) if (Object.hasOwn(body, key)) { known = true; valid(Array.isArray(body[key]) && body[key].length <= 200); body[key].forEach((s) => { store(s); if (key === 'restaurants') valid(!Object.hasOwn(s, 'dispatchPoint')); }); }
   if (Object.hasOwn(body, 'store')) { known = true; if (body.store !== null) store(body.store); menu(body.menu); }
   if (Object.hasOwn(body, 'quote')) { known = true; snapshot(body.quote); valid(integer(body.quote.expiresAt)); }
   if (Object.hasOwn(body, 'order')) { known = true; order(body.order); }
@@ -61,7 +64,7 @@ export function readEatsResponse(body) {
   if (Object.hasOwn(body, 'current')) {
     known = true; valid(Array.isArray(body.current) && body.current.length <= 1); body.current.forEach(order);
     valid(typeof body.online === 'boolean' && typeof body.eligible === 'boolean' && body.isDemo === true && Array.isArray(body.available) && body.available.length <= 100);
-    for (const j of body.available) valid(object(j) && id(j.id) && integer(j.version) && object(j.restaurant) && id(j.restaurant.id) && string(j.restaurant.name) && string(j.restaurant.address) && object(j.deliveryArea) && string(j.deliveryArea.name) && integer(j.deliveryFeeKobo));
+    for (const j of body.available) valid(object(j) && id(j.id) && integer(j.version) && object(j.restaurant) && !Object.hasOwn(j.restaurant, 'dispatchPoint') && id(j.restaurant.id) && string(j.restaurant.name) && string(j.restaurant.address) && object(j.deliveryArea) && string(j.deliveryArea.name) && integer(j.deliveryFeeKobo));
   }
   if (body.areas !== undefined) valid(Array.isArray(body.areas) && body.areas.length <= 50 && body.areas.every((a) => object(a) && string(a.id) && string(a.name)));
   valid(known); return body;

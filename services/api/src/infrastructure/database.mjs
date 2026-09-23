@@ -10,6 +10,7 @@ migrations.push('019_eats.sql');
 migrations.push('020_home_kitchens.sql');
 migrations.push('021_meal_checkout.sql');
 migrations.push('022_guest_rides.sql');
+migrations.push('023_nationwide_eats.sql');
 export const SCHEMA_VERSION = migrations.length;
 
 export function transaction(db, run) {

@@ -38,7 +38,7 @@ homepage fare demonstration also remains available.
 
 Only local runtime enables sample matching. Staging rejects sample availability
 and new sample ride requests, and hides their controls. Hosted testing needs a
-configured map provider, route quotes and drivers with fresh Abuja device positions.
+configured map provider, route quotes and drivers with fresh Nigerian device positions.
 Existing saved sample journeys remain readable and can finish their prior flow.
 Alibaba Cloud is the selected future host; setup is paused while payment is resolved.
 No cloud resource or paid service is required for the local sample journey.
@@ -54,7 +54,7 @@ No cloud resource or paid service is required for the local sample journey.
 | Request deadline | Unclaimed requests expire at exactly five minutes |
 | Ordering | Weighted pickup proximity and customer waiting time, then oldest request and ID; up to 50 eligible requests. See [ranking policy](smart-matching.md). |
 | GPS freshness | Captured less than 30 seconds ago; at most 5 seconds of future clock skew |
-| GPS quality | Inside the Abuja preview rectangle; reported accuracy at most 200 metres |
+| GPS quality | Inside Nigeria; reported accuracy at most 200 metres |
 | Availability lease | Last accepted heartbeat less than 60 seconds ago; GPS freshness also applies |
 | Browser publishing | At most once per 10 seconds; reacquires a stationary GPS fix before it ages out |
 | Stop | Explicit Offline, hidden/closed page, claim, lost session/approval, stale GPS or lease expiry |
@@ -166,7 +166,7 @@ Before treating the preview as ready, manually check:
    keyboard navigation, status messages and usable Offline controls.
 2. The sample flow above; mismatched areas see no request. Leave a request unclaimed
    for five minutes and verify expiry, history and a new customer request.
-3. GPS on an Abuja device over HTTPS: approve/deny permission, check near/far pickup
+3. GPS on a device in Nigeria over HTTPS: approve/deny permission, check near/far pickup
    matching, then hide the page, revoke permission, interrupt the network and stop.
 4. Two drivers claim the same request; only one starts the conversation. Check that
    the other driver cannot access its exact pickup, chat, call or fare records.

@@ -1,8 +1,10 @@
 import * as Location from 'expo-location';
 import type { Position } from '../../../../packages/shared/src/mobile-journeys.mjs';
-export async function currentPosition(ask: boolean): Promise<Position> {
+export async function currentPosition(ask: boolean, purpose: 'work' | 'kitchen' = 'work'): Promise<Position> {
   const permission=ask ? await Location.requestForegroundPermissionsAsync() : await Location.getForegroundPermissionsAsync();
-  if(!permission.granted) throw new Error('Location access is needed to match nearby jobs. Allow it in your phone settings, then choose Go online.');
+  if(!permission.granted) throw new Error(purpose === 'kitchen'
+    ? 'Allow location access in your phone settings, then choose Use my current location again.'
+    : 'Location access is needed to match nearby jobs. Allow it in your phone settings, then choose Go online.');
   let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
     const fix=await Promise.race([Location.getCurrentPositionAsync({accuracy:Location.Accuracy.High}),new Promise<never>((_,reject)=>{

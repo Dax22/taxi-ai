@@ -184,13 +184,18 @@ SDP and ownership hashes, releases both participant locks and preserves a metada
 history entry. Call actions never alter fares. See [the voice guide](../../docs/voice.md)
 for all endpoints, timeouts, local testing and optional coturn configuration.
 
-## Abuja locations
+## Nigeria-wide locations
 
 `modules/locations/` owns route quotes and explicit driver sharing. Its injected
 map adapter supplies Photon address results and OSRM road routes; all pricing is
 computed server-side with a clearly labelled illustrative policy. Provider I/O
 runs outside database transactions and rechecks authorization before saving.
 The ride service binds a nonexpired quote inside the ride-creation transaction.
+Nigeria-wide search and GPS use the shared country polygon rather than the former
+Abuja rectangle. Driver matching remains local to the pickup. Eats uses canonical
+state/town IDs, explicit seller coverage and private pickup coordinates for local
+courier eligibility; schema 23 preserves existing records. See
+[nationwide contracts and limitations](../../docs/nationwide.md).
 
 Sharing starts only after booking and only for its assigned approved driver.
 Updates are bound to a session and browser-window nonce, with monotonic sequences,

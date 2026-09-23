@@ -19,7 +19,7 @@ works without provider credentials or Alibaba hosting.
    or **Simulate failure**. Try failure first: no receipt is issued and no paid
    earnings are counted. **Retry test payment** creates a new reference.
 5. Choose success on the new attempt. Both participants can see the saved receipt
-   with pickup/destination labels, fare, dates in Abuja time and a `SIM-` reference.
+   with pickup/destination labels, fare, dates in Nigeria time (WAT) and a `SIM-` reference.
    **Print / save as PDF** opens the browser's print dialog for this receipt.
    The printed page retains the simulation notice.
 6. In the driver's **Your earnings preview**, inspect gross completed fares,

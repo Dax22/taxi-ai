@@ -172,3 +172,13 @@ test('category changes invalidate both saved and in-flight quotes, including a s
   assert.ok(f.c.snapshot().quote); f.c.setCategory('motorcycle'); assert.equal(f.c.snapshot().quote, null);
   f.c.reset(); assert.equal(f.c.snapshot().vehicleCategory, 'standard');
 });
+
+
+test('the web route planner accepts Lagos and Kano pins while rejecting neighbouring countries', async () => {
+  const f = plannerSetup(); await f.c.setContext(customer, false); f.c.enable();
+  const lagos = { lat: 6.6018, lng: 3.3515, name: 'Ikeja' }, kano = { lat: 12.0022, lng: 8.592, name: 'Kano' };
+  f.c.select('pickup', lagos); f.c.select('destination', kano); await f.c.preview();
+  assert.deepEqual(f.commands[0].data, { pickup: lagos, destination: kano, vehicleCategory: 'standard' });
+  f.c.select('pickup', { lat: 6.3667, lng: 2.4333, name: 'Cotonou' });
+  assert.deepEqual(f.c.snapshot().pickup, lagos); assert.match(f.c.snapshot().error, /Nigeria/);
+});

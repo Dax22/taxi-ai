@@ -10,7 +10,7 @@ with no live transport or payment.
 ## Customer flow
 
 1. Select a vehicle category and add parcel/recipient details for deliveries.
-   Choose **Abuja address**, enable search after reading its provider disclosure,
+   Choose **Nigeria address**, enable search after reading its provider disclosure,
    then explicitly search/select both addresses. Merely typing sends nothing.
    The screen does not request GPS permissions or track the phone.
 2. Review the category fare and endpoints. Passenger trips show road distance and
@@ -41,7 +41,7 @@ The staging tester gate, native rate/body limits and cookie/origin isolation app
 | Method/path | Input | Result |
 | --- | --- | --- |
 | GET `/booking` | none | Enabled providers/hostnames, local sample areas, current customer requests, driver-work/online blockers |
-| POST `/booking/search` | `{query}` | Bounded Abuja results and attribution |
+| POST `/booking/search` | `{query}` | Bounded Nigerian results and attribution |
 | POST `/booking/quotes` | `{pickup:{name,lat,lng},destination:{name,lat,lng}}`, Idempotency-Key | Durable route preview, 15-minute expiry, server suggestion and `{quoteId}` request payload |
 | POST `/booking/sample` | `{pickupId,destinationId}` | Local sample preview; creates no ride |
 | POST `/booking/requests` | `{quoteId}` or local sample IDs, Idempotency-Key | Current customer request, replay marker |
