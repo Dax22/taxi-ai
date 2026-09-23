@@ -52,6 +52,10 @@ const routes = new Map([
   ['/dashboard/sign-in-methods.mjs', ['public/dashboard/sign-in-methods.mjs', 'text/javascript; charset=utf-8']],
   ['/trip-share', ['public/trip-share.html', 'text/html; charset=utf-8']],
   ['/trip-share.mjs', ['public/trip-share.mjs', 'text/javascript; charset=utf-8']],
+  ['/guest-trip', ['public/guest-trip.html', 'text/html; charset=utf-8']],
+  ['/guest-trip.mjs', ['public/guest-trip.mjs', 'text/javascript; charset=utf-8']],
+  ...['guest-rides-panel', 'guest-rides-transport', 'guest-trip-controller'].map((name) => [`/dashboard/${name}.mjs`, [`public/dashboard/${name}.mjs`, 'text/javascript; charset=utf-8']]),
+  ...['guest-rides', 'guest-rides-controller'].map((name) => [`/shared/${name}.mjs`, [`../../packages/shared/src/${name}.mjs`, 'text/javascript; charset=utf-8']]),
   ['/dashboard/safety-controller.mjs', ['public/dashboard/safety-controller.mjs', 'text/javascript; charset=utf-8']],
   ['/dashboard/safety-view.mjs', ['public/dashboard/safety-view.mjs', 'text/javascript; charset=utf-8']],
   ['/dashboard/vehicle-checks.mjs', ['public/dashboard/vehicle-checks.mjs', 'text/javascript; charset=utf-8']],
@@ -140,7 +144,7 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
   const handleGoogleCallback = createGoogleCallback(application, runtime.mode === 'staging');
   const health = createHealth(db);
   const cleanup = setInterval(() => {
-    try { application.rides.sweep(); application.availability.sweep(); application.calls.sweep(); application.locations.sweep(); application.safety.sweep(); application.vehicleChecks.sweep(); application.devices.sweep(); application.googleAuth.sweep(); }
+    try { application.rides.sweep(); application.availability.sweep(); application.calls.sweep(); application.locations.sweep(); application.safety.sweep(); application.guestRides.sweep(); application.vehicleChecks.sweep(); application.devices.sweep(); application.googleAuth.sweep(); }
     catch { telemetry.event('maintenance_failed'); }
     void application.accountEmail.deliverPending().catch(() => telemetry.event('maintenance_failed'));
     void application.notifications.deliverPending().catch(() => telemetry.event('maintenance_failed'));

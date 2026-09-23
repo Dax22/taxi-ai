@@ -24,6 +24,7 @@ import { createSafetyView } from './dashboard/safety-view.mjs';
 import { createVehiclePhotoCheck } from './dashboard/vehicle-checks.mjs';
 import { createAccountModeView, modePreferences } from './dashboard/account-mode-view.mjs';
 import { createGoogleSignIn, consumeGoogleOutcome } from './dashboard/google-auth.mjs';
+import { createGuestRidesPanel } from './dashboard/guest-rides-panel.mjs';
 
 let serverTime = { now: Date.now(), received: performance.now() };
 const client = createApiClient({ onServerTime(now) { serverTime = { now, received: performance.now() }; } });
@@ -78,6 +79,10 @@ const safetyView = createSafetyView({ onAdd: (data) => safety.add(data), onRemov
   onReview: (...args) => safety.review(...args), onSimulate: (...args) => safety.simulate(...args) });
 const safety = createSafetyController({ client, view: safetyView, origin: location.origin,
   copy: (value) => navigator.clipboard.writeText(value) });
+const guests = createGuestRidesPanel({ client, origin: location.origin,
+  now: () => serverTime.now + performance.now() - serverTime.received,
+  onSessionChanged: () => void page.poll() });
+if (document.hidden) guests.pause();
 const vehicleCheck = createVehiclePhotoCheck({client,onReport:(id,checkId)=>safetyView.vehicleMismatch(id,checkId)});
 const view = createDashboardView({
   onEditVehicle: () => page.editVehicle(),
@@ -108,7 +113,7 @@ let storage;
 try { storage = window.sessionStorage; } catch { /* Mode selection remains usable without storage. */ }
 const page = createPageController({ client, activityClient, view, modeView, preferences: modePreferences(storage),
   conversation, conversationView, calls, sharing, availability,
-  planner, payments, onboarding, safety, vehicleCheck, authForm, feedback: {
+  planner, payments, onboarding, safety, vehicleCheck, guests, authForm, feedback: {
     clear() { $('page-error').textContent = ''; $('page-notice').textContent = ''; },
     error(message) { $('page-error').textContent = message; },
     notice(message) { $('page-notice').textContent = message; },
@@ -124,10 +129,10 @@ const page = createPageController({ client, activityClient, view, modeView, pref
 const poll = () => { if (!document.hidden) void page.poll(); };
 $('logout').addEventListener('click', () => page.logout());
 $('refresh').addEventListener('click', () => page.poll());
-document.addEventListener('visibilitychange', () => { if (document.hidden) availability.shutdown(); else poll(); });
-window.addEventListener('pagehide', () => { calls.shutdown(); sharing.shutdown(); availability.shutdown(); safety.reset(); vehicleCheck.reset(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden) { availability.shutdown(); guests.pause(); } else { guests.resume(); poll(); } });
+window.addEventListener('pagehide', () => { calls.shutdown(); sharing.shutdown(); availability.shutdown(); safety.reset(); vehicleCheck.reset(); guests.reset(); });
 window.addEventListener('afterprint', () => document.body.classList.remove('print-receipt'));
-setInterval(() => { view.tick(); conversationView.tick(); calls.tick(); planner.tick(); sharing.tick(); availability.tick(); }, 1000);
+setInterval(() => { view.tick(); conversationView.tick(); calls.tick(); planner.tick(); sharing.tick(); availability.tick(); guests.tick(); }, 1000);
 setInterval(() => { if (!document.hidden || calls.hasMedia()) void calls.poll(); }, 2000);
 setInterval(() => { if (!document.hidden || sharing.sharing()) void sharing.poll(); }, 3000);
 setInterval(poll, 3000);

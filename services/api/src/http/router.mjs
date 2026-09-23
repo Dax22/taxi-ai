@@ -9,6 +9,7 @@ import { callRoutes } from '../modules/calls/routes.mjs';
 import { locationRoutes } from '../modules/locations/routes.mjs';
 import { availabilityRoutes } from '../modules/availability/routes.mjs';
 import { safetyRoutes } from '../modules/safety/routes.mjs';
+import { guestRideRoutes } from '../modules/guest-rides/routes.mjs';
 import { vehicleCheckRoutes } from '../modules/vehicle-checks/routes.mjs';
 import { paymentRoutes } from '../modules/payments/routes.mjs';
 import { adminConsoleRoutes } from '../modules/admin-console/routes.mjs';
@@ -26,6 +27,7 @@ export function createApiRouter(application, { secure = false } = {}) {
   const routes = [...accountEmailRoutes(application.accountEmail, cookie), ...googleAuthRoutes(application.googleAuth, accounts, secure), ...adminConsoleRoutes(application.adminConsole, accounts, cookie), ...deviceSessionRoutes(devices), ...accountRoutes(accounts, cookie), ...driverRoutes(drivers), ...rideRoutes(rides), ...chatRoutes(chat), ...callRoutes(calls), ...locationRoutes(locations), ...availabilityRoutes(availability), ...paymentRoutes(payments), ...safetyRoutes(safety)];
   routes.push(...vehicleCheckRoutes(application.vehicleChecks));
   routes.push(...eatsRoutes(application.eats));
+  routes.push(...guestRideRoutes(application.guestRides));
   return async function handleApi({ request, response, pathname, origin, clientAddress }) {
     const write = request.method === 'POST';
     check(['GET', 'POST'].includes(request.method), 'METHOD_NOT_ALLOWED', 'Use GET or POST.');

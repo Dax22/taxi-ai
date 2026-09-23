@@ -14,6 +14,13 @@ keyboard, accessibility and tablet QA remain pending.
   parcels with recipient details, category pricing and approved capacity matching; explicit Abuja search, route/fare review, shared ride requests,
   same-command retries, current status, registered vehicle and pre-start cancellation.
   Local sample journeys work without live providers. [Booking guide](../../docs/mobile-booking.md).
+- **Book for someone else** on Standard/SUV: identify the adult passenger and confirm
+  their agreement before requesting. The booker negotiates and confirms the fare;
+  assigned drivers see the passenger’s name without their phone number. A confirmed
+  guest journey offers a revocable private link shared manually through the phone’s
+  share menu. It includes pickup details and the PIN for the intended passenger;
+  no automated SMS, guest chat or payment collection is provided. Guest drafts stay
+  in memory, reset on account/category changes and retain the same payload on retry.
 - Separate customer/work activity with current and paginated past journeys.
 - Complete driver applications: guided make/year/model/colour dropdowns, years from
   2000 through the current year, Other fields for unlisted values,

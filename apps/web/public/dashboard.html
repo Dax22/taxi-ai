@@ -149,6 +149,18 @@
           </div><p id="delivery-load-hint" class="small-note"></p><p class="small-note">Confirm the load fits with the driver before collection. Share the drop-off code privately with your recipient after pickup. This preview does not contact the recipient.</p>
         </fieldset></form>
       </section>
+      <section id="passenger-panel" class="account-card" hidden aria-labelledby="passenger-title">
+        <p class="eyebrow">YOUR PASSENGER</p><h2 id="passenger-title">Who is riding?</h2>
+        <form id="passenger-form" class="stack-form" autocomplete="off"><fieldset id="passenger-fields"><legend class="visually-hidden">Choose the passenger</legend>
+          <label for="passenger-kind">Book this ride for</label><select id="passenger-kind"><option value="self">Me</option><option value="guest">Someone else</option></select>
+          <div id="guest-passenger-fields" hidden>
+            <div class="onboarding-grid"><div><label for="passenger-name">Friend’s name</label><input id="passenger-name" minlength="2" maxlength="80" autocomplete="off"></div>
+              <div><label for="passenger-phone">Friend’s phone number</label><input id="passenger-phone" type="tel" maxlength="40" placeholder="080… or +234…" autocomplete="off" aria-describedby="passenger-note"></div></div>
+            <label class="guest-consent"><input id="passenger-consent" type="checkbox"> My friend is 18 or older and agrees to this booking and to sharing their name and trip details with the assigned driver.</label>
+            <p id="passenger-note" class="small-note">You agree the fare, manage the booking and pay. The phone number stays private to your booking; this preview sends no SMS. After confirming, send your friend a private trip link yourself.</p>
+          </div>
+        </fieldset></form>
+      </section>
       <div id="standard-ride-planner" hidden>
       <section id="location-planner" class="account-card location-panel" hidden aria-labelledby="location-planner-title">
         <div class="card-topline"><div><p class="eyebrow">ABUJA / PLAN YOUR ROUTE</p><h2 id="location-planner-title">Choose your pickup and destination.</h2></div><button id="planner-online" class="button button-outline button-small" type="button">Enable online maps</button></div>
@@ -214,7 +226,7 @@
             <div class="review-actions"><button id="tracking-start" type="button" class="button button-primary button-small" hidden>Share my location</button><button id="tracking-stop" type="button" class="button button-outline button-small" hidden>Stop sharing</button></div>
           </section>
           <section id="ride-detail" class="account-card detail-card" hidden aria-labelledby="detail-title">
-            <div class="card-topline"><p class="eyebrow">JOURNEY DETAILS</p><span id="detail-status" class="status-badge"></span></div><h2 id="detail-title"></h2><div id="detail-vehicle-card"></div><p id="detail-person" class="supporting-copy"></p><p id="detail-delivery" class="small-note" hidden></p><p id="detail-reference" class="small-note"></p>
+            <div class="card-topline"><p class="eyebrow">JOURNEY DETAILS</p><span id="detail-status" class="status-badge"></span></div><h2 id="detail-title"></h2><div id="detail-vehicle-card"></div><p id="detail-person" class="supporting-copy"></p><p id="detail-passenger" class="supporting-copy" hidden></p><p id="detail-delivery" class="small-note" hidden></p><p id="detail-reference" class="small-note"></p>
             <div class="fare-display" aria-live="polite" aria-atomic="true"><p id="fare-label" class="eyebrow"></p><strong id="fare-value"></strong><p id="fare-guidance"></p></div>
             <p id="matching-status" class="small-note"></p>
             <p id="fare-expiry" class="small-note"></p>
@@ -224,13 +236,13 @@
             <section id="trip-panel" class="trip-panel" hidden aria-labelledby="trip-title">
               <p class="eyebrow">YOUR TRIP</p><h3 id="trip-title"></h3><p id="trip-guidance" class="supporting-copy"></p>
               <div id="pickup-identity" class="quote-preview" hidden><div role="status" aria-live="polite" aria-atomic="true"><h3 id="arrival-title"></h3><p id="arrival-body"></p></div>
-                <p>Compare the number plate, make/model and colour. If anything differs, do not board, hand over a parcel or share your pickup PIN.</p>
+                <p id="pickup-identity-help">Compare the number plate, make/model and colour. If anything differs, do not board, hand over a parcel or share your pickup PIN.</p>
                 <p class="small-note">Arrival is reported by the driver. The example image does not verify the physical vehicle.</p>
                 <button id="vehicle-mismatch-report" type="button" class="button button-outline button-small">Vehicle doesn’t match?</button></div>
               <button id="trip-confirm" class="button button-primary button-full" type="button" hidden>Confirm test booking</button>
               <section id="vehicle-check-panel" class="quote-preview" hidden aria-labelledby="vehicle-check-title">
                 <h3 id="vehicle-check-title">AI vehicle photo check</h3>
-                <p>Take a clear photo of one vehicle with its whole number plate visible. This optional check compares the photo with your assigned vehicle.</p>
+                <p id="vehicle-photo-guidance">Take a clear photo of one vehicle at the actual pickup with its whole number plate visible. This optional check compares the photo with your assigned vehicle.</p>
                 <p id="vehicle-check-status" role="status"></p><p id="vehicle-check-error" class="error-text" role="alert"></p>
                 <form id="vehicle-check-form" class="stack-form">
                   <label for="vehicle-check-file">Take or choose a vehicle photo (JPEG or PNG)</label>
@@ -247,15 +259,25 @@
                 <p class="small-note">AI can misread photos. This does not detect a cloned plate, prove when a photo was taken, identify the driver or authorise boarding. Reports require your confirmation.</p>
               </section>
               <button id="trip-action" class="button button-primary button-full" type="button" hidden></button>
-              <div id="pickup-pin-panel" class="pickup-pin-panel" hidden><p class="eyebrow">YOUR PICKUP PIN</p><output id="pickup-pin-value" aria-label="Your six-digit pickup PIN"></output><p class="small-note">Share this with your driver in person after checking the vehicle. Keep it private until pickup.</p></div>
+              <div id="pickup-pin-panel" class="pickup-pin-panel" hidden><p class="eyebrow">PICKUP PIN</p><output id="pickup-pin-value" aria-label="Six-digit pickup PIN"></output><p id="pickup-pin-guidance" class="small-note">Share this with your driver in person after checking the vehicle. Keep it private until pickup.</p></div>
               <div id="delivery-pin-panel" class="quote-preview" hidden><span>Recipient’s drop-off code</span><strong id="delivery-pin-value"></strong><p class="small-note">Share this code privately with the recipient. They give it to the driver only when the parcel is handed over.</p></div>
               <form id="delivery-pin-form" class="stack-form" hidden><fieldset id="delivery-pin-fields"><legend>Verify delivery</legend><label for="driver-delivery-pin">Recipient’s six-digit code</label><input id="driver-delivery-pin" type="password" inputmode="numeric" pattern="[0-9]{6}" minlength="6" maxlength="6" autocomplete="off" required><p id="delivery-pin-lock" class="error-text" role="status"></p><button id="delivery-complete" class="button button-primary button-full" type="submit">Verify code and complete delivery</button></fieldset></form>
-              <form id="pickup-pin-form" class="stack-form" hidden><fieldset id="pickup-pin-fields"><legend>Verify pickup</legend><label for="driver-pickup-pin">Customer’s six-digit PIN</label><input id="driver-pickup-pin" type="password" inputmode="numeric" pattern="[0-9]{6}" minlength="6" maxlength="6" autocomplete="off" required aria-describedby="pickup-pin-help pickup-pin-lock"><p id="pickup-pin-help" class="small-note">Ask the customer for their PIN when they are at the vehicle.</p><p id="pickup-pin-lock" class="error-text" role="status"></p><button id="trip-start" class="button button-primary button-full" type="submit">Verify PIN and start trip</button></fieldset></form>
+              <form id="pickup-pin-form" class="stack-form" hidden><fieldset id="pickup-pin-fields"><legend>Verify pickup</legend><label for="driver-pickup-pin">Passenger’s six-digit pickup PIN</label><input id="driver-pickup-pin" type="password" inputmode="numeric" pattern="[0-9]{6}" minlength="6" maxlength="6" autocomplete="off" required aria-describedby="pickup-pin-help pickup-pin-lock"><p id="pickup-pin-help" class="small-note">Ask the customer for their PIN when they are at the vehicle.</p><p id="pickup-pin-lock" class="error-text" role="status"></p><button id="trip-start" class="button button-primary button-full" type="submit">Verify PIN and start trip</button></fieldset></form>
             </section>
             <button id="cancel-request" class="text-link cancel-link" type="button" hidden>Cancel request</button>
             <form id="trip-cancel-form" class="stack-form cancellation-form" hidden><fieldset id="trip-cancel-fields"><legend>Cancel this journey?</legend><label for="trip-cancel-reason">Reason</label><select id="trip-cancel-reason" required><option value="plans_changed">Plans changed</option><option value="pickup_problem">Pickup problem</option><option value="other">Other reason</option></select><p class="small-note">This ends the request or booking. No cancellation fee is charged in this preview.</p><div class="review-actions"><button id="trip-cancel-submit" type="submit" class="button button-outline button-small">Confirm cancellation</button><button id="trip-cancel-dismiss" type="button" class="button button-primary button-small">Keep journey</button></div></fieldset></form>
             <section id="trip-activity" class="history-section" hidden aria-labelledby="trip-activity-title"><h3 id="trip-activity-title">Trip activity</h3><ol id="trip-timeline" class="trip-timeline"></ol></section>
             <div id="live-history" class="history-section" hidden><h3>Fare history</h3><ol id="live-offer-history"></ol></div>
+          </section>
+          <section id="guest-link-panel" class="account-card" hidden aria-labelledby="guest-link-title">
+            <p class="eyebrow">BOOKED FOR YOUR FRIEND</p><h2 id="guest-link-title">Your friend’s private trip link</h2>
+            <p class="small-note">Send this privately to the friend taking the ride. It shows the pickup PIN, trip, driver and vehicle details. Anyone with the link can view those details. Your friend does not need an account.</p>
+            <p class="small-note">You remain responsible for fare agreement, booking changes and payment. No SMS or other message is sent automatically in this preview.</p>
+            <p id="guest-link-status" class="small-note" role="status"></p><p id="guest-link-error" class="error-text" role="alert"></p>
+            <div class="review-actions"><button id="guest-link-create" type="button" class="button button-primary button-small">Create private link</button><button id="guest-link-replace" type="button" class="button button-outline button-small" hidden>Replace link</button><button id="guest-link-revoke" type="button" class="button button-outline button-small" hidden>Revoke link</button><button id="guest-link-retry" type="button" class="button button-outline button-small" hidden>Retry the same action</button><button id="guest-link-refresh" type="button" class="button button-outline button-small">Refresh link status</button></div>
+            <div id="guest-link-confirm" class="mode-confirm" hidden><p>Replacing the link stops the previous link working. Send the new link to your friend again.</p><button id="guest-link-confirm-replace" type="button" class="button button-primary button-small">Confirm replacement</button><button id="guest-link-keep" type="button" class="button button-outline button-small">Keep current link</button></div>
+            <div id="guest-link-secret" class="stack-form" hidden><label for="guest-link-url">Private link — includes pickup PIN access</label><input id="guest-link-url" readonly autocomplete="off" spellcheck="false"><div class="review-actions"><button id="guest-link-copy" type="button" class="button button-primary button-small">Copy private link</button><button id="guest-link-share" type="button" class="button button-outline button-small" hidden>Share privately</button></div></div>
+            <p class="small-note">The link expires and stops working after revocation, account sign-out or trip completion. It is shown only here when created; leaving this screen clears the displayed link.</p>
           </section>
           <section id="safety-panel" class="account-card safety-panel" hidden aria-labelledby="safety-title">
             <div class="card-topline"><h2 id="safety-title">Trip safety</h2><span class="status-badge">TEST ONLY</span></div>

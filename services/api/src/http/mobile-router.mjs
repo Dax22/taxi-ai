@@ -6,20 +6,21 @@ import { readBody } from './body.mjs';
 import { json } from './responses.mjs';
 import { createMobileJourneys, mobileNotifications } from './mobile-journeys.mjs';
 import { mobileSafety } from './mobile-safety.mjs';
+import { mobileGuestRides } from './mobile-guest-rides.mjs';
 import { mobileVehicleChecks } from './mobile-vehicle-checks.mjs';
 import { mobileTracking } from './mobile-tracking.mjs';
 import { createMobileBooking } from './mobile-booking.mjs';
 import { eatsRoutes } from '../modules/eats/routes.mjs';
 
 /** Versioned native surface. Cookie identity and browser CSRF are never reused. */
-export function createMobileRouter({ devices, accounts, drivers, rides, eats, locations, availability, chat, notifications, safety, vehicleChecks, clock, rateLimiter, googleAuth, accountEmail }) {
+export function createMobileRouter({ devices, accounts, drivers, rides, eats, locations, availability, chat, notifications, safety, guestRides, vehicleChecks, clock, rateLimiter, googleAuth, accountEmail }) {
   const foodRoutes = eatsRoutes(eats);
   const booking = createMobileBooking({ rides, locations, availability, clock });
   const journeys = createMobileJourneys({ rides, availability, chat, clock });
   function summary(ride) {
     return { id: ride.id, status: ride.status, pickup: ride.pickup.name, destination: ride.destination.name,
       fareKobo: ride.trip?.fareKobo ?? ride.negotiation?.agreement?.amountKobo ?? null,
-      vehicleCategory: ride.vehicleCategory, suggestedFareKobo: ride.suggestedFareKobo, createdAt: ride.createdAt, isDemo: ride.isDemo,
+      vehicleCategory: ride.vehicleCategory, passenger: ride.passenger, suggestedFareKobo: ride.suggestedFareKobo, createdAt: ride.createdAt, isDemo: ride.isDemo,
       driver: ride.driver ? { id: ride.driver.id, name: ride.driver.name, vehicle: ride.driver.vehicle } : null };
   }
   // An explicit owner-only projection keeps reviewer identities, hashes and audit internals off native clients.
@@ -66,6 +67,7 @@ export function createMobileRouter({ devices, accounts, drivers, rides, eats, lo
       accessToken, query, data, key: request.headers['idempotency-key'] });
     else if (path.startsWith('/vehicle-checks/')) body = await mobileVehicleChecks({ vehicleChecks,session,path,write,data,key:request.headers['idempotency-key'] });
     else if (path.startsWith('/safety/')) body = mobileSafety({ safety, session, path, write, data, key: request.headers['idempotency-key'] });
+    else if (path.startsWith('/guest-rides/')) body = mobileGuestRides({ guestRides, session, path, write, data, key: request.headers['idempotency-key'] });
     else if (path.startsWith('/tracking/')) body = mobileTracking({ locations, session, path, write, query, data, key: request.headers['idempotency-key'] });
     else if (path === '/notifications' || path.startsWith('/notifications/')) body = mobileNotifications({ notifications, user: session.user, sessionId: session.id, path, write, query, data });
     else if (!write && path === '/activity') {

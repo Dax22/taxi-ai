@@ -9,6 +9,7 @@ import { useBooking } from '../src/booking/use-booking';
 import { PlaceSearch } from '../src/booking/place-search';
 import { RoutePreview } from '../src/booking/route-preview';
 import { RequestCard } from '../src/booking/request-card';
+import { PassengerForm } from '../src/booking/passenger-form';
 import { SelectField } from '../src/ui/select-field';
 import { Button, Card, Field, Heading, Loading, Notice, Pill, Screen, styles } from '../src/ui/components';
 import type { BookingRide } from '../../../packages/shared/src/mobile-booking.mjs';
@@ -39,6 +40,7 @@ function BookingScreen() {
       <Text style={styles.body}>{settings.blockedBy === 'online' ? 'Go offline in Work before requesting your own ride.' : 'Finish or cancel your driver journey before requesting your own ride.'}</Text><Button title="Open Work" secondary onPress={() => void setMode('work').then((ok) => { if(ok)router.push('/work'); })}/></Card>}
     {settings && !settings.current.length && !settings.blockedBy && <VehicleCategories value={s.category} onChange={(id) => c.chooseCategory(id)} disabled={locked}/>}
     {settings && !settings.current.length && !settings.blockedBy && <>
+      {!delivery && <PassengerForm passenger={s.passenger} controller={c} disabled={disabled}/>}
       {delivery && <Card><Text style={styles.h2}>What are you sending?</Text>
         {([['description', 'Parcel description and size'], ['weightKg', 'Total weight (kg)'], ['recipientName', 'Recipient name'], ['pickupInstructions', 'Pickup instructions (optional)'], ['dropoffInstructions', 'Drop-off instructions (optional)']] as [keyof DeliveryDraft, string][]).map(([field, label]) => <Field key={field} label={label} value={s.delivery[field]} editable={!disabled} keyboardType={field === 'weightKg' ? 'decimal-pad' : 'default'} maxLength={field === 'weightKg' ? 10 : field === 'recipientName' ? 100 : 240} onChangeText={(value) => c.editDelivery(field, value)}/>)}
         <Text style={styles.small}>{vehicleCategory(s.category)?.name} preview limit: {policy?.maxLoadKg} kg. Matching also checks the driver’s approved load capacity. Confirm the load fits before collection.</Text><Text style={styles.small}>After pickup, share the drop-off code privately with your recipient. They give it to the driver at handover. This preview does not contact the recipient.</Text>
@@ -56,7 +58,7 @@ function BookingScreen() {
             <SelectField label="Destination area" value={s.destinationId} options={settings.areas.map((a) => ({ value: a.id, label: a.name, disabled: a.id === s.pickupId }))} disabled={disabled} onChange={(id) => c.sample('destination', id)}/></>}
           {(s.mode === 'sample' || s.consent) && <Button title={s.preview ? 'Preview route again' : 'Preview route & fare'} secondary={!!s.preview} busy={s.busy === 'preview'} disabled={disabled} onPress={() => void c.preview()}/>}
         </Card></View>
-        {s.preview && <View style={[look.column, wide && look.wideColumn]}><RoutePreview preview={s.preview} now={s.now} disabled={disabled} busy={s.busy === 'request'} onRequest={() => void c.submit()} onPreview={() => void c.preview()}/></View>}
+        {s.preview && <View style={[look.column, wide && look.wideColumn]}><RoutePreview preview={s.preview} now={s.now} disabled={disabled} busy={s.busy === 'request'} passengerName={!delivery && s.passenger.kind === 'guest' ? s.passenger.name.trim() : undefined} onRequest={() => void c.submit()} onPreview={() => void c.preview()}/></View>}
         </View>
       </>}
     </>}

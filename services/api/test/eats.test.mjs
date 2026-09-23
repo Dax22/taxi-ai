@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { harness, participants, PASSWORD, requestRide } from './helpers.mjs';
-import { removeEatsFixtureTables } from './migration-fixtures.mjs';
+import { removeEatsFixtureTables, removeGuestFixtureTables } from './migration-fixtures.mjs';
 import { SCHEMA_VERSION } from '../src/infrastructure/database.mjs';
 
 const details = { name: 'Test Abuja Kitchen', cuisine: 'Nigerian', description: 'Fictional kitchen for ordering tests.', address: '10 Fictional Road, Wuse II', areaId: 'wuse-ii', prepMinutes: 25, minimumKobo: 100_000, deliveryFeeKobo: 150_000 };
@@ -297,6 +297,7 @@ test('schema 19 upgrade preserves populated Eats orders and restaurant settings 
   const legacyDetails = JSON.stringify(details), legacyMenu = JSON.stringify(item);
   f.h.db.prepare('UPDATE eats_stores SET details_json=? WHERE id=?').run(legacyDetails, f.store.id);
   f.h.db.prepare('UPDATE eats_menu SET details_json=? WHERE id=?').run(legacyMenu, f.menu[0].id);
+  removeGuestFixtureTables(f.h.db);
   f.h.db.exec('DROP TABLE eats_collection_points; DROP TABLE eats_checkouts; DROP TABLE eats_photos; PRAGMA user_version=19'); await f.h.restart();
   assert.equal(f.h.db.prepare('PRAGMA user_version').get().user_version, SCHEMA_VERSION);
   const current = await ok(f.seller, '/api/eats/store');

@@ -3,6 +3,7 @@ import { parseBookingRide } from './mobile-booking.mjs';
 import { transportCategory } from './transport-categories.mjs';
 import { NOTIFICATION_LABELS } from './notification-labels.mjs';
 import { validMatchRecommendation } from './smart-matching.mjs';
+import { readPassenger } from './guest-rides.mjs';
 const object = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const text = (v,max=240) => typeof v === 'string' && v.length > 0 && v.length <= max;
 const integer = (v) => Number.isSafeInteger(v) && v >= 0;
@@ -13,6 +14,7 @@ const nullableTime = (v) => v === null || integer(v);
 function expect(ok) { if (!ok) throw new Error('Taxi Ai returned an incompatible journey response. Refresh and try again.'); }
 function journey(r,env) {
   parseBookingRide({ ...env,ride:r });
+  readPassenger(r.passenger, r.vehicleCategory, { allowPhone: r.mode === 'customer' });
   expect(mode(r.mode) && text(r.customerName) && typeof r.chatReady === 'boolean' && nullableTime(r.pinBlockedUntil)
     && (r.pickupPin === null || r.mode === 'customer' && typeof r.pickupPin === 'string' && /^\d{6}$/.test(r.pickupPin))
     && (r.mode !== 'work' || r.delivery?.dropoffPin === undefined)
