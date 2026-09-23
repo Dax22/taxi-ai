@@ -7,13 +7,14 @@
   .landing-page .site-header { border-bottom: 0; height: 86px; }
   .landing-page .header-end .button { border-radius: 999px; }
   .landing-page .desktop-nav .tiny-dot { background: var(--brand); }
-  .hero-intro { grid-area: 1 / 1; align-self: center; padding-block: 88px 112px; text-align: left; position: relative; z-index: 2; pointer-events: none; }
+  .hero-intro { grid-area: 1 / 1; align-self: center; padding-block: 64px 88px; text-align: left; position: relative; z-index: 2; pointer-events: none; }
   .hero-copy { max-width: 660px; pointer-events: auto; }
   .hero-intro .eyebrow { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; color: #454b43; }
   .hero-intro .tiny-dot { background: var(--brand); }
   .hero h1 { font-size: clamp(44px, 4.8vw, 72px); line-height: 1.06; letter-spacing: -.055em; font-weight: 600; text-wrap: balance; overflow-wrap: break-word; }
+  /* Protect the letter edges without washing out any part of the artwork. */
+  .hero h1, .hero-intro .eyebrow, .hero-actions .text-link, .hero-preview-note { text-shadow: 0 1px 2px #fff, 0 0 4px #fff; }
   .hero h1 span { color: var(--ink); }
-  .hero-description { max-width: 39ch; margin-top: 24px; color: #454b43; font-size: 17px; line-height: 1.65; }
   .hero-actions { display: flex; align-items: center; justify-content: flex-start; flex-wrap: wrap; gap: 16px 28px; margin-top: 28px; }
   .hero-actions .button-primary { border-radius: 999px; padding: 17px 26px; min-height: 54px; font-size: 15px; }
   .hero-actions .text-link { gap: 12px; min-height: 48px; }
@@ -22,8 +23,7 @@
   /* Artwork starts directly at the header and reaches both page edges.
      The in-flow overlay lets the hero grow when text wraps or is enlarged. */
   .hero-visual { position: relative; width: 100%; margin: 0; }
-  .hero-slide-viewport { position: relative; isolation: isolate; display: grid; width: 100%; min-height: clamp(580px, 48vw, 780px); background: #f8f9f7; }
-  .hero-slide-viewport::after { content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none; background: linear-gradient(90deg, #f8f9f7fa 0%, #f8f9f7f2 32%, #f8f9f7b3 49%, #f8f9f700 75%); }
+  .hero-slide-viewport { position: relative; isolation: isolate; display: grid; width: 100%; min-height: clamp(480px, 40vw, 640px); background: #f8f9f7; }
   .hero-service-slide { position: absolute; inset: 0; margin: 0; animation: hero-scene-appear .3s ease-out; }
   .hero-visual picture { display: block; height: 100%; }
   .hero-image { width: 100%; height: 100%; object-fit: cover; }
@@ -78,13 +78,11 @@
   }
   @media (max-width: 800px) {
     .landing-page .site-header { height: 80px; }
-    .hero-intro { align-self: start; padding-block: 52px 300px; }
+    .hero-intro { align-self: start; padding-block: 36px 260px; }
     .hero-copy { max-width: 620px; }
-    .hero-slide-viewport { min-height: 680px; }
+    .hero-slide-viewport { min-height: 560px; }
     .hero-image { object-fit: contain; object-position: center bottom; }
-    .hero-slide-viewport::after { background: linear-gradient(180deg, #f8f9f7 0%, #f8f9f7fa 32%, #f8f9f7c7 50%, #f8f9f700 75%); }
     .hero h1 { font-size: clamp(40px, 7vw, 58px); }
-    .hero-description { font-size: 16px; margin-top: 20px; }
     .hero-intro .eyebrow { font-size: 10px; margin-bottom: 20px; }
     .booking-card { margin-top: 24px; padding: 22px 22px 0; }
     .booking-card .preview-label { margin-inline: -22px; }
@@ -100,14 +98,13 @@
   }
   @media (max-width: 580px) {
     .landing-page .site-header { height: 73px; }
-    .hero-intro { padding-block: 38px 250px; }
+    .hero-intro { padding-block: 28px 200px; }
     .hero h1 { font-size: clamp(36px, 9vw, 48px); line-height: 1.08; letter-spacing: -.045em; }
-    .hero-description { font-size: 15px; max-width: 35ch; }
     .hero-actions { gap: 10px 20px; margin-top: 24px; }
     .hero-actions .button-primary { padding: 15px 24px; min-height: 52px; }
     .hero-actions .text-link { font-size: 12px; gap: 10px; }
     .hero-preview-note { font-size: 10px; }
-    .hero-slide-viewport { min-height: 620px; }
+    .hero-slide-viewport { min-height: 500px; }
     .hero-carousel-controls { bottom: 12px; right: 12px; }
     .hero-art-note { font-size: 7px; margin-inline: 16px; }
     .booking-card { margin-top: 22px; padding: 20px 18px 0; border-radius: 16px; }

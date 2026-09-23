@@ -45,8 +45,14 @@ external top margin. One persistent text overlay carries the headline and links
 across all scenes; its primary action is “Book a ride” and links to `/app`.
 The fare-demo link continues to target `#book`.
 
-A pale directional gradient keeps dark text legible. Desktop typography scales
-fluidly; at 800px and below, the copy sits higher in the same hero and the complete
+The full-image white gradient is removed so all four scenes retain their original
+colours. A tight text shadow outlines the headline and secondary link without
+covering the surrounding artwork. The supporting paragraph is removed.
+Desktop minimum height scales from 480px to 640px (previously 580px to 780px);
+tablet and phone minimums are 560px and 500px. Reduced content padding also shortens
+the hero while still allowing it to grow for enlarged text.
+Desktop typography scales fluidly; at 800px and below, the copy sits higher in the
+same hero and the complete
 2:1 artwork sits along its bottom edge. The content remains in the grid flow so
 wrapped or enlarged text increases the hero height instead of being clipped.
 The decorative journey card was removed to avoid overlapping the new headline.
