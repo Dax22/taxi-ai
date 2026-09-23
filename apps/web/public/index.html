@@ -12,6 +12,7 @@
   <link rel="stylesheet" href="/vehicle-categories.css">
   <script type="module" src="/app.mjs"></script>
   <script type="module" src="/download.mjs"></script>
+  <script type="module" src="/homepage-carousel.mjs"></script>
 </head>
 <body class="landing-page">
   <a class="skip-link" href="#book">Skip to booking demo</a>
@@ -37,11 +38,42 @@
       </div>
 
       <div class="hero-stage">
-        <figure class="hero-visual">
-          <picture><source media="(max-width: 800px)" srcset="/assets/city-route-hero-small.webp"><img class="hero-image" src="/assets/city-route-hero.webp" width="1774" height="887" alt="A miniature white city with green parks, a small yellow taxi and a dark route connecting two yellow location pins" fetchpriority="high" decoding="async"></picture>
-          <div class="journey-peek" aria-hidden="true"><span class="journey-peek-icon">↗</span><div><p class="eyebrow">A LITTLE MORE FREEDOM</p><p>Your journey.<br>Your agreed fare.</p></div><span class="journey-peek-line"></span><small>Suggested. Discussed. Agreed.</small></div>
-          <figcaption>AN ILLUSTRATION OF WHAT’S AHEAD · NOT A LIVE MAP</figcaption>
-        </figure>
+        <section class="hero-visual" data-homepage-carousel aria-roledescription="carousel" aria-label="Explore Taxi Ai services">
+          <div class="hero-slide-viewport" id="hero-service-scenes">
+            <figure class="hero-service-slide" id="hero-scene-ride" data-carousel-slide data-slide-name="City rides" role="group" aria-roledescription="slide" aria-label="1 of 4: City rides">
+              <picture><source media="(max-width: 800px)" srcset="/assets/city-route-hero-small.webp"><img class="hero-image" src="/assets/city-route-hero.webp" width="1774" height="887" alt="A miniature white city with green parks, a small yellow taxi and a dark route connecting two yellow location pins" fetchpriority="high" decoding="async"></picture>
+              <div class="journey-peek" aria-hidden="true"><span class="journey-peek-icon">↗</span><div><p class="eyebrow">A LITTLE MORE FREEDOM</p><p>Your journey.<br>Your agreed fare.</p></div><span class="journey-peek-line"></span><small>Suggested. Discussed. Agreed.</small></div>
+              <figcaption class="hero-slide-caption">Your city. Your agreed fare.</figcaption>
+            </figure>
+            <figure class="hero-service-slide" id="hero-scene-airport" data-carousel-slide data-slide-name="Airport drop-off" role="group" aria-roledescription="slide" aria-label="2 of 4: Airport drop-off" hidden>
+              <picture><source media="(max-width: 800px)" srcset="/assets/airport-dropoff-hero-small.webp"><img class="hero-image" src="/assets/airport-dropoff-hero.webp" width="1774" height="887" alt="A white 3D airport scene with a driver helping a traveller beside a yellow car and luggage" loading="lazy" fetchpriority="low" decoding="async"></picture>
+              <figcaption class="hero-slide-caption">A smoother start to your next chapter.</figcaption>
+            </figure>
+            <figure class="hero-service-slide" id="hero-scene-food" data-carousel-slide data-slide-name="Food delivery" role="group" aria-roledescription="slide" aria-label="3 of 4: Food delivery" hidden>
+              <picture><source media="(max-width: 800px)" srcset="/assets/food-delivery-hero-small.webp"><img class="hero-image" src="/assets/food-delivery-hero.webp" width="1774" height="887" alt="A miniature 3D food courier handing a takeaway bag to a customer at a white home, with yellow delivery accents" loading="lazy" fetchpriority="low" decoding="async"></picture>
+              <figcaption class="hero-slide-caption">Local favourites. A friendly handover.</figcaption>
+            </figure>
+            <figure class="hero-service-slide" id="hero-scene-courier" data-carousel-slide data-slide-name="Courier delivery" role="group" aria-roledescription="slide" aria-label="4 of 4: Courier delivery" hidden>
+              <picture><source media="(max-width: 800px)" srcset="/assets/courier-delivery-hero-small.webp"><img class="hero-image" src="/assets/courier-delivery-hero.webp" width="1774" height="887" alt="A white miniature neighbourhood and warehouse, with a white-and-yellow van and motorcycle on a dark parcel delivery route between two location pins" loading="lazy" fetchpriority="low" decoding="async"></picture>
+              <figcaption class="hero-slide-caption">From your hands to theirs.</figcaption>
+            </figure>
+          </div>
+          <div class="hero-carousel-controls" data-carousel-controls hidden>
+            <button class="hero-carousel-rotation" type="button" data-carousel-rotation aria-controls="hero-service-scenes">Pause slides</button>
+            <div class="hero-carousel-choices" role="group" aria-label="Choose a service scene">
+              <button type="button" data-carousel-select="0" aria-controls="hero-scene-ride" aria-pressed="true">City rides</button>
+              <button type="button" data-carousel-select="1" aria-controls="hero-scene-airport" aria-pressed="false">Airport drop-off</button>
+              <button type="button" data-carousel-select="2" aria-controls="hero-scene-food" aria-pressed="false">Food delivery</button>
+              <button type="button" data-carousel-select="3" aria-controls="hero-scene-courier" aria-pressed="false">Courier delivery</button>
+            </div>
+            <div class="hero-carousel-arrows">
+              <button type="button" data-carousel-previous aria-label="Previous service scene" aria-controls="hero-service-scenes"><span aria-hidden="true">←</span></button>
+              <button type="button" data-carousel-next aria-label="Next service scene" aria-controls="hero-service-scenes"><span aria-hidden="true">→</span></button>
+            </div>
+          </div>
+          <p class="hero-art-note">AN ILLUSTRATION OF WHAT’S AHEAD · NOT LIVE SERVICE AVAILABILITY</p>
+          <p class="hero-carousel-announcement" data-carousel-status aria-live="polite" aria-atomic="true"></p>
+        </section>
         <div class="booking-card" id="book">
           <div class="service-tabs" role="tablist" aria-label="Choose a service">
             <button id="tab-ride" type="button" role="tab" aria-selected="true" aria-controls="panel-ride" data-tab="ride"><img class="service-vehicle-icon" src="/assets/vehicles/sedan-white.png" width="42" height="32" alt="">Ride</button>
