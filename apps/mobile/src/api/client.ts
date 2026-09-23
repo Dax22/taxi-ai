@@ -165,7 +165,7 @@ export class MobileClient {
     if (epoch !== this.epoch) throw changed(); return result;
   }
   async session() { const epoch = this.epoch, body = await this.request('/session'); if (epoch !== this.epoch) throw changed(); const user = parseAccount(body.user); this.publish(user); return user; }
-  async activity(mode: Mode, before?: string | null) { return parseActivity(await this.request(`/activity?mode=${mode}${before ? `&before=${encodeURIComponent(before)}` : ''}`)); }
+  async activity(mode: Mode, before?: string | null) { return parseActivity(await this.request(`/activity?mode=${mode}${before ? `&before=${encodeURIComponent(before)}` : ''}`), mode); }
   async booking() { return parseBooking(await this.request('/booking')); }
   async searchPlaces(query: string) { return parsePlaces(await this.request('/booking/search', { query })); }
   async routePreview(pickup: Place, destination: Place, key: string, vehicleCategory: VehicleCategoryId = 'standard') {
@@ -225,6 +225,10 @@ export class MobileClient {
   async devices() { return parseDevices(await this.request('/devices')); }
   async eats(path: string, data?: unknown, key?: string) {
     if (!path.startsWith('/eats/')) throw new Error('Use an Eats API path.');
+    return this.request(path, data, key);
+  }
+  async guestRides(path: string, data?: unknown, key?: string) {
+    if (!path.startsWith('/guest-rides/')) throw new Error('Use a guest ride API path.');
     return this.request(path, data, key);
   }
   async emailStatus() { return parseEmailStatus(await this.request('/account/email')); }

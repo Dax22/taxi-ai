@@ -8,6 +8,7 @@ import { SelectField } from '../../src/ui/select-field';
 import { WorkProfileControls } from '../../src/ui/work-profile-controls';
 import { vehicleCategory } from '../../../../packages/shared/src/vehicle-categories.mjs';
 import { MATCH_REASON_LABELS } from '../../../../packages/shared/src/smart-matching.mjs';
+import { PassengerSummary } from '../../src/guest-rides/passenger-summary';
 export default function Work(){
   const {user,blocked}=useSession(),{state:s,controller:c}=useWork();const [area,setArea]=useState('');
   const eligible=Boolean(user?.driver?.eligibility.eligible),locked=s.busy||s.uncertain||s.stale;
@@ -26,7 +27,7 @@ export default function Work(){
         <Button title="Refresh work" secondary busy={s.loading} disabled={s.busy} onPress={()=>void c.refresh()}/>
       </Card>
       {s.work?.activeElsewhere.map((j)=><Card key={j.id}><Text style={styles.body}>You have a personal journey to finish.</Text><Button title="View personal journey" onPress={()=>router.push({pathname:'/journey',params:{id:j.id}})}/></Card>)}
-      {s.work?.current.map((j)=><Card key={j.id}><Pill>CURRENT JOB</Pill><Text style={styles.h2}>{j.pickup} → {j.destination}</Text><Button title="Open journey" onPress={()=>router.push({pathname:'/journey',params:{id:j.id}})}/></Card>)}
+      {s.work?.current.map((j)=><Card key={j.id}><Pill>CURRENT JOB</Pill><Text style={styles.h2}>{j.pickup} → {j.destination}</Text><PassengerSummary passenger={j.passenger} bookedBy={j.customerName}/><Button title="Open journey" onPress={()=>router.push({pathname:'/journey',params:{id:j.id}})}/></Card>)}
       <Heading title="Nearby requests." subtitle={online?'Eligible requests are ordered by pickup distance and customer waiting time.':'Go online to see available work.'}/>
       {online&&!s.work?.available.length&&<Text style={styles.body}>No matching requests yet. This screen refreshes while the app is open.</Text>}
       {online&&s.work?.available.map((job)=><Card key={job.id}><Pill>{vehicleCategory(job.vehicleCategory)?.name.toUpperCase()??'REQUEST'}</Pill>

@@ -2,6 +2,7 @@ import { transportCategory, deliveryDetails } from './transport-categories.mjs';
 import { envelope, parseVehicle } from './mobile-contracts.mjs';
 import { insideAbuja } from './locations.mjs';
 import { RIDE_STATUS_LABELS, canCancelRide } from './trip-lifecycle.mjs';
+import { readPassenger } from './guest-rides.mjs';
 
 const record = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const text = (v, max = 160) => typeof v === 'string' && v.length > 0 && v.length <= max;
@@ -19,6 +20,7 @@ function ride(r) {
     && (r.expiresAt === null || number(r.expiresAt)) && r.canCancel === canCancelRide(r.status));
   expect(r.driver === null || (record(r.driver) && text(r.driver.name)));
   expect(transportCategory(r.vehicleCategory));
+  readPassenger(r.passenger, r.vehicleCategory);
   if (transportCategory(r.vehicleCategory).service === 'delivery') {
     expect(record(r.delivery));
     const { verifiedAt, pinBlockedUntil, dropoffPin, ...details } = r.delivery;

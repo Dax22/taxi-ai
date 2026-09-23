@@ -33,6 +33,9 @@ private documents and recorded manual checks; external identity/licence verifica
 is not connected. Use fictional details and documents.
 
 - One personal login, Customer/Work mode switching and optional driver enrollment.
+- Book a passenger ride for an adult friend on web/mobile, with separate booker
+  and passenger details and a private, revocable trip/PIN link shared manually.
+  The booker retains fare and payment authority. [Guest-ride setup](docs/guest-rides.md).
 - Taxi Ai Eats on web/mobile: location-first dish search, combined kitchen orders,
   restaurants/vendors/home kitchens, town-only vendor and home-kitchen profiles, meal photos and finite
   portions, delivery or pickup, test checkout and My store. [Try a food order](docs/eats.md).
@@ -306,11 +309,13 @@ The terminal example runs with `npm run demo`. Read [the architecture](docs/arch
 
 ## Development and review
 
-The latest development branch is `feat/eats-meal-builder`, stacked on the Eats and
-home-kitchen branches. It adds dish search after delivery location, mixed-kitchen
-checkout and town-only vendor and home-kitchen profiles to web and mobile. Schema 21 preserves
-existing records and adds combined checkout and private collection-point storage.
-See [Eats setup and acceptance](docs/eats.md) and [mobile setup](apps/mobile/README.md).
+The latest development branch is `feat/guest-rides`, stacked on
+`feat/eats-meal-builder`. It adds booking for an adult friend, separates passenger
+details from the booker's fare/payment authority, and provides private passenger
+links on web and mobile. Schema 22 preserves existing records and adds guest-ride
+storage. Links are shared manually; automated SMS and real payments are not connected.
+See [guest-ride setup and acceptance](docs/guest-rides.md),
+[Eats setup](docs/eats.md) and [mobile setup](apps/mobile/README.md).
 Back up the database before changing branches; older releases may not support the
 existing schema.
 Read [CONTRIBUTING.md](CONTRIBUTING.md) for the GitHub/VS Code workflow and where

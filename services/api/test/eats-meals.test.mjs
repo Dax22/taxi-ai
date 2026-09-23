@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { harness, participants, PASSWORD } from './helpers.mjs';
 import { readEatsResponse } from '../../../packages/shared/src/eats-contracts.mjs';
 import { SCHEMA_VERSION } from '../src/infrastructure/database.mjs';
+import { removeGuestFixtureTables } from './migration-fixtures.mjs';
 
 const address = { line: '20 Fictional Close, test blue gate', areaId: 'maitama' };
 const privatePoint = 'Test collection point beside the community gate';
@@ -175,6 +176,7 @@ test('schema 20 upgrade preserves existing Eats records and adds empty combined 
   const quote = (await ok(f.customer, '/quotes', { ...f.basket([home]).groups[0], address, instructions: '' })).quote;
   const order = (await ok(f.customer, '/orders', { quoteId: quote.id })).order;
   const old = f.h.db.prepare('SELECT * FROM eats_orders WHERE id=?').get(order.id);
+  removeGuestFixtureTables(f.h.db);
   f.h.db.exec('DROP TABLE eats_collection_points; DROP TABLE eats_checkouts; PRAGMA user_version=20'); await f.h.restart();
   assert.equal(f.h.db.prepare('PRAGMA user_version').get().user_version, SCHEMA_VERSION);
   assert.deepEqual(f.h.db.prepare('SELECT * FROM eats_orders WHERE id=?').get(order.id), old);

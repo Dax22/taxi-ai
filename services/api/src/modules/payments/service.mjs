@@ -46,7 +46,7 @@ export function createPaymentsService({ repository, getAccount, tripForPayment, 
     return unitOfWork(() => {
       const user = actor(userId), payment = owned(user, rideId);
       requireRole(user, 'customer');
-      check(payment.customerId === user.id, 'FORBIDDEN', 'Only the passenger on this trip can pay.');
+      check(payment.customerId === user.id, 'FORBIDDEN', 'Only the booking account can pay for this trip.');
       check(allowSimulation, 'FORBIDDEN', 'Payment simulation is available only in local development.');
       const previous = repository.findCommand(userId, key);
       if (previous) {

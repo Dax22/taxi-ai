@@ -20,6 +20,9 @@ test('the local site serves HTML, modules and artwork with correct content types
       ['/eats/view.mjs', 'text/javascript'], ['/eats/transport.mjs', 'text/javascript'],
       ...['eats', 'eats-controller', 'eats-contracts'].map((name) => [`/shared/${name}.mjs`, 'text/javascript']),
       ['/trip-share', 'text/html'], ['/trip-share.mjs', 'text/javascript'], ['/shared/safety.mjs', 'text/javascript'],
+      ['/guest-trip', 'text/html'], ['/guest-trip.mjs', 'text/javascript'],
+      ...['guest-rides', 'guest-rides-controller'].map((name) => [`/shared/${name}.mjs`, 'text/javascript']),
+      ...['guest-rides-panel', 'guest-rides-transport', 'guest-trip-controller'].map((name) => [`/dashboard/${name}.mjs`, 'text/javascript']),
       ...['safety-controller', 'safety-view', 'safety-format', 'trip-share-controller'].map((name) => [`/dashboard/${name}.mjs`, 'text/javascript']),
       ['/dashboard.css', 'text/css'], ['/dashboard.mjs', 'text/javascript'], ['/styles.css', 'text/css'],
       ['/homepage.css', 'text/css'],
@@ -56,7 +59,7 @@ test('the local site serves HTML, modules and artwork with correct content types
 
 test('camera and microphone are account-only; explicit work geolocation is also permitted in Eats; only configured tiles can load externally', async () => {
   for (const mode of ['local', 'off']) await withServer(async (base) => {
-    for (const path of ['/', '/app', '/app?preview=1', '/eats', '/api/session', '/trip-share']) {
+    for (const path of ['/', '/app', '/app?preview=1', '/eats', '/api/session', '/trip-share', '/guest-trip']) {
       const result = await fetch(base + path);
       const policy = result.headers.get('permissions-policy');
       assert.equal(policy, `camera=${path.startsWith('/app') ? '(self)' : '()'}, microphone=${path.startsWith('/app') && mode !== 'off' ? '(self)' : '()'}, geolocation=${path.startsWith('/app') || path === '/eats' ? '(self)' : '()'}`);

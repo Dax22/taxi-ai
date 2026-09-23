@@ -27,6 +27,8 @@ function clearTransientState(db, now) {
       native_session_id = NULL, session_hash = NULL, client_hash = NULL, stopped_at = COALESCE(stopped_at, ?), reason = COALESCE(reason, 'snapshot_reset')`).run(now);
     db.prepare(`UPDATE trip_share_links SET active=0,token_hash=NULL,session_hash=NULL,version=version+1,
       ended_at=?,reason='snapshot_reset' WHERE active=1`).run(now);
+    db.prepare(`UPDATE guest_ride_links SET active=0,token_hash=NULL,session_binding=NULL,version=version+1,
+      ended_at=?,reason='snapshot_reset' WHERE active=1`).run(now);
     db.exec('DELETE FROM location_quotes WHERE ride_id IS NULL;');
   });
 }

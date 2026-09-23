@@ -1,4 +1,5 @@
 import { transportCategory, validPayload } from './transport-categories.mjs';
+import { readPassenger } from './guest-rides.mjs';
 /** Additive v1 wire contracts shared by HTTP contract tests and native clients. */
 export const MOBILE_API_VERSION = 1;
 const record = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -38,14 +39,16 @@ export function parseSignIn(value) {
     && c.accessExpiresAt > value.serverNow && c.refreshExpiresAt >= c.accessExpiresAt);
   return value;
 }
-export function parseActivity(value) {
+export function parseActivity(value, mode) {
   envelope(value);
+  expect(mode === undefined || ['customer', 'work'].includes(mode));
   const ride = (r) => record(r) && transportCategory(r.vehicleCategory) && text(r.id) && text(r.status) && text(r.pickup) && text(r.destination)
     && (r.fareKobo === null || integer(r.fareKobo)) && integer(r.suggestedFareKobo) && integer(r.createdAt) && typeof r.isDemo === 'boolean'
     && (r.driver === undefined || r.driver === null || (record(r.driver) && text(r.driver.id) && text(r.driver.name) && vehicle(r.driver.vehicle)));
   expect(Array.isArray(value.current) && value.current.every(ride) && Array.isArray(value.history) && value.history.every(ride)
     && nullableText(value.nextBefore) && Array.isArray(value.activeElsewhere)
     && value.activeElsewhere.every((r) => record(r) && text(r.id) && text(r.status) && ['customer','work'].includes(r.mode)));
+  [...value.current, ...value.history].forEach(r => readPassenger(r.passenger, r.vehicleCategory, { allowPhone: mode !== 'work' }));
   return value;
 }
 export function parseDevices(value) {
