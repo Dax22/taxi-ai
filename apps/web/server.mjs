@@ -33,9 +33,9 @@ import { createStaffMfaConfig } from '../../services/api/src/infrastructure/staf
 // Explicit allowlist: never serve the repository root or arbitrary disk paths.
 const routes = new Map([
   ['/shared/realtime-client.mjs', ['../../packages/shared/src/realtime-client.mjs', 'text/javascript; charset=utf-8']],
-  ...['/admin', '/admin/', '/admin/accounts', '/admin/trips', '/admin/analytics', '/admin/operations', '/admin/staff', '/admin/audit', '/admin/cases'].map((path) => [path, ['../admin/public/index.html', 'text/html; charset=utf-8']]),
+  ...['/admin', '/admin/', '/admin/accounts', '/admin/trips', '/admin/analytics', '/admin/operations', '/admin/staff', '/admin/audit', '/admin/cases', '/admin/finance', '/admin/compliance', '/admin/demand'].map((path) => [path, ['../admin/public/index.html', 'text/html; charset=utf-8']]),
   ['/admin/styles.css', ['../admin/public/styles.css', 'text/css; charset=utf-8']],
-  ...['app', 'api-client', 'controller', 'view', 'navigation', 'pages', 'charts', 'ui', 'forms', 'operations-page', 'staff-pages', 'case-pages'].map((name) => [`/admin/${name}.mjs`, [`../admin/public/${name}.mjs`, 'text/javascript; charset=utf-8']]),
+  ...['app', 'api-client', 'controller', 'view', 'navigation', 'pages', 'charts', 'ui', 'forms', 'operations-page', 'staff-pages', 'case-pages', 'finance-pages', 'compliance-pages', 'demand-page'].map((name) => [`/admin/${name}.mjs`, [`../admin/public/${name}.mjs`, 'text/javascript; charset=utf-8']]),
   ['/', ['public/index.html', 'text/html; charset=utf-8']],
   ['/devices', ['public/devices.html', 'text/html; charset=utf-8']],
   ['/devices.mjs', ['public/devices.mjs', 'text/javascript; charset=utf-8']],
@@ -259,7 +259,7 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
       response.end('Method not allowed');
       return;
     }
-    const route = routes.get(pathname) ?? (/^\/admin\/(accounts|trips|cases)\/[a-f0-9-]{36}$/.test(pathname) ? routes.get('/admin') : null);
+    const route = routes.get(pathname) ?? (/^\/admin\/(accounts|trips|cases|finance|compliance)\/[a-f0-9-]{36}$/.test(pathname) ? routes.get('/admin') : null);
     if (!route) {
       response.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
       response.end(request.method === 'HEAD' ? undefined : 'Not found');

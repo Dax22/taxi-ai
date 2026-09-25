@@ -22,6 +22,7 @@ export function createAdminController({ client, view, route, navigate = (path) =
       if (credentials) await client.login(credentials, signal);
       if (epoch !== generation) return;
       const first = await client.session(signal); if (epoch !== generation || !check(first)) return;
+      if (route.name === 'overview' && first.staff?.role === 'finance' && canAccess(first.staff, 'finance.read')) { navigate('/admin/finance'); return; }
       if (route.permission && !canAccess(first.staff, route.permission)) {
         const home = defaultPage(first.staff);
         if (route.name === 'overview' && home && home !== '/admin') { navigate(home); return; }

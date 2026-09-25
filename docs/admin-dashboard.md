@@ -11,6 +11,10 @@ operations queues and support/safety cases. See the
 [implemented admin workspace](admin-workspace.md) for current access rules,
 configuration and workflow. The reporting definitions below still apply.
 
+Finance, driver compliance and demand analytics are also implemented. Their
+[page and reporting guide](admin-finance-compliance-demand.md) describes simulated
+finance records, internal compliance tasks and demand/current-supply definitions.
+
 ## Implemented reporting
 
 Account search accepts name, email, account ID or saved profile plate. Driver

@@ -79,6 +79,12 @@ import { createAdminCasesRepository } from './modules/admin-cases/repository.mjs
 import { createAdminCasesService } from './modules/admin-cases/service.mjs';
 import { createAdminOperationsRepository } from './modules/admin-operations/repository.mjs';
 import { createAdminOperationsService } from './modules/admin-operations/service.mjs';
+import { createAdminFinanceRepository } from './modules/admin-finance/repository.mjs';
+import { createAdminFinanceService } from './modules/admin-finance/service.mjs';
+import { createAdminComplianceRepository } from './modules/admin-compliance/repository.mjs';
+import { createAdminComplianceService } from './modules/admin-compliance/service.mjs';
+import { createAdminDemandRepository } from './modules/admin-demand/repository.mjs';
+import { createAdminDemandService } from './modules/admin-demand/service.mjs';
 
 /** Composition root: the only place that wires business modules to adapters. */
 export function createApplication({ db, clock = Date.now, callConfig = createCallConfig(), mapProvider = createMapProvider(), allowSimulation = false,
@@ -232,10 +238,17 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
     unitOfWork, tokens, audit, clock });
   const adminOperations = createAdminOperationsService({ repository: createAdminOperationsRepository(db),
     requirePermission: staffAccess.requirePermission, clock, unitOfWork, locationForTrip: locations.safetyPosition, allowSimulation });
+  const adminFinance = createAdminFinanceService({ repository: createAdminFinanceRepository(db),
+    requirePermission: staffAccess.requirePermission, unitOfWork, clock, audit });
+  const adminCompliance = createAdminComplianceService({ repository: createAdminComplianceRepository(db),
+    getEligibility: drivers.eligibilityFor, requirePermission: staffAccess.requirePermission,
+    unitOfWork, tokens, audit, clock });
+  const adminDemand = createAdminDemandService({ repository: createAdminDemandRepository(db),
+    requirePermission: staffAccess.requirePermission, unitOfWork, clock, allowSimulation });
   const eats = createEatsService({ repository: eatsRepository, getAccount: accounts.profile, photoCodec: { normalize: normalizeDishPhoto },
     hasOtherWork: async (id) => (await rideRepository.hasDriverWork(id)) || (await rideRepository.hasCustomerWork(id, clock())),
     availabilityFor: availability.positionFor, onClaim: availability.onClaim, tokens, unitOfWork, audit, clock, normalisePhoto: normaliseFoodPhoto });
   const googleAuth = createGoogleAuthService({ repository: createGoogleAuthRepository(db), provider: googleProvider,
     accounts, devices, tokens, unitOfWork, clock });
-  return Object.freeze({ accounts, devices, drivers, rides, dispatch, eats, chat, calls, locations, availability, payments, safety, safetyMonitoring, guestRides, family, familyDelivery, vehicleChecks, adminConsole, staffAccess, adminCases, adminOperations, googleAuth, accountEmail, notifications, rateLimiter, realtime, workerCoordinator, clock });
+  return Object.freeze({ accounts, devices, drivers, rides, dispatch, eats, chat, calls, locations, availability, payments, safety, safetyMonitoring, guestRides, family, familyDelivery, vehicleChecks, adminConsole, staffAccess, adminCases, adminOperations, adminFinance, adminCompliance, adminDemand, googleAuth, accountEmail, notifications, rateLimiter, realtime, workerCoordinator, clock });
 }

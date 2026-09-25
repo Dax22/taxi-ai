@@ -538,3 +538,12 @@ SQLite migrations 33–35 and PostgreSQL migrations 5–7 add these tables and i
 derive Owner memberships from existing administrators and backfill saved SOS cases.
 See [setup and module map](../apps/admin/README.md) and
 [roles and workflow](admin-workspace.md).
+
+`admin-finance` provides read-only simulated payment projections, exact kobo totals
+and local record checks. `admin-demand` aggregates historical request cohorts and
+separately captures current eligible driver supply. Neither mutates payments or
+matching. `admin-compliance` projects document status through the canonical driver
+eligibility port and owns internal follow-up tasks, events and idempotency records
+(SQLite migration 36, PostgreSQL migration 8). It cannot approve drivers or send
+notifications. All three use scoped staff permissions; see the
+[finance, compliance and demand guide](admin-finance-compliance-demand.md).

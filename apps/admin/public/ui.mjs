@@ -67,6 +67,9 @@ export function filterForm(route, specs, values = {}) {
     const input = el(options ? 'select' : 'input', null, '', { id, name });
     if (options) for (const [value, text] of options) input.append(el('option', text, '', { value }));
     else { input.setAttribute('type', type); if (placeholder) input.setAttribute('placeholder', placeholder); if (type === 'search') input.setAttribute('maxlength', '100'); }
+    if (spec.minLength != null) input.setAttribute('minlength', spec.minLength);
+    if (spec.maxLength != null) input.setAttribute('maxlength', spec.maxLength);
+    if (spec.pattern) input.setAttribute('pattern', spec.pattern);
     input.value = route.query.get(name) ?? values[name] ?? ''; field.append(input); form.append(field);
   }
   const actions = el('div', null, 'filter-actions');

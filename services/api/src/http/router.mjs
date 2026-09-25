@@ -27,6 +27,9 @@ import { authorizeStaffRequest, staffPermission } from './staff-boundary.mjs';
 import { staffAccessRoutes } from '../modules/staff-access/routes.mjs';
 import { adminCasesRoutes } from '../modules/admin-cases/routes.mjs';
 import { adminOperationsRoutes } from '../modules/admin-operations/routes.mjs';
+import { adminFinanceRoutes } from '../modules/admin-finance/routes.mjs';
+import { adminComplianceRoutes } from '../modules/admin-compliance/routes.mjs';
+import { adminDemandRoutes } from '../modules/admin-demand/routes.mjs';
 
 /** HTTP owns parsing, cookies, CSRF and response codes; services own decisions. */
 export function createApiRouter(application, { secure = false } = {}) {
@@ -34,6 +37,7 @@ export function createApiRouter(application, { secure = false } = {}) {
   const cookie = (token, age) => sessionCookie(token, age, secure);
   const routes = [...accountEmailRoutes(application.accountEmail, cookie), ...googleAuthRoutes(application.googleAuth, accounts, secure), ...adminConsoleRoutes(application.adminConsole, accounts, cookie, application.staffAccess), ...deviceSessionRoutes(devices), ...accountRoutes(accounts, cookie), ...driverRoutes(drivers), ...rideRoutes(rides, application.dispatch), ...dispatchRoutes(application.dispatch), ...chatRoutes(chat), ...callRoutes(calls), ...locationRoutes(locations), ...availabilityRoutes(availability), ...paymentRoutes(payments), ...safetyRoutes(safety)];
   routes.push(...staffAccessRoutes(application.staffAccess), ...adminCasesRoutes(application.adminCases), ...adminOperationsRoutes(application.adminOperations));
+  routes.push(...adminFinanceRoutes(application.adminFinance), ...adminComplianceRoutes(application.adminCompliance), ...adminDemandRoutes(application.adminDemand));
   routes.push(...safetyMonitoringRoutes(application.safetyMonitoring));
   routes.push(...vehicleCheckRoutes(application.vehicleChecks));
   routes.push(...eatsRoutes(application.eats));

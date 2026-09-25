@@ -16,6 +16,7 @@ export function actionForm({ title, action, fields = [], submit = 'Save changes'
     if (spec.options) for (const [value, label] of spec.options) input.append(el('option', label, '', { value }));
     else { if (!spec.multiline) input.setAttribute('type', spec.type ?? 'text'); input.setAttribute('autocomplete', spec.autocomplete ?? 'off'); }
     if (spec.placeholder) input.setAttribute('placeholder', spec.placeholder);
+    if (spec.convert) input.setAttribute('data-convert', spec.convert);
     if (spec.value != null) input.value = spec.value;
     field.append(input); if (spec.help) field.append(el('p', spec.help, 'small muted')); form.append(field);
   }
@@ -25,7 +26,7 @@ export function formPayload(form) {
   const payload = { ...form.actionData };
   for (const field of form.elements) {
     if (!field.name || field.disabled) continue;
-    payload[field.name] = field.name === 'assigneeId' && !field.value ? null : field.value;
+    payload[field.name] = field.dataset?.convert === 'wat' ? Date.parse(field.value + '+01:00') : field.name === 'assigneeId' && !field.value ? null : field.value;
   }
   return payload;
 }

@@ -44,13 +44,19 @@ roles and enrolled authenticators, and signs out old sessions. See the
 | `/admin/cases/:id` | Notes, priority, status, history and restricted linked trip/incident evidence |
 | `/admin/staff` | Owner-managed staff roles and session revocation |
 | `/admin/audit` | Searchable staff access and recorded administrative actions |
+| `/admin/finance` | Exact simulated payment totals, filters, ledger and internal record checks |
+| `/admin/finance/:id` | Payment attempts and limited receipt metadata |
+| `/admin/compliance` | Driver application, expiry and internal follow-up queues |
+| `/admin/compliance/:id` | Document metadata and versioned staff follow-up tasks |
+| `/admin/demand` | Aggregate demand by area/time, matching outcomes and current available supply |
 
 All pages support direct links, normal browser navigation and refresh. Keyset
 pagination includes old trips beyond the customer workspace's shorter list.
 The directory masks email addresses; opening a profile records staff access and
 shows the contact email. No private documents, licence numbers, passwords, PINs,
 raw GPS, conversations or call recordings are returned by reporting APIs.
-Finance sees aggregate analytics only. The separate safety case API can show a
+Finance sees aggregate analytics and financial record metadata without participant
+profiles or route labels. The separate safety case API can show a
 saved incident location with its timestamp; that snapshot is not a live GPS feed.
 Navigation and server permissions both restrict the available pages by role.
 
@@ -70,6 +76,8 @@ Payment totals are explicitly simulations. Completed fares are gross fares, not
 platform revenue, settlements or driver payouts. Analytics uses request date
 cohorts in Africa/Lagos; profile totals remain all time even when history is filtered.
 See [metric definitions and release boundaries](../../docs/admin-dashboard.md).
+The [finance, compliance and demand guide](../../docs/admin-finance-compliance-demand.md)
+explains the new screens, date filters and limitations before Paystack is connected.
 
 Staff membership is separate from customer/driver capabilities. Browser sessions
 are still shared with the main website. Configure a persistent

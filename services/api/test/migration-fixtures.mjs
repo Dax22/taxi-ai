@@ -101,6 +101,7 @@ export function removeFamilyFixtureTables(db) {
 
 /** Legacy owner rows are derived from users.role; real staff grants are not disposable fixtures. */
 export function removeAdminWorkspaceFixtureTables(db) {
+  removeAdminExpansionFixtureTables(db);
   const exists = table => db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(table);
   for (const index of ['admin_ops_ride_queue', 'admin_ops_active_trip', 'admin_ops_offer_cohort', 'admin_ops_eats_delays', 'admin_ops_available_queue']) {
     db.exec(`DROP INDEX IF EXISTS ${index}`);
@@ -125,5 +126,18 @@ export function removeAdminWorkspaceFixtureTables(db) {
       WHERE m.role<>'owner' OR m.status<>'active' OR m.version<>1 OR u.role<>'admin'`).get().count;
     if (distinctGrants) throw new Error('Cannot downgrade a populated staff_memberships fixture.');
     db.exec('DROP TABLE staff_memberships');
+  }
+}
+
+/** Compliance tasks are durable operator work; an older-schema fixture may remove only empty tables. */
+export function removeAdminExpansionFixtureTables(db) {
+  const tables = ['admin_compliance_commands', 'admin_compliance_events', 'admin_compliance_followups'];
+  const present = tables.filter(table => db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(table));
+  for (const table of present) {
+    if (db.prepare(`SELECT count(*) AS count FROM ${table}`).get().count) throw new Error(`Cannot downgrade a populated ${table} fixture.`);
+  }
+  for (const table of present) db.exec(`DROP TABLE ${table}`);
+  for (const index of ['admin_compliance_due', 'admin_compliance_history', 'admin_compliance_documents', 'admin_compliance_applications']) {
+    db.exec(`DROP INDEX IF EXISTS ${index}`);
   }
 }

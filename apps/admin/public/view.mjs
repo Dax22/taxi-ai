@@ -3,7 +3,7 @@ import { renderPage } from './pages.mjs';
 import { canAccess } from './navigation.mjs';
 import { actionForm } from './forms.mjs';
 
-const permissions = { overview: 'analytics.read', analytics: 'analytics.read', accounts: 'accounts.read', trips: 'trips.read', operations: 'operations.read', cases: 'cases', staff: 'staff.manage', audit: 'audit.read' };
+const permissions = { overview: 'analytics.read', analytics: 'analytics.read', accounts: 'accounts.read', trips: 'trips.read', operations: 'operations.read', cases: 'cases', staff: 'staff.manage', audit: 'audit.read', finance: 'finance.read', compliance: 'compliance.read', demand: 'demand.read' };
 export function createAdminView() {
   return Object.freeze({
     clear() {
@@ -42,6 +42,7 @@ export function createAdminView() {
       $('updated').textContent = `Updated ${date(data.serverNow ?? data.asOf)}`;
       for (const anchor of document.querySelectorAll('#navigation a')) {
         anchor.hidden = staff ? !canAccess(staff, permissions[anchor.dataset.section]) : true;
+        if (anchor.dataset.section === 'overview' && staff?.role === 'finance' && canAccess(staff, 'finance.read')) anchor.hidden = true;
         if (anchor.dataset.section === route.section) anchor.setAttribute('aria-current', 'page'); else anchor.removeAttribute('aria-current');
       }
       $('legacy-review').hidden = !staff?.permissions?.includes('legacy.review');

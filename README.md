@@ -77,6 +77,9 @@ is not connected. Use fictional details and documents.
 - [Staff workspace](docs/admin-workspace.md): scoped roles and authenticator verification,
   operations queues, searchable audit history, and assigned support/safety cases with
   notes, response targets and synchronized saved SOS status.
+- [Finance, compliance and demand](docs/admin-finance-compliance-demand.md): simulation
+  ledger and record checks, driver document expiry and staff follow-ups, and area/time
+  demand analysis. Live payments remain unconfigured until a provider is connected.
 - Additive schema-13 reporting indexes preserve existing accounts, sessions and trip history.
 - Server-checked trip roles, self-claim prevention and conflicting-work protection.
 - Private driver applications, contact/licence/vehicle details and bounded image uploads.

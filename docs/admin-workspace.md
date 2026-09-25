@@ -11,10 +11,10 @@ tokens do not authorize administrative endpoints.
 | Role | Access |
 | --- | --- |
 | Owner | Staff management, access audit, operations, account/trip reports, analytics, support and safety cases, and existing administrative reviews |
-| Operations | Operations queues and trip reports |
+| Operations | Operations queues, trip reports, driver compliance follow-ups and demand analytics |
 | Support | Support cases and account/trip reports |
 | Safety | Safety cases and account/trip reports |
-| Finance | Aggregate analytics |
+| Finance | Aggregate analytics and the simulation finance centre; no participant profiles or routes |
 
 An owner assigns an existing registered account a role and supplies a reason.
 Role changes and revocations take effect on subsequent requests. The browser
@@ -73,6 +73,11 @@ must never place passwords, authenticator secrets or payment-card information
 in reasons or case notes.
 
 ## Operations
+
+The [finance, compliance and demand workspaces](admin-finance-compliance-demand.md)
+extend reporting with financial record checks, driver document expiry queues,
+internal follow-up tasks and aggregate area/time analysis. Paystack setup is not
+required for these simulation-backed views.
 
 The operations page supplies bounded, cursor-paginated queues for waiting rides,
 active trips, available drivers and delayed Eats orders. Each response has an
