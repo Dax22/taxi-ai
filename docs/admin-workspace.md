@@ -11,7 +11,7 @@ tokens do not authorize administrative endpoints.
 | Role | Access |
 | --- | --- |
 | Owner | Staff management, access audit, operations, account/trip reports, analytics, support and safety cases, and existing administrative reviews |
-| Operations | Operations queues, trip reports, driver compliance follow-ups and demand analytics |
+| Operations | Operations queues, trip reports, driver compliance follow-ups, demand analytics and nationwide coverage maps |
 | Support | Support cases and account/trip reports |
 | Safety | Safety cases and account/trip reports |
 | Finance | Aggregate analytics and the simulation finance centre; no participant profiles or routes |

@@ -16,6 +16,8 @@ function hourly(rows) {
 }
 export function demand(data, route) {
   const result = el('div'), total = data.totals;
+  const mapQuery = new URLSearchParams({ from: data.filters.from, to: data.filters.to, service: data.filters.service });
+  result.append(link('Open Nigeria coverage map ↗', '/admin/coverage?' + mapQuery, 'button secondary'));
   result.append(filterForm(route, [
     { name: 'from', label: 'Requested from · WAT', type: 'date' }, { name: 'to', label: 'Requested to · WAT', type: 'date' },
     { name: 'service', label: 'Service', options: [['all', 'Rides and courier'], ['ride', 'Rides'], ['courier', 'Courier']] },

@@ -8,6 +8,7 @@ const metadata = {
   compliance: ['Driver compliance', 'Document expiry, eligibility and internal follow-up tasks.', 'compliance.read'],
   complianceDetail: ['Driver compliance details', 'Review document status and record the next follow-up.', 'compliance.read'],
   demand: ['Demand analytics', 'Request patterns and current driver coverage across Nigeria.', 'demand.read'],
+  coverage: ['Coverage map', 'Demand, pickup waits and current driver availability across Nigeria.', 'demand.read'],
   staff: ['Staff access', 'Assign a role and manage access to the operations workspace.', 'staff.manage'],
   audit: ['Staff activity', 'Recorded staff actions and the reasons behind access changes.', 'audit.read'],
   cases: ['Support & safety', 'A shared queue with clear ownership and response deadlines.', 'cases'],
@@ -19,10 +20,10 @@ export function canAccess(staff, permission) {
 }
 export const defaultPage = (staff) => staff?.role === 'finance' && canAccess(staff, 'finance.read') ? '/admin/finance' : [['analytics.read', '/admin'], ['operations.read', '/admin/operations'], ['cases', '/admin/cases'], ['finance.read', '/admin/finance'], ['trips.read', '/admin/trips'], ['staff.manage', '/admin/staff']].find(([permission]) => canAccess(staff, permission))?.[1] ?? null;
 export function routeFor(location) {
-  const path = location.pathname.replace(/\/$/, ''), match = path.match(/^\/admin(?:\/(accounts|trips|analytics|operations|staff|audit|cases|finance|compliance|demand)(?:\/([a-f0-9-]{36}))?)?$/);
+  const path = location.pathname.replace(/\/$/, ''), match = path.match(/^\/admin(?:\/(accounts|trips|analytics|operations|staff|audit|cases|finance|compliance|demand|coverage)(?:\/([a-f0-9-]{36}))?)?$/);
   if (!match || (match[2] && !['accounts', 'trips', 'cases', 'finance', 'compliance'].includes(match[1]))) throw new Error('This dashboard page does not exist.');
   const section = match[1] ?? 'overview', name = match[2] ? { accounts: 'account', trips: 'trip', cases: 'case', finance: 'financeDetail', compliance: 'complianceDetail' }[section] : section;
-  const query = new URLSearchParams(location.search), endpoint = section === 'overview' ? 'analytics' : section === 'audit' ? 'staff/audit' : section;
+  const query = new URLSearchParams(location.search), endpoint = section === 'overview' ? 'analytics' : section === 'audit' ? 'staff/audit' : section === 'coverage' ? 'demand/coverage' : section;
   return { path, query, section, name, permission: metadata[name][2], title: metadata[name][0], description: metadata[name][1],
     apiPath: '/api/admin/console/' + endpoint + (match[2] ? '/' + match[2] : '') + (query.size ? '?' + query : '') };
 }

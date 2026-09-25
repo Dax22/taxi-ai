@@ -80,6 +80,9 @@ is not connected. Use fictional details and documents.
 - [Finance, compliance and demand](docs/admin-finance-compliance-demand.md): simulation
   ledger and record checks, driver document expiry and staff follow-ups, and area/time
   demand analysis. Live payments remain unconfigured until a provider is connected.
+- [Nationwide coverage map](docs/nationwide-coverage-map.md): city navigation across
+  Nigeria, aggregate request demand, observed pickup waits, unserved requests and
+  current waiting requests versus eligible available drivers.
 - Additive schema-13 reporting indexes preserve existing accounts, sessions and trip history.
 - Server-checked trip roles, self-claim prevention and conflicting-work protection.
 - Private driver applications, contact/licence/vehicle details and bounded image uploads.

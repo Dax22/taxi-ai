@@ -1,5 +1,7 @@
 import { check } from '../../shared/errors.mjs';
 import { fields } from '../../shared/validation.mjs';
+import { NIGERIA_BOUNDS } from '../../../../../packages/shared/src/locations.mjs';
+import { NIGERIA_MAP_PLACES, mapPlaceBounds } from '../../../../../packages/shared/src/nigeria-map-places.mjs';
 import { DEMO_AREAS } from '../../../../../packages/shared/src/demo-booking.mjs';
 
 export const DAY_MS = 86_400_000;
@@ -68,4 +70,84 @@ export function demandDaily(rows, filter) {
 export function demandHours(rows) {
   const indexed = new Map(rows.map((row) => [Number(row.hour), row]));
   return Array.from({ length: 24 }, (_, hour) => ({ hour, ...demandMetrics(indexed.get(hour)) }));
+}
+
+
+export const COVERAGE_MAX_CELLS = 1600;
+const gridSteps = Object.freeze([0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1]);
+export function coverageFilters(input = {}, now) {
+  fields(input, ['from', 'to', 'service', 'place', 'bbox', 'layer'], []);
+  const dateInput = Object.fromEntries(['from', 'to', 'service'].filter(key => input[key] !== undefined).map(key => [key, input[key]]));
+  const base = demandFilters(dateInput, now);
+  check(input.place === undefined || typeof input.place === 'string', 'INVALID_INPUT', 'Choose a saved map place.');
+  const placeId = input.place ?? '';
+  let place = placeId ? NIGERIA_MAP_PLACES.find(item => item.id === placeId) : null;
+  check(!placeId || place, 'INVALID_INPUT', 'Choose a saved map place.');
+  const layer = input.layer ?? 'coverage';
+  check(['demand', 'coverage', 'wait', 'unserved'].includes(layer), 'INVALID_INPUT', 'Choose a supported map layer.');
+  let bounds = place ? mapPlaceBounds(place) : { ...NIGERIA_BOUNDS };
+  if (input.bbox !== undefined && input.bbox !== '') {
+    check(typeof input.bbox === 'string' && input.bbox.length <= 160, 'INVALID_INPUT', 'Choose valid map bounds.');
+    const parts = input.bbox.split(',');
+    check(parts.length === 4 && parts.every(value => /^-?(?:\d+(?:\.\d*)?|\.\d+)$/.test(value)), 'INVALID_INPUT', 'Use west,south,east,north coordinates.');
+    const [west, south, east, north] = parts.map(Number);
+    bounds = { west, south, east, north };
+    place = null;
+  }
+  const { west, south, east, north } = bounds;
+  check(Object.values(bounds).every(Number.isFinite) && west < east && south < north
+    && west >= NIGERIA_BOUNDS.west && east <= NIGERIA_BOUNDS.east
+    && south >= NIGERIA_BOUNDS.south && north <= NIGERIA_BOUNDS.north,
+  'INVALID_INPUT', 'Map bounds must be an ordered viewport within Nigeria’s national extent.');
+  // Snap the effective query as well as its returned bounds to whole grid
+  // cells. Arbitrary sub-cell rectangles must not become precise-pin probes.
+  let cellDegrees;
+  const round = value => Math.round(value * 1e8) / 1e8;
+  const index = (value, step) => Number((value / step).toFixed(8));
+  for (const step of gridSteps) {
+    const snapped = { west: Math.max(NIGERIA_BOUNDS.west, round(Math.floor(index(west, step)) * step)),
+      south: Math.max(NIGERIA_BOUNDS.south, round(Math.floor(index(south, step)) * step)),
+      east: Math.min(NIGERIA_BOUNDS.east, round(Math.ceil(index(east, step)) * step)),
+      north: Math.min(NIGERIA_BOUNDS.north, round(Math.ceil(index(north, step)) * step)) };
+    const columns = Math.ceil(index(snapped.east, step)) - Math.floor(index(snapped.west, step));
+    const rows = Math.ceil(index(snapped.north, step)) - Math.floor(index(snapped.south, step));
+    if (columns * rows <= COVERAGE_MAX_CELLS) { cellDegrees = step; bounds = snapped; break; }
+  }
+  check(cellDegrees, 'INVALID_INPUT', 'Choose a smaller map viewport.');
+  return { ...base, place, bounds, cellDegrees, layer, nationalBounds: NIGERIA_BOUNDS,
+    bbox: input.bbox ? [bounds.west, bounds.south, bounds.east, bounds.north].join(',') : '' };
+}
+
+export function coverageHistorical(row = {}) {
+  return { requests: Number(row.requests ?? 0), unserved: Number(row.unserved ?? 0),
+    pickupWaitObservations: Number(row.pickupWaitObservations ?? 0),
+    meanPickupWaitSeconds: row.meanPickupWaitSeconds == null ? null : Number(row.meanPickupWaitSeconds) };
+}
+export function coverageCurrent(row = {}) {
+  return { waitingRequests: Number(row.waitingRequests ?? 0), availableDrivers: Number(row.availableDrivers ?? 0),
+    waitingObservations: Number(row.waitingObservations ?? 0),
+    meanWaitingSeconds: row.meanWaitingSeconds == null ? null : Number(row.meanWaitingSeconds),
+    maxWaitingSeconds: row.maxWaitingSeconds == null ? null : Number(row.maxWaitingSeconds) };
+}
+export function coverageSummary(rows = []) {
+  const totals = { requests: 0, unserved: 0, pickupWaitObservations: 0, waitingRequests: 0, availableDrivers: 0,
+    waitingObservations: 0, meanPickupWaitSeconds: null, meanWaitingSeconds: null, maxWaitingSeconds: null };
+  let pickupSum = 0, waitingSum = 0;
+  for (const row of rows) {
+    for (const key of ['requests', 'unserved', 'pickupWaitObservations', 'waitingRequests', 'availableDrivers', 'waitingObservations']) totals[key] += Number(row[key] ?? 0);
+    pickupSum += Number(row.meanPickupWaitSeconds ?? 0) * Number(row.pickupWaitObservations ?? 0);
+    waitingSum += Number(row.meanWaitingSeconds ?? 0) * Number(row.waitingObservations ?? 0);
+    if (row.maxWaitingSeconds != null) totals.maxWaitingSeconds = Math.max(totals.maxWaitingSeconds ?? 0, Number(row.maxWaitingSeconds));
+  }
+  totals.meanPickupWaitSeconds = totals.pickupWaitObservations ? pickupSum / totals.pickupWaitObservations : null;
+  totals.meanWaitingSeconds = totals.waitingObservations ? waitingSum / totals.waitingObservations : null;
+  return { historical: coverageHistorical(totals), current: coverageCurrent(totals) };
+}
+export function coverageCell(row, filter) {
+  const x = Number(row.cellX), y = Number(row.cellY), step = filter.cellDegrees;
+  const round = value => Math.round(value * 1e8) / 1e8;
+  // Clip the coarse cell to the requested viewport, never expose a saved pin.
+  return { key: `${step}:${x}:${y}`, bounds: { west: round(Math.max(filter.bounds.west, x * step)),
+    south: round(Math.max(filter.bounds.south, y * step)), east: round(Math.min(filter.bounds.east, (x + 1) * step)),
+    north: round(Math.min(filter.bounds.north, (y + 1) * step)) }, ...coverageHistorical(row), ...coverageCurrent(row) };
 }

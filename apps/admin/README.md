@@ -49,6 +49,7 @@ roles and enrolled authenticators, and signs out old sessions. See the
 | `/admin/compliance` | Driver application, expiry and internal follow-up queues |
 | `/admin/compliance/:id` | Document metadata and versioned staff follow-up tasks |
 | `/admin/demand` | Aggregate demand by area/time, matching outcomes and current available supply |
+| `/admin/coverage` | Nationwide interactive demand map, pickup waits, unserved requests and current driver coverage |
 
 All pages support direct links, normal browser navigation and refresh. Keyset
 pagination includes old trips beyond the customer workspace's shorter list.
@@ -78,6 +79,8 @@ cohorts in Africa/Lagos; profile totals remain all time even when history is fil
 See [metric definitions and release boundaries](../../docs/admin-dashboard.md).
 The [finance, compliance and demand guide](../../docs/admin-finance-compliance-demand.md)
 explains the new screens, date filters and limitations before Paystack is connected.
+The [nationwide coverage map guide](../../docs/nationwide-coverage-map.md) defines
+map cells, city navigation, observed pickup waits and current coverage.
 
 Staff membership is separate from customer/driver capabilities. Browser sessions
 are still shared with the main website. Configure a persistent

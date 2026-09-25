@@ -7,7 +7,7 @@ export function staffPermission(path, user, staff) {
   if (path.startsWith('/api/admin/console/staff/audit')) return 'audit.read';
   if (path.startsWith('/api/admin/console/staff')) return 'staff.manage';
   if (path === '/api/admin/console/operations') return 'operations.read';
-  if (path === '/api/admin/console/demand') return 'demand.read';
+  if (path === '/api/admin/console/demand' || path === '/api/admin/console/demand/coverage') return 'demand.read';
   if (path === '/api/admin/console/finance' || path.startsWith('/api/admin/console/finance/')) return 'finance.read';
   if (path === '/api/admin/console/compliance' || path.startsWith('/api/admin/console/compliance/')) {
     return /\/(follow-up|complete)$/.test(path) ? 'compliance.manage' : 'compliance.read';

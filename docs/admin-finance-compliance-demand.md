@@ -11,6 +11,7 @@ checks as the other staff pages. They do not require a Paystack account.
 | `/admin/compliance` | Owner, Operations | Driver review, document expiry and follow-up queues |
 | `/admin/compliance/:driverId` | Owner, Operations | Current document metadata and internal follow-up tasks |
 | `/admin/demand` | Owner, Operations | Demand by area and time, journey outcomes and current driver coverage |
+| `/admin/coverage` | Owner, Operations | Nationwide demand map, observed pickup waits and current coverage |
 
 Existing administrators retain Owner access. Other staff receive these pages
 through their assigned roles. Finance access does not grant passenger profiles,
@@ -99,6 +100,10 @@ The page contains no individual passenger or driver identifiers, precise GPS,
 private addresses or household-level maps. Unknown areas are not assigned an
 invented city. No external map request or new location collection is needed.
 Demand analytics is read-only and does not change negotiated or agreed fares.
+
+The [nationwide coverage map](nationwide-coverage-map.md) adds GPS grid layers,
+city navigation, observed booking-to-arrival waits and a separate current coverage
+snapshot. Sample areas remain off that map; city shortcuts are approximate views.
 
 ## Storage and verification
 

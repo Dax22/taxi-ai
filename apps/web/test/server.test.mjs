@@ -16,6 +16,9 @@ async function withServer(run, mode = 'local', maps = 'community') {
 test('the local site serves HTML, modules and artwork with correct content types', async () => {
   await withServer(async (base) => {
     for (const [path, type] of [['/', 'text/html'], ['/app', 'text/html'],
+      ['/admin/coverage', 'text/html'], ['/admin/coverage-page.mjs', 'text/javascript'],
+      ['/admin/coverage-map.mjs', 'text/javascript'], ['/admin/coverage-map-model.mjs', 'text/javascript'],
+      ['/shared/nigeria-map-places.mjs', 'text/javascript'],
       ['/eats', 'text/html'], ['/eats.css', 'text/css'], ['/typography.css', 'text/css'], ['/eats.mjs', 'text/javascript'],
       ['/eats/view.mjs', 'text/javascript'], ['/eats/location-fields.mjs', 'text/javascript'],
       ['/shared/nigeria-areas.mjs', 'text/javascript'], ['/shared/nigeria-boundary.mjs', 'text/javascript'], ['/eats/transport.mjs', 'text/javascript'],

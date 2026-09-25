@@ -4,6 +4,7 @@ import { cases, caseDetail } from './case-pages.mjs';
 import { finance, financeDetail } from './finance-pages.mjs';
 import { compliance, complianceDetail } from './compliance-pages.mjs';
 import { demand } from './demand-page.mjs';
+import { coverage } from './coverage-page.mjs';
 import { el, link, badge, avatar, panel, cards, table, empty, pagination, filterForm, detailsList, person, money, count, percent, date } from './ui.mjs';
 import { trend, statuses } from './charts.mjs';
 import { RIDE_STATUS_LABELS } from '/shared/trip-lifecycle.mjs';
@@ -147,4 +148,4 @@ function analytics(data, route, access) {
   fragment.append(reportingNote(data.range), el('p', 'Completion and cancellation rates divide by all requests in this period. Expired requests are shown separately. The average fare is rounded down to a whole kobo.', 'definition-note'));
   return fragment;
 }
-export const renderPage = (route, data, access) => ({ overview, accounts, account, trips, trip, analytics, operations, staff, audit, cases, case: caseDetail, finance, financeDetail, compliance, complianceDetail, demand })[route.name](data, route, access);
+export const renderPage = (route, data, access) => ({ overview, accounts, account, trips, trip, analytics, operations, staff, audit, cases, case: caseDetail, finance, financeDetail, compliance, complianceDetail, demand, coverage })[route.name](data, route, access);

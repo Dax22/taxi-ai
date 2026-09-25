@@ -66,9 +66,55 @@ const valuesFor = (filter, now, allowSimulation = false) => ({ ...Object.fromEnt
   since: filter.since, until: filter.until, now, region: filter.region,
   limit: filter.limit + 1, today: new Date(now + 3_600_000).toISOString().slice(0, 10), allowSample: allowSimulation ? 1 : 0 });
 
+// Coverage aggregates GPS into bounded cells in storage. The only location
+// values returned are grid indices; route payloads and participant rows stay here.
+const quoteCoordinate = (axis, low, high) => `CASE WHEN json_type(q.route_json,'$.pickup.${axis}') IN ('integer','real','number')
+  THEN CASE WHEN CAST(json_extract(q.route_json,'$.pickup.${axis}') AS NUMERIC) BETWEEN $${low} AND $${high}
+    THEN CAST(json_extract(q.route_json,'$.pickup.${axis}') AS DOUBLE PRECISION) ELSE NULL END ELSE NULL END`;
+const liveWaiting = `r.status='requested' AND r.driver_id IS NULL AND r.request_expires_at>$now AND r.created_at<=$now`;
+function coverageRecords(filter) {
+  return `coverage_requests AS (SELECT
+    CASE WHEN substr(r.dispatch_region,1,7)='sample:' THEN 'sample' ELSE 'gps' END AS sourceKind,
+    ${quoteCoordinate('lat', 'nationalSouth', 'nationalNorth')} AS lat,
+    ${quoteCoordinate('lng', 'nationalWest', 'nationalEast')} AS lng,
+    CASE WHEN r.created_at>=$since AND r.created_at<$until THEN 1 ELSE 0 END AS historical,
+    CASE WHEN r.driver_id IS NULL AND r.matched_at IS NULL AND (r.closed_reason='request_expired'
+      OR (r.status='requested' AND r.request_expires_at<=$now)) THEN 1 ELSE 0 END AS unserved,
+    CASE WHEN t.booked_at>=r.created_at AND t.arrived_at>=t.booked_at AND t.arrived_at<=$now
+      THEN (t.arrived_at-t.booked_at)/1000.0 ELSE NULL END AS pickupWait,
+    CASE WHEN ${liveWaiting} THEN 1 ELSE 0 END AS waiting,
+    CASE WHEN ${liveWaiting} THEN ($now-r.created_at)/1000.0 ELSE NULL END AS waitingSeconds,
+    0 AS availableDrivers
+    FROM rides r LEFT JOIN location_quotes q ON q.ride_id=r.id LEFT JOIN ride_trips t ON t.ride_id=r.id
+    WHERE ((r.created_at>=$since AND r.created_at<$until) OR (${liveWaiting}))${serviceClause('r.vehicle_category', filter)}),
+  coverage_supply AS (SELECT CASE WHEN a.mode='sample' THEN 'sample' ELSE 'gps' END AS sourceKind,
+    a.latitude AS lat,a.longitude AS lng,0 AS historical,0 AS unserved,CAST(NULL AS DOUBLE PRECISION) AS pickupWait,
+    0 AS waiting,CAST(NULL AS DOUBLE PRECISION) AS waitingSeconds,
+    1 AS availableDrivers ${eligibleDrivers}${serviceClause(driverCategory, filter)}),
+  coverage_records AS (SELECT * FROM coverage_requests UNION ALL SELECT * FROM coverage_supply),
+  located AS (SELECT *,CASE WHEN sourceKind='sample' THEN 'sample'
+    WHEN lat IS NULL OR lng IS NULL OR lat<$nationalSouth OR lat>$nationalNorth OR lng<$nationalWest OR lng>$nationalEast THEN 'unlocated'
+    WHEN lat<$south OR (lat>=$north AND $north<$nationalNorth) OR lng<$west OR (lng>=$east AND $east<$nationalEast) THEN 'outside' ELSE 'mapped' END AS mapKind FROM coverage_records),
+  gridded AS (SELECT *,CASE WHEN mapKind='mapped' THEN CAST(FLOOR(lng/CAST($cellDegrees AS DOUBLE PRECISION)) AS INTEGER) ELSE 0 END AS cellX,
+    CASE WHEN mapKind='mapped' THEN CAST(FLOOR(lat/CAST($cellDegrees AS DOUBLE PRECISION)) AS INTEGER) ELSE 0 END AS cellY FROM located)`;
+}
+
 export function createAdminDemandRepository(db) {
   async function read(sql, values, method = 'get') { return db.prepare(sql)[method](bindings(sql, values)); }
   return Object.freeze({
+    async coverage(filter, now, allowSimulation) {
+      const values = { ...valuesFor(filter, now, allowSimulation), ...filter.bounds, cellDegrees: filter.cellDegrees,
+        nationalSouth: filter.nationalBounds.south, nationalNorth: filter.nationalBounds.north,
+        nationalWest: filter.nationalBounds.west, nationalEast: filter.nationalBounds.east };
+      return read(`WITH ${coverageRecords(filter)} SELECT mapKind,cellX,cellY,
+        COALESCE(sum(historical),0) AS requests,
+        COALESCE(sum(CASE WHEN historical=1 THEN unserved ELSE 0 END),0) AS unserved,
+        count(CASE WHEN historical=1 THEN pickupWait ELSE NULL END) AS pickupWaitObservations,
+        AVG(CASE WHEN historical=1 THEN pickupWait ELSE NULL END) AS meanPickupWaitSeconds,
+        COALESCE(sum(waiting),0) AS waitingRequests,COALESCE(sum(availableDrivers),0) AS availableDrivers,
+        count(waitingSeconds) AS waitingObservations,AVG(waitingSeconds) AS meanWaitingSeconds,MAX(waitingSeconds) AS maxWaitingSeconds
+        FROM gridded GROUP BY mapKind,cellX,cellY ORDER BY mapKind,cellY,cellX`, values, 'all');
+    },
     async totals(filter, now) {
       return read(`WITH ${cohort(filter)} SELECT ${metrics} FROM cohort`, valuesFor(filter, now));
     },

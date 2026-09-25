@@ -547,3 +547,11 @@ eligibility port and owns internal follow-up tasks, events and idempotency recor
 (SQLite migration 36, PostgreSQL migration 8). It cannot approve drivers or send
 notifications. All three use scoped staff permissions; see the
 [finance, compliance and demand guide](admin-finance-compliance-demand.md).
+
+The same `admin-demand` module also owns `/api/admin/console/demand/coverage`.
+Its SQL projection groups saved pickup points and current eligible supply into
+bounded geographic cells, without returning raw locations. The staff map has
+separate projection/navigation and rendering modules, backed by bundled country
+geometry and sourced city navigation anchors. Historical requests and measured
+pickup waits remain separate from current waiting requests and driver supply;
+see [nationwide coverage](nationwide-coverage-map.md).

@@ -3,7 +3,7 @@ import { renderPage } from './pages.mjs';
 import { canAccess } from './navigation.mjs';
 import { actionForm } from './forms.mjs';
 
-const permissions = { overview: 'analytics.read', analytics: 'analytics.read', accounts: 'accounts.read', trips: 'trips.read', operations: 'operations.read', cases: 'cases', staff: 'staff.manage', audit: 'audit.read', finance: 'finance.read', compliance: 'compliance.read', demand: 'demand.read' };
+const permissions = { overview: 'analytics.read', analytics: 'analytics.read', accounts: 'accounts.read', trips: 'trips.read', operations: 'operations.read', cases: 'cases', staff: 'staff.manage', audit: 'audit.read', finance: 'finance.read', compliance: 'compliance.read', demand: 'demand.read', coverage: 'demand.read' };
 export function createAdminView() {
   return Object.freeze({
     clear() {

@@ -33,9 +33,9 @@ import { createStaffMfaConfig } from '../../services/api/src/infrastructure/staf
 // Explicit allowlist: never serve the repository root or arbitrary disk paths.
 const routes = new Map([
   ['/shared/realtime-client.mjs', ['../../packages/shared/src/realtime-client.mjs', 'text/javascript; charset=utf-8']],
-  ...['/admin', '/admin/', '/admin/accounts', '/admin/trips', '/admin/analytics', '/admin/operations', '/admin/staff', '/admin/audit', '/admin/cases', '/admin/finance', '/admin/compliance', '/admin/demand'].map((path) => [path, ['../admin/public/index.html', 'text/html; charset=utf-8']]),
+  ...['/admin', '/admin/', '/admin/accounts', '/admin/trips', '/admin/analytics', '/admin/operations', '/admin/staff', '/admin/audit', '/admin/cases', '/admin/finance', '/admin/compliance', '/admin/demand', '/admin/coverage'].map((path) => [path, ['../admin/public/index.html', 'text/html; charset=utf-8']]),
   ['/admin/styles.css', ['../admin/public/styles.css', 'text/css; charset=utf-8']],
-  ...['app', 'api-client', 'controller', 'view', 'navigation', 'pages', 'charts', 'ui', 'forms', 'operations-page', 'staff-pages', 'case-pages', 'finance-pages', 'compliance-pages', 'demand-page'].map((name) => [`/admin/${name}.mjs`, [`../admin/public/${name}.mjs`, 'text/javascript; charset=utf-8']]),
+  ...['app', 'api-client', 'controller', 'view', 'navigation', 'pages', 'charts', 'ui', 'forms', 'operations-page', 'staff-pages', 'case-pages', 'finance-pages', 'compliance-pages', 'demand-page', 'coverage-page', 'coverage-map', 'coverage-map-model'].map((name) => [`/admin/${name}.mjs`, [`../admin/public/${name}.mjs`, 'text/javascript; charset=utf-8']]),
   ['/', ['public/index.html', 'text/html; charset=utf-8']],
   ['/devices', ['public/devices.html', 'text/html; charset=utf-8']],
   ['/devices.mjs', ['public/devices.mjs', 'text/javascript; charset=utf-8']],
@@ -55,6 +55,7 @@ const routes = new Map([
   ['/eats/meal-view.mjs', ['public/eats/meal-view.mjs', 'text/javascript; charset=utf-8']],
   ['/eats/location-fields.mjs', ['public/eats/location-fields.mjs', 'text/javascript; charset=utf-8']],
   ['/shared/nigeria-areas.mjs', ['../../packages/shared/src/nigeria-areas.mjs', 'text/javascript; charset=utf-8']],
+  ['/shared/nigeria-map-places.mjs', ['../../packages/shared/src/nigeria-map-places.mjs', 'text/javascript; charset=utf-8']],
   ['/eats/view.mjs', ['public/eats/view.mjs', 'text/javascript; charset=utf-8']],
   ['/eats/transport.mjs', ['public/eats/transport.mjs', 'text/javascript; charset=utf-8']],
   ['/typography.css', ['public/typography.css', 'text/css; charset=utf-8']],
