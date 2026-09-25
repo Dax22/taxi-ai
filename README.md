@@ -74,6 +74,9 @@ is not connected. Use fictional details and documents.
 - Website Download app section stays Coming soon until real store URLs are added.
 - Separate [operations dashboard](apps/admin/README.md) at `/admin`: searchable accounts,
   individual profiles, complete paginated trip history, exact fare/payment totals and analytics.
+- [Staff workspace](docs/admin-workspace.md): scoped roles and authenticator verification,
+  operations queues, searchable audit history, and assigned support/safety cases with
+  notes, response targets and synchronized saved SOS status.
 - Additive schema-13 reporting indexes preserve existing accounts, sessions and trip history.
 - Server-checked trip roles, self-claim prevention and conflicting-work protection.
 - Private driver applications, contact/licence/vehicle details and bounded image uploads.
@@ -180,7 +183,10 @@ test driver approval and a full customer/driver negotiation.
    See [the onboarding guide](docs/driver-onboarding.md) for corrections and renewals.
 
 The administrator role cannot be selected during registration or granted through
-an HTTP endpoint. Additional administrators and staff account recovery are not built yet.
+an HTTP endpoint. The Owner can now grant scoped Operations, Support, Safety or
+Finance membership to registered accounts at `/admin/staff`; this does not grant
+the legacy administrator role. See [admin workspace setup](docs/admin-workspace.md).
+Additional owner bootstrapping and staff authenticator recovery remain operator work.
 Customer/driver password recovery is available once [email delivery](docs/account-email.md) is configured.
 
 ## Try a complete customer/driver journey

@@ -72,10 +72,17 @@ import { createFamilyRepository } from './modules/family/repository.mjs';
 import { createFamilyService } from './modules/family/service.mjs';
 import { createFamilyDeliveryRepository } from './modules/family-delivery/repository.mjs';
 import { createFamilyDeliveryService } from './modules/family-delivery/service.mjs';
+import { createStaffAccessRepository } from './modules/staff-access/repository.mjs';
+import { createStaffAccessService } from './modules/staff-access/service.mjs';
+import { createStaffMfaConfig } from './infrastructure/staff-config.mjs';
+import { createAdminCasesRepository } from './modules/admin-cases/repository.mjs';
+import { createAdminCasesService } from './modules/admin-cases/service.mjs';
+import { createAdminOperationsRepository } from './modules/admin-operations/repository.mjs';
+import { createAdminOperationsService } from './modules/admin-operations/service.mjs';
 
 /** Composition root: the only place that wires business modules to adapters. */
 export function createApplication({ db, clock = Date.now, callConfig = createCallConfig(), mapProvider = createMapProvider(), allowSimulation = false,
-  dispatchConfig = createDispatchConfig(), workerConfig = createWorkerConfig(),
+  dispatchConfig = createDispatchConfig(), workerConfig = createWorkerConfig(), staffMfa = createStaffMfaConfig(),
   safetyAlertProvider = createSafetyAlertProvider(), accountMail = createAccountMail(), pushProvider = createPushProvider(), vehicleVisionProvider = createVehicleVisionProvider(),
   googleProvider = createGoogleProvider({ config: createGoogleConfig({}), clock }) }) {
   db = asAsyncDatabase(db);
@@ -107,7 +114,17 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
   drivers = createDriversService({ repository: driverRepository,
     getAccount: accounts.profile, hasDriverWork, codec: createDriverDocumentCodec(MAX_DRIVER_FILE_BYTES),
     tokens, unitOfWork, audit, clock });
-  let calls, locations, payments, safety, guestRides, notifications, family, familyDelivery;
+  let calls, locations, payments, safety, guestRides, notifications, family, familyDelivery, adminCases;
+  const staffAccess = createStaffAccessService({ repository: createStaffAccessRepository(db), getAccount: accounts.profile,
+    getAccountByEmail: async email => {
+      const record = await accountRepository.findByEmail(email);
+      return record ? await accounts.profile(record.id) : null;
+    }, verifyPassword: async (userId, password) => {
+      const account = await accounts.profile(userId);
+      return Boolean(account && (await accounts.login({ email: account.email, password })).id === userId);
+    }, sessionOwner: async token => (await accounts.sessionFor(token))?.user.id ?? null,
+    revokeSessions: async id => { await accountRepository.deleteUserSessions(id); await devices.revokeUser(id); },
+    factor: staffMfa.factor, mfaRequired: staffMfa.required, tokens, unitOfWork, audit, clock });
   const availability = createAvailabilityService({ repository: createAvailabilityRepository(db),
     getAccount: accounts.profile, sessionOwner: accounts.sessionOwner, nativeSessionFor: devices.sessionFor, nativeSessionOwner: devices.sessionOwner, isBusy: async (id) => (await rideRepository.hasNegotiation(id)) || (await rideRepository.hasCustomerWork(id, clock())) || (await eatsRepository.hasWork(id)),
     unitOfWork, tokens, audit, clock, allowSimulation });
@@ -173,7 +190,10 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
     nativeSessionOwner:devices.sessionOwner,unitOfWork,tokens,clock });
   safety = createSafetyService({ repository: createSafetyRepository(db), getAccount: accounts.profile, getTrip: rides.safetyContext,
     vehicleCheckEvidence:vehicleChecks.evidence,
-    locationForTrip: locations.safetyPosition, sessionOwner: accounts.sessionOwner, nativeSessionOwner: devices.sessionOwner, unitOfWork, tokens, audit, clock, allowSimulation });
+    locationForTrip: locations.safetyPosition, sessionOwner: accounts.sessionOwner, nativeSessionOwner: devices.sessionOwner, unitOfWork, tokens, audit, clock, allowSimulation,
+    requireStaffPermission: staffAccess.requirePermission,
+    onIncident: async data => await adminCases.onIncident(data),
+    onIncidentReviewed: async data => await adminCases.syncIncident(data) });
   const safetyMonitoring = createSafetyMonitoringService({repository:createSafetyMonitoringRepository(db),provider:safetyAlertProvider,
     getAccount:accounts.profile,getTrip:rides.guestContext,locationForTrip:locations.safetyPosition,routeForTrip:locations.routeForRide,
     sessionOwner:accounts.sessionOwner,nativeSessionOwner:devices.sessionOwner,unitOfWork,tokens,audit,clock});
@@ -196,11 +216,22 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
     familyTargets: notifications.familyTargets, validFamilyTarget: notifications.validFamilyTarget,
     disableTarget: notifications.disableFamilyTarget, dispatchable: family.dispatchable,
     unitOfWork, tokens, clock, onChanged: async (userId) => await realtime.publish([userId]) });
-  const adminConsole = createAdminConsoleService({ repository: createAdminConsoleRepository(db), audit, clock, unitOfWork });
+  const adminConsole = createAdminConsoleService({ repository: createAdminConsoleRepository(db), audit, clock, unitOfWork,
+    requirePermission: async (user, permission) => await staffAccess.requirePermission(user.id, permission) });
+  adminCases = createAdminCasesService({ repository: createAdminCasesRepository(db),
+    requirePermission: staffAccess.requirePermission, listEligibleStaff: staffAccess.listEligible,
+    getTripEvidence: async (rideId, userId) => {
+      const { trip } = await adminConsole.trip(await accounts.profile(userId), rideId);
+      return { rideId: trip.id, status: trip.status, pickup: trip.pickup, destination: trip.destination,
+        customer: trip.customer, driver: trip.driver ? { ...trip.driver, vehicle: trip.vehicle } : null };
+    }, getIncidentEvidence: safety.staffCaseEvidence, reviewIncident: safety.staffCaseReview,
+    unitOfWork, tokens, audit, clock });
+  const adminOperations = createAdminOperationsService({ repository: createAdminOperationsRepository(db),
+    requirePermission: staffAccess.requirePermission, clock, unitOfWork, locationForTrip: locations.safetyPosition, allowSimulation });
   const eats = createEatsService({ repository: eatsRepository, getAccount: accounts.profile, photoCodec: { normalize: normalizeDishPhoto },
     hasOtherWork: async (id) => (await rideRepository.hasDriverWork(id)) || (await rideRepository.hasCustomerWork(id, clock())),
     availabilityFor: availability.positionFor, onClaim: availability.onClaim, tokens, unitOfWork, audit, clock, normalisePhoto: normaliseFoodPhoto });
   const googleAuth = createGoogleAuthService({ repository: createGoogleAuthRepository(db), provider: googleProvider,
     accounts, devices, tokens, unitOfWork, clock });
-  return Object.freeze({ accounts, devices, drivers, rides, dispatch, eats, chat, calls, locations, availability, payments, safety, safetyMonitoring, guestRides, family, familyDelivery, vehicleChecks, adminConsole, googleAuth, accountEmail, notifications, rateLimiter, realtime, workerCoordinator, clock });
+  return Object.freeze({ accounts, devices, drivers, rides, dispatch, eats, chat, calls, locations, availability, payments, safety, safetyMonitoring, guestRides, family, familyDelivery, vehicleChecks, adminConsole, staffAccess, adminCases, adminOperations, googleAuth, accountEmail, notifications, rateLimiter, realtime, workerCoordinator, clock });
 }

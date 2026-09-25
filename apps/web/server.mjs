@@ -28,13 +28,14 @@ import { createEmailConfig } from '../../services/api/src/infrastructure/email-c
 import { createPushProvider } from '../../services/api/src/infrastructure/push-provider.mjs';
 import { createVehicleVisionProvider } from '../../services/api/src/infrastructure/vehicle-vision-provider.mjs';
 import { createAccountMail } from '../../services/api/src/infrastructure/account-mail.mjs';
+import { createStaffMfaConfig } from '../../services/api/src/infrastructure/staff-config.mjs';
 
 // Explicit allowlist: never serve the repository root or arbitrary disk paths.
 const routes = new Map([
   ['/shared/realtime-client.mjs', ['../../packages/shared/src/realtime-client.mjs', 'text/javascript; charset=utf-8']],
-  ...['/admin', '/admin/', '/admin/accounts', '/admin/trips', '/admin/analytics'].map((path) => [path, ['../admin/public/index.html', 'text/html; charset=utf-8']]),
+  ...['/admin', '/admin/', '/admin/accounts', '/admin/trips', '/admin/analytics', '/admin/operations', '/admin/staff', '/admin/audit', '/admin/cases'].map((path) => [path, ['../admin/public/index.html', 'text/html; charset=utf-8']]),
   ['/admin/styles.css', ['../admin/public/styles.css', 'text/css; charset=utf-8']],
-  ...['app', 'api-client', 'controller', 'view', 'navigation', 'pages', 'charts', 'ui'].map((name) => [`/admin/${name}.mjs`, [`../admin/public/${name}.mjs`, 'text/javascript; charset=utf-8']]),
+  ...['app', 'api-client', 'controller', 'view', 'navigation', 'pages', 'charts', 'ui', 'forms', 'operations-page', 'staff-pages', 'case-pages'].map((name) => [`/admin/${name}.mjs`, [`../admin/public/${name}.mjs`, 'text/javascript; charset=utf-8']]),
   ['/', ['public/index.html', 'text/html; charset=utf-8']],
   ['/devices', ['public/devices.html', 'text/html; charset=utf-8']],
   ['/devices.mjs', ['public/devices.mjs', 'text/javascript; charset=utf-8']],
@@ -166,7 +167,7 @@ const routes = new Map([
 export function createAppServer({ runtime = createRuntimeConfig({}), db = openDatabase(runtime.mode === 'staging' ? runtime.database : ':memory:'),
   clock = Date.now, callConfig = createCallConfig({ ...process.env, TAXI_AI_CALLS_MODE: process.env.TAXI_AI_CALLS_MODE ?? (runtime.mode === 'staging' ? 'off' : 'local') }),
   mapProvider = createMapProvider({ env: { ...process.env, TAXI_AI_MAPS_MODE: process.env.TAXI_AI_MAPS_MODE ?? (runtime.mode === 'staging' ? 'off' : 'community') } }),
-  dispatchConfig = createDispatchConfig(process.env), workerConfig = createWorkerConfig(process.env),
+  dispatchConfig = createDispatchConfig(process.env), workerConfig = createWorkerConfig(process.env), staffMfa = createStaffMfaConfig(process.env),
   telemetry = createTelemetry({ enabled: runtime.mode === 'staging' }),
   accountMail = createAccountMail({ config: createEmailConfig(process.env,runtime) }),
   safetyAlertProvider = createSafetyAlertProvider({env:process.env}),
@@ -178,7 +179,7 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
   if (workerConfig.role !== 'all' && db.kind !== 'postgres') throw new Error('Split API/worker deployments require PostgreSQL.');
   const application = createApplication({ db, clock, callConfig, mapProvider,
     dispatchConfig: { ...dispatchConfig, requestRefresh: workerConfig.role === 'all' }, workerConfig,
-    googleProvider, accountMail, pushProvider, vehicleVisionProvider, safetyAlertProvider, allowSimulation: runtime.mode === 'local' });
+    googleProvider, accountMail, pushProvider, vehicleVisionProvider, safetyAlertProvider, staffMfa, allowSimulation: runtime.mode === 'local' });
   const httpApplication = workerConfig.role === 'api' ? { ...application, dispatch: { ...application.dispatch, refresh: async () => {} } } : application;
   const handleApi = createApiRouter(httpApplication, { secure: runtime.mode === 'staging' });
   const handleMobile = createMobileRouter(httpApplication);
@@ -258,7 +259,7 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
       response.end('Method not allowed');
       return;
     }
-    const route = routes.get(pathname) ?? (/^\/admin\/(accounts|trips)\/[a-f0-9-]{36}$/.test(pathname) ? routes.get('/admin') : null);
+    const route = routes.get(pathname) ?? (/^\/admin\/(accounts|trips|cases)\/[a-f0-9-]{36}$/.test(pathname) ? routes.get('/admin') : null);
     if (!route) {
       response.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
       response.end(request.method === 'HEAD' ? undefined : 'Not found');

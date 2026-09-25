@@ -6,6 +6,11 @@ Status: the first read-only operations dashboard ships in **0.18.0**, under
 the same saved application data and existing administrator role; no metrics are
 seeded or invented. [Setup and page guide](../apps/admin/README.md).
 
+The current release adds scoped staff roles, authenticator verification, live
+operations queues and support/safety cases. See the
+[implemented admin workspace](admin-workspace.md) for current access rules,
+configuration and workflow. The reporting definitions below still apply.
+
 ## Implemented reporting
 
 Account search accepts name, email, account ID or saved profile plate. Driver
@@ -18,8 +23,9 @@ driving fares and every saved journey through stable next/previous pages.
 Trips expose route names, participants, current status, agreed fare, payment state,
 the saved vehicle snapshot and recorded operational events. There is no raw GPS,
 pickup PIN, private conversation, licence number or document content in this read
-model. Private evidence and existing support/SOS actions remain in the original
-review workspace, linked from the sidebar.
+model. Restricted saved SOS evidence and synchronized incident status are now
+available in safety cases. Other existing reviews remain in the original
+workspace, linked from the Owner sidebar.
 
 | Metric | Definition |
 | --- | --- |
@@ -41,8 +47,9 @@ ties. No commission, payout, refund, rating or forecasting figures are inferred.
 
 The backend exposes `/api/admin/console/{session,accounts,trips,analytics}` and
 detail routes `/accounts/:id`, `/trips/:id`. `/login` requires existing staff
-credentials and cannot promote users. Every reporting read checks the administrator
-role on the server; native bearer tokens cannot authorize these cookie routes.
+credentials and cannot promote users. Every reporting read checks its staff
+permission on the server; native bearer tokens cannot authorize these cookie routes.
+Finance receives aggregates without sample trips or exact route labels.
 Detailed account and trip reads append `admin.account_viewed` / `admin.trip_viewed`
 audit events with staff, subject and timestamp. Email is masked in the directory.
 Sensitive data is not embedded in HTML or cached. The controller checks the staff
@@ -51,7 +58,8 @@ sign-out or backgrounding. Dashboard filters use bound SQL parameters.
 
 Schema 13 adds account/trip reporting indexes only. Back up existing data with
 the previous release before upgrading; no identities, approvals, sessions or
-historical records are rewritten. Current backup/restore requires schema 16.
+historical records are rewritten. Current backup/restore uses the current schema;
+see the deployment guide for migration and restore compatibility.
 
 Automated checks cover role/session isolation, audited reads, exact money,
 retried payments, dual-role totals, over a thousand historical records, cursor
@@ -59,8 +67,9 @@ ties/reverse pages, date boundaries, literal search, empty states, text renderin
 late responses, direct assets/routes and preservation of schema-12 records.
 Browser layout, keyboard, screen-reader and device acceptance are still pending.
 
-Dedicated staff origin/session audience, MFA, granular staff roles and an analytics
-warehouse are future work. This preview is a separate application on the same
+Dedicated staff origin/session audience and an analytics warehouse are future
+work. MFA and granular staff roles are implemented but MFA enforcement requires
+deployment configuration. This preview is a separate application on the same
 origin and existing web session; it is not a replacement for the production access
 and operational controls below. No new hosting or public rollout is included.
 

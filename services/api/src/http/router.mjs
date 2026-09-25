@@ -23,12 +23,17 @@ import { requireSameOrigin, readSessionToken, sessionCookie, requireCsrf } from 
 import { readBody } from './body.mjs';
 import { json } from './responses.mjs';
 import { realtimeResponse, requestAbortSignal } from '../modules/realtime/routes.mjs';
+import { authorizeStaffRequest, staffPermission } from './staff-boundary.mjs';
+import { staffAccessRoutes } from '../modules/staff-access/routes.mjs';
+import { adminCasesRoutes } from '../modules/admin-cases/routes.mjs';
+import { adminOperationsRoutes } from '../modules/admin-operations/routes.mjs';
 
 /** HTTP owns parsing, cookies, CSRF and response codes; services own decisions. */
 export function createApiRouter(application, { secure = false } = {}) {
   const { accounts, devices, drivers, rides, chat, calls, locations, availability, payments, safety, rateLimiter, clock } = application;
   const cookie = (token, age) => sessionCookie(token, age, secure);
-  const routes = [...accountEmailRoutes(application.accountEmail, cookie), ...googleAuthRoutes(application.googleAuth, accounts, secure), ...adminConsoleRoutes(application.adminConsole, accounts, cookie), ...deviceSessionRoutes(devices), ...accountRoutes(accounts, cookie), ...driverRoutes(drivers), ...rideRoutes(rides, application.dispatch), ...dispatchRoutes(application.dispatch), ...chatRoutes(chat), ...callRoutes(calls), ...locationRoutes(locations), ...availabilityRoutes(availability), ...paymentRoutes(payments), ...safetyRoutes(safety)];
+  const routes = [...accountEmailRoutes(application.accountEmail, cookie), ...googleAuthRoutes(application.googleAuth, accounts, secure), ...adminConsoleRoutes(application.adminConsole, accounts, cookie, application.staffAccess), ...deviceSessionRoutes(devices), ...accountRoutes(accounts, cookie), ...driverRoutes(drivers), ...rideRoutes(rides, application.dispatch), ...dispatchRoutes(application.dispatch), ...chatRoutes(chat), ...callRoutes(calls), ...locationRoutes(locations), ...availabilityRoutes(availability), ...paymentRoutes(payments), ...safetyRoutes(safety)];
+  routes.push(...staffAccessRoutes(application.staffAccess), ...adminCasesRoutes(application.adminCases), ...adminOperationsRoutes(application.adminOperations));
   routes.push(...safetyMonitoringRoutes(application.safetyMonitoring));
   routes.push(...vehicleCheckRoutes(application.vehicleChecks));
   routes.push(...eatsRoutes(application.eats));
@@ -77,11 +82,26 @@ export function createApiRouter(application, { secure = false } = {}) {
       return;
     }
     check(route, 'NOT_FOUND', 'API endpoint not found.');
-    const result = await route.handle({ data, token, session, user: session?.user, origin, cookieHeader: request.headers.cookie,
+    const staffRequest = staffPermission(pathname, session?.user);
+    if (staffRequest) {
+      await rateLimiter.consume(`staff-read:${session.user.id}`, clock(), 120, 60_000);
+      if (write && pathname.includes('/staff/mfa/')) await rateLimiter.consume(`staff-factor:${session.user.id}`, clock(), 5, 5 * 60_000);
+      await authorizeStaffRequest(application.staffAccess, session.user, token, pathname);
+    }
+    const context = { data, token, session, user: session?.user, origin, cookieHeader: request.headers.cookie,
       match: pathname.match(route.path), key: request.headers['idempotency-key'], callClient: request.headers['x-call-client'],
       locationClient: request.headers['x-location-client'],
       availabilityClient: request.headers['x-availability-client'],
-      query: new URL(request.url, origin).searchParams, reauthenticate: async () => { const fresh = (await accounts.sessionFor(token)); check(fresh, 'UNAUTHENTICATED', 'Sign in to continue.'); if (write) requireCsrf(request, fresh); return fresh.user; } });
+      query: new URL(request.url, origin).searchParams, reauthenticate: async () => { const fresh = (await accounts.sessionFor(token)); check(fresh, 'UNAUTHENTICATED', 'Sign in to continue.'); if (write) requireCsrf(request, fresh); return fresh.user; } };
+    const result = staffRequest && write ? await application.staffAccess.withSession(session.user.id, token, async () => {
+      await authorizeStaffRequest(application.staffAccess, session.user, token, pathname);
+      return await route.handle(context);
+    }) : await route.handle(context);
+    if (staffRequest) {
+      const fresh = await accounts.sessionFor(token);
+      check(fresh?.user.id === session.user.id, 'UNAUTHENTICATED', 'Sign in to continue.');
+      await authorizeStaffRequest(application.staffAccess, fresh.user, token, pathname);
+    }
     if (result.cookie) response.setHeader('Set-Cookie', result.cookie);
     if (result.image) {
       response.writeHead(200, { 'Content-Type': result.image.mimeType, 'Content-Length': result.image.content.length });

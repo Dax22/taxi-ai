@@ -1,4 +1,4 @@
-import { removeSafetyMonitoringFixtureTables } from './migration-fixtures.mjs';
+import { includeExpectedStaffOwners, removeSafetyMonitoringFixtureTables } from './migration-fixtures.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -16,6 +16,7 @@ test('schema 18 upgrades add empty Eats storage while preserving existing accoun
   const ride = await requestRide(customer);
   const tables = h.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'eats_%' ORDER BY name").all().map((r) => r.name).filter((name) => !['dispatch_commands','dispatch_offers','dispatch_journeys','account_revisions','worker_leases'].includes(name));
   const records = new Map(tables.map((name) => [name, h.db.prepare(`SELECT * FROM ${name}`).all()]));
+  includeExpectedStaffOwners(h.db, records);
   removeEatsFixtureTables(h.db); h.db.exec('PRAGMA user_version=18'); await h.restart();
   assert.equal(h.db.prepare('PRAGMA user_version').get().user_version, SCHEMA_VERSION);
   for (const name of tables) assert.deepEqual(h.db.prepare(`SELECT * FROM ${name}`).all(), records.get(name), name);

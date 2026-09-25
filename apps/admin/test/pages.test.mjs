@@ -80,3 +80,14 @@ test('directory empty states are explicit, exact money stays precise and resetti
   view.clear(); assert.equal(f.nodes.get('workspace').hidden, true); assert.equal(f.nodes.get('page-content').children.length, 0);
   assert.equal(f.nodes.get('staff-name').textContent, ''); view.signIn('Sign in'); assert.equal(f.nodes.get('sign-in').hidden, false);
 });
+
+test('finance overview and analytics show aggregate totals without treating permission-redacted journeys as no activity', (t) => {
+  fixture(t);
+  for (const name of ['overview', 'analytics']) {
+    const output = renderPage(route(name), { ...analytics, recentTrips: [], routes: [] }, { role: 'finance', permissions: ['analytics.read'] });
+    assert.match(text(output), /₦9,701\.00/); assert.match(text(output), /aggregate totals/); assert.match(text(output), /require trip access/);
+    assert.doesNotMatch(text(output), /No journeys to show|No route activity yet|Recent journeys|Most requested routes/);
+    assert.equal(all(output).filter((node) => node.attributes.href?.startsWith('/admin/trips')).length, 0);
+    assert.equal(all(output).filter((node) => node.attributes.href?.startsWith('/admin/accounts')).length, 0);
+  }
+});

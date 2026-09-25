@@ -526,6 +526,15 @@ Schema 13 adds reporting indexes without data backfill or record changes.
 
 Staff role checks are applied both at HTTP and service boundaries. Audited detail
 views, bounded filters, stable pagination and exact kobo sums are shared across
-the pages. The application presently uses existing web administrator cookies on
-the same origin; dedicated staff sessions/origin, MFA and granular permissions
-remain production requirements. See [setup and module map](../apps/admin/README.md).
+the pages. The application uses existing web cookies on the same origin;
+dedicated staff sessions/origin remain deployment work.
+
+`staff-access` owns separate staff membership, permissions, encrypted TOTP factors
+and session-bound verification. `admin-operations` owns bounded queue projections.
+`admin-cases` owns support/safety workflow and receives narrow evidence and source
+incident synchronization ports from the composition root. Privileged HTTP writes
+recheck the current session and permission inside the mutation transaction.
+SQLite migrations 33–35 and PostgreSQL migrations 5–7 add these tables and indexes,
+derive Owner memberships from existing administrators and backfill saved SOS cases.
+See [setup and module map](../apps/admin/README.md) and
+[roles and workflow](admin-workspace.md).

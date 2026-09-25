@@ -7,7 +7,9 @@ import { asyncMap } from '../../shared/async-collections.mjs';
 
 
 /** Safety records are private; notification actions are an explicit local simulator. */
-export function createSafetyService({ repository, getAccount, getTrip, locationForTrip, sessionOwner, nativeSessionOwner = () => null, vehicleCheckEvidence, unitOfWork, tokens, audit, clock, allowSimulation = false }) {
+export function createSafetyService({ repository, getAccount, getTrip, locationForTrip, sessionOwner, nativeSessionOwner = () => null, vehicleCheckEvidence, unitOfWork, tokens, audit, clock, allowSimulation = false,
+  requireStaffPermission = async () => { check(false, 'FORBIDDEN', 'Staff case access is unavailable.'); },
+  onIncident = async () => {}, onIncidentReviewed = async () => {} }) {
   const settings = Object.freeze({ mode: 'simulation', canSimulate: allowSimulation, localOnly: allowSimulation, maxContacts: MAX_CONTACTS, shareMinutes: SHARE_MINUTES });
   async function actor(id) { const user = (await getAccount(id)); check(user, 'UNAUTHENTICATED', 'Sign in to continue.'); return user; }
   function participant(user) { requireRole(user, 'customer'); }
@@ -120,6 +122,7 @@ export function createSafetyService({ repository, getAccount, getTrip, locationF
           const notificationId = tokens.id(); (await repository.addNotification(notificationId, resourceId, contact, now));
           (await repository.notificationEvent(notificationId, user.id, 'queued', 0, now));
         }
+        await onIncident({ incidentId: resourceId, rideId: id, now });
       } else if (action === 'incident.review') {
         fields(data, ['expectedVersion', 'decision', 'note']); const row = (await incident(user, id)); version(row, data.expectedVersion);
         const note = noteText(data.note, true);
@@ -130,6 +133,7 @@ export function createSafetyService({ repository, getAccount, getTrip, locationF
         if (next[1] === 'resolved') for (const notice of (await repository.notifications(id))) {
           if (['queued', 'failed'].includes(notice.status)) (await noticeState(notice, 'cancelled', notice.attempts, user, now));
         }
+        await onIncidentReviewed({ incidentId: id, status: next[1], userId: user.id, reason: note, now });
       } else if (action === 'notification.simulate') {
         fields(data, ['expectedVersion', 'outcome']); const notice = (await repository.notification(id));
         check(notice, 'NOT_FOUND', 'Test notification not found.'); const row = (await incident(user, notice.incidentId)); version(notice, data.expectedVersion);
@@ -167,5 +171,35 @@ export function createSafetyService({ repository, getAccount, getTrip, locationF
   }
   // Trip closure owns this transaction. An open incident does not close itself when a trip ends.
   async function closeRide(id, now) { for (const row of (await repository.linksForRide(id))) (await endLink(row, now, 'trip_ended')); }
-  return Object.freeze({ contacts, trip, get, list, command, sharedTrip, closeRide, sweep });
+  // Case-only evidence access. This port never grants general live tracking.
+  async function staffCaseEvidence(incidentId, userId) {
+    await requireStaffPermission(userId, 'cases.safety');
+    const row = await repository.incident(incidentId);
+    check(row, 'NOT_FOUND', 'Incident not found.');
+    await audit.record(userId, 'admin.safety_evidence_viewed', incidentId, clock());
+    return { id: row.id, rideId: row.rideId, kind: row.kind, status: row.status, createdAt: row.createdAt,
+      note: row.note, snapshot: JSON.parse(row.snapshotJson),
+      notifications: (await repository.notifications(incidentId)).map(notice => ({
+        id: notice.id, mode: notice.mode, status: notice.status, attempts: notice.attempts, updatedAt: notice.updatedAt })) };
+  }
+  async function staffCaseReview({ incidentId, userId, status, reason, now = clock() }) {
+    await requireStaffPermission(userId, 'cases.safety');
+    check(['open', 'acknowledged', 'resolved'].includes(status), 'INVALID_INPUT', 'Choose a valid incident status.');
+    check(typeof reason === 'string' && reason.trim().length >= 5 && reason.trim().length <= 1000
+      && !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/u.test(reason), 'INVALID_INPUT', 'Record a reason of 5–1000 characters.');
+    const note = reason.trim(), row = await repository.incident(incidentId);
+    check(row, 'NOT_FOUND', 'Incident not found.');
+    if (row.status === status) return;
+    if (status !== 'resolved') {
+      const open = await repository.openIncident(row.rideId, row.reporterId);
+      check(!open || open.id === incidentId, 'INCIDENT_OPEN', 'A newer incident is already open for this passenger and trip.');
+    }
+    await repository.reviewIncident(incidentId, status, userId, now);
+    await repository.incidentEvent(incidentId, userId, status, note, row.version + 1, now);
+    if (status === 'resolved') for (const notice of await repository.notifications(incidentId)) {
+      if (['queued', 'failed'].includes(notice.status)) await noticeState(notice, 'cancelled', notice.attempts, { id: userId }, now);
+    }
+    await audit.record(userId, 'admin.safety_case_reviewed', incidentId, now);
+  }
+  return Object.freeze({ contacts, trip, get, list, command, sharedTrip, closeRide, sweep, staffCaseEvidence, staffCaseReview });
 }

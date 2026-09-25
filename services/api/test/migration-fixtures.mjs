@@ -1,3 +1,10 @@
+/** Schema 33 derives this new table from preserved legacy administrator identities. */
+export function includeExpectedStaffOwners(db, baseline) {
+  if (!baseline.has('staff_memberships')) return;
+  baseline.set('staff_memberships', db.prepare(`SELECT id AS user_id,'owner' AS role,'active' AS status,
+    1 AS version,created_at AS updated_at FROM users WHERE role='admin' ORDER BY id`).all());
+}
+
 /** Remove only the new, empty feature tables when a test reconstructs an older schema. */
 export function removeEatsFixtureTables(db) {
   removeGuestFixtureTables(db);
@@ -80,6 +87,7 @@ export function removeWorkerScaleFixtureFields(db) {
 
 /** Family sharing is opt-in; older fixtures must never discard real consent or trip grants. */
 export function removeFamilyFixtureTables(db) {
+  removeAdminWorkspaceFixtureTables(db);
   for (const { name } of db.prepare("SELECT name FROM sqlite_master WHERE type='trigger' AND (name LIKE 'family_%' OR name LIKE 'realtime_family_%')").all()) {
     if (!/^(?:realtime_)?family_[a-z_]+$/.test(name)) throw new Error('Unexpected family fixture trigger.');
     db.exec(`DROP TRIGGER ${name}`);
@@ -88,5 +96,34 @@ export function removeFamilyFixtureTables(db) {
     if (!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(table)) continue;
     if (db.prepare(`SELECT count(*) AS count FROM ${table}`).get().count) throw new Error(`Cannot downgrade a populated ${table} fixture.`);
     db.exec(`DROP TABLE ${table}`);
+  }
+}
+
+/** Legacy owner rows are derived from users.role; real staff grants are not disposable fixtures. */
+export function removeAdminWorkspaceFixtureTables(db) {
+  const exists = table => db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(table);
+  for (const index of ['admin_ops_ride_queue', 'admin_ops_active_trip', 'admin_ops_offer_cohort', 'admin_ops_eats_delays', 'admin_ops_available_queue']) {
+    db.exec(`DROP INDEX IF EXISTS ${index}`);
+  }
+  for (const table of ['admin_case_commands', 'admin_case_events', 'admin_cases']) {
+    if (!exists(table)) continue;
+    const count = table === 'admin_cases'
+      ? db.prepare('SELECT count(*) AS count FROM admin_cases WHERE incident_id IS NULL').get().count
+      : table === 'admin_case_events'
+        ? db.prepare("SELECT count(*) AS count FROM admin_case_events WHERE action<>'incident_linked' OR actor_id IS NOT NULL").get().count
+        : db.prepare(`SELECT count(*) AS count FROM ${table}`).get().count;
+    if (count) throw new Error(`Cannot downgrade a populated ${table} fixture.`);
+    db.exec(`DROP TABLE ${table}`);
+  }
+  for (const table of ['staff_stepups', 'staff_mfa_pending', 'staff_mfa', 'staff_commands', 'staff_access_audit']) {
+    if (!exists(table)) continue;
+    if (db.prepare(`SELECT count(*) AS count FROM ${table}`).get().count) throw new Error(`Cannot downgrade a populated ${table} fixture.`);
+    db.exec(`DROP TABLE ${table}`);
+  }
+  if (exists('staff_memberships')) {
+    const distinctGrants = db.prepare(`SELECT count(*) AS count FROM staff_memberships m JOIN users u ON u.id=m.user_id
+      WHERE m.role<>'owner' OR m.status<>'active' OR m.version<>1 OR u.role<>'admin'`).get().count;
+    if (distinctGrants) throw new Error('Cannot downgrade a populated staff_memberships fixture.');
+    db.exec('DROP TABLE staff_memberships');
   }
 }

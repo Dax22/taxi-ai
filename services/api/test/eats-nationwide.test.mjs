@@ -7,7 +7,7 @@ import { harness, participants, PASSWORD } from './helpers.mjs';
 import { foodAreaId, LEGACY_FOOD_AREAS } from '../../../packages/shared/src/nigeria-areas.mjs';
 import { SCHEMA_VERSION } from '../src/infrastructure/database.mjs';
 import { saveSnapshot } from '../src/infrastructure/database-snapshot.mjs';
-import { removeNationwideEatsFixtureTables } from './migration-fixtures.mjs';
+import { includeExpectedStaffOwners, removeNationwideEatsFixtureTables } from './migration-fixtures.mjs';
 
 const IKEJA = foodAreaId('lagos', 'Ikeja');
 const KANO = foodAreaId('kano', 'Kano');
@@ -254,6 +254,7 @@ test('schema 22 upgrade preserves existing account and Eats records and creates 
   const f = await fixture(t, { persistent: true }), k = await f.kitchen('wuse-ii', null), order = await k.place();
   const tables = f.h.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT IN ('eats_store_dispatch_points','eats_order_dispatch_points','account_revisions','worker_leases') ORDER BY name").all().map((row) => row.name);
   const before = new Map(tables.map((name) => [name, f.h.db.prepare(`SELECT * FROM ${name}`).all()]));
+  includeExpectedStaffOwners(f.h.db, before);
   removeNationwideEatsFixtureTables(f.h.db); f.h.db.exec('PRAGMA user_version=22');
   await f.h.restart();
   assert.equal(f.h.db.prepare('PRAGMA user_version').get().user_version, SCHEMA_VERSION);
