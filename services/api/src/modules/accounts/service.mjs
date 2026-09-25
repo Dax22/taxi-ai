@@ -9,7 +9,7 @@ export const SESSION_MS = 12 * 60 * 60 * 1000;
  * repository, driverProfiles {find, insert, validateVehicle}, passwords {hash, verify}, tokens
  * {id, generate, digest}, unitOfWork, audit, hasRideHistory and clock.
  */
-export function createAccountsService({ repository, driverProfiles, passwords, tokens, unitOfWork, audit, hasRideHistory, clock, revokeDevices = () => {}, onRegistered = () => {} }) {
+export function createAccountsService({ repository, driverProfiles, passwords, tokens, unitOfWork, audit, hasRideHistory, clock, revokeDevices = () => {}, onRegistered = () => {}, revokeRecoveryLinks = () => {} }) {
   const passwordProofs = new WeakMap();
   async function profile(id) {
     const user = (await repository.findById(id));
@@ -252,7 +252,29 @@ export function createAccountsService({ repository, driverProfiles, passwords, t
     }));
   }
 
-  return Object.freeze({ profile, register, login, resolveGoogle, signInMethods, unlinkGoogle, addDriverProfile, deleteDriverProfile, issueSession, sessionFor, revokeSession, bootstrapAdmin,
+  // Operator-only port for the local CLI. No browser or native route exposes it.
+  // Database access is the operator authority; this never grants roles or resets MFA.
+  async function resetAdminPasswordLocally(email, password) {
+    email = emailAddress(email); password = passwordInput(password);
+    const original = await repository.findByEmail(email);
+    check(original?.role === 'admin' && original.passwordEnabled, 'INVALID_ACCOUNT',
+      'No password-based administrator was found for that email in the configured database.');
+    const hash = await passwords.hash(password);
+    return await unitOfWork(async () => {
+      const current = await repository.findByEmail(email);
+      check(current?.id === original.id && current.role === 'admin' && current.passwordEnabled
+        && current.passwordHash === original.passwordHash, 'INVALID_ACCOUNT',
+      'The administrator account changed. Run the reset command again.');
+      await repository.replacePassword(current.id, hash);
+      await repository.deleteUserSessions(current.id);
+      await revokeDevices(current.id);
+      await revokeRecoveryLinks(current.id);
+      await audit.record(current.id, 'admin.password_reset_locally', current.id, clock());
+      return { email, reset: true };
+    });
+  }
+
+  return Object.freeze({ profile, register, login, resolveGoogle, signInMethods, unlinkGoogle, addDriverProfile, deleteDriverProfile, issueSession, sessionFor, revokeSession, bootstrapAdmin, resetAdminPasswordLocally,
     emailState, emailStateForAddress, confirmEmail, replacePassword, validatePasswordLogin, consumePasswordLogin,
     sessionOwner: async (hash) => (await repository.findSession(hash, clock()))?.userId ?? null });
 }

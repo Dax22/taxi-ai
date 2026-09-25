@@ -20,6 +20,7 @@
     "test:safety": "node --experimental-sqlite --test services/api/test/safety.test.mjs services/api/test/safety-migration.test.mjs apps/web/test/safety.test.mjs",
     "verify": "npm run check && npm test",
     "admin": "node --env-file-if-exists=.env --experimental-sqlite scripts/create-admin.mjs",
+    "admin:reset-password": "node --env-file-if-exists=.env --experimental-sqlite scripts/reset-admin-password.mjs",
     "demo": "node scripts/fare-demo.mjs",
     "mobile:start": "npm --prefix apps/mobile start",
     "mobile:verify": "npm --prefix apps/mobile run verify",

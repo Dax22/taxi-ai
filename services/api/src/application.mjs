@@ -107,6 +107,10 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
       return driver ? { ...driver, eligibility: (await drivers.eligibilityFor(id)) } : null;
     } },
     passwords, tokens, unitOfWork, audit, revokeDevices: async (id) => (await devices.revokeUser(id)),
+    revokeRecoveryLinks: async (id) => {
+      const recovery = createAccountEmailRepository(db);
+      await recovery.deleteUserTokens(id); await recovery.deleteUserJobs(id);
+    },
     onRegistered: async (id) => (await accountEmail.onRegistered(id)), hasRideHistory: rideRepository.hasHistory, clock });
   devices = createDeviceSessionsService({ repository: createDeviceSessionsRepository(db),
     authenticate: accounts.login, validatePasswordLogin: accounts.validatePasswordLogin, consumePasswordLogin: accounts.consumePasswordLogin,

@@ -22,6 +22,13 @@ simulated payments used by the website and native app. No separate install is ne
 Ordinary browser tabs share the website login. Use a separate browser profile or
 private session when testing staff and customer accounts simultaneously.
 
+If you forget the existing administrator password, stop the local server and run
+`npm run admin:reset-password -- your-admin-email@example.com` in the VS Code
+terminal. Enter and confirm a new password when prompted; input stays hidden.
+Restart the server and sign in again. The reset preserves accounts, trips, staff
+roles and enrolled authenticators, and signs out old sessions. See the
+[operator recovery instructions](../../docs/admin-workspace.md#forgotten-administrator-password).
+
 ## Pages
 
 | Path | Purpose |

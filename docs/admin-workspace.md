@@ -42,6 +42,30 @@ key; keep that key with the recoverable infrastructure secrets. Set
 `TAXI_AI_STAFF_MFA_REQUIRED=true` to enforce enrollment. Local development
 defaults to optional enrollment for existing test administrators.
 
+### Forgotten administrator password
+
+For an existing password-based administrator, use the operator command in the
+VS Code integrated terminal on the machine that holds the configured database:
+
+```bash
+npm run admin:reset-password -- taxi-admin@example.test
+```
+
+Stop the local development server first. The command asks for a new password
+(12–128 characters) and confirmation without displaying either. Do not put the
+password in the command, environment variables or chat. Run from the repository
+root with the same `.env` / database configuration as the server; the command
+supports `TAXI_AI_DB` for SQLite and `TAXI_AI_DATABASE_URL` for PostgreSQL.
+Restart the server and sign in with the existing email and new password.
+
+This command requires local operator/database access. It does not create an
+administrator, grant or restore staff membership, reset an authenticator, or
+enable password login for a Google-only account. It changes only the existing
+administrator password, revokes old browser/native sessions and temporary MFA
+proofs, invalidates pending email recovery links and records the local reset.
+Existing accounts, trips, staff membership and enrolled authenticators remain.
+There is no browser or native endpoint for this operator action.
+
 The searchable access audit records staff changes and reasons together with
 recorded administrative actions. It is not a transcript of every page viewed
 or a replacement for infrastructure request logging. Staff
