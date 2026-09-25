@@ -1,3 +1,4 @@
+import { pushTarget } from './push-target';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { isDevice } from 'expo-device';
 import * as Notifications from 'expo-notifications';
@@ -17,11 +18,12 @@ export async function notificationToken(projectId: string): Promise<string> {
   })])).data;}finally{clearTimeout(timeout);}
 }
 // A tap opens an explicit review prompt. The payload cannot choose an account or authorize a journey.
-export function listenForPush(onUpdate:(id:number)=>void,onReceive:()=>void=()=>{}){
+export function listenForPush(onUpdate:(id:number)=>void,onReceive:()=>void=()=>{},onFamily:(eventId:string)=>void=()=>{}){
   if(!supported())return()=>{};
   const receive=(response:Notifications.NotificationResponse|null)=>{
-    const id=response?.notification.request.content.data?.notificationId;
-    if(Number.isSafeInteger(id)&&Number(id)>0)onUpdate(Number(id));
+    const target=pushTarget(response?.notification.request.content.data);
+    if(target?.kind==='family')onFamily(target.eventId);
+    else if(target?.kind==='journey')onUpdate(target.notificationId);
     Notifications.clearLastNotificationResponse();
   };
   receive(Notifications.getLastNotificationResponse());

@@ -68,6 +68,10 @@ import { createRealtimeService } from './modules/realtime/service.mjs';
 import { createWorkerCoordinationRepository } from './modules/worker-coordination/repository.mjs';
 import { createWorkerCoordinator } from './infrastructure/worker-coordinator.mjs';
 import { createWorkerConfig } from './infrastructure/worker-config.mjs';
+import { createFamilyRepository } from './modules/family/repository.mjs';
+import { createFamilyService } from './modules/family/service.mjs';
+import { createFamilyDeliveryRepository } from './modules/family-delivery/repository.mjs';
+import { createFamilyDeliveryService } from './modules/family-delivery/service.mjs';
 
 /** Composition root: the only place that wires business modules to adapters. */
 export function createApplication({ db, clock = Date.now, callConfig = createCallConfig(), mapProvider = createMapProvider(), allowSimulation = false,
@@ -103,7 +107,7 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
   drivers = createDriversService({ repository: driverRepository,
     getAccount: accounts.profile, hasDriverWork, codec: createDriverDocumentCodec(MAX_DRIVER_FILE_BYTES),
     tokens, unitOfWork, audit, clock });
-  let calls, locations, payments, safety, guestRides, notifications;
+  let calls, locations, payments, safety, guestRides, notifications, family, familyDelivery;
   const availability = createAvailabilityService({ repository: createAvailabilityRepository(db),
     getAccount: accounts.profile, sessionOwner: accounts.sessionOwner, nativeSessionFor: devices.sessionFor, nativeSessionOwner: devices.sessionOwner, isBusy: async (id) => (await rideRepository.hasNegotiation(id)) || (await rideRepository.hasCustomerWork(id, clock())) || (await eatsRepository.hasWork(id)),
     unitOfWork, tokens, audit, clock, allowSimulation });
@@ -129,6 +133,7 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
       const targets = kind === 'request' ? recipients : [ride.customerId,ride.driverId].filter((id) => id && id !== actorId);
       for (const userId of targets) (await notifications.publish({ userId, rideId: ride.id, kind,
         mode: userId === ride.customerId ? 'customer' : 'work', eventKey, now }));
+      await family.onRideEvent({ rideId: ride.id, kind, eventKey, now });
     },
     onTripCompleted: async (data) => (await payments.recordCompletion(data)),
     onRideClosed: async (id, now) => { (await calls.closeRide(id, now)); (await locations.closeRide(id, now)); (await safety.closeRide(id, now)); (await guestRides.closeRide(id, now)); } });
@@ -159,7 +164,8 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
     sessionOwner: accounts.sessionOwner, getRideContext: rides.conversationContext, unitOfWork, audit, tokens, clock, config: callConfig });
   locations = createLocationsService({ repository: createLocationsRepository(db), provider: mapProvider,
     getAccount: accounts.profile, sessionOwner: accounts.sessionOwner, nativeAccessOwner: devices.accessOwner, nativeSessionOwner: devices.sessionOwner,
-    getRideContext: rides.conversationContext, unitOfWork, tokens, audit, clock });
+    getRideContext: rides.conversationContext, unitOfWork, tokens, audit, clock,
+    onChange: async (rideId, now) => await family.onLocationEvent(rideId, now) });
   payments = createPaymentsService({ repository: createPaymentsRepository(db), getAccount: accounts.profile,
     tripForPayment: rides.paymentContext, simulate: simulatePayment, unitOfWork, tokens, audit, clock, allowSimulation });
   const vehicleChecks = createVehicleChecksService({ repository:createVehicleChecksRepository(db),provider:vehicleVisionProvider,
@@ -173,11 +179,28 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
     sessionOwner:accounts.sessionOwner,nativeSessionOwner:devices.sessionOwner,unitOfWork,tokens,audit,clock});
   guestRides = createGuestRidesService({ repository: guestRepository, getAccount: accounts.profile, getTrip: rides.guestContext,
     locationForTrip: locations.safetyPosition, sessionOwner: accounts.sessionOwner, nativeSessionOwner: devices.sessionOwner, unitOfWork, tokens, audit, clock });
+  family = createFamilyService({ repository: createFamilyRepository(db), getAccount: accounts.profile,
+    getAccountByEmail: async (email) => {
+      const account = await accountRepository.findByEmail(email);
+      return account ? { id: account.id } : null;
+    }, getTrip: rides.familyContext,
+    listTrips: async (user) => (await rides.list(user, 'customer')).rides.map(ride => ({
+      rideId: ride.id, customerId: user.id, status: ride.trip?.status ?? ride.status,
+      pickup: ride.pickup.name, destination: ride.destination.name,
+      passenger: ride.passenger, vehicleCategory: ride.vehicleCategory })),
+    locationForTrip: locations.safetyPosition, unitOfWork, tokens, audit, clock,
+    publish: realtime.publish,
+    enqueue: async (eventId, userId) => await familyDelivery.enqueue(eventId, userId),
+    deliveryFor: async (eventId, userId) => await familyDelivery.deliveryFor(eventId, userId) });
+  familyDelivery = createFamilyDeliveryService({ repository: createFamilyDeliveryRepository(db), provider: pushProvider,
+    familyTargets: notifications.familyTargets, validFamilyTarget: notifications.validFamilyTarget,
+    disableTarget: notifications.disableFamilyTarget, dispatchable: family.dispatchable,
+    unitOfWork, tokens, clock, onChanged: async (userId) => await realtime.publish([userId]) });
   const adminConsole = createAdminConsoleService({ repository: createAdminConsoleRepository(db), audit, clock, unitOfWork });
   const eats = createEatsService({ repository: eatsRepository, getAccount: accounts.profile, photoCodec: { normalize: normalizeDishPhoto },
     hasOtherWork: async (id) => (await rideRepository.hasDriverWork(id)) || (await rideRepository.hasCustomerWork(id, clock())),
     availabilityFor: availability.positionFor, onClaim: availability.onClaim, tokens, unitOfWork, audit, clock, normalisePhoto: normaliseFoodPhoto });
   const googleAuth = createGoogleAuthService({ repository: createGoogleAuthRepository(db), provider: googleProvider,
     accounts, devices, tokens, unitOfWork, clock });
-  return Object.freeze({ accounts, devices, drivers, rides, dispatch, eats, chat, calls, locations, availability, payments, safety, safetyMonitoring, guestRides, vehicleChecks, adminConsole, googleAuth, accountEmail, notifications, rateLimiter, realtime, workerCoordinator, clock });
+  return Object.freeze({ accounts, devices, drivers, rides, dispatch, eats, chat, calls, locations, availability, payments, safety, safetyMonitoring, guestRides, family, familyDelivery, vehicleChecks, adminConsole, googleAuth, accountEmail, notifications, rateLimiter, realtime, workerCoordinator, clock });
 }

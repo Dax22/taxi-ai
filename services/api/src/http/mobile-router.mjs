@@ -1,4 +1,5 @@
 import { safetyMonitoringRoutes } from '../modules/safety-monitoring/routes.mjs';
+import { familyRoutes } from '../modules/family/routes.mjs';
 import { MOBILE_API_VERSION } from '../../../../packages/shared/src/mobile-contracts.mjs';
 import { check } from '../shared/errors.mjs';
 import { fields } from '../shared/validation.mjs';
@@ -15,9 +16,10 @@ import { eatsRoutes } from '../modules/eats/routes.mjs';
 import { realtimeResponse, requestAbortSignal } from '../modules/realtime/routes.mjs';
 
 /** Versioned native surface. Cookie identity and browser CSRF are never reused. */
-export function createMobileRouter({ devices, accounts, drivers, rides, dispatch, eats, locations, availability, chat, notifications, safety, safetyMonitoring, guestRides, vehicleChecks, payments, clock, rateLimiter, googleAuth, accountEmail, realtime }) {
+export function createMobileRouter({ devices, accounts, drivers, rides, dispatch, eats, locations, availability, chat, notifications, safety, safetyMonitoring, guestRides, family, vehicleChecks, payments, clock, rateLimiter, googleAuth, accountEmail, realtime }) {
   const monitorRoutes = safetyMonitoringRoutes(safetyMonitoring).filter(r=>!r.role);
   const foodRoutes = eatsRoutes(eats);
+  const relativesRoutes = familyRoutes(family);
   const booking = createMobileBooking({ rides, locations, availability, clock });
   const journeys = createMobileJourneys({ rides, dispatch, availability, chat, clock });
   function summary(ride) {
@@ -61,7 +63,20 @@ export function createMobileRouter({ devices, accounts, drivers, rides, dispatch
       return;
     }
     let body;
-    if (auth && path === '/auth/providers') body = { google: (await googleAuth.settings()) };
+    if (path === '/family' || path.startsWith('/family/')) {
+      if (write && path === '/family/invite') await rateLimiter.consume(`family-invite:${session.user.id}`, clock(), 10, 60_000);
+      const familyPath = `/api${path}`;
+      const route = relativesRoutes.find(entry => entry.method === request.method && entry.path.test(familyPath));
+      check(route, 'NOT_FOUND', 'Family Safety endpoint not found.');
+      if (route.role) check(hasCapability(session.user, route.role), 'FORBIDDEN', 'This account cannot use Family Safety.');
+      const result = await route.handle({ user: session.user, match: familyPath.match(route.path), data, query,
+        key: request.headers['idempotency-key'], reauthenticate: async () => {
+          const fresh = await devices.sessionFor(accessToken);
+          check(fresh, 'UNAUTHENTICATED', 'Sign in to continue.'); return fresh.user;
+        } });
+      body = result.body;
+    }
+    else if (auth && path === '/auth/providers') body = { google: (await googleAuth.settings()) };
     else if (auth && path === '/auth/email-settings') body = (await accountEmail.settings());
     else if (auth && path === '/auth/password/request') body = (await accountEmail.requestReset(data));
     else if (auth && path === '/auth/google/challenge') body = (await googleAuth.nativeChallenge(data));

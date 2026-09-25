@@ -10,13 +10,14 @@ import { WorkController } from '../work/controller';
 import { currentPosition } from '../work/location';
 import type { Notifications } from '../../../../packages/shared/src/mobile-journeys.mjs';
 import { listenForPush } from '../notifications/push';
-interface Operations { safety(id:string):SafetyController; work:WorkController; journey(id:string):JourneyController; updates:Notifications|null; refreshUpdates():Promise<void>; pushId:number|null; dismissPush():void }
+interface Operations { safety(id:string):SafetyController; work:WorkController; journey(id:string):JourneyController; updates:Notifications|null; refreshUpdates():Promise<void>; pushId:number|null; familyPushId:string|null; dismissFamilyPush():void; dismissPush():void }
 const Context=createContext<Operations|null>(null);
 export function OperationsProvider({children}:PropsWithChildren){
   const {client,user,role,blocked}=useSession();
   const work=useMemo(()=>new WorkController(client,randomUUID,currentPosition),[client]);
   const safetyControllers=useRef(new Map<string,SafetyController>());
   const controllers=useRef(new Map<string,JourneyController>()),[updates,setUpdates]=useState<Notifications|null>(null),[pushId,setPushId]=useState<number|null>(null);
+  const [familyPushId,setFamilyPushId]=useState<string|null>(null);
   const updateGeneration=useRef(0),updatesBusy=useRef(false);
   const refreshUpdates=useCallback(async()=>{
     if(!client.account()||AppState.currentState!=='active'||blocked||updatesBusy.current)return;
@@ -33,11 +34,11 @@ export function OperationsProvider({children}:PropsWithChildren){
     const state=AppState.addEventListener('change',(next)=>{if(next!=='active'){work.pause();updateGeneration.current++;}else{if(role==='driver'&&user.driver)work.activate();void refreshUpdates();}});
     return()=>{work.pause();updateGeneration.current++;clearInterval(poll);changed();clearInterval(tick);state.remove();};
   },[user?.id,Boolean(user?.driver),role,blocked,work,refreshUpdates]);
-  useEffect(()=>{if(user)return listenForPush(setPushId,()=>void refreshUpdates());},[user?.id,refreshUpdates]);
+  useEffect(()=>{if(user)return listenForPush(setPushId,()=>void refreshUpdates(),setFamilyPushId);},[user?.id,refreshUpdates]);
   // Disposal is deferred across Strict Mode's effect replay; account-key changes destroy private controllers.
   const alive=useRef(false);
   useEffect(()=>{alive.current=true;return()=>{alive.current=false;queueMicrotask(()=>{if(!alive.current){work.dispose();for(const c of controllers.current.values())c.dispose();controllers.current.clear();for(const c of safetyControllers.current.values())c.dispose();safetyControllers.current.clear();}});};},[work]);
-  const value:Operations={safety:(id)=>{let c=safetyControllers.current.get(id);if(!c){c=new SafetyController(client,id,randomUUID);safetyControllers.current.set(id,c);}return c;},work,updates,refreshUpdates,pushId,dismissPush:()=>setPushId(null),journey:(id)=>{
+  const value:Operations={safety:(id)=>{let c=safetyControllers.current.get(id);if(!c){c=new SafetyController(client,id,randomUUID);safetyControllers.current.set(id,c);}return c;},work,updates,refreshUpdates,pushId,familyPushId,dismissFamilyPush:()=>setFamilyPushId(null),dismissPush:()=>setPushId(null),journey:(id)=>{
     let controller=controllers.current.get(id);if(!controller){controller=new JourneyController(client,id,randomUUID);controllers.current.set(id,controller);}return controller;
   }};
   return <Context.Provider value={value}>{children}</Context.Provider>;

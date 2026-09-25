@@ -23,6 +23,7 @@ export function createNotificationsRepository(db) {
     },
     unregister: async (sessionId) => (await db.prepare('DELETE FROM push_registrations WHERE session_id=?').run(sessionId)),
     registered: async (id) => (await db.prepare('SELECT token FROM push_registrations WHERE session_id=?').get(id))?.token ?? null,
+    familyTargets: async (userId) => db.prepare('SELECT session_id AS sessionId,token FROM push_registrations WHERE user_id=? ORDER BY session_id LIMIT 50').all(userId),
     jobActive: async (id) => Boolean((await db.prepare("SELECT 1 FROM push_jobs WHERE id=? AND status IN ('pending','ticket')").get(id))),
     disable: async (token) => (await db.prepare('DELETE FROM push_registrations WHERE token=?').run(token)),
     due: async (now) => (await db.prepare(`SELECT j.id,j.notification_id AS notificationId,j.session_id AS sessionId,j.token,j.status,j.attempts,j.ticket,

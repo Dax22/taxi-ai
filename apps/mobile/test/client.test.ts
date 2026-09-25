@@ -348,3 +348,53 @@ test('native live updates share one authenticated request and abort on backgroun
   app.resumeUpdates(); await delay(1); assert.equal(reads.length, 2);
   await app.logout(); assert.equal(reads[1].signal!.aborted, true);
 });
+
+const familyDashboard = () => ({ adultConfirmed: true, contacts: [], trips: [], availableTrips: [], inbox: [], limits: { contacts: 5, checkInCooldownMs: 300000 } });
+test('family sharing commands keep bearer authentication, consent and idempotency through token refresh', async () => {
+  const calls: Array<{ url: string; options: RequestInit }> = [];
+  const { app, storage } = client(async (url, options) => {
+    if (url.endsWith('/auth/login')) return response(auth());
+    if (url.endsWith('/auth/refresh')) return response(auth(2));
+    calls.push({ url, options });
+    return new Headers(options.headers).get('Authorization') === `Bearer ${auth().credentials.accessToken}` ? unauthorized()
+      : ok({ family: familyDashboard(), replayed: false });
+  });
+  await app.login(user.email, 'Test password', 'Phone');
+  await app.familyCommand('invite', { email: 'private-family@example.test', adultConfirmed: true }, 'original-family-key');
+  assert.equal(calls.length, 2);
+  for (const call of calls) {
+    assert.ok(call.url.endsWith('/api/mobile/v1/family/invite'));
+    assert.equal(new Headers(call.options.headers).get('Idempotency-Key'), 'original-family-key');
+    assert.equal(call.options.credentials, 'omit');
+    assert.deepEqual(JSON.parse(String(call.options.body)), { email: 'private-family@example.test', adultConfirmed: true });
+  }
+  assert.ok(!storage.value!.includes('private-family')); assert.ok(!storage.value!.includes('adultConfirmed'));
+});
+
+test('a family response received after logout cannot enter the next signed-in account', async () => {
+  let finish!: (value: Response) => void;
+  const { app } = client(async url => {
+    if (url.endsWith('/auth/login')) return response(auth());
+    if (url.endsWith('/family')) return new Promise(resolve => { finish = resolve; });
+    return ok();
+  });
+  await app.login(user.email, 'Test password', 'Phone');
+  const pending = app.familyDashboard(), rejected = assert.rejects(pending, { code: 'SESSION_CHANGED' });
+  await app.logout(); finish(ok({ family: familyDashboard() })); await rejected;
+  assert.equal(app.account(), null);
+});
+
+test('family read cancellation reaches the network and malformed observer payloads fail the client boundary', async () => {
+  let reading: RequestInit | undefined, forbidden = false;
+  const { app } = client(async (url, options) => {
+    if (url.endsWith('/auth/login')) return response(auth());
+    if (forbidden) return ok({ family: { ...familyDashboard(), pickupPin: '123456' } });
+    reading = options;
+    return new Promise((_resolve, reject) => options.signal!.addEventListener('abort', () => reject(new Error('Aborted')), { once: true }));
+  });
+  await app.login(user.email, 'Test password', 'Phone');
+  const controller = new AbortController(), pending = app.familyDashboard(controller.signal), rejected = assert.rejects(pending, { code: 'NETWORK' });
+  controller.abort(); await rejected; assert.equal(reading?.signal?.aborted, true);
+  forbidden = true; await assert.rejects(app.familyDashboard(), /incompatible Family Safety/);
+  await assert.rejects(app.familyTrip('../another-user'), /Invalid family trip/);
+});

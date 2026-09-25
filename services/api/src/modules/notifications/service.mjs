@@ -77,6 +77,11 @@ export function createNotificationsService({ repository, getAccount, sessionOwne
       }
     } finally { running = false; }
   }
+  // Internal ports: family delivery reuses device opt-in without importing this repository.
+  async function validFamilyTarget({ userId,sessionId,token }) {
+    return (await sessionOwner(sessionId)) === userId && (await repository.registered(sessionId)) === token;
+  }
   return Object.freeze({ publish, list, open, read, register, unregister, deliverPending,
+    familyTargets: repository.familyTargets, validFamilyTarget, disableFamilyTarget: repository.disable,
     onProfileDeleted: async (id, now) => (await repository.closeWork(id, now)), stop: () => { stopped = true; } });
 }

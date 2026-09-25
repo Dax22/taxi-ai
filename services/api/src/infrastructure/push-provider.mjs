@@ -11,12 +11,16 @@ export function createPushProvider({ env = {}, fetchImpl = fetch } = {}) {
   function error(value) { return { status: value?.details?.error === 'DeviceNotRegistered' ? 'unregistered'
     : value?.details?.error === 'MessageRateExceeded' ? 'retry' : 'error' }; }
   return Object.freeze({ enabled, projectId: enabled ? projectId : null,
-    async send({ token, notificationId, arrivalBody }) {
+    async send({ token, notificationId, arrivalBody, familyEventId }) {
       if (!enabled) return { status: 'error' };
-      const arrival = typeof arrivalBody === 'string' && arrivalBody.length > 0 && arrivalBody.length <= 500;
+      const family = familyEventId !== undefined;
+      if (family ? typeof familyEventId !== 'string' || !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(familyEventId)
+        : !Number.isSafeInteger(notificationId) || notificationId < 1) return { status:'error' };
+      const arrival = !family && typeof arrivalBody === 'string' && arrivalBody.length > 0 && arrivalBody.length <= 500;
       const result = await post('send',{ to: token, title: arrival ? 'Taxi Ai · Driver has arrived' : 'Taxi Ai',
-        body: arrival ? arrivalBody : 'You have a new journey update. Open Taxi Ai to view it.',
-        data: { notificationId }, sound: 'default', channelId: 'journeys', ttl: 300 });
+        body: family ? 'You have a Family Safety update. Open Taxi Ai to view it.'
+          : arrival ? arrivalBody : 'You have a new journey update. Open Taxi Ai to view it.',
+        data: family ? {kind:'family',eventId:familyEventId} : { notificationId }, sound: 'default', channelId: 'journeys', ttl: 300 });
       if (!result.data) return { status: result.status ?? 'retry' };
       return result.data.status === 'ok' && typeof result.data.id === 'string' ? { status: 'ticket', ticket: result.data.id } : error(result.data);
     },

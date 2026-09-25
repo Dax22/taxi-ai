@@ -470,6 +470,16 @@ export function createRidesService({ repository, deliveries, passengerForRide, s
     return { ...(await safetyContext(user, id)), passenger: (await passengerForRide(id)), bookerName: (await getAccount(ride.customerId)).name,
       pickupPin: ride.trip?.pickupPin ?? null };
   }
-  return Object.freeze({ get, list, history, mutate, rate, conversationContext, conversationIds, paymentContext, safetyContext, guestContext, sweep,
+  // Minimal read port for family observers; never pass the passenger's pickup PIN.
+  async function familyContext(user, id) {
+    const ride = await record(id); requireParticipant(ride, user);
+    const context = await safetyContext(user, id);
+    return { rideId: id, customerId: ride.customerId, driverId: ride.driverId, status: context.status,
+      pickup: context.pickup, destination: context.destination,
+      driver: context.driver ? { name: context.driver.name, vehicle: context.driver.vehicle } : null,
+      passenger: await passengerForRide(id), vehicleCategory: ride.vehicleCategory,
+      completedAt: ride.trip?.completedAt ?? null };
+  }
+  return Object.freeze({ get, list, history, mutate, rate, conversationContext, conversationIds, paymentContext, safetyContext, guestContext, familyContext, sweep,
     dispatchCandidates, dispatchCandidateFor: async (rideId, driverId, now) => (await dispatchCandidate((await repository.find(rideId)), driverId, now)) });
 }

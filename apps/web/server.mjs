@@ -41,6 +41,11 @@ const routes = new Map([
   ['/download.mjs', ['public/download.mjs', 'text/javascript; charset=utf-8']],
   ['/app-release.mjs', ['public/app-release.mjs', 'text/javascript; charset=utf-8']],
   ['/app', ['public/dashboard.html', 'text/html; charset=utf-8']],
+  ['/family', ['public/family.html', 'text/html; charset=utf-8']],
+  ['/family.css', ['public/family.css', 'text/css; charset=utf-8']],
+  ['/family.mjs', ['public/family.mjs', 'text/javascript; charset=utf-8']],
+  ...['controller', 'view'].map(name => [`/family/${name}.mjs`, [`public/family/${name}.mjs`, 'text/javascript; charset=utf-8']]),
+  ['/shared/family.mjs', ['../../packages/shared/src/family.mjs', 'text/javascript; charset=utf-8']],
   ['/eats', ['public/eats.html', 'text/html; charset=utf-8']],
   ['/eats/sell', ['public/eats.html', 'text/html; charset=utf-8']],
   ['/eats.mjs', ['public/eats.mjs', 'text/javascript; charset=utf-8']],
@@ -183,7 +188,7 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
     regions: () => application.dispatch.regions(), dispatch: application.dispatch, onError: (name) => telemetry.event(name),
     maintenance: async ({ lease, active }) => {
       for (const service of [application.rides, application.availability, application.calls, application.locations,
-        application.safety, application.guestRides, application.vehicleChecks, application.devices, application.googleAuth]) {
+        application.safety, application.guestRides, application.family, application.vehicleChecks, application.devices, application.googleAuth]) {
         if (!active()) return;
         const held = await db.transaction(async () => {
           if (!await application.workerCoordinator.guard(lease)) return false;
@@ -198,7 +203,7 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
       });
       // Provider I/O stays outside transactions. Each outbox separately claims
       // jobs; the coordinator only permits starting the next bounded drain.
-      for (const service of [application.safetyMonitoring, application.accountEmail, application.notifications]) {
+      for (const service of [application.safetyMonitoring, application.accountEmail, application.notifications, application.familyDelivery]) {
         if (!active() || !await application.workerCoordinator.guard(lease)) return;
         await service.deliverPending();
       }
@@ -215,7 +220,7 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
     response.setHeader('Content-Security-Policy', `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'${pathname === '/eats' ? ' data:' : ''}${mapProvider.mode === 'off' ? '' : ` ${mapProvider.tileOrigin}`}; media-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'`);
     try {
       pathname = new URL(request.url, 'http://localhost').pathname;
-      if (pathname === '/app' && mapProvider.mode !== 'off') response.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+      if (['/app', '/family'].includes(pathname) && mapProvider.mode !== 'off') response.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
       response.setHeader('Permissions-Policy', `camera=${pathname === '/app' ? '(self)' : '()'}, microphone=${pathname === '/app' ? '(self)' : '()'}, geolocation=${['/app', '/eats'].includes(pathname) ? '(self)' : '()'}, accelerometer=${pathname === '/app' ? '(self)' : '()'}, gyroscope=${pathname === '/app' ? '(self)' : '()'}`);
     } catch {
       response.writeHead(400);
@@ -276,7 +281,7 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
       // Signal every producer immediately before waiting, so an in-flight route
       // cannot publish another offer while the worker runtime is draining.
       const tasks = [workers.stop(), application.dispatch.stop(), application.safetyMonitoring.stop(),
-        application.accountEmail.stop(), application.notifications.stop(), application.realtime.close()];
+        application.accountEmail.stop(), application.notifications.stop(), application.familyDelivery.stop(), application.realtime.close()];
       let deadline;
       const completed = Promise.allSettled(tasks).then((results) => {
         if (results.some((result) => result.status === 'rejected')) throw new Error('A background service could not finish shutting down.');

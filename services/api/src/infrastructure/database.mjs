@@ -19,6 +19,7 @@ migrations.push('027_dispatch.sql');
 migrations.push('028_realtime.sql');
 migrations.push('029_location_scale.sql');
 migrations.push('030_worker_scale.sql');
+migrations.push('031_family_safety.sql', '032_family_delivery.sql');
 export const SCHEMA_VERSION = migrations.length;
 
 export function transaction(db, run) {

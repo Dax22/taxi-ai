@@ -1,4 +1,5 @@
 import { safetyMonitoringRoutes } from '../modules/safety-monitoring/routes.mjs';
+import { familyRoutes } from '../modules/family/routes.mjs';
 import { deviceSessionRoutes } from '../modules/device-sessions/routes.mjs';
 import { check } from '../shared/errors.mjs';
 import { hasCapability } from '../shared/policies.mjs';
@@ -32,6 +33,7 @@ export function createApiRouter(application, { secure = false } = {}) {
   routes.push(...vehicleCheckRoutes(application.vehicleChecks));
   routes.push(...eatsRoutes(application.eats));
   routes.push(...guestRideRoutes(application.guestRides));
+  routes.push(...familyRoutes(application.family));
   return async function handleApi({ request, response, pathname, origin, clientAddress }) {
     const write = request.method === 'POST';
     check(['GET', 'POST'].includes(request.method), 'METHOD_NOT_ALLOWED', 'Use GET or POST.');
@@ -49,6 +51,10 @@ export function createApiRouter(application, { secure = false } = {}) {
       session = (await accounts.sessionFor(token));
       if (route?.access !== 'public') check(session, 'UNAUTHENTICATED', 'Sign in to continue.');
       if (route?.role) check(hasCapability(session?.user, route.role), 'FORBIDDEN', `The ${route.role} capability is required.`);
+      if (pathname === '/api/family' || pathname.startsWith('/api/family/')) {
+        await rateLimiter.consume(`family:${session.user.id}`, clock(), 120, 60_000);
+        if (write && pathname === '/api/family/invite') await rateLimiter.consume(`family-invite:${session.user.id}`, clock(), 10, 60_000);
+      }
       if (route?.documentDownload) (await rateLimiter.consume(`document:${session.user.id}`, clock(), 30, 60_000));
       if (write) {
         requireCsrf(request, session);

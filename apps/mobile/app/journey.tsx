@@ -24,6 +24,7 @@ function JourneyScreen({id}:{id:string}){
   return <Screen><Notice message={s.error}/>{!r&&s.loading&&<Loading/>}<Button title="Refresh journey" secondary busy={s.loading} disabled={s.busy} onPress={()=>void c.refresh()}/>
     {s.uncertain&&<Button title="Retry the same action" busy={s.busy} onPress={()=>void c.retry()}/>}
     {r&&<><Button title="Safety / SOS" secondary onPress={()=>router.push({pathname:'/safety',params:{id:r.id}})}/><Pill>{bookingStatusLabel(r.status).toUpperCase()}</Pill><Heading title={`${r.pickup} → ${r.destination}`} subtitle={`${vehicleCategory(r.vehicleCategory??'standard')?.name} · ${r.mode==='work'?'Driver':'Customer'}`}/>
+      {r.mode==='customer'&&!r.delivery&&r.passenger?.kind!=='guest'&&<Button title="Family Safety · choose who can view this trip" secondary onPress={()=>router.push({pathname:'/family',params:{rideId:r.id}})}/>}
       {r.mode==='customer'&&<KemmyCard ride={r} now={s.now} ratingChoice={s.ratingChoice} busy={s.busy} onChoose={(stars)=>c.chooseRating(stars)} onRate={()=>void c.rate()}/>}
       <Card><Text style={styles.h2}>{r.fareKobo===null?'Suggested fare':'Agreed fare'} · {fare(r.fareKobo??r.suggestedFareKobo)}</Text>
         <Text style={styles.body}>{r.mode==='work'?`${r.passenger?.kind==='guest'?'Booked by':'Customer'} · ${r.customerName}`:r.driver?`Driver · ${r.driver.name}`:'Waiting for a driver to take your request.'}</Text>

@@ -1,3 +1,5 @@
+import { readFamilyResponse, readFamilyTripResponse, readFamilyCommandResult } from '../../../../packages/shared/src/family.mjs';
+import type { FamilyAction } from '../../../../packages/shared/src/family.mjs';
 import { createRealtimeClient } from '../../../../packages/shared/src/realtime-client.mjs';
 import { readContacts, readSafety, readSafetyResult } from '../safety/contracts.ts';
 import { readPayment, readReceipt, readEarnings } from '../payments/contracts.ts';
@@ -203,6 +205,17 @@ export class MobileClient {
   async bookingRide(id: string) { return parseBookingRide(await this.request(`/booking/requests/${id}`)); }
   async cancelRide(id: string, expectedVersion: number, key: string) {
     return parseBookingRide(await this.request(`/booking/requests/${id}/cancel`, { expectedVersion, reason: 'plans_changed' }, key));
+  }
+  async familyDashboard(signal?: AbortSignal) { return readFamilyResponse(await this.request('/family', undefined, undefined, signal)); }
+  async familyTrip(shareId: string, signal?: AbortSignal) {
+    if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(shareId)) throw new Error('Invalid family trip.');
+    const result = readFamilyTripResponse(await this.request(`/family/trips/${shareId}`, undefined, undefined, signal));
+    if (result.trip.shareId !== shareId) throw new ApiError('Family trip response does not match the selected trip.', 'INVALID_RESPONSE');
+    return result;
+  }
+  async familyCommand(action: FamilyAction, data: Record<string, unknown>, key: string, signal?: AbortSignal) {
+    if (!['invite', 'accept', 'decline', 'revoke-contact', 'share', 'stop-sharing', 'request-check-in', 'respond', 'acknowledge'].includes(action)) throw new Error('Invalid family action.');
+    return readFamilyCommandResult(await this.request(`/family/${action}`, data, key, signal));
   }
   async safetyMonitoring(id:string) { return this.request(`/safety-monitoring/rides/${id}`); }
   async safetyMonitoringCommand(id:string,action:string,data:unknown,key:string) { return this.request(`/safety-monitoring/rides/${id}/${action}`,data,key); }

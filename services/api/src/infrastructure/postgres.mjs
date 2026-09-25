@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import pg from 'pg';
 import { compilePostgresQuery } from './postgres-sql.mjs';
 
-export const POSTGRES_MIGRATIONS = ['001_baseline.sql', '002_scale.sql'];
+export const POSTGRES_MIGRATIONS = ['001_baseline.sql', '002_scale.sql', '003_family_safety.sql', '004_family_delivery.sql'];
 export const POSTGRES_SCHEMA_VERSION = POSTGRES_MIGRATIONS.length;
 const safeNumber = (value) => {
   const result = Number(value);

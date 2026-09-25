@@ -73,6 +73,20 @@ export function removeLocationScaleFixtureFields(db) {
 }
 
 export function removeWorkerScaleFixtureFields(db) {
+  removeFamilyFixtureTables(db);
   db.exec('DROP INDEX IF EXISTS rides_dispatch_region; DROP INDEX IF EXISTS worker_lease_expiry; DROP TABLE IF EXISTS worker_leases');
   if (db.prepare('PRAGMA table_info(rides)').all().some(row => row.name === 'dispatch_region')) db.exec('ALTER TABLE rides DROP COLUMN dispatch_region');
+}
+
+/** Family sharing is opt-in; older fixtures must never discard real consent or trip grants. */
+export function removeFamilyFixtureTables(db) {
+  for (const { name } of db.prepare("SELECT name FROM sqlite_master WHERE type='trigger' AND (name LIKE 'family_%' OR name LIKE 'realtime_family_%')").all()) {
+    if (!/^(?:realtime_)?family_[a-z_]+$/.test(name)) throw new Error('Unexpected family fixture trigger.');
+    db.exec(`DROP TRIGGER ${name}`);
+  }
+  for (const table of ['family_push_jobs', 'family_commands', 'family_events', 'family_trip_state', 'family_shares', 'family_contacts', 'family_adults']) {
+    if (!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(table)) continue;
+    if (db.prepare(`SELECT count(*) AS count FROM ${table}`).get().count) throw new Error(`Cannot downgrade a populated ${table} fixture.`);
+    db.exec(`DROP TABLE ${table}`);
+  }
 }

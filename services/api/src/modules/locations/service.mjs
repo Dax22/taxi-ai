@@ -5,7 +5,7 @@ import { transportCategory } from '../../../../../packages/shared/src/transport-
 import { NIGERIA_BOUNDS, insideNigeria, canShareLocation } from '../../../../../packages/shared/src/locations.mjs';
 import { key, clientIdentity, endpoints, point, checkedRoute, directQuote, position, QUOTE_MS, FRESH_MS, SHARE_MS } from './domain.mjs';
 
-export function createLocationsService({ repository, provider, getAccount, sessionOwner, nativeAccessOwner = () => null, nativeSessionOwner = () => null, getRideContext, unitOfWork, tokens, audit, clock }) {
+export function createLocationsService({ repository, provider, getAccount, sessionOwner, nativeAccessOwner = () => null, nativeSessionOwner = () => null, getRideContext, unitOfWork, tokens, audit, clock, onChange = async () => {} }) {
   async function context(input, clientRequired = false, planning = false) {
     const user = (await getAccount(input.userId));
     check(user, 'UNAUTHENTICATED', 'Sign in to use locations.');
@@ -86,6 +86,7 @@ export function createLocationsService({ repository, provider, getAccount, sessi
     if (!share?.active) return;
     (await repository.stop(share.id, now));
     (await audit.record(share.driverId, 'location.stopped', share.id, now));
+    await onChange(share.rideId, now);
   }
   async function closeRide(id, now) { (await close((await repository.currentShare(id)), now)); }
   const shareOwner = async (binding) => binding?.startsWith('native:') ? (await nativeSessionOwner(binding.slice(7))) : (await sessionOwner(binding));
@@ -150,6 +151,7 @@ export function createLocationsService({ repository, provider, getAccount, sessi
         const shareId = tokens.id();
         (await repository.saveShare({ id: shareId, rideId: id, driverId: ctx.userId, sessionHash: ctx.sessionHash, clientHash: ctx.clientHash, now }));
         (await audit.record(ctx.userId, 'location.started', shareId, now));
+        await onChange(id, now);
         share = (await repository.share(shareId));
       } else {
         share = (await driverShare(ctx, id)); (await close(share, now)); share = (await repository.share(id));
@@ -174,6 +176,7 @@ export function createLocationsService({ repository, provider, getAccount, sessi
       const previous = share.positionJson ? JSON.parse(share.positionJson) : null;
       check(!previous || value.capturedAt >= previous.capturedAt, 'STALE_LOCATION', 'An older GPS fix cannot replace a newer one.');
       (await repository.update(id, data.sequence, value, clock()));
+      await onChange(share.rideId, clock());
       return { share: shareView((await repository.share(id)), ctx), replayed: false };
     }));
   }
