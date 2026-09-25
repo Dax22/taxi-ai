@@ -28,9 +28,10 @@ export function OperationsProvider({children}:PropsWithChildren){
     if(role==='driver'&&user.driver&&AppState.currentState==='active')work.activate();
     void refreshUpdates();
     const poll=setInterval(()=>{if(role==='driver'&&user.driver){void work.heartbeat().then(()=>work.refresh());}void refreshUpdates();},10_000);
+    const workPoll=setInterval(()=>{if(role==='driver'&&user.driver)void work.refresh();},3000);
     const tick=setInterval(()=>work.tick(),1000);
     const state=AppState.addEventListener('change',(next)=>{if(next!=='active'){work.pause();updateGeneration.current++;}else{if(role==='driver'&&user.driver)work.activate();void refreshUpdates();}});
-    return()=>{work.pause();updateGeneration.current++;clearInterval(poll);clearInterval(tick);state.remove();};
+    return()=>{work.pause();updateGeneration.current++;clearInterval(poll);clearInterval(workPoll);clearInterval(tick);state.remove();};
   },[user?.id,Boolean(user?.driver),role,blocked,work,refreshUpdates]);
   useEffect(()=>{if(user)return listenForPush(setPushId,()=>void refreshUpdates());},[user?.id,refreshUpdates]);
   // Disposal is deferred across Strict Mode's effect replay; account-key changes destroy private controllers.

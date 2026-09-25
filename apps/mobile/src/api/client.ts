@@ -7,7 +7,7 @@ import { envelope, parseAccount, parseSignIn, parseActivity, parseDevices, parse
 import type { VehicleCategoryId } from '../../../../packages/shared/src/vehicle-categories.mjs';
 import type { Account, Credentials, DriverCommands, DriverDetails, Mode, SignIn } from '../../../../packages/shared/src/mobile-contracts.mjs';
 import { parseBooking, parsePlaces, parsePreview, parseBookingRide } from '../../../../packages/shared/src/mobile-booking.mjs';
-import { parseJourney, parseWork, parseAvailability, parseThread, parseSentMessage, parseReadMessages, parseNotifications, parseNotificationTarget } from '../../../../packages/shared/src/mobile-journeys.mjs';
+import { parseJourney, parseWork, parseAvailability, parseDeclinedOffer, parseThread, parseSentMessage, parseReadMessages, parseNotifications, parseNotificationTarget } from '../../../../packages/shared/src/mobile-journeys.mjs';
 import type { JourneyAction, JourneyData, OnlineData, Position } from '../../../../packages/shared/src/mobile-journeys.mjs';
 import type { Place, RequestData } from '../../../../packages/shared/src/mobile-booking.mjs';
 
@@ -219,6 +219,7 @@ export class MobileClient {
   async earnings(before?: string | null) { return readEarnings(await this.request(`/driver/earnings${before ? `?before=${before}` : ''}`)); }
   async journeyCommand(id: string, action: JourneyAction, data: JourneyData, key: string) { return parseJourney(await this.request(`/journeys/${id}/${action}`,data,key)); }
   async work(clientId: string) { return parseWork(await this.request(`/work?clientId=${clientId}`)); }
+  async declineOffer(id: string, key: string) { return parseDeclinedOffer(await this.request(`/work/offers/${id}/decline`,{},key)); }
   async online(clientId: string, data: OnlineData, key: string) { return parseAvailability(await this.request(`/work/online?clientId=${clientId}`,data,key)); }
   async offline(clientId: string, id: string, key: string) { return parseAvailability(await this.request(`/work/${id}/offline?clientId=${clientId}`,{},key)); }
   async heartbeat(clientId: string, id: string, sequence: number, position?: Position) { return parseAvailability(await this.request(`/work/${id}/heartbeat?clientId=${clientId}`,{ sequence,...(position ? { position } : {}) })); }

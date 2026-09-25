@@ -1,8 +1,8 @@
 import type { MobileClient } from '../api/client.ts';
 import type { Work, Availability, OnlineData, Position, AvailableJob, Journey } from '../../../../packages/shared/src/mobile-journeys.mjs';
 import { definiteFailure } from '../journeys/controller.ts';
-type Api=Pick<MobileClient,'work'|'online'|'offline'|'heartbeat'|'journeyCommand'>;
-type Command={kind:'online';data:OnlineData;key:string}|{kind:'offline';id:string;key:string}|{kind:'claim';job:AvailableJob;key:string};
+type Api=Pick<MobileClient,'work'|'online'|'offline'|'heartbeat'|'journeyCommand'|'declineOffer'>;
+type Command={kind:'online';data:OnlineData;key:string}|{kind:'offline';id:string;key:string}|{kind:'claim';job:AvailableJob;key:string}|{kind:'decline';offerId:string;key:string};
 export interface WorkState { work:Work|null; availability:Availability|null; busy:boolean; loading:boolean; stale:boolean; uncertain:boolean; error:string; now:number; journey:Journey|null }
 export class WorkController {
   private api:Api; private key:()=>string; private locate:(ask:boolean)=>Promise<Position>; readonly clientId:string;
@@ -14,7 +14,8 @@ export class WorkController {
   subscribe=(fn:()=>void)=>{this.listeners.add(fn);return()=>{this.listeners.delete(fn);};};
   private patch(v:Partial<WorkState>){if(this.disposed)return;this.state={...this.state,...v};for(const fn of this.listeners)fn();}
   private time(n:number){this.anchor={server:n,local:this.clock()};return n;}
-  tick(){if(this.active)this.patch({now:this.anchor.server+Math.max(0,this.clock()-this.anchor.local)});}
+  private now(){return this.anchor.server+Math.max(0,this.clock()-this.anchor.local);}
+  tick(){if(this.active)this.patch({now:this.now()});}
   activate(){if(this.disposed)return;this.active=true;void this.refresh();}
   pause(){this.active=false;this.intent=false;this.reads++;this.patch({stale:true,loading:false});if(this.state.availability?.owned&&!this.command&&!this.state.busy)void this.offline(true);}
   dispose(){this.pause();this.disposed=true;this.listeners.clear();}
@@ -44,8 +45,19 @@ export class WorkController {
     return !this.command&&!this.state.availability?.online;
   }
   async claim(job:AvailableJob){
-    if(!this.active||this.command||this.state.busy||this.state.stale||this.state.now>=job.expiresAt||!this.state.work?.available.some((r)=>r.id===job.id&&r.version===job.version))return;
-    this.command={kind:'claim',job:{...job},key:this.key()};await this.run();
+    if(!this.canRespond(job))return;
+    this.command={kind:'claim',job:{...job,...(job.offer?{offer:{...job.offer}}:{})},key:this.key()};await this.run();
+  }
+  private canRespond(job:AvailableJob){
+    return this.active&&!this.disposed&&!this.command&&!this.state.busy&&!this.state.stale
+      &&Boolean(this.state.availability?.online&&this.state.availability.expiresAt&&this.now()<this.state.availability.expiresAt)
+      &&!this.state.work?.current.length&&!this.state.work?.activeElsewhere.length
+      &&this.now()<Math.min(job.expiresAt,job.offer?.expiresAt??job.expiresAt)
+      &&Boolean(this.state.work?.available.some((r)=>r.id===job.id&&r.version===job.version&&r.offer?.id===job.offer?.id));
+  }
+  async decline(job:AvailableJob){
+    if(!job.offer||!this.canRespond(job))return;
+    this.command={kind:'decline',offerId:job.offer.id,key:this.key()};await this.run();
   }
   async retry(){if(this.active&&this.command&&!this.state.busy)await this.run();}
   clearJourney(){this.patch({journey:null});}
@@ -66,8 +78,11 @@ export class WorkController {
     this.reads++;this.patch({busy:true,loading:false,error:''});let success=false;
     try{
       if(cmd.kind==='claim'){
-        const result=await this.api.journeyCommand(cmd.job.id,'claim',{expectedVersion:cmd.job.version},cmd.key);
+        const result=await this.api.journeyCommand(cmd.job.id,'claim',{expectedVersion:cmd.job.version,...(cmd.job.offer?{offerId:cmd.job.offer.id}:{})},cmd.key);
         this.intent=false;this.patch({journey:result.ride,availability:null,now:this.time(result.serverNow)});
+      }else if(cmd.kind==='decline'){
+        const result=await this.api.declineOffer(cmd.offerId,cmd.key);
+        this.patch({now:this.time(result.serverNow),work:this.state.work?{...this.state.work,available:this.state.work.available.filter((job)=>job.offer?.id!==cmd.offerId)}:null});
       }else{
         const result=cmd.kind==='online'?await this.api.online(this.clientId,cmd.data,cmd.key):await this.api.offline(this.clientId,cmd.id,cmd.key);
         this.patch({availability:result.availability,now:this.time(result.serverNow)});
@@ -75,10 +90,10 @@ export class WorkController {
       this.command=null;success=true;this.patch({uncertain:false,stale:!this.active});
     }catch(e){
       if(definiteFailure(e)){this.command=null;this.patch({uncertain:false,stale:true,error:e instanceof Error?e.message:'Review your work status and try again.'});}
-      else this.patch({uncertain:true,stale:true,error:'Availability or job confirmation was interrupted. Retry the same action before continuing.'});
+      else this.patch({uncertain:true,stale:true,error:'Your work action was interrupted. Retry the same action before continuing.'});
     }finally{
       this.patch({busy:false});
-      if(success&&!this.intent&&this.state.availability?.owned&&!this.disposed)await this.offline(true);
+      if(success&&(!this.active||!this.intent&&cmd.kind!=='decline')&&this.state.availability?.owned&&!this.disposed)await this.offline(true);
       else if(success&&this.active)void this.refresh();
     }
   }

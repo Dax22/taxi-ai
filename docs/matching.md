@@ -1,18 +1,17 @@
-# Driver availability and nearby requests
+# Driver availability and timed ride offers
 
-This milestone adds explicit driver availability and rule-based matching to the
-existing test ride flow. An available request is an invitation to start a fare
-conversation. A successful claim selects one driver; it does not accept a fare,
-confirm a booking or dispatch an actual vehicle.
+Driver availability and server-side matching connect a test request to an eligible
+driver. The default policy gives one driver an exclusive, timed invitation to
+start a fare conversation. A successful claim selects that driver; it does not
+accept a fare, confirm a booking or dispatch an actual vehicle. Web and native
+apps use the same matching service. See [dispatch setup](dispatch.md) for policy
+modes, road estimates, metrics and database upgrade instructions.
 
 ## Try it locally without hosting or GPS
 
-Use `feat/driver-matching` and Node 22.12 or later:
+Use the current project checkout and Node 22.12 or later:
 
 ```bash
-git fetch origin
-git switch feat/driver-matching
-git pull --ff-only origin feat/driver-matching
 npm run verify
 npm run dev
 ```
@@ -24,8 +23,9 @@ in separate browser profiles/windows. Ordinary tabs share the account cookie.
 1. On the driver dashboard, under **Your availability → Local testing**, select
    **Wuse II** and click **Go online in sample area**. Keep that page visible.
 2. As the customer, create a **Sample-area demo** request from Wuse II to Maitama.
-3. Within the normal three-second refresh, the driver sees a **Local sample-area
-   match** under Nearby requests. Choose **Start negotiation**.
+3. After matching and the normal dashboard refresh, the selected driver sees a
+   timed sample-area offer. Choose **Start negotiation** before it expires, or
+   decline it to let the server consider another eligible driver.
 4. Availability stops. Use chat, offers/counteroffers and explicit acceptance as
    before, then confirm the booking and complete the pickup-PIN test journey.
 5. After completion or cancellation, choose Go online again for more requests.
@@ -52,7 +52,10 @@ No cloud resource or paid service is required for the local sample journey.
 | Initial search | Within 5 km of the pickup in a straight line |
 | Expanded search | Within 10 km from exactly 60 seconds after request creation |
 | Request deadline | Unclaimed requests expire at exactly five minutes |
-| Ordering | Weighted pickup proximity and customer waiting time, then oldest request and ID; up to 50 eligible requests. See [ranking policy](smart-matching.md). |
+| Selection | Road pickup estimate and waiting priority; explicit distance fallback when routing is unavailable. See [ranking policy](smart-matching.md). |
+| Driver offer | Up to 20 seconds, ending sooner if the five-minute request deadline arrives |
+| Offer exclusivity | At most one pending offer per driver and per request |
+| Matching worker | Runs every two seconds; batch mode also waits until a request is at least two seconds old |
 | GPS freshness | Captured less than 30 seconds ago; at most 5 seconds of future clock skew |
 | GPS quality | Inside Nigeria; reported accuracy at most 200 metres |
 | Availability lease | Last accepted heartbeat less than 60 seconds ago; GPS freshness also applies |
@@ -60,16 +63,22 @@ No cloud resource or paid service is required for the local sample journey.
 | Stop | Explicit Offline, hidden/closed page, claim, lost session/approval, stale GPS or lease expiry |
 
 The radius is a preview policy, not an official service boundary. Device positions
-are self-reported and do not prove physical presence. Distances are not road travel
-times. No AI model, traffic service, multi-driver bidding, push notification or
-background mobile location service is added by this milestone.
+are self-reported and do not prove physical presence. Radius eligibility still uses
+straight-line distance. Pickup estimates, when available, come from the configured
+road router; they are shown separately from approximate distance. The default OSRM
+adapter has no live traffic feed or trained ETA model. Background mobile location
+is not added by this change.
 
-All eligible online drivers can see an unclaimed request. A wider search makes it
-available to additional drivers; new eligible drivers can also see it while the
-search remains open. There is no exclusive timed invitation to one driver before
-claiming. The server rechecks approval, workload, live availability, location,
-distance, request deadline and version inside the claim transaction. Only one
-claim succeeds. Going online again during an active negotiation or trip is blocked.
+In default sequential mode or optional batch mode, only the invited driver sees
+and can claim that pending request. Expired, declined or revoked invitations make
+the request eligible for another driver while its search remains open. The same
+driver/request pair is not invited again for that request. A wider radius can add
+new eligible drivers. Explicit `legacy` mode retains the shared nearby-request
+list and first valid claim behavior.
+
+The server rechecks the offer ID, expiry, availability lease, approval, workload,
+location, distance, request deadline and version inside the claim transaction.
+Only one claim succeeds. Going online again during an active negotiation or trip is blocked.
 Existing agreed-but-unbooked fare behavior and confirmation-time workload checks
 are preserved; agreement alone is not a confirmed reservation.
 
@@ -84,16 +93,20 @@ customer action; routed requests require a fresh, unused route quote.
 
 Availability uses a separate session/window-bound lease from trip GPS sharing.
 The server keeps only its latest accepted position. Available-request projections
-show approximate pickup/destination areas and a rounded-up kilometre distance,
-without exact route geometry, pickup labels or customer identity. The availability
+show approximate pickup/destination areas, a rounded-up kilometre distance and,
+when available, rounded road pickup minutes. Fallback estimates never show an ETA.
+They omit exact route geometry, pickup labels and customer identity. The availability
 API returns state and ownership, never coordinates or session/window hashes.
 Customers and administrators cannot read a driver's availability endpoint.
 
 Claiming atomically erases availability coordinates and ownership. It does not
 start trip tracking; after booking, the assigned driver separately chooses whether
 to share location with the customer. Offline also clears the current position.
-Audit records contain event type and IDs, not GPS coordinates. Backups sanitize
-availability along with sessions, call setup and trip location sharing.
+Audit records contain event type and IDs, not GPS coordinates. Pickup routing sends
+the driver's current location and the request pickup to the configured map service;
+those points do not become available-request projections or matching telemetry.
+Backups sanitize availability along with sessions, call setup and trip location
+sharing, and revoke pending dispatch offers.
 
 The browser stops its watcher immediately on Offline. An interrupted stop request
 may leave server state until expiry, so the UI offers retry and explains the limit.
@@ -106,17 +119,21 @@ An abandoned browser window's lease expires within one minute, often sooner for 
 Browser location requires a secure context and user permission; see the
 [W3C Geolocation specification](https://www.w3.org/TR/geolocation/). Keep the driver
 page visible: switching tabs or locking a device takes this web preview offline.
-Native app/background availability remains future work.
+Native driver availability and timed offers use the same server checks. The native
+app also needs location permission and active foreground operation; continuous
+background availability remains separate work. See [native journeys](mobile-journeys.md).
 
 ## API and module ownership
 
 `modules/availability/` owns `driver_availability` and `availability_commands`.
-Rides owns request deadlines and matching/claim rules. The composition root injects
-`positionFor`, `onClaim` and workload/session lookup ports; modules never import
-each other's repositories. Provider requests remain outside SQLite transactions.
-Matching filters before limiting results, so older distant requests cannot hide
-nearby candidates behind a pre-filter page limit. This single-process preview scans
-open requests; a larger deployment needs indexed geospatial candidate retrieval.
+Rides owns request deadlines, eligibility and claims. `modules/dispatch/` owns
+persistent offers, timed allocation and aggregate metrics. The composition root
+injects candidate, availability, routing and claim ports; modules never import
+each other's repositories. Provider requests remain outside SQLite transactions,
+followed by eligibility rechecks before offers are saved. Selection is bounded to
+32 drivers, 32 requests and 512 candidate edges per allocation; this single-process
+preview needs indexed geospatial retrieval and dedicated routing capacity before
+a larger deployment.
 
 | Method and path | Contract |
 | --- | --- |
@@ -124,8 +141,10 @@ open requests; a larger deployment needs indexed geospatial candidate retrieval.
 | `POST /api/availability/online` | `{mode: "gps", position: {lat,lng,accuracy,capturedAt}}` or local-only `{mode: "sample", areaId}` |
 | `POST /api/availability/:id/offline` | Empty object; same driver's sessions may stop this exact lease |
 | `POST /api/availability/:id/position` | `{sequence, position}` for GPS; `{sequence}` heartbeat for sample mode |
-| `GET /api/rides` | Existing own rides plus eligible nearby requests and `matchingSettings.allowSimulation` |
-| `POST /api/rides/:id/claim` | Existing `{expectedVersion}`; now also rechecks availability and distance |
+| `GET /api/rides` | Own rides and the invited request; `matchingSettings` includes `allowSimulation` and `dispatchMode` |
+| `POST /api/rides/:id/claim` | `{expectedVersion, offerId}` in sequential/batch mode; atomic offer and eligibility checks |
+| `POST /api/dispatch/offers/:id/decline` | Empty object; ends the current driver's invitation, with an idempotency key |
+| `GET /api/admin/dispatch/metrics` | Administrator-only aggregate matching outcomes; see [metric definitions](dispatch.md#measurements) |
 
 All writes require same-origin JSON, session CSRF and `X-Availability-Client` for
 availability mutations. Online/Offline also require an `Idempotency-Key`. Position
@@ -134,6 +153,7 @@ the lease. Online retries return the saved current state, including an ended lea
 and cannot turn a stopped driver back online. IDs and time come from the server.
 
 The five-second maintenance task clears expired availability and unclaimed requests.
+The two-second matching worker expires/revokes offers and allocates new ones.
 Availability reads/updates also sweep; ride reads/commands sweep request expiry.
 Claim validation checks freshness independently, so a late maintenance tick cannot
 allow a stale match. Expiry commits before a failing ride command, preventing a
@@ -142,17 +162,19 @@ retry/audit write instead rolls back the claim and availability closure together
 
 ## Migration and validation
 
-Migration `006_matching.sql` upgrades schemas 1–5 to 6 without resetting accounts,
+Historical migration `006_matching.sql` introduced schema 6 without resetting accounts,
 sessions, fare events, trips, PINs, chats or route quotes. Existing requested rides
 receive `created_at + five minutes`; already-old requests expire on the next sweep.
 All drivers start offline. Expired requests retain storage status `cancelled` with
 `closed_reason=request_expired`; the API projects the distinct `expired` status.
 No fabricated participant cancellation activity or fare acceptance is written.
 
-Earlier branches cannot open a schema-six database. Before upgrading an existing
-database, use the previous release's backup command and retain that release for
-recovery: backup/restore validation is schema-specific. New snapshots clear all
-availability positions and ownership, so restoration never puts drivers online.
+Current migration `027_dispatch.sql` adds schema 27 for invitation state and outcome
+timestamps. Before upgrading an existing database, use the previous release's
+backup command and retain that release for recovery: backup/restore validation is
+schema-specific. Do not point an earlier release at the upgraded database. New
+snapshots clear availability positions and ownership and revoke pending invitations,
+so restoration never puts drivers online or revives offers.
 
 Automated tests cover permissions, sample/GPS separation, radius expansion,
 competing claims, exact expiry, session/window ownership, stale/replayed updates,
@@ -168,7 +190,8 @@ Before treating the preview as ready, manually check:
    for five minutes and verify expiry, history and a new customer request.
 3. GPS on a device in Nigeria over HTTPS: approve/deny permission, check near/far pickup
    matching, then hide the page, revoke permission, interrupt the network and stop.
-4. Two drivers claim the same request; only one starts the conversation. Check that
-   the other driver cannot access its exact pickup, chat, call or fare records.
+4. With two eligible drivers, verify only one receives the request at a time. Decline
+   or wait 20 seconds and check it moves to the other driver; a stale offer cannot
+   be claimed. Check the other driver cannot access exact pickup, chat, call or fare records.
 5. Complete a negotiated booking and PIN journey. Availability must remain off until
    the driver explicitly goes online; trip GPS still needs separate consent.

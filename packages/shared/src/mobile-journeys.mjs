@@ -37,16 +37,22 @@ function availability(a) {
 }
 export function parseJourney(v) { envelope(v); journey(v.ride,v); return v; }
 export function parseAvailability(v) { envelope(v); availability(v.availability); return v; }
+export function parseDeclinedOffer(v) { envelope(v); expect(v.declined === true && typeof v.replayed === 'boolean'); return v; }
 export function parseWork(v) {
   envelope(v); availability(v.availability);
   expect(object(v.settings) && typeof v.settings.allowSimulation === 'boolean' && positive(v.settings.heartbeatSeconds) && positive(v.settings.leaseSeconds)
+    && (v.settings.dispatchMode === undefined || ['legacy','sequential','batch'].includes(v.settings.dispatchMode))
     && positive(v.settings.freshPositionSeconds) && Array.isArray(v.areas) && v.areas.length <= 20 && v.areas.every((a) => text(a.id,50) && text(a.name))
     && Array.isArray(v.current) && v.current.length <= 50 && Array.isArray(v.available) && v.available.length <= 50
     && Array.isArray(v.activeElsewhere) && v.activeElsewhere.length <= 50 && v.activeElsewhere.every((a) => uuid(a.id) && mode(a.mode) && text(a.status,50)));
   v.current.forEach((r) => journey(r,v));
   expect(v.available.every((r) => object(r) && uuid(r.id) && integer(r.version) && transportCategory(r.vehicleCategory) && text(r.pickup) && text(r.destination)
     && positive(r.suggestedFareKobo) && integer(r.expiresAt) && (r.approximateDistanceKm === null || integer(r.approximateDistanceKm))
-    && (r.recommendation === undefined || validMatchRecommendation(r.recommendation)))); return v;
+    && (r.recommendation === undefined || validMatchRecommendation(r.recommendation))
+    && (r.offer === undefined || object(r.offer) && uuid(r.offer.id) && integer(r.offer.expiresAt) && r.offer.expiresAt <= r.expiresAt
+      && ['road','distance_fallback','sample'].includes(r.offer.etaSource)
+      && (r.offer.etaSource === 'road' ? positive(r.offer.pickupEtaMinutes) : r.offer.pickupEtaMinutes === null))));
+  expect(v.available.filter((r) => r.offer !== undefined).length <= 1); return v;
 }
 function message(m) { expect(object(m) && uuid(m.id) && positive(m.sequence) && text(m.body,2000) && integer(m.createdAt) && typeof m.fromYou === 'boolean'); }
 export function parseThread(v) {

@@ -25,16 +25,20 @@ function projection(ride,user,now) {
     chatReady: permitted && Boolean(ride.driver), pickupPin: ride.trip?.pickupPin ?? null, pinBlockedUntil: ride.trip?.pinBlockedUntil ?? null };
 }
 const message = (value,userId) => ({ id: value.id, sequence: value.sequence, body: value.body, createdAt: value.createdAt, fromYou: value.senderId === userId });
-export function createMobileJourneys({ rides, availability, chat, clock }) {
-  return ({ path,write,user,accessToken,query,data,key }) => {
+export function createMobileJourneys({ rides, dispatch, availability, chat, clock }) {
+  return async ({ path,write,user,accessToken,query,data,key,reauthenticate }) => {
     const context = { userId: user.id, sessionToken: accessToken, native: true, clientId: query.get('clientId') };
     if (path === '/work' && !write) {
+      await dispatch?.refresh();
+      if (reauthenticate) user = reauthenticate();
       const state = availability.get(context), list = rides.list(user,'work');
-      return { ...state, areas: state.settings.allowSimulation ? DEMO_AREAS : [], current: list.rides.filter((r) => !['completed','cancelled','expired'].includes(r.status)).map((r) => projection(r,user,clock())),
+      return { ...state, settings: { ...state.settings, dispatchMode: list.matchingSettings.dispatchMode }, areas: state.settings.allowSimulation ? DEMO_AREAS : [], current: list.rides.filter((r) => !['completed','cancelled','expired'].includes(r.status)).map((r) => projection(r,user,clock())),
         activeElsewhere: list.activeElsewhere, available: list.available.map((r) => ({ id: r.id, version: r.version, vehicleCategory: r.vehicleCategory,
           pickup: r.pickup.name, destination: r.destination.name, suggestedFareKobo: r.suggestedFareKobo, expiresAt: r.expiresAt, approximateDistanceKm: r.approximateDistanceKm,
-          recommendation: r.recommendation })) };
+          recommendation: r.recommendation, ...(r.offer ? { offer: r.offer } : {}) })) };
     }
+    const declined = path.match(/^\/work\/offers\/([a-f0-9-]{36})\/decline$/);
+    if (write && declined) return dispatch.decline({ userId: user.id, offerId: declined[1], key, data });
     if (write && path === '/work/online') return availability.command(context,'online',null,data,key);
     const lease = path.match(/^\/work\/([a-f0-9-]{36})\/(offline|heartbeat)$/);
     if (write && lease) return lease[2] === 'offline' ? availability.command(context,'offline',lease[1],data,key) : availability.update(context,lease[1],data);

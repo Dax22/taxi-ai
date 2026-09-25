@@ -73,5 +73,32 @@ export function createMapProvider({ env = process.env, fetchImpl = globalThis.fe
       const route = result.routes[0];
       return { distanceMeters: route.distance, durationSeconds: route.duration, coordinates: route.geometry.coordinates };
     },
+    async pickupEstimates(pairs) {
+      // One bounded OSRM table on the existing routing origin/profile. Custom
+      // providers without the standard route path remain usable via route().
+      check(Array.isArray(pairs) && pairs.length > 0 && pairs.length <= 16,
+        'INVALID_ROUTE', 'Pickup routing accepts up to 16 pairs at a time.');
+      const validPoint = (p) => p && Number.isFinite(p.lat) && Math.abs(p.lat) <= 90
+        && Number.isFinite(p.lng) && Math.abs(p.lng) <= 180;
+      check(pairs.every((pair) => validPoint(pair?.from) && validPoint(pair?.to)), 'INVALID_ROUTE', 'Pickup routing needs valid coordinates.');
+      check(/\/route\/v1\/[^/]+\/?$/.test(routeUrl.pathname), 'MAPS_UNAVAILABLE', 'This route provider does not expose pickup tables.');
+      const points = pairs.flatMap(({ from, to }) => [from, to]);
+      const url = new URL(routeUrl);
+      url.pathname = `${url.pathname.replace(/\/route\/v1\/([^/]+)\/?$/, '/table/v1/$1')}/${points.map((p) => `${p.lng},${p.lat}`).join(';')}`;
+      for (const [name, value] of Object.entries({ sources: pairs.map((_, i) => i * 2).join(';'),
+        destinations: pairs.map((_, i) => i * 2 + 1).join(';'), annotations: 'duration,distance',
+        radiuses: points.map(() => '250').join(';'), generate_hints: 'false' })) url.searchParams.set(name, value);
+      // Shares the route rate limit with previews; no fallback_speed is sent.
+      const result = await json(url, 'route', 15_000);
+      check(result?.code === 'Ok' && Array.isArray(result.durations) && Array.isArray(result.distances)
+        && Array.isArray(result.sources) && Array.isArray(result.destinations), 'MAPS_UNAVAILABLE', 'Pickup routing returned an invalid table.');
+      return pairs.map((_, i) => {
+        const durationSeconds = result.durations[i]?.[i], distanceMeters = result.distances[i]?.[i];
+        if (!Number.isFinite(durationSeconds) || !Number.isFinite(distanceMeters)
+          || result.fallback_speed_cells?.some((cell) => Array.isArray(cell) && cell[0] === i && cell[1] === i)) return null;
+        return { durationSeconds, distanceMeters, source: 'osrm-table',
+          snappedFrom: result.sources[i]?.location, snappedTo: result.destinations[i]?.location };
+      });
+    },
   });
 }

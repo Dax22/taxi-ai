@@ -5,6 +5,7 @@ import { hasCapability } from '../shared/policies.mjs';
 import { accountRoutes } from '../modules/accounts/routes.mjs';
 import { driverRoutes } from '../modules/drivers/routes.mjs';
 import { rideRoutes } from '../modules/rides/routes.mjs';
+import { dispatchRoutes } from '../modules/dispatch/routes.mjs';
 import { chatRoutes } from '../modules/chat/routes.mjs';
 import { callRoutes } from '../modules/calls/routes.mjs';
 import { locationRoutes } from '../modules/locations/routes.mjs';
@@ -25,7 +26,7 @@ import { json } from './responses.mjs';
 export function createApiRouter(application, { secure = false } = {}) {
   const { accounts, devices, drivers, rides, chat, calls, locations, availability, payments, safety, rateLimiter, clock } = application;
   const cookie = (token, age) => sessionCookie(token, age, secure);
-  const routes = [...accountEmailRoutes(application.accountEmail, cookie), ...googleAuthRoutes(application.googleAuth, accounts, secure), ...adminConsoleRoutes(application.adminConsole, accounts, cookie), ...deviceSessionRoutes(devices), ...accountRoutes(accounts, cookie), ...driverRoutes(drivers), ...rideRoutes(rides), ...chatRoutes(chat), ...callRoutes(calls), ...locationRoutes(locations), ...availabilityRoutes(availability), ...paymentRoutes(payments), ...safetyRoutes(safety)];
+  const routes = [...accountEmailRoutes(application.accountEmail, cookie), ...googleAuthRoutes(application.googleAuth, accounts, secure), ...adminConsoleRoutes(application.adminConsole, accounts, cookie), ...deviceSessionRoutes(devices), ...accountRoutes(accounts, cookie), ...driverRoutes(drivers), ...rideRoutes(rides, application.dispatch), ...dispatchRoutes(application.dispatch), ...chatRoutes(chat), ...callRoutes(calls), ...locationRoutes(locations), ...availabilityRoutes(availability), ...paymentRoutes(payments), ...safetyRoutes(safety)];
   routes.push(...safetyMonitoringRoutes(application.safetyMonitoring));
   routes.push(...vehicleCheckRoutes(application.vehicleChecks));
   routes.push(...eatsRoutes(application.eats));
@@ -63,7 +64,7 @@ export function createApiRouter(application, { secure = false } = {}) {
       match: pathname.match(route.path), key: request.headers['idempotency-key'], callClient: request.headers['x-call-client'],
       locationClient: request.headers['x-location-client'],
       availabilityClient: request.headers['x-availability-client'],
-      query: new URL(request.url, origin).searchParams, reauthenticate: () => { const fresh = accounts.sessionFor(token); check(fresh, 'UNAUTHENTICATED', 'Sign in to continue.'); requireCsrf(request, fresh); return fresh.user; } });
+      query: new URL(request.url, origin).searchParams, reauthenticate: () => { const fresh = accounts.sessionFor(token); check(fresh, 'UNAUTHENTICATED', 'Sign in to continue.'); if (write) requireCsrf(request, fresh); return fresh.user; } });
     if (result.cookie) response.setHeader('Set-Cookie', result.cookie);
     if (result.image) {
       response.writeHead(200, { 'Content-Type': result.image.mimeType, 'Content-Length': result.image.content.length });

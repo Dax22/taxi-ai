@@ -12,7 +12,7 @@ async function fixture(t){
   const h=await harness(t),{customer,driver,admin}=await participants(h);
   const sent=[],receipts=[];
   const provider={enabled:true,projectId,send:async(data)=>{sent.push(data);return{status:'ticket',ticket:'fixture-ticket'};},receipt:async(ticket)=>{receipts.push(ticket);return{status:'ok'};}};
-  const app=createApplication({db:h.db,clock:()=>h.now,allowSimulation:true,pushProvider:provider});
+  const app=createApplication({db:h.db,clock:()=>h.now,allowSimulation:true,pushProvider:provider,dispatchConfig:{mode:'legacy'}});
   const credentials=app.devices.issue(customer.user.id,'Test device').credentials;
   app.notifications.register(customer.user.id,credentials.sessionId,{token,projectId});
   const ride=await claimRide(driver,await requestRide(customer));
@@ -166,4 +166,56 @@ test('Expo arrival text contains the requested identity while routing data remai
   assert.deepEqual(requests[0].data, { notificationId:3 }); assert.equal(requests[0].ttl, 300);
   await provider.send({ token,notificationId:4,arrivalBody:'x'.repeat(501) });
   assert.equal(requests[1].title, 'Taxi Ai'); assert.match(requests[1].body, /new journey update/);
+});
+
+async function dispatchPushFixture(t) {
+  const h = await harness(t, { dispatchConfig: { mode: 'sequential' } });
+  const { customer, driver } = await participants(h);
+  const sent = [], receipts = [];
+  const provider = { enabled: true, projectId,
+    send: async (data) => { sent.push(data); return { status: 'ticket', ticket: 'dispatch-ticket' }; },
+    receipt: async (ticket) => { receipts.push(ticket); return { status: 'ok' }; } };
+  const app = createApplication({ db: h.db, clock: () => h.now, allowSimulation: true,
+    pushProvider: provider, dispatchConfig: { mode: 'sequential' } });
+  const device = app.devices.issue(driver.user.id, 'Dispatch phone').credentials;
+  app.notifications.register(driver.user.id, device.sessionId, { token, projectId });
+  const ride = await requestRide(customer);
+  await app.dispatch.refresh();
+  const offer = app.dispatch.forDriver(driver.user.id, h.now);
+  assert.equal(offer.rideId, ride.id);
+  const job = h.db.prepare(`SELECT j.id FROM push_jobs j JOIN account_notifications n ON n.id=j.notification_id
+    WHERE n.user_id=? AND n.kind='request'`).get(driver.user.id);
+  assert.ok(job);
+  return { h, app, driver, ride, offer, job, sent, receipts, provider };
+}
+
+test('expired and declined dispatch invitations discard pending push jobs without a provider send', async (t) => {
+  for (const outcome of ['expired', 'declined']) {
+    const f = await dispatchPushFixture(t);
+    if (outcome === 'expired') f.h.advance(20_000);
+    else f.app.dispatch.decline({ userId: f.driver.user.id, offerId: f.offer.id, key: randomUUID(), data: {} });
+    await f.app.notifications.deliverPending();
+    assert.equal(f.sent.length, 0, outcome);
+    assert.equal(f.h.db.prepare('SELECT status FROM push_jobs WHERE id=?').get(f.job.id).status, 'dead', outcome);
+  }
+});
+
+test('a dispatch push retry rechecks its offer while an already-sent ticket can finish its receipt', async (t) => {
+  const retry = await dispatchPushFixture(t);
+  retry.provider.send = async (data) => { retry.sent.push(data); return { status: 'retry' }; };
+  await retry.app.notifications.deliverPending();
+  assert.equal(retry.sent.length, 1);
+  retry.h.advance(60_000);
+  await retry.app.notifications.deliverPending();
+  assert.equal(retry.sent.length, 1, 'an expired invitation cannot cause a new provider send');
+  assert.equal(retry.h.db.prepare('SELECT status FROM push_jobs WHERE id=?').get(retry.job.id).status, 'dead');
+
+  const ticket = await dispatchPushFixture(t);
+  await ticket.app.notifications.deliverPending();
+  assert.equal(ticket.sent.length, 1);
+  ticket.h.advance(15 * 60_000);
+  await ticket.app.notifications.deliverPending();
+  assert.deepEqual(ticket.receipts, ['dispatch-ticket']);
+  assert.equal(ticket.sent.length, 1);
+  assert.equal(ticket.h.db.prepare('SELECT status FROM push_jobs WHERE id=?').get(ticket.job.id).status, 'done');
 });

@@ -23,6 +23,25 @@ function client(fetcher: (url: string, options: RequestInit) => Promise<Response
   return { app: new MobileClient({ origin: 'https://taxi.example.test', vault: v.port, fetchImpl: ((url, options) => fetcher(String(url), options ?? {})) as typeof fetch }), ...v };
 }
 
+test('ride offer decline keeps its identity, empty body and idempotency key through access refresh', async () => {
+  const calls: Array<{ url: string; options: RequestInit }> = [];
+  const { app } = client(async (url, options) => {
+    if (url.endsWith('/auth/login')) return response(auth());
+    if (url.endsWith('/auth/refresh')) return response(auth(2));
+    calls.push({ url, options });
+    return new Headers(options.headers).get('Authorization') === `Bearer ${auth().credentials.accessToken}` ? unauthorized()
+      : ok({ declined: true, replayed: false });
+  });
+  await app.login(user.email, 'Test password', 'Phone');
+  assert.equal((await app.declineOffer(id, 'original-decline-key')).declined, true);
+  assert.equal(calls.length, 2); assert.equal(calls[0].url, calls[1].url);
+  assert.ok(calls[0].url.endsWith(`/work/offers/${id}/decline`));
+  for (const call of calls) {
+    assert.equal(call.options.body, '{}');
+    assert.equal(new Headers(call.options.headers).get('Idempotency-Key'), 'original-decline-key');
+  }
+});
+
 test('guest link commands retain the exact body and key through access refresh without persisting a private token', async () => {
   const calls: RequestInit[] = [], secret = 'c'.repeat(64);
   const { app, storage } = client(async (url, options) => {

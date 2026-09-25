@@ -3,7 +3,7 @@ import { canUseMode, accountInMode, modeForRide } from '/shared/account-modes.mj
 
 const emptyState = () => ({ account: null, user: null, mode: 'customer', modePrompt: false,
   activeElsewhere: [], rides: [], available: [], drivers: [], reports: [], chatUnread: {},
-  history: [], historyCursor: null, historyLoaded: false, availabilityOnline: false, sampleMatchingEnabled: false });
+  history: [], historyCursor: null, historyLoaded: false, availabilityOnline: false, sampleMatchingEnabled: false, dispatchMode: 'legacy' });
 const closed = (ride) => ['completed', 'cancelled', 'expired'].includes(ride.status);
 const identity = (session) => session.user ? `${session.user.id}:${session.user.role}:${session.csrfToken}` : null;
 
@@ -92,6 +92,7 @@ export function createPageController({ client, activityClient = client, view, mo
           }
           next.rides = data.rides; next.available = data.available; next.activeElsewhere = data.activeElsewhere ?? [];
           next.sampleMatchingEnabled = data.matchingSettings.allowSimulation;
+          next.dispatchMode = data.matchingSettings.dispatchMode ?? 'legacy';
         }
         if (epoch !== generation) return;
         if (first.user) {
@@ -162,6 +163,7 @@ export function createPageController({ client, activityClient = client, view, mo
     try { await refresh(); } catch { feedback.offline(); }
   }
   function rideCommand(path, data, message) {
+    if (/^\/api\/dispatch\/offers\/[^/]+\/decline$/.test(path)) return runAction(() => client.command(path, data), message);
     return runAction(async () => {
       const result = await client.rideCommand(path, data); view.select(result.ride.id);
       if (path === '/api/rides') view.rideCreated?.(result.ride);

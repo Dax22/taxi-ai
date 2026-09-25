@@ -1,10 +1,13 @@
-export function rideRoutes(rides) {
+export function rideRoutes(rides, dispatch) {
   function write(action, id, context) {
     const result = rides.mutate({ userId: context.user.id, key: context.key, action, id, data: context.data });
     return { status: action === 'create' && !result.replayed ? 201 : 200, body: result };
   }
   return [
-    { method: 'GET', path: /^\/api\/rides$/, access: 'read', handle: ({ user, query }) => ({ body: rides.list(user, query.get('mode')) }) },
+    { method: 'GET', path: /^\/api\/rides$/, access: 'read', handle: async ({ user, query, reauthenticate }) => {
+      if (query.get('mode') !== 'customer' && user.driver?.status === 'approved') await dispatch?.refresh();
+      return { body: rides.list(reauthenticate ? reauthenticate() : user, query.get('mode')) };
+    } },
     { method: 'GET', path: /^\/api\/rides\/history$/, access: 'read',
       handle: ({ user, query }) => ({ body: rides.history(user, query.get('before'), query.get('mode')) }) },
     { method: 'POST', path: /^\/api\/rides$/, access: 'write', handle: (context) => write('create', null, context) },

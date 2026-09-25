@@ -13,8 +13,10 @@ export interface Position { lat: number; lng: number; accuracy: number; captured
 export type OnlineData = { mode: 'gps'; position: Position } | { mode: 'sample'; areaId: string };
 export interface Availability { id: string; online: boolean; owned: boolean; mode: 'gps' | 'sample'; areaId: string | null; sequence: number; updatedAt: number; expiresAt: number | null; reason: string | null }
 export interface AvailabilityResult extends Envelope { availability: Availability | null }
-export interface AvailableJob { id: string; version: number; vehicleCategory: VehicleCategoryId; pickup: string; destination: string; suggestedFareKobo: number; expiresAt: number; approximateDistanceKm: number | null; recommendation?: MatchRecommendation }
-export interface Work extends AvailabilityResult { settings: { allowSimulation: boolean; heartbeatSeconds: number; leaseSeconds: number; freshPositionSeconds: number };
+export interface DispatchOffer { id: string; expiresAt: number; pickupEtaMinutes: number | null; etaSource: 'road' | 'distance_fallback' | 'sample' }
+export interface DeclinedOffer extends Envelope { declined: true; replayed: boolean }
+export interface AvailableJob { id: string; version: number; vehicleCategory: VehicleCategoryId; pickup: string; destination: string; suggestedFareKobo: number; expiresAt: number; approximateDistanceKm: number | null; recommendation?: MatchRecommendation; offer?: DispatchOffer }
+export interface Work extends AvailabilityResult { settings: { allowSimulation: boolean; heartbeatSeconds: number; leaseSeconds: number; freshPositionSeconds: number; dispatchMode?: 'legacy' | 'sequential' | 'batch' };
  areas: { id: string; name: string }[]; current: Journey[]; activeElsewhere: { id: string; mode: Mode; status: string }[]; available: AvailableJob[] }
 export interface Message { id: string; sequence: number; body: string; createdAt: number; fromYou: boolean }
 export interface Thread extends Envelope { rideId: string; messages: Message[]; hasMore: boolean; nextAfter: number; lastSequence: number; readThrough: number; unread: number; reportedMessageIds: string[]; canSend: boolean }
@@ -24,6 +26,7 @@ export interface Notifications extends Envelope { notifications: Notification[];
 export interface NotificationTarget extends Envelope { target: { rideId: string; mode: Mode; screen: 'work' | 'journey' } }
 export function parseJourney(value: unknown): JourneyResult;
 export function parseAvailability(value: unknown): AvailabilityResult;
+export function parseDeclinedOffer(value: unknown): DeclinedOffer;
 export function parseWork(value: unknown): Work;
 export function parseThread(value: unknown): Thread;
 export function parseSentMessage(value: unknown): SentMessage;

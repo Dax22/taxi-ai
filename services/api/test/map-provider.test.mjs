@@ -51,3 +51,45 @@ test('OSRM uses car routes, bounded snapping and GeoJSON; upstream failures neve
   assert.throws(() => createMapProvider({ env: { TAXI_AI_SEARCH_URL: 'https://user:secret@example.test/api' } }));
   assert.throws(() => createMapProvider({ env: { TAXI_AI_TILE_URL: 'javascript:alert(1)' } }));
 });
+test('OSRM pickup table uses configured routing origin and shared rate limit, and never accepts fallback-speed cells', async () => {
+  let now = 1000;
+  const calls = [], pairs = [
+    { from: { lat: 9.08, lng: 7.4 }, to: { lat: 9.085, lng: 7.405 } },
+    { from: { lat: 9.081, lng: 7.401 }, to: { lat: 9.086, lng: 7.406 } },
+    { from: { lat: 9.082, lng: 7.402 }, to: { lat: 9.087, lng: 7.407 } },
+  ];
+  const provider = createMapProvider({ now: () => now, env: { TAXI_AI_ROUTING_URL: 'https://maps.example.test/routed-car/route/v1/driving/' },
+    fetchImpl: async (url) => {
+      calls.push(url);
+      return Response.json({ code: 'Ok', durations: [[180, 220, 300], [160, null, 400], [170, 210, 300]],
+        distances: [[1200, 1400, 2000], [1100, null, 2400], [1150, 1300, 1800]], fallback_speed_cells: [[2, 2]],
+        sources: pairs.map(({ from }) => ({ location: [from.lng, from.lat] })),
+        destinations: pairs.map(({ to }) => ({ location: [to.lng, to.lat] })) });
+    } });
+  const results = await provider.pickupEstimates(pairs);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].origin, 'https://maps.example.test');
+  assert.match(calls[0].pathname, /^\/routed-car\/table\/v1\/driving\//);
+  assert.equal(calls[0].searchParams.get('sources'), '0;2;4');
+  assert.equal(calls[0].searchParams.get('destinations'), '1;3;5');
+  assert.equal(calls[0].searchParams.get('annotations'), 'duration,distance');
+  assert.equal(calls[0].searchParams.get('radiuses'), '250;250;250;250;250;250');
+  assert.equal(calls[0].searchParams.has('fallback_speed'), false);
+  assert.deepEqual(results, [{ durationSeconds: 180, distanceMeters: 1200, source: 'osrm-table',
+    snappedFrom: [7.4, 9.08], snappedTo: [7.405, 9.085] }, null, null]);
+  assert.deepEqual(await provider.pickupEstimates(pairs), results); assert.equal(calls.length, 1);
+  await assert.rejects(provider.route(pairs[0].from, pairs[0].to), { code: 'MAPS_BUSY' });
+  now += 15_000; await provider.pickupEstimates(pairs); assert.equal(calls.length, 2);
+});
+test('OSRM pickup table bounds work and rejects unsupported endpoints or malformed tables', async () => {
+  let calls = 0;
+  const pair = { from: { lat: 9.08, lng: 7.4 }, to: { lat: 9.085, lng: 7.405 } };
+  const provider = createMapProvider({ fetchImpl: async () => { calls += 1; return Response.json({ code: 'Ok' }); } });
+  for (const pairs of [[], Array(17).fill(pair), [{ ...pair, from: { lat: NaN, lng: 7.4 } }]]) {
+    await assert.rejects(provider.pickupEstimates(pairs), { code: 'INVALID_ROUTE' });
+  }
+  assert.equal(calls, 0);
+  await assert.rejects(provider.pickupEstimates([pair]), { code: 'MAPS_UNAVAILABLE' });
+  await assert.rejects(createMapProvider({ env: { TAXI_AI_ROUTING_URL: 'https://maps.example.test/custom/' },
+    fetchImpl: () => assert.fail('unsupported table URL must not be queried') }).pickupEstimates([pair]), { code: 'MAPS_UNAVAILABLE' });
+});

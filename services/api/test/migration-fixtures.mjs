@@ -30,9 +30,24 @@ export function removeNationwideEatsFixtureTables(db) {
 
 /** Safety monitoring is additive in schema 26; downgrade fixtures must remove its empty tables. */
 export function removeSafetyMonitoringFixtureTables(db) {
+  removeDispatchFixtureTables(db);
   for (const table of ['safety_delivery_jobs','safety_auto_alerts','safety_monitor_sessions','safety_risk_zones','safety_monitor_commands']) {
     if (!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(table)) continue;
     if (db.prepare(`SELECT count(*) AS count FROM ${table}`).get().count) throw new Error(`Cannot downgrade a populated ${table} fixture.`);
+    db.exec(`DROP TABLE ${table}`);
+  }
+}
+
+/** Reconstruct schema 26 without removing any original ride or fare records. */
+export function removeDispatchFixtureTables(db) {
+  for (const table of ['dispatch_commands', 'dispatch_offers', 'dispatch_journeys']) {
+    if (!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(table)) continue;
+    // Journey rows are derived measurements written even under the legacy
+    // policy. They did not exist in old fixtures; genuine invitations must be
+    // empty before a test deliberately reconstructs an older database.
+    if (table !== 'dispatch_journeys' && db.prepare(`SELECT count(*) AS count FROM ${table}`).get().count) {
+      throw new Error(`Cannot downgrade a populated ${table} fixture.`);
+    }
     db.exec(`DROP TABLE ${table}`);
   }
 }

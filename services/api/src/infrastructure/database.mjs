@@ -15,6 +15,7 @@ migrations.push('023_nationwide_eats.sql');
 migrations.push('024_driver_ratings.sql');
 migrations.push('025_eats_menu_photos.sql');
 migrations.push('026_safety_monitoring.sql');
+migrations.push('027_dispatch.sql');
 export const SCHEMA_VERSION = migrations.length;
 
 export function transaction(db, run) {

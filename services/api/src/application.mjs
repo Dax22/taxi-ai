@@ -35,6 +35,10 @@ import { createCallsRepository } from './modules/calls/repository.mjs';
 import { createCallsService } from './modules/calls/service.mjs';
 import { createCallConfig } from './infrastructure/call-config.mjs';
 import { createMapProvider } from './infrastructure/map-provider.mjs';
+import { createPickupEtaProvider } from './infrastructure/pickup-eta.mjs';
+import { createDispatchConfig } from './infrastructure/dispatch-config.mjs';
+import { createDispatchRepository } from './modules/dispatch/repository.mjs';
+import { createDispatchService } from './modules/dispatch/service.mjs';
 import { createLocationsRepository } from './modules/locations/repository.mjs';
 import { createLocationsService } from './modules/locations/service.mjs';
 import { createAvailabilityRepository } from './modules/availability/repository.mjs';
@@ -62,6 +66,7 @@ import { createVehicleChecksService } from './modules/vehicle-checks/service.mjs
 
 /** Composition root: the only place that wires business modules to adapters. */
 export function createApplication({ db, clock = Date.now, callConfig = createCallConfig(), mapProvider = createMapProvider(), allowSimulation = false,
+  dispatchConfig = createDispatchConfig(),
   safetyAlertProvider = createSafetyAlertProvider(), accountMail = createAccountMail(), pushProvider = createPushProvider(), vehicleVisionProvider = createVehicleVisionProvider(),
   googleProvider = createGoogleProvider({ config: createGoogleConfig({}), clock }) }) {
   const unitOfWork = (run) => transaction(db, run);
@@ -93,7 +98,14 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
   const availability = createAvailabilityService({ repository: createAvailabilityRepository(db),
     getAccount: accounts.profile, sessionOwner: accounts.sessionOwner, nativeSessionFor: devices.sessionFor, nativeSessionOwner: devices.sessionOwner, isBusy: (id) => rideRepository.hasNegotiation(id) || rideRepository.hasCustomerWork(id, clock()) || eatsRepository.hasWork(id),
     unitOfWork, tokens, audit, clock, allowSimulation });
+  const pickupEta = createPickupEtaProvider({ mapProvider, now: clock });
+  const dispatch = createDispatchService({ repository: createDispatchRepository(db), getAccount: accounts.profile,
+    candidates: (now, options) => rides.dispatchCandidates(now, options), candidateFor: (rideId, driverId, now) => rides.dispatchCandidateFor(rideId, driverId, now),
+    estimateMany: pickupEta.estimateMany, config: dispatchConfig, unitOfWork, tokens, audit, clock,
+    onOffer: (offer) => notifications.publish({ userId: offer.driverId, rideId: offer.rideId, kind: 'request',
+      mode: 'work', eventKey: `dispatch:${offer.id}`, now: offer.createdAt }) });
   const rides = createRidesService({ repository: rideRepository,
+    dispatch,
     passengerForRide: guestRepository.passenger, savePassenger: guestRepository.savePassenger,
     hasOtherWork: eatsRepository.hasWork,
     getAccount: accounts.profile, unitOfWork, audit, tokens, clock,
@@ -103,6 +115,7 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
     bindQuote: (userId, id, rideId, now) => locations.bindQuote(userId, id, rideId, now),
     availabilityFor: availability.positionFor, onClaim: availability.onClaim, availableDriverIds: availability.driverIds, allowSimulation,
     onEvent: ({ kind, ride, actorId, recipients = [], eventKey, now }) => {
+      dispatch.observe({ kind, rideId: ride.id, locationMode: locations.routeForRide(ride.id) ? 'gps' : 'sample', now });
       const targets = kind === 'request' ? recipients : [ride.customerId,ride.driverId].filter((id) => id && id !== actorId);
       for (const userId of targets) notifications.publish({ userId, rideId: ride.id, kind,
         mode: userId === ride.customerId ? 'customer' : 'work', eventKey, now });
@@ -117,6 +130,7 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
     } });
   notifications = createNotificationsService({ repository: createNotificationsRepository(db), getAccount: accounts.profile,
     sessionOwner: devices.sessionOwner, provider: pushProvider, unitOfWork, clock,
+    shouldSendRequest: (userId, rideId) => !dispatch.enabled || dispatch.forDriver(userId, clock())?.rideId === rideId,
     getArrival: (userId, rideId) => {
       const ride = rideRepository.find(rideId), trip = rideRepository.findTrip(rideId);
       if (ride?.customerId !== userId || !trip?.arrivedAt || !ride.driverSnapshotJson) return null;
@@ -155,5 +169,5 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
     availabilityFor: availability.positionFor, onClaim: availability.onClaim, tokens, unitOfWork, audit, clock, normalisePhoto: normaliseFoodPhoto });
   const googleAuth = createGoogleAuthService({ repository: createGoogleAuthRepository(db), provider: googleProvider,
     accounts, devices, tokens, unitOfWork, clock });
-  return Object.freeze({ accounts, devices, drivers, rides, eats, chat, calls, locations, availability, payments, safety, safetyMonitoring, guestRides, vehicleChecks, adminConsole, googleAuth, accountEmail, notifications, rateLimiter, clock });
+  return Object.freeze({ accounts, devices, drivers, rides, dispatch, eats, chat, calls, locations, availability, payments, safety, safetyMonitoring, guestRides, vehicleChecks, adminConsole, googleAuth, accountEmail, notifications, rateLimiter, clock });
 }

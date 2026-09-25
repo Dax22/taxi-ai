@@ -75,6 +75,8 @@
   .request-row strong { display: block; font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
   .request-row small { display: block; color: var(--muted); margin-top: 6px; font-size: 12px; }
   .request-row .button { flex-shrink: 0; }
+  .dispatch-offer-row { flex-wrap: wrap; justify-content: flex-start; }
+  .dispatch-offer-row > div { flex: 1 1 100%; min-width: 0; }
   .empty-state { padding: 20px 0 8px; color: var(--muted); font-size: 14px; }
   #detail-title { overflow-wrap: anywhere; }
   #detail-reference { margin-top: 8px; overflow-wrap: anywhere; }

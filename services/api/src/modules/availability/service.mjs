@@ -98,7 +98,7 @@ export function createAvailabilityService({ repository, getAccount, sessionOwner
   // Internal ports: caller owns its transaction. Never export coordinates through HTTP.
   function positionFor(driverId, now) {
     const row = repository.current(driverId);
-    return row && !invalidReason(row, now) ? { mode: row.mode, areaId: row.areaId,
+    return row && !invalidReason(row, now) ? { id: row.id, mode: row.mode, areaId: row.areaId,
       position: row.positionJson ? JSON.parse(row.positionJson) : null } : null;
   }
   return Object.freeze({ get, command, update, sweep, positionFor,

@@ -66,6 +66,21 @@ function setup() {
     session(next) { current = next; }, intercept(fn) { intercept = fn; } };
 }
 
+test('declining a timed offer refreshes Work without treating the result as a claimed journey', async () => {
+  const h = setup(); h.session(session(driver));
+  h.intercept(async (path) => {
+    if (path === '/api/dispatch/offers/offer-one/decline') return { declined: true, replayed: false };
+    if (path.startsWith('/api/rides?')) return { rides: [], available: [], matchingSettings: { allowSimulation: true, dispatchMode: 'sequential' } };
+  });
+  await h.page.refresh(); await h.page.switchMode('work');
+  const result = await h.page.rideCommand('/api/dispatch/offers/offer-one/decline', {}, 'Offer declined.');
+  assert.equal(result.declined, true);
+  assert.deepEqual(h.commands.at(-1), { path: '/api/dispatch/offers/offer-one/decline', data: {} });
+  assert.equal(h.rendered().dispatchMode, 'sequential');
+  assert.ok(!h.feedback.some(([name]) => name === 'error'));
+  assert.ok(h.feedback.some(([name, message]) => name === 'notice' && message === 'Offer declined.'));
+});
+
 test('vehicle edit enters Work, establishes the driver context and opens the editor on every click', async () => {
   const h = setup(); h.session(session(driver)); await h.page.refresh();
   assert.equal(h.rendered().mode, 'customer'); assert.equal(await h.page.editVehicle(), true);

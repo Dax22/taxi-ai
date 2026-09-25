@@ -10,6 +10,7 @@ import { sendError, json } from '../../services/api/src/http/responses.mjs';
 import { requestContext, requireStagingAccess, isInternalHealth } from '../../services/api/src/http/security.mjs';
 import { createCallConfig } from '../../services/api/src/infrastructure/call-config.mjs';
 import { createMapProvider } from '../../services/api/src/infrastructure/map-provider.mjs';
+import { createDispatchConfig } from '../../services/api/src/infrastructure/dispatch-config.mjs';
 import { createRuntimeConfig } from '../../services/api/src/infrastructure/runtime-config.mjs';
 import { createHealth } from '../../services/api/src/infrastructure/health.mjs';
 import { createTelemetry } from '../../services/api/src/infrastructure/telemetry.mjs';
@@ -155,6 +156,7 @@ const routes = new Map([
 export function createAppServer({ runtime = createRuntimeConfig({}), db = openDatabase(runtime.mode === 'staging' ? runtime.database : ':memory:'),
   clock = Date.now, callConfig = createCallConfig({ ...process.env, TAXI_AI_CALLS_MODE: process.env.TAXI_AI_CALLS_MODE ?? (runtime.mode === 'staging' ? 'off' : 'local') }),
   mapProvider = createMapProvider({ env: { ...process.env, TAXI_AI_MAPS_MODE: process.env.TAXI_AI_MAPS_MODE ?? (runtime.mode === 'staging' ? 'off' : 'community') } }),
+  dispatchConfig = createDispatchConfig(process.env),
   telemetry = createTelemetry({ enabled: runtime.mode === 'staging' }),
   accountMail = createAccountMail({ config: createEmailConfig(process.env,runtime) }),
   safetyAlertProvider = createSafetyAlertProvider({env:process.env}),
@@ -162,7 +164,7 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
   vehicleVisionProvider = createVehicleVisionProvider({ env:process.env }),
   googleProvider = createGoogleProvider({ config: createGoogleConfig(process.env, runtime), clock }) } = {}) {
   if (runtime.mode === 'staging' && callConfig.mode === 'local') throw new Error('Staging calls require off or a configured relay.');
-  const application = createApplication({ db, clock, callConfig, mapProvider, googleProvider, accountMail, pushProvider, vehicleVisionProvider, safetyAlertProvider, allowSimulation: runtime.mode === 'local' });
+  const application = createApplication({ db, clock, callConfig, mapProvider, dispatchConfig, googleProvider, accountMail, pushProvider, vehicleVisionProvider, safetyAlertProvider, allowSimulation: runtime.mode === 'local' });
   const handleApi = createApiRouter(application, { secure: runtime.mode === 'staging' });
   const handleMobile = createMobileRouter(application);
   const handleGoogleCallback = createGoogleCallback(application, runtime.mode === 'staging');
@@ -175,6 +177,10 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
     void application.notifications.deliverPending().catch(() => telemetry.event('maintenance_failed'));
   }, 5000);
   cleanup.unref();
+  const dispatchTimer = setInterval(() => {
+    void application.dispatch.refresh().catch(() => telemetry.event('dispatch_failed'));
+  }, 2000);
+  dispatchTimer.unref();
   const server = createServer(async (request, response) => {
     let pathname = '';
     telemetry.observe(request, response, () => pathname);
@@ -240,8 +246,10 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
   });
   server.requestTimeout = 15_000;
   server.headersTimeout = 10_000;
-  server.beginShutdown = () => { health.beginShutdown(); clearInterval(cleanup); application.accountEmail.stop(); };
-  server.on('close', () => { clearInterval(cleanup); application.accountEmail.stop(); application.notifications.stop(); void application.safetyMonitoring.stop().finally(() => db.close()); });
+  server.beginShutdown = () => { health.beginShutdown(); clearInterval(cleanup); clearInterval(dispatchTimer);
+    void application.dispatch.stop().catch(() => telemetry.event('dispatch_failed')); application.accountEmail.stop(); };
+  server.on('close', () => { clearInterval(cleanup); clearInterval(dispatchTimer); application.accountEmail.stop(); application.notifications.stop();
+    void Promise.allSettled([application.dispatch.stop(), application.safetyMonitoring.stop()]).finally(() => db.close()); });
   return server;
 }
 

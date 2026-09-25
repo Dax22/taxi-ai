@@ -14,11 +14,11 @@ import { createMobileBooking } from './mobile-booking.mjs';
 import { eatsRoutes } from '../modules/eats/routes.mjs';
 
 /** Versioned native surface. Cookie identity and browser CSRF are never reused. */
-export function createMobileRouter({ devices, accounts, drivers, rides, eats, locations, availability, chat, notifications, safety, safetyMonitoring, guestRides, vehicleChecks, payments, clock, rateLimiter, googleAuth, accountEmail }) {
+export function createMobileRouter({ devices, accounts, drivers, rides, dispatch, eats, locations, availability, chat, notifications, safety, safetyMonitoring, guestRides, vehicleChecks, payments, clock, rateLimiter, googleAuth, accountEmail }) {
   const monitorRoutes = safetyMonitoringRoutes(safetyMonitoring).filter(r=>!r.role);
   const foodRoutes = eatsRoutes(eats);
   const booking = createMobileBooking({ rides, locations, availability, clock });
-  const journeys = createMobileJourneys({ rides, availability, chat, clock });
+  const journeys = createMobileJourneys({ rides, dispatch, availability, chat, clock });
   function summary(ride) {
     return { id: ride.id, status: ride.status, pickup: ride.pickup.name, destination: ride.destination.name,
       fareKobo: ride.trip?.fareKobo ?? ride.negotiation?.agreement?.amountKobo ?? null,
@@ -81,8 +81,9 @@ export function createMobileRouter({ devices, accounts, drivers, rides, eats, lo
     else if (write && path === '/account/email/request') body = accountEmail.requestVerification(session.user.id,data);
     else if (path === '/booking' || path.startsWith('/booking/')) body = await booking({ path, write, user: session.user,
       accessToken, data, key: request.headers['idempotency-key'] });
-    else if (path === '/work' || path.startsWith('/work/') || path.startsWith('/journeys/')) body = journeys({ path, write, user: session.user,
-      accessToken, query, data, key: request.headers['idempotency-key'] });
+    else if (path === '/work' || path.startsWith('/work/') || path.startsWith('/journeys/')) body = await journeys({ path, write, user: session.user,
+      accessToken, query, data, key: request.headers['idempotency-key'],
+      reauthenticate: () => { const fresh = devices.sessionFor(accessToken); check(fresh, 'UNAUTHENTICATED', 'Sign in to continue.'); return fresh.user; } });
     else if (path.startsWith('/vehicle-checks/')) body = await mobileVehicleChecks({ vehicleChecks,session,path,write,data,key:request.headers['idempotency-key'] });
     else if (path.startsWith('/safety-monitoring/')) {
       const route=monitorRoutes.find(r=>r.method===request.method && r.path.test('/api'+path));

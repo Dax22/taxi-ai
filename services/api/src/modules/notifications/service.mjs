@@ -4,7 +4,8 @@ import { hasCapability } from '../../shared/policies.mjs';
 import { NOTIFICATION_LABELS } from '../../../../../packages/shared/src/notification-labels.mjs';
 import { arrivalNotice } from '../../../../../packages/shared/src/pickup-identity.mjs';
 
-export function createNotificationsService({ repository, getAccount, sessionOwner, canOpen, getArrival = () => null, provider, unitOfWork, clock }) {
+export function createNotificationsService({ repository, getAccount, sessionOwner, canOpen, getArrival = () => null,
+  shouldSendRequest = () => true, provider, unitOfWork, clock }) {
   let running = false, stopped = false;
   const actor = (id) => { const user = getAccount(id); check(hasCapability(user, 'customer'), 'FORBIDDEN', 'Sign in to view updates.'); return user; };
   const own = (userId,id) => { actor(userId); check(Number.isSafeInteger(id) && id > 0, 'INVALID_CURSOR', 'Invalid update ID.'); const n = repository.find(id); check(n?.userId === userId, 'NOT_FOUND', 'Update not found.'); return n; };
@@ -46,8 +47,13 @@ export function createNotificationsService({ repository, getAccount, sessionOwne
         if (stopped) break;
         const valid = () => repository.jobActive(job.id) && sessionOwner(job.sessionId) === job.userId && repository.registered(job.sessionId) === job.token
           && (repository.find(job.notificationId)?.mode !== 'work' || hasCapability(getAccount(job.userId), 'driver'));
+        // An invitation may end long before the generic push job TTL. Check the
+        // current offer immediately before sending; an existing ticket only
+        // polls a receipt and must not be turned into another notification.
+        const requestActive = job.kind !== 'request' || job.status !== 'pending'
+          || shouldSendRequest(job.userId, repository.find(job.notificationId)?.rideId);
         const arrived = job.kind === 'arrive' && job.status === 'pending' ? arrival(repository.find(job.notificationId)) : null;
-        if (!valid() || job.kind === 'arrive' && job.status === 'pending' && arrived?.status !== 'arrived'
+        if (!valid() || !requestActive || job.kind === 'arrive' && job.status === 'pending' && arrived?.status !== 'arrived'
           || clock() >= job.createdAt + (['request','arrive'].includes(job.kind) && job.status === 'pending' ? 300_000 : 86_400_000) || job.attempts >= 8) {
           unitOfWork(() => repository.finish(job.id,'dead',clock())); continue;
         }

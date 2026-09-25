@@ -211,7 +211,9 @@ Read [the payments guide](docs/payments.md) for controls, exact amounts, receipt
 driver totals and manual print/browser review.
 
 Read [the matching guide](docs/matching.md) for local testing, permission, radius,
-timeouts and manual validation. Read [the trip guide](docs/trips.md) for cancellation, pickup verification,
+timeouts and manual validation, and [timed driver offers](docs/dispatch.md) for road pickup
+estimates, sequential/batch settings, schema-27 upgrade steps and matching metrics.
+Read [the trip guide](docs/trips.md) for cancellation, pickup verification,
 history, database migration and the manual review checklist.
 
 Once a driver claims the request, its **Your conversation** panel opens. Send a

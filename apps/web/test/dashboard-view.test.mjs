@@ -33,7 +33,7 @@ class ElementFixture {
   focus() { this.focused = true; }
   reset() { this.resets = (this.resets ?? 0) + 1; }
 }
-function setup(t) {
+function setup(t, serverNow = () => 1000) {
   const old = globalThis.document, nodes = new Map(), created = [];
   for (const [, tag, id] of html.matchAll(/<(\w+)\b[^>]*?\bid="([^"]+)"/g)) nodes.set(id, new ElementFixture(tag));
   const node = (id) => { assert.ok(nodes.has(id), `Missing HTML element #${id}`); return nodes.get(id); };
@@ -42,7 +42,7 @@ function setup(t) {
       ? all.filter((value) => value.tag === 'button') : all.filter((value) => value.dataset.requestExpires); } };
   t.after(() => { globalThis.document = old; });
   const commands = [], mismatches = [], edits = [];
-  const view = createDashboardView({ serverNow: () => 1000, onCommand: (...args) => commands.push(args), onVehicleMismatch: (id) => mismatches.push(id), onEditVehicle: () => edits.push(true), onReview() {}, onReportReview() {}, onSelectionChange() {}, onHistory() {} });
+  const view = createDashboardView({ serverNow, onCommand: (...args) => commands.push(args), onVehicleMismatch: (id) => mismatches.push(id), onEditVehicle: () => edits.push(true), onReview() {}, onReportReview() {}, onSelectionChange() {}, onHistory() {} });
   return { view, node, commands, mismatches, edits };
 }
 const customer = { id: 'customer', name: 'Passenger', role: 'customer' };
@@ -51,6 +51,41 @@ const ride = { id: 'ride-one', status: 'booked', version: 4, createdAt: 1000, su
   pickup: { name: 'Wuse' }, destination: { name: 'Maitama' }, customer, driver: { id: driver.id, name: driver.name, vehicle: driver.driver.vehicle },
   negotiation: { agreement: { amountKobo: 470001 } }, trip: { pickupPin: '123456' }, activity: [] };
 const state = (user, rides = [ride]) => ({ user, rides, history: [], drivers: [], available: [], reports: [], chatUnread: {}, historyCursor: null });
+
+test('timed ride offers show a road ETA and expiry, send explicit offer consent and block expired actions before the next tick', (t) => {
+  let now = 1000; const h = setup(t, () => now);
+  const offered = { ...ride, status: 'requested', expiresAt: 301000, hasRoute: true, approximateDistanceKm: 2,
+    offer: { id: 'offer-one', expiresAt: 21000, pickupEtaMinutes: 4, etaSource: 'road' } };
+  h.view.render({ ...state(driver, []), availabilityOnline: true, dispatchMode: 'sequential', available: [offered] });
+  const row = h.node('available-list').children[0], [description, accept, decline] = row.children;
+  assert.ok(description.children.some((node) => node.textContent === 'Ride offer'));
+  assert.ok(description.children.some((node) => /About 4 min to pickup/.test(node.textContent)));
+  assert.ok(description.children.some((node) => /Respond within 20 seconds/.test(node.textContent)));
+  assert.ok(description.children.some((node) => /Both sides must agree/.test(node.textContent)));
+  assert.equal(accept.textContent, 'Accept and negotiate');
+  accept.handlers.click(); assert.deepEqual(h.commands[0].slice(0, 2), ['/api/rides/ride-one/claim', { expectedVersion: 4, offerId: 'offer-one' }]);
+  decline.handlers.click(); assert.deepEqual(h.commands[1].slice(0, 2), ['/api/dispatch/offers/offer-one/decline', {}]);
+  now = 21000; accept.handlers.click(); decline.handlers.click(); assert.equal(h.commands.length, 2);
+  h.view.tick(); assert.equal(accept.disabled, true); assert.equal(decline.disabled, true);
+  assert.ok(description.children.some((node) => /Offer expired/.test(node.textContent)));
+});
+
+test('sample and fallback ride offers do not claim road pickup times; stale handlers cannot accept a replaced offer', (t) => {
+  const h = setup(t), offered = { ...ride, status: 'requested', expiresAt: 301000, hasRoute: true, approximateDistanceKm: 2,
+    offer: { id: 'offer-one', expiresAt: 21000, pickupEtaMinutes: null, etaSource: 'distance_fallback' } };
+  const next = { ...state(driver, []), availabilityOnline: true, dispatchMode: 'batch', available: [offered] };
+  h.view.render(next); const oldAccept = h.node('available-list').children[0].children[1];
+  let labels = h.node('available-list').children[0].children[0].children.map((node) => node.textContent).join(' ');
+  assert.match(labels, /Road estimate unavailable/); assert.ok(!labels.includes('min to pickup'));
+  h.view.render({ ...next, available: [{ ...offered, offer: { ...offered.offer, id: 'offer-two', etaSource: 'sample' } }] });
+  oldAccept.handlers.click(); assert.equal(h.commands.length, 0);
+  labels = h.node('available-list').children[0].children[0].children.map((node) => node.textContent).join(' ');
+  assert.match(labels, /Local sample-area match/); assert.ok(!labels.includes('min to pickup'));
+  h.view.reset(); oldAccept.handlers.click(); assert.equal(h.commands.length, 0);
+  h.view.render({ ...next, dispatchMode: 'legacy', available: [{ ...offered, offer: undefined }] });
+  h.node('available-list').children[0].children[1].handlers.click();
+  assert.deepEqual(h.commands[0].slice(0, 2), ['/api/rides/ride-one/claim', { expectedVersion: 4 }]);
+});
 
 test('Edit / change vehicle is in the driver profile card and stays usable after dashboard ticks', (t) => {
   const h = setup(t), profile = html.match(/<section id="driver-panel"[^>]*>([\s\S]*?)<\/section>/)[1];

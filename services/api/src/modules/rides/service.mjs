@@ -5,6 +5,7 @@ import { transportCategory, categoryFare } from '../../../../../packages/shared/
 import { passengerDetails, passengerView } from '../../../../../packages/shared/src/guest-rides.mjs';
 import { REQUEST_MS, EXPAND_MS, searchRadius } from '../../../../../packages/shared/src/matching.mjs';
 import { rankEligibleMatches } from '../../../../../packages/shared/src/smart-matching.mjs';
+import { DISPATCH_POLICY } from '../../../../../packages/shared/src/dispatch.mjs';
 import { check } from '../../shared/errors.mjs';
 import { fields } from '../../shared/validation.mjs';
 import { hasCapability, requireRole, requireEligibleDriver } from '../../shared/policies.mjs';
@@ -15,7 +16,8 @@ import { requireParticipant, requireVersion, restoreNegotiation, canonical } fro
  * or HTTP objects. unitOfWork must encompass state, fare, audit and retry writes.
  */
 export function createRidesService({ repository, deliveries, passengerForRide, savePassenger, getAccount, unitOfWork, audit, tokens, clock, onRideClosed = () => {}, onTripCompleted = () => {},
-  routeForRide = () => null, quoteForRide, bindQuote, availabilityFor = () => null, onClaim = () => {}, onEvent = () => {}, availableDriverIds = () => [], hasOtherWork = () => false, allowSimulation = false }) {
+  routeForRide = () => null, quoteForRide, bindQuote, availabilityFor = () => null, onClaim = () => {}, onEvent = () => {}, availableDriverIds = () => [], hasOtherWork = () => false, allowSimulation = false,
+  dispatch = null }) {
   // Expiry commits independently of a command that may fail afterward.
   function sweep() {
     unitOfWork(() => {
@@ -96,12 +98,14 @@ export function createRidesService({ repository, deliveries, passengerForRide, s
     sweep();
     const now = clock();
     const position = mode !== 'customer' && hasCapability(user, 'driver') && user.driver?.status === 'approved' ? availabilityFor(user.id, now) : null;
-    const candidates = position ? repository.listAvailable().filter((ride) => ride.customerId !== user.id && deliveries.matches(ride, user.driver.vehicle))
+    const offer = position ? dispatch?.forDriver(user.id, now) : null;
+    const open = dispatch?.enabled ? (offer ? [repository.find(offer.rideId)].filter(Boolean) : []) : position ? repository.listAvailable() : [];
+    const candidates = position ? open.filter((ride) => ride.customerId !== user.id && deliveries.matches(ride, user.driver.vehicle))
       .map((ride) => ({ ride, metres: matchDistance(ride, position, now) })).filter((item) => item.metres !== null)
       .map(({ ride, metres }) => ({ ride, id: ride.id, createdAt: ride.createdAt, expiresAt: ride.requestExpiresAt,
         distanceMeters: position.mode === 'sample' ? null : metres })) : [];
     const available = rankEligibleMatches(candidates, now).slice(0, 50);
-    return { matchingSettings: { allowSimulation },
+    return { matchingSettings: { allowSimulation, dispatchMode: dispatch?.mode ?? 'legacy' },
       activeElsewhere: repository.activeFor(user.id).filter((ride) => !inMode(ride, user, mode)).map((ride) => ({
         id: ride.id, mode: ride.customerId === user.id ? 'customer' : 'work', status: repository.findTrip(ride.id)?.status ?? ride.status })),
       rides: repository.listFor(user.id, mode).map((ride) => view(ride, user)), available: available.map(({ ride, distanceMeters, recommendation }) => {
@@ -111,7 +115,10 @@ export function createRidesService({ repository, deliveries, passengerForRide, s
         : createDemoQuote(ride.pickupId, ride.destinationId);
       return { id: ride.id, version: ride.version, vehicleCategory: ride.vehicleCategory, service: transportCategory(ride.vehicleCategory).service, pickup: quote.pickup, destination: quote.destination,
         suggestedFareKobo: ride.suggestedFareKobo, currency: 'NGN', isDemo: true, hasRoute: Boolean(route), createdAt: ride.createdAt,
-        expiresAt: ride.requestExpiresAt, approximateDistanceKm: route ? Math.ceil(distanceMeters / 1000) : null, recommendation };
+        expiresAt: ride.requestExpiresAt, approximateDistanceKm: route ? Math.ceil(distanceMeters / 1000) : null,
+        ...(!dispatch?.enabled ? { recommendation } : {}),
+        ...(dispatch?.enabled && offer ? { offer: { id: offer.id, expiresAt: offer.expiresAt, etaSource: offer.etaSource,
+          pickupEtaMinutes: offer.etaSource === 'road' ? Math.max(1, Math.ceil(offer.pickupEtaSeconds / 60)) : null } } : {}) };
     }) };
   }
 
@@ -122,6 +129,63 @@ export function createRidesService({ repository, deliveries, passengerForRide, s
     if (availability.mode !== 'gps') return null;
     const metres = distanceMeters(availability.position, route.pickup);
     return metres <= searchRadius(ride.createdAt, now) ? metres : null;
+  }
+
+  // Internal matching ports. Exact points never enter an available-request response.
+  function dispatchCandidate(ride, driverId, now) {
+    const driver = getAccount(driverId);
+    if (!ride || ride.customerId === driverId || !hasCapability(driver, 'driver') || driver.driver?.status !== 'approved'
+      || !driver.driver.eligibility?.eligible || repository.hasNegotiation(driverId) || hasOtherWork(driverId)
+      || repository.hasCustomerWork(driverId, now) || !deliveries.matches(ride, driver.driver.vehicle)) return null;
+    const availability = availabilityFor(driverId, now);
+    if (!availability) return null;
+    const metres = matchDistance(ride, availability, now);
+    if (metres === null) return null;
+    const route = routeForRide(ride.id);
+    return { rideId: ride.id, driverId, availabilityId: availability.id, version: ride.version,
+      createdAt: ride.createdAt, expiresAt: ride.requestExpiresAt,
+      distanceMeters: route ? metres : null, pickupEtaSeconds: null,
+      from: route ? availability.position : null, to: route?.pickup ?? null };
+  }
+  function dispatchCandidates(now, { excludeDriverIds = new Set(), excludeRideIds = new Set(),
+    attempted = () => false, minimumAgeMs = 0 } = {}) {
+    // Snapshot each driver's approval, workload and availability once per cycle.
+    // dispatchCandidateFor deliberately performs fresh reads again at commit.
+    const drivers = availableDriverIds().flatMap((id) => {
+      if (excludeDriverIds.has(id)) return [];
+      const user = getAccount(id);
+      if (!hasCapability(user, 'driver') || user.driver?.status !== 'approved' || !user.driver.eligibility?.eligible
+        || repository.hasNegotiation(id) || hasOtherWork(id) || repository.hasCustomerWork(id, now)) return [];
+      const availability = availabilityFor(id, now);
+      return availability ? [{ id, vehicle: user.driver.vehicle, availability }] : [];
+    });
+    if (!drivers.length) return [];
+    const result = [];
+    let eligibleRides = 0;
+    for (const ride of repository.listAvailable()) {
+      if (ride.status !== 'requested' || now >= ride.requestExpiresAt || excludeRideIds.has(ride.id)
+        || now < ride.createdAt + minimumAgeMs) continue;
+      const route = routeForRide(ride.id), radius = searchRadius(ride.createdAt, now), edges = [];
+      for (const { id, vehicle, availability } of drivers) {
+        if (ride.customerId === id || !deliveries.matches(ride, vehicle) || attempted(ride.id, id)) continue;
+        const metres = route ? (availability.mode === 'gps' ? distanceMeters(availability.position, route.pickup) : null)
+          : availability.mode === 'sample' && availability.areaId === ride.pickupId ? 0 : null;
+        if (metres === null || route && metres > radius) continue;
+        edges.push({ rideId: ride.id, driverId: id, availabilityId: availability.id, version: ride.version,
+          createdAt: ride.createdAt, expiresAt: ride.requestExpiresAt, distanceMeters: route ? metres : null,
+          pickupEtaSeconds: null, from: route ? availability.position : null, to: route?.pickup ?? null });
+      }
+      if (!edges.length) continue;
+      // Keep 32 nearest eligible drivers per ride, then let the shared policy
+      // choose a global set. With at most 32 rides, this neighbour budget retains
+      // enough alternatives for maximum cardinality while limiting output to 1024.
+      edges.sort((a, b) => (a.distanceMeters ?? 0) - (b.distanceMeters ?? 0)
+        || (a.driverId < b.driverId ? -1 : a.driverId > b.driverId ? 1 : 0));
+      result.push(...edges.slice(0, DISPATCH_POLICY.maxDrivers));
+      eligibleRides += 1;
+      if (eligibleRides >= DISPATCH_POLICY.maxRides) break;
+    }
+    return result;
   }
 
   function history(user, beforeId = null, mode = null) {
@@ -175,7 +239,7 @@ export function createRidesService({ repository, deliveries, passengerForRide, s
 
   function claim(user, id, data, now) {
     requireEligibleDriver(user);
-    fields(data, ['expectedVersion']);
+    fields(data, ['expectedVersion', 'offerId'], ['expectedVersion']);
     const ride = record(id);
     check(ride.customerId !== user.id, 'FORBIDDEN', 'You cannot drive your own request.');
     check(deliveries.matches(ride, user.driver.vehicle), 'VEHICLE_MISMATCH', 'This request needs a different approved vehicle category or load capacity.');
@@ -186,6 +250,7 @@ export function createRidesService({ repository, deliveries, passengerForRide, s
     const availability = availabilityFor(user.id, now);
     check(availability, 'DRIVER_OFFLINE', 'Go online with a fresh location before selecting a request.');
     check(matchDistance(ride, availability, now) !== null, 'OUTSIDE_MATCH_AREA', 'This request is outside your current matching area. Refresh nearby requests.');
+    dispatch?.accept(user, id, data.offerId, now);
     check(repository.claim({ id, driverId: user.id, driverSnapshot: peer(user.id, true), expectedVersion: ride.version, now }),
       'STALE_VERSION', 'This request has changed. Refresh and try again.');
     audit.record(user.id, 'ride.claimed', id, now);
@@ -324,7 +389,7 @@ export function createRidesService({ repository, deliveries, passengerForRide, s
       repository.saveCommand(userId, key, fingerprint, outcome.rideId, outcome.errorCode);
       if (!outcome.errorCode) {
         const ride = record(outcome.rideId);
-        const recipients = action === 'create' ? availableDriverIds().filter((driverId) => {
+        const recipients = action === 'create' && !dispatch?.enabled ? availableDriverIds().filter((driverId) => {
           const driver = getAccount(driverId), position = availabilityFor(driverId, now);
           return driverId !== userId && driver?.driver && position && deliveries.matches(ride, driver.driver.vehicle) && matchDistance(ride, position, now) !== null;
         }) : [];
@@ -370,5 +435,6 @@ export function createRidesService({ repository, deliveries, passengerForRide, s
     return { ...safetyContext(user, id), passenger: passengerForRide(id), bookerName: getAccount(ride.customerId).name,
       pickupPin: ride.trip?.pickupPin ?? null };
   }
-  return Object.freeze({ get, list, history, mutate, rate, conversationContext, conversationIds, paymentContext, safetyContext, guestContext, sweep });
+  return Object.freeze({ get, list, history, mutate, rate, conversationContext, conversationIds, paymentContext, safetyContext, guestContext, sweep,
+    dispatchCandidates, dispatchCandidateFor: (rideId, driverId, now) => dispatchCandidate(repository.find(rideId), driverId, now) });
 }

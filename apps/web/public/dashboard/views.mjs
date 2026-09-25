@@ -18,6 +18,7 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
   let state = { user: null, rides: [], available: [], drivers: [] };
   let selectedId = null, detailId = null;
   let renderedLists = '', renderedDetail = '';
+  let offerCountdowns = [];
   let busy = false;
   let passengerCategory = 'standard', passengerAccount = null;
   let initialCategory = typeof location === 'undefined' ? null : new URLSearchParams(location.search).get('category');
@@ -58,6 +59,10 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
       button.dataset.locked = String(!state.availabilityOnline || Number(button.dataset.requestExpires) <= serverNow()
         || (state.activeElsewhere?.length > 0 || state.rides.some((item) => isActiveRide(item.status))));
     }
+    for (const { node, expiresAt } of offerCountdowns) {
+      const seconds = Math.ceil((expiresAt - serverNow()) / 1000);
+      node.textContent = seconds > 0 ? `Respond within ${seconds} seconds.` : 'Offer expired. Waiting for the next request.';
+    }
     for (const button of document.querySelectorAll('button')) {
       if (button.closest('#guest-link-panel, #vehicle-categories-panel, #google-auth, #account-modes, #calls-panel, #location-planner, #location-tracking, #availability-panel, #payment-panel, #earnings-panel, #payments-admin-panel, #onboarding-panel, #trusted-contacts-panel, #safety-panel, #safety-admin-panel')) continue; // Feature controllers own their controls.
       button.disabled = busy || button.dataset.locked === 'true';
@@ -95,6 +100,7 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
     $('admin-dashboard').hidden = !admin;
     $('chat-reports-panel').hidden = !admin;
     $('available-section').hidden = !driver || !user.driver.eligibility?.eligible || user.driver.status !== 'approved';
+    $('available-title').textContent = state.dispatchMode && state.dispatchMode !== 'legacy' ? 'Ride offers' : 'Nearby requests';
     $('open-request-note').hidden = !(state.activeElsewhere?.length > 0 || state.rides.some((ride) => isActiveRide(ride.status)));
     renderVehicleCard($('driver-vehicle-card'), driver ? user.driver.vehicle : null, { label: 'REGISTERED VEHICLE', compact: true });
     if (driver) {
@@ -108,7 +114,7 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
       selectedId = state.rides.find((ride) => isActiveRide(ride.status))?.id ?? state.rides[0]?.id ?? null;
     }
     const listKey = JSON.stringify({ user, rides: state.rides.map((ride) => [ride.id, ride.version]),
-      available: state.available, drivers: state.drivers, reports: state.reports, unread: state.chatUnread, selectedId,
+      available: state.available, dispatchMode: state.dispatchMode, drivers: state.drivers, reports: state.reports, unread: state.chatUnread, selectedId,
       history: state.history?.map((ride) => [ride.id, ride.version]), historyCursor: state.historyCursor });
     if (listKey !== renderedLists) {
       renderedLists = listKey;
@@ -142,22 +148,48 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
       $(['completed', 'cancelled', 'expired'].includes(ride.status) ? 'history-list' : 'ride-list').append(button);
     }
     $('available-list').replaceChildren();
-    if (!state.available.length) $('available-list').append(element('p', 'Nearby requests appear while you are online. Local sample mode matches requests from your selected sample area.', 'empty-state'));
+    offerCountdowns = [];
+    const timedOffers = state.dispatchMode && state.dispatchMode !== 'legacy';
+    if (!state.available.length) $('available-list').append(element('p', timedOffers
+      ? 'Timed ride offers appear while you are online. Review an offer, then accept to negotiate the fare.'
+      : 'Nearby requests appear while you are online. Local sample mode matches requests from your selected sample area.', 'empty-state'));
     const driverBusy = (state.activeElsewhere?.length > 0 || state.rides.some((ride) => isActiveRide(ride.status)));
-    if (state.available.some((ride) => ride.recommendation)) $('available-list').append(element('p', 'Eligible requests are ordered by pickup distance and customer waiting time.', 'empty-state'));
+    if (state.available.some((ride) => ride.recommendation && !ride.offer)) $('available-list').append(element('p', 'Eligible requests are ordered by pickup distance and customer waiting time.', 'empty-state'));
     for (const ride of state.available) {
-      const row = element('div', undefined, 'request-row');
+      const row = element('div', undefined, ride.offer ? 'request-row dispatch-offer-row' : 'request-row');
       const description = element('div');
+      const offer = ride.offer, expiresAt = Math.min(ride.expiresAt, offer?.expiresAt ?? ride.expiresAt);
+      if (offer) description.append(element('strong', 'Ride offer'));
       description.append(element('strong', `${ride.pickup.name} → ${ride.destination.name}`),
         element('small', `${vehicleCategory(ride.vehicleCategory ?? 'standard')?.name} · ${ride.hasRoute ? 'Route suggestion' : 'Sample suggestion'} ${formatNaira(ride.suggestedFareKobo)}`));
-      description.append(element('small', ride.hasRoute ? `Within about ${Math.max(1, ride.approximateDistanceKm)} km in a straight line · driving time varies` : 'Local sample-area match'));
-      if (ride.recommendation) description.append(element('small', ride.recommendation.reasons.map((reason) => MATCH_REASON_LABELS[reason]).filter(Boolean).join(' · ')));
-      const button = element('button', 'Start negotiation ↗', 'button button-primary button-small');
+      if (offer?.etaSource === 'road') description.append(element('small', `About ${offer.pickupEtaMinutes} min to pickup · road estimate`));
+      else {
+        if (offer?.etaSource === 'distance_fallback') description.append(element('small', 'Road estimate unavailable'));
+        description.append(element('small', offer?.etaSource === 'sample' || !ride.hasRoute ? 'Local sample-area match · no road estimate'
+          : `Within about ${Math.max(1, ride.approximateDistanceKm)} km in a straight line · driving time varies`));
+      }
+      if (ride.recommendation && !offer) description.append(element('small', ride.recommendation.reasons.map((reason) => MATCH_REASON_LABELS[reason]).filter(Boolean).join(' · ')));
+      if (offer) {
+        const countdown = element('small'); offerCountdowns.push({ node: countdown, expiresAt });
+        description.append(countdown, element('small', 'Accepting opens fare negotiation. Both sides must agree before booking.'));
+      }
+      const canRespond = () => !busy && state.availabilityOnline && expiresAt > serverNow()
+        && !state.activeElsewhere?.length && !state.rides.some((item) => isActiveRide(item.status))
+        && state.available.some((item) => item.id === ride.id && item.version === ride.version && item.offer?.id === offer?.id);
+      const button = element('button', offer ? 'Accept and negotiate' : 'Start negotiation ↗', 'button button-primary button-small');
       button.type = 'button';
-      button.dataset.locked = String(driverBusy || !state.availabilityOnline || ride.expiresAt <= serverNow());
-      button.dataset.requestExpires = String(ride.expiresAt);
-      button.addEventListener('click', () => onCommand(`/api/rides/${ride.id}/claim`, { expectedVersion: ride.version }, 'Request selected. You or the customer can make the first offer.'));
+      button.dataset.locked = String(driverBusy || !state.availabilityOnline || expiresAt <= serverNow());
+      button.dataset.requestExpires = String(expiresAt);
+      button.addEventListener('click', () => {
+        if (canRespond()) onCommand(`/api/rides/${ride.id}/claim`, { expectedVersion: ride.version, ...(offer ? { offerId: offer.id } : {}) }, 'Request selected. You or the customer can make the first fare offer.');
+      });
       row.append(description, button);
+      if (offer) {
+        const decline = element('button', 'Decline offer', 'button button-small');
+        decline.type = 'button'; decline.dataset.requestExpires = String(expiresAt);
+        decline.addEventListener('click', () => { if (canRespond()) onCommand(`/api/dispatch/offers/${offer.id}/decline`, {}, 'Offer declined. You are still available for another request.'); });
+        row.append(decline);
+      }
       $('available-list').append(row);
     }
     $('driver-applications').replaceChildren();
@@ -320,7 +352,7 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
       $('detail-passenger').textContent = ''; $('detail-passenger').hidden = true;
       for (const id of ['delivery-description', 'delivery-weight', 'delivery-recipient', 'delivery-pickup', 'delivery-dropoff']) $(id).value = '';
       $('detail-delivery').textContent = ''; $('detail-delivery').hidden = true;
-      selectedId = null; detailId = null; renderedLists = ''; renderedDetail = '';
+      selectedId = null; detailId = null; renderedLists = ''; renderedDetail = ''; offerCountdowns = [];
       $('ride-detail').hidden = true;
       for (const id of ['detail-title', 'detail-person', 'detail-reference', 'detail-status', 'fare-value', 'fare-label',
         'fare-guidance', 'fare-expiry', 'driver-vehicle', 'driver-status', 'driver-guidance', 'account-identity', 'matching-status']) $(id).textContent = '';
