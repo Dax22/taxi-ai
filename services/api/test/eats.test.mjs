@@ -14,7 +14,7 @@ const item = { name: 'Jollof rice and chicken', description: 'Rice, tomato, pepp
 test('schema 18 upgrades add empty Eats storage while preserving existing accounts, documents and journeys', async (t) => {
   const h = await harness(t, { persistent: true }), { customer, driver } = await participants(h);
   const ride = await requestRide(customer);
-  const tables = h.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'eats_%' ORDER BY name").all().map((r) => r.name).filter((name) => !['dispatch_commands','dispatch_offers','dispatch_journeys'].includes(name));
+  const tables = h.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'eats_%' ORDER BY name").all().map((r) => r.name).filter((name) => !['dispatch_commands','dispatch_offers','dispatch_journeys','account_revisions','worker_leases'].includes(name));
   const records = new Map(tables.map((name) => [name, h.db.prepare(`SELECT * FROM ${name}`).all()]));
   removeEatsFixtureTables(h.db); h.db.exec('PRAGMA user_version=18'); await h.restart();
   assert.equal(h.db.prepare('PRAGMA user_version').get().user_version, SCHEMA_VERSION);
@@ -407,8 +407,10 @@ for (const sellerType of ['home_kitchen', 'food_vendor']) test(`native ${sellerT
 test('a meal photo cannot be committed after its session is revoked during decoding', async () => {
   const { createEatsService } = await import('../src/modules/eats/service.mjs');
   const user = { id: randomUUID(), role: 'customer' }, id = randomUUID(); let complete, writes = 0;
+  let started; const decoding = new Promise((resolve) => { started = resolve; });
   const service = createEatsService({ repository: { store: () => ({ id, version: 1 }), membership: () => ({ storeId: id }), command: () => null },
-    getAccount: () => user, normalisePhoto: () => new Promise((resolve) => { complete = resolve; }), unitOfWork: () => { writes++; }, clock: () => 1 });
+    getAccount: () => user, normalisePhoto: () => new Promise((resolve) => { complete = resolve; started(); }), unitOfWork: () => { writes++; }, clock: () => 1 });
   const pending = service.saveMenu(user, id, { expectedVersion: 1, itemId: null, item: { ...item, photo: { mimeType: 'image/jpeg', base64: 'fixture' } } }, randomUUID(), () => null);
+  await decoding;
   complete('normalised-fixture'); await assert.rejects(pending, (error) => error.code === 'UNAUTHENTICATED'); assert.equal(writes, 0);
 });

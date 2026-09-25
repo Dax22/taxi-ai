@@ -63,7 +63,7 @@ test('web Google signup creates one customer account and uses stable subject acr
   assert.deepEqual((await web.send('/api/account/sign-in-methods')).body.methods, { password: false, google: true });
   assert.equal((await web.send('/api/auth/login', { email: identity.email, password: PASSWORD })).status, 401);
   assert.equal((await web.send('/api/admin/console/accounts')).status, 403);
-  assert.throws(() => bootstrapAdmin(h.db, identity.email), { code: 'INVALID_ACCOUNT' });
+  (await assert.rejects(async () => (await bootstrapAdmin(h.db, identity.email)), { code: 'INVALID_ACCOUNT' }));
   await web.send('/api/auth/logout', {}); await h.restart(); provider.config.origin = h.base;
   state.identity.email = 'updated-google@example.test';
   await web.finish(await web.start());
@@ -117,7 +117,7 @@ test('linking rechecks the original session after Google responds and rejects th
 });
 test('staff cannot connect or sign in with Google and native credentials cannot authorize staff', async (t) => {
   const { h, state } = await fixture(t), admin = browser(h), google = browser(h);
-  await admin.register('admin@example.test'); const a = bootstrapAdmin(h.db, 'admin@example.test');
+  await admin.register('admin@example.test'); const a = (await bootstrapAdmin(h.db, 'admin@example.test'));
   await admin.send('/api/auth/login', { email: a.email, password: PASSWORD });
   assert.equal((await admin.send('/api/account/google/link', { password: PASSWORD })).status, 403);
   state.identity = { ...identity, email: a.email };

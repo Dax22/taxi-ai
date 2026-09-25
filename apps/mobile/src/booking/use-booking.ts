@@ -18,10 +18,10 @@ export function useBooking() {
   useFocusEffect(useCallback(() => {
     if (AppState.currentState === 'active') controller.activate();
     const listener = AppState.addEventListener('change', (next) => next === 'active' ? controller.activate() : controller.pause());
-    const poll = setInterval(() => { void controller.refresh(); }, 10_000);
+    const changed = client.subscribeChanges(() => controller.refresh());
     const tick = setInterval(() => controller.tick(), 1000);
-    return () => { listener.remove(); clearInterval(poll); clearInterval(tick); controller.pause(); };
-  }, [controller]));
+    return () => { listener.remove(); changed(); clearInterval(tick); controller.pause(); };
+  }, [controller, client]));
   // Focus changes pause reads; unmount/account changes erase drafts and ignore late writes.
   return { state, controller };
 }

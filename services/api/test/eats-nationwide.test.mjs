@@ -252,7 +252,7 @@ test('new nationwide delivery kitchens need a reviewed dispatch pin; pickup-only
 
 test('schema 22 upgrade preserves existing account and Eats records and creates empty private dispatch tables', async (t) => {
   const f = await fixture(t, { persistent: true }), k = await f.kitchen('wuse-ii', null), order = await k.place();
-  const tables = f.h.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT IN ('eats_store_dispatch_points','eats_order_dispatch_points') ORDER BY name").all().map((row) => row.name);
+  const tables = f.h.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT IN ('eats_store_dispatch_points','eats_order_dispatch_points','account_revisions','worker_leases') ORDER BY name").all().map((row) => row.name);
   const before = new Map(tables.map((name) => [name, f.h.db.prepare(`SELECT * FROM ${name}`).all()]));
   removeNationwideEatsFixtureTables(f.h.db); f.h.db.exec('PRAGMA user_version=22');
   await f.h.restart();

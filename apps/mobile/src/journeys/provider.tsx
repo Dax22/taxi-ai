@@ -27,11 +27,11 @@ export function OperationsProvider({children}:PropsWithChildren){
     if(blocked||!user||!role)return;
     if(role==='driver'&&user.driver&&AppState.currentState==='active')work.activate();
     void refreshUpdates();
-    const poll=setInterval(()=>{if(role==='driver'&&user.driver){void work.heartbeat().then(()=>work.refresh());}void refreshUpdates();},10_000);
-    const workPoll=setInterval(()=>{if(role==='driver'&&user.driver)void work.refresh();},3000);
+    const poll=setInterval(()=>{if(role==='driver'&&user.driver)void work.heartbeat();},10_000);
+    const changed=client.subscribeChanges(async()=>{if(role==='driver'&&user.driver)await work.refresh();await refreshUpdates();});
     const tick=setInterval(()=>work.tick(),1000);
     const state=AppState.addEventListener('change',(next)=>{if(next!=='active'){work.pause();updateGeneration.current++;}else{if(role==='driver'&&user.driver)work.activate();void refreshUpdates();}});
-    return()=>{work.pause();updateGeneration.current++;clearInterval(poll);clearInterval(workPoll);clearInterval(tick);state.remove();};
+    return()=>{work.pause();updateGeneration.current++;clearInterval(poll);changed();clearInterval(tick);state.remove();};
   },[user?.id,Boolean(user?.driver),role,blocked,work,refreshUpdates]);
   useEffect(()=>{if(user)return listenForPush(setPushId,()=>void refreshUpdates());},[user?.id,refreshUpdates]);
   // Disposal is deferred across Strict Mode's effect replay; account-key changes destroy private controllers.
@@ -45,24 +45,24 @@ export function OperationsProvider({children}:PropsWithChildren){
 export function useOperations(){const value=useContext(Context);if(!value)throw new Error('Journey controls are unavailable.');return value;}
 export function useWork(){const {work}=useOperations();return{controller:work,state:useSyncExternalStore(work.subscribe,work.snapshot)};}
 export function useJourney(id:string){
-  const operations=useOperations(),controller=operations.journey(id),{blocked}=useSession();
+  const operations=useOperations(),controller=operations.journey(id),{blocked,client}=useSession();
   const state=useSyncExternalStore(controller.subscribe,controller.snapshot);
   useFocusEffect(useCallback(()=>{
     if(blocked)return;
     if(AppState.currentState==='active')controller.activate();
     const listener=AppState.addEventListener('change',(next)=>next==='active'?controller.activate():controller.pause());
-    const poll=setInterval(()=>void controller.refresh(),5000),tick=setInterval(()=>controller.tick(),1000);
-    return()=>{listener.remove();clearInterval(poll);clearInterval(tick);controller.pause();};
-  },[controller,blocked]));
+    const changed=client.subscribeChanges(()=>controller.refresh()),tick=setInterval(()=>controller.tick(),1000);
+    return()=>{listener.remove();changed();clearInterval(tick);controller.pause();};
+  },[controller,blocked,client]));
   return{controller,state};
 }
 
 export function useSafety(id:string){
- const c=useOperations().safety(id),{blocked}=useSession();
+ const c=useOperations().safety(id),{blocked,client}=useSession();
  const state=useSyncExternalStore(c.subscribe,c.snapshot);
  useFocusEffect(useCallback(()=>{if(blocked)return;if(AppState.currentState==='active')c.activate();
  const listener=AppState.addEventListener('change',next=>next==='active'?c.activate():c.pause());
- const poll=setInterval(()=>void c.refresh(),10000);
- return()=>{listener.remove();clearInterval(poll);c.pause();};},[c,blocked]));
+ const changed=client.subscribeChanges(()=>c.refresh());
+ return()=>{listener.remove();changed();c.pause();};},[c,blocked,client]));
  return {controller:c,state};
 }

@@ -8,7 +8,7 @@ import { openDatabase, SCHEMA_VERSION } from '../src/infrastructure/database.mjs
 import { createApplication } from '../src/application.mjs';
 import { tokens } from '../src/infrastructure/tokens.mjs';
 
-test('schema six preserves existing records and backfills only completed trips as unpaid simulations', (t) => {
+test('schema six preserves existing records and backfills only completed trips as unpaid simulations', async (t) => {
   const folder = mkdtempSync(join(tmpdir(), 'taxi-payments-upgrade-'));
   t.after(() => rmSync(folder, { recursive: true, force: true }));
   const filename = join(folder, 'old.sqlite'), old = new DatabaseSync(filename);
@@ -43,18 +43,18 @@ test('schema six preserves existing records and backfills only completed trips a
   const db = openDatabase(filename);
   try {
     assert.equal(db.prepare('PRAGMA user_version').get().user_version, SCHEMA_VERSION);
-    for (const table of tables) assert.equal(JSON.stringify(db.prepare(`SELECT * FROM ${table}`).all().map((row) => { if (table === 'rides') { assert.equal(row.vehicle_category, 'standard'); delete row.driver_snapshot_json; delete row.vehicle_category; } return row; })), snapshot.get(table), table);
+    for (const table of tables) assert.equal(JSON.stringify(db.prepare(`SELECT * FROM ${table}`).all().map((row) => { if (table === 'rides') { assert.equal(row.vehicle_category, 'standard'); delete row.driver_snapshot_json; delete row.vehicle_category; assert.equal(row.dispatch_region, `sample:${row.pickup_id}`); delete row.dispatch_region; } return row; })), snapshot.get(table), table);
     assert.equal(db.prepare('SELECT count(*) AS n FROM payments').get().n, 2);
     assert.equal(db.prepare('SELECT count(*) AS n FROM payment_attempts').get().n, 0);
     assert.equal(db.prepare('SELECT count(*) AS n FROM payment_receipts').get().n, 0);
     assert.ok(db.prepare('SELECT * FROM payments').all().every((row) => row.status === 'unpaid' && row.amount_kobo === 470001 && row.mode === 'simulation'));
     assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(), []);
     const app = createApplication({ db, allowSimulation: true, clock: () => 2000 });
-    assert.equal(app.accounts.sessionFor('fixture-session').user.id, 'customer');
-    let current = app.payments.command({ userId: 'customer', rideId: routed.id, action: 'start', key: tokens.id(), data: { expectedVersion: 0 } }).payment;
-    current = app.payments.command({ userId: 'customer', rideId: routed.id, attemptId: current.attempt.id, action: 'simulate', key: tokens.id(),
-      data: { expectedVersion: current.version, outcome: 'success' } }).payment;
-    const receipt = app.payments.receipt('customer', routed.id).receipt;
+    assert.equal((await app.accounts.sessionFor('fixture-session')).user.id, 'customer');
+    let current = (await app.payments.command({ userId: 'customer', rideId: routed.id, action: 'start', key: tokens.id(), data: { expectedVersion: 0 } })).payment;
+    current = (await app.payments.command({ userId: 'customer', rideId: routed.id, attemptId: current.attempt.id, action: 'simulate', key: tokens.id(),
+      data: { expectedVersion: current.version, outcome: 'success' } })).payment;
+    const receipt = (await app.payments.receipt('customer', routed.id)).receipt;
     assert.equal(receipt.pickup, 'Saved landmark A'); assert.equal(receipt.destination, 'Saved landmark B');
     assert.equal(current.status, 'paid'); assert.equal(receipt.amountKobo, 470001);
   } finally { db.close(); }

@@ -46,7 +46,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
     let generation = 0;
     const subscription = AppState.addEventListener('change', (state) => {
       const epoch = ++generation;
-      if (state !== 'active') { setBlocked(true); return; }
+      if (state !== 'active') { client.pauseUpdates(); setBlocked(true); return; }
       if (!client.account()) { setBlocked(false); return; }
       setBlocked(true);
       void client.session().then(() => { if (epoch === generation) setStartupError(''); })
@@ -55,6 +55,11 @@ export function SessionProvider({ children }: PropsWithChildren) {
     });
     return () => { generation++; subscription.remove(); };
   }, [client]);
+  useEffect(() => {
+    if (user && ready && !blocked && AppState.currentState === 'active') client.resumeUpdates();
+    else client.pauseUpdates();
+    return () => client.pauseUpdates();
+  }, [client, user?.id, ready, blocked]);
   const logout = useCallback(async () => {
     setStartupError(''); setNotice('');
     const warning = await client.logout(); if (warning) setNotice(warning);

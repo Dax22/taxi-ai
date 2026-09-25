@@ -4,6 +4,10 @@ This release prepares Taxi Ai for an invited testing group. It adds deployment
 configuration and operator commands; it does not provision a host, register a
 domain, publish the website or enable real transport services. Use test accounts
 and test journeys. The default `npm run dev` experience remains on localhost.
+This guide describes the single-process SQLite template. For multiple API
+replicas, PostgreSQL/PostGIS, separate workers and load testing, use the
+[scalability guide](scalability.md) and `deploy/scale/compose.yml`. Neither template
+establishes production capacity or enables live transport/payments.
 
 ## Runtime boundary
 
@@ -13,7 +17,9 @@ and test journeys. The default `npm run dev` experience remains on localhost.
 | `PORT` | `3000` | Valid port; reference container uses `3000` internally |
 | `TAXI_AI_BIND` | Always `127.0.0.1` | `127.0.0.1`, or `0.0.0.0` on an isolated container network |
 | `TAXI_AI_PUBLIC_ORIGIN` | Derived from loopback Host | One HTTPS DNS origin, without path/query/credentials |
-| `TAXI_AI_DB` | Ignored `data/taxi-ai.sqlite` | Explicit absolute path on persistent local storage |
+| `TAXI_AI_DB` | Ignored `data/taxi-ai.sqlite` | Explicit absolute path for the SQLite template |
+| `TAXI_AI_DATABASE_URL` | Unset; SQLite | PostgreSQL connection URL for the scale template; replaces the SQLite path requirement |
+| `TAXI_AI_PROCESS_ROLE` | `all` | `all` with SQLite; separate `api` and `worker` processes require PostgreSQL |
 | `TAXI_AI_PROXY_TOKEN` | Unused | 32 random bytes encoded as 64 lowercase hex characters |
 | `TAXI_AI_STAGING_ACCESS_FILE` | Unused | Absolute path to the invited-tester hash file |
 | `TAXI_AI_MAPS_MODE` | `community` | Defaults to `off`; enable a reviewed provider for map tests |
@@ -30,8 +36,10 @@ serving content. Forwarded Host is ignored; a comma-separated forwarding chain i
 rejected. Only a request authenticated as coming through that gateway supplies a
 client IP for rate limiting. Local mode always uses the socket address.
 
-The reference gateway is the internet-facing edge. Adding a CDN, another proxy,
-load balancer or multiple app replicas requires a reviewed configuration change.
+The reference gateway is the internet-facing edge. The scale template provides
+a gateway configuration for multiple PostgreSQL-backed API replicas. Additional
+CDNs, proxy layers or different load balancers require a reviewed forwarding-header
+configuration; adding replicas to the SQLite template is unsupported.
 Keep the app port private; a proxy token is an additional boundary, not a reason
 to expose plaintext HTTP. Caddy's [header controls](https://caddyserver.com/docs/caddyfile/directives/reverse_proxy#headers)
 support explicit overwrites rather than trusting a client's forwarding headers.
@@ -80,6 +88,12 @@ last tester makes the next staging startup fail closed. Add a replacement first
 when rotating access. Rotate the proxy token in both app and gateway together.
 
 ## Reference deployment
+
+For the PostgreSQL alternative, follow [the scale deployment](scalability.md#reference-topology)
+instead of these SQLite commands. It includes database migrations and separate
+runtime roles; selecting a database URL alone does not migrate existing accounts.
+Use [the PostgreSQL runbook](postgresql.md) for schema setup, importing a reviewed
+SQLite snapshot and database-specific recovery.
 
 `Dockerfile` and `deploy/staging/compose.yml` provide one non-root Node app,
 a Caddy HTTPS gateway and named volumes for app data, backups and certificates.
@@ -154,6 +168,12 @@ after provisioning the relay described in [voice](voice.md). Local WebRTC mode i
 rejected in staging. No TURN service has been provisioned by this work.
 
 ## Backup and restore
+
+The commands below back up and restore **SQLite only**. PostgreSQL deployments
+need database-native backups, protected off-host retention and a tested restore
+procedure. A normal PostgreSQL backup contains live authentication and private
+journey data; it does not inherit the SQLite snapshot sanitizer. Keep backup
+credentials and restored environments restricted. See [scalability](scalability.md).
 
 From the repository root, with the source database selected by `TAXI_AI_DB`:
 
@@ -296,7 +316,9 @@ Customers/drivers can create test SOS records, save fictional trusted contacts
 and create expiring private trip links. Administrators can record acknowledgments
 and closure. All notification records remain simulations; their state-changing
 simulator endpoints are local-only and return 403 in staging, including replays.
-No background worker sends notifications. See [Trip Safety](safety.md).
+These manual SOS records do not send external notifications. Separately configured
+[automatic safety monitoring](safety-monitoring.md) and provider delivery require
+their own consent, configuration and operational validation. See [Trip Safety](safety.md).
 
 The invited-tester gateway remains required on `/trip-share` and its bearer-read
 API. A recipient needs their own preview access as well as the private link.

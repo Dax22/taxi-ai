@@ -329,3 +329,22 @@ test('application edits preserve their version and request key through token rot
   application.driverId = 'another-driver';
   await assert.rejects(app.application(),{ code:'SESSION_CHANGED' });
 });
+
+test('native live updates share one authenticated request and abort on background or logout', async () => {
+  const reads: RequestInit[] = [];
+  const { app } = client(async (url, options) => {
+    if (url.endsWith('/auth/login')) return response(auth());
+    if (url.includes('/events?')) {
+      reads.push(options);
+      return new Promise((_resolve, reject) => options.signal!.addEventListener('abort', () => reject(new Error('Aborted')), { once: true }));
+    }
+    return ok();
+  });
+  await app.login(user.email, 'Test password', 'Phone');
+  app.resumeUpdates(); app.resumeUpdates(); await delay(1);
+  assert.equal(reads.length, 1);
+  assert.equal(new Headers(reads[0].headers).get('Authorization'), `Bearer ${auth().credentials.accessToken}`);
+  app.pauseUpdates(); assert.equal(reads[0].signal!.aborted, true);
+  app.resumeUpdates(); await delay(1); assert.equal(reads.length, 2);
+  await app.logout(); assert.equal(reads[1].signal!.aborted, true);
+});

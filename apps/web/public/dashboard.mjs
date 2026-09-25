@@ -1,3 +1,4 @@
+import { createRealtimeClient } from '/shared/realtime-client.mjs';
 import { createSafetyMonitoring } from './dashboard/safety-monitoring.mjs';
 import { createOnboardingController } from './dashboard/onboarding-controller.mjs';
 import { createOnboardingView } from './dashboard/onboarding-view.mjs';
@@ -115,13 +116,22 @@ const modeView = createAccountModeView({ onSwitch: (...args) => page.switchMode(
   onAddDriver: (vehicle) => page.addDriver(vehicle), onOpenRide: (id) => page.openRide(id) });
 let storage;
 try { storage = window.sessionStorage; } catch { /* Mode selection remains usable without storage. */ }
+let liveIdentity = null;
+const liveUpdates = createRealtimeClient({
+  read: (cursor, signal) => activityClient.request(`/api/events?cursor=${cursor}&wait=25000`, { signal }),
+  refresh: async () => { await page.poll(); await Promise.all([calls.poll(), sharing.poll()]); },
+});
 const page = createPageController({ client, activityClient, view, modeView, preferences: modePreferences(storage),
   conversation, conversationView, calls, sharing, availability,
-  planner, payments, onboarding, safety, vehicleCheck, guests, authForm, feedback: {
+  planner, payments, onboarding, safety, vehicleCheck, guests, authForm,
+  onAccount(identity) {
+    if (identity !== liveIdentity) { liveIdentity = identity; liveUpdates.reset(); }
+    if (identity && !document.hidden) liveUpdates.resume(); else liveUpdates.pause();
+  }, feedback: {
     clear() { $('page-error').textContent = ''; $('page-notice').textContent = ''; },
     error(message) { $('page-error').textContent = message; },
     notice(message) { $('page-notice').textContent = message; },
-    synced() { $('sync-status').textContent = 'Dashboard updated · refreshes every 3s'; },
+    synced() { $('sync-status').textContent = 'Dashboard updated · live updates active'; },
     offline() {
       $('sync-status').textContent = 'Connection lost · use Refresh to retry';
       if (!$('loading').hidden) {
@@ -133,11 +143,12 @@ const page = createPageController({ client, activityClient, view, modeView, pref
 const poll = () => { if (!document.hidden) void page.poll(); };
 $('logout').addEventListener('click', () => page.logout());
 $('refresh').addEventListener('click', () => page.poll());
-document.addEventListener('visibilitychange', () => { if (document.hidden) { availability.shutdown(); guests.pause(); } else { guests.resume(); poll(); } });
-window.addEventListener('pagehide', () => { calls.shutdown(); sharing.shutdown(); availability.shutdown(); safety.reset(); vehicleCheck.reset(); guests.reset(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden) { liveUpdates.pause(); availability.shutdown(); guests.pause(); } else { if (liveIdentity) liveUpdates.resume(); guests.resume(); poll(); } });
+window.addEventListener('pagehide', () => { liveUpdates.reset(); calls.shutdown(); sharing.shutdown(); availability.shutdown(); safety.reset(); vehicleCheck.reset(); guests.reset(); });
 window.addEventListener('afterprint', () => document.body.classList.remove('print-receipt'));
 setInterval(() => { view.tick(); conversationView.tick(); calls.tick(); planner.tick(); sharing.tick(); availability.tick(); guests.tick(); }, 1000);
-setInterval(() => { if (!document.hidden || calls.hasMedia()) void calls.poll(); }, 2000);
-setInterval(() => { if (!document.hidden || sharing.sharing()) void sharing.poll(); }, 3000);
-setInterval(poll, 3000);
+setInterval(() => { if (calls.hasMedia()) void calls.poll(); }, 2000);
+// Location publication remains on sharing.tick(); reception uses account invalidations.
+// Anonymous sessions use a slow check; authenticated sessions refresh on invalidation.
+setInterval(() => { if (!liveIdentity) poll(); }, 30_000);
 poll();

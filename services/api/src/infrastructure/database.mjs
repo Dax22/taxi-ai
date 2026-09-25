@@ -16,6 +16,9 @@ migrations.push('024_driver_ratings.sql');
 migrations.push('025_eats_menu_photos.sql');
 migrations.push('026_safety_monitoring.sql');
 migrations.push('027_dispatch.sql');
+migrations.push('028_realtime.sql');
+migrations.push('029_location_scale.sql');
+migrations.push('030_worker_scale.sql');
 export const SCHEMA_VERSION = migrations.length;
 
 export function transaction(db, run) {

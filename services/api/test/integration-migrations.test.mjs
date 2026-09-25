@@ -8,6 +8,16 @@ import { openDatabase, SCHEMA_VERSION } from '../src/infrastructure/database.mjs
 
 const migrations = new URL('../migrations/', import.meta.url);
 const apply = (db, name) => db.exec(readFileSync(new URL(name, migrations), 'utf8'));
+// Schema30 adds a derived pickup region; every original ride field must survive unchanged.
+function assertRidesPreserved(db, expected) {
+  const rows = db.prepare('SELECT * FROM rides').all().map(row => {
+    assert.equal(row.dispatch_region, `sample:${row.pickup_id}`);
+    delete row.dispatch_region;
+    return row;
+  });
+  assert.deepEqual(rows, expected);
+}
+
 function fixture(t, version, legacy = false) {
   const folder = mkdtempSync(join(tmpdir(), 'taxi-integration-'));
   t.after(() => rmSync(folder, { recursive: true, force: true }));
@@ -37,7 +47,7 @@ for (const version of [20,21]) test(`checkpoint schema ${version} upgrades witho
   const f = fixture(t,version,true); let db = openDatabase(f.path);
   assert.equal(db.prepare('PRAGMA user_version').get().user_version,SCHEMA_VERSION);
   assert.deepEqual(db.prepare('SELECT * FROM users').all(),f.users);
-  assert.deepEqual(db.prepare('SELECT * FROM rides').all(),f.rides);
+  assertRidesPreserved(db, f.rides);
   assert.equal(db.prepare('SELECT stars FROM ride_driver_ratings').get().stars,5);
   assert.equal(JSON.parse(db.prepare('SELECT details_json FROM eats_stores').get().details_json).sellerType,'home_kitchen');
   assert.equal(db.prepare('SELECT location FROM eats_collection_points').get().location,'Private saved pickup');
@@ -58,7 +68,7 @@ for (const version of [20,21,22,23]) test(`slider schema ${version} retains exis
   const f = fixture(t,version); const db = openDatabase(f.path);
   assert.equal(db.prepare('PRAGMA user_version').get().user_version,SCHEMA_VERSION);
   assert.deepEqual(db.prepare('SELECT * FROM users').all(),f.users);
-  assert.deepEqual(db.prepare('SELECT * FROM rides').all(),f.rides);
+  assertRidesPreserved(db, f.rides);
   const quote = db.prepare('SELECT snapshot_json, expires_at FROM eats_quotes').get();
   assert.equal(JSON.parse(quote.snapshot_json).restaurant.sellerType,'home_kitchen');
   assert.equal(quote.expires_at,123456);

@@ -16,9 +16,9 @@ function mailFixture() {
 function fixture(t) {
   const db = openDatabase(':memory:'), mail = mailFixture(); let now = TEST_NOW;
   const app = createApplication({ db, clock: () => now, accountMail: mail, allowSimulation: true });
-  t.after(() => { app.accountEmail.stop(); db.close(); });
+  t.after(async () => { (await app.accountEmail.stop()); db.close(); });
   return { db, app, mail, advance(ms) { now += ms; },
-    register: (email = 'fixture@example.test') => app.accounts.register({ name: 'Email Fixture', email, password: PASSWORD }),
+    register: async (email = 'fixture@example.test') => (await app.accounts.register({ name: 'Email Fixture', email, password: PASSWORD })),
     last: (purpose) => mail.messages.filter((m) => m.purpose === purpose).at(-1),
     count: (table) => db.prepare(`SELECT count(*) AS n FROM ${table}`).get().n };
 }
@@ -31,82 +31,84 @@ test('registration queues verification without exposing a token; explicit confir
   assert.equal(link.length,64);
   assert.equal(f.db.prepare('SELECT token_hash FROM account_email_tokens').get().token_hash,tokens.digest(link));
   for (const table of ['account_email_jobs','account_email_tokens','audit_events']) assert.ok(!JSON.stringify(f.db.prepare(`SELECT * FROM ${table}`).all()).includes(link));
-  assert.equal(f.app.accounts.profile(user.id).emailVerified,false);
-  assert.deepEqual(f.app.accountEmail.verify({ token: link }),{ verified:true });
-  assert.throws(() => f.app.accountEmail.verify({ token: link }),invalidLink);
+  assert.equal((await f.app.accounts.profile(user.id)).emailVerified,false);
+  assert.deepEqual((await f.app.accountEmail.verify({ token: link })),{ verified:true });
+  (await assert.rejects(async () => (await f.app.accountEmail.verify({ token: link })),invalidLink));
   assert.equal((await f.app.accounts.login({ email:user.email,password:PASSWORD })).emailVerified,true);
-  assert.equal(f.app.accountEmail.status(user.id).verified,true);
+  assert.equal((await f.app.accountEmail.status(user.id)).verified,true);
 });
 
 test('reset atomically revokes all web and native credentials, consumes both link purposes and preserves trips and driver identity', async (t) => {
   const f = fixture(t), user = await f.register();
-  const driver = f.app.accounts.addDriverProfile(user.id,{ vehicle:{ model:'Toyota Corolla',plate:'ABJ-123' } },'email-test-driver-key').user;
-  const web = f.app.accounts.issueSession(user.id), second = f.app.accounts.issueSession(user.id);
-  const ride = f.app.rides.mutate({ userId:user.id, key:'reset-ride-fixture-key', action:'create', id:null, data:{pickupId:'wuse-ii',destinationId:'maitama'} }).ride;
+  const driver = (await f.app.accounts.addDriverProfile(user.id,{ vehicle:{ model:'Toyota Corolla',plate:'ABJ-123' } },'email-test-driver-key')).user;
+  const web = (await f.app.accounts.issueSession(user.id)), second = (await f.app.accounts.issueSession(user.id));
+  const ride = (await f.app.rides.mutate({ userId:user.id, key:'reset-ride-fixture-key', action:'create', id:null, data:{pickupId:'wuse-ii',destinationId:'maitama'} })).ride;
   const device = await f.app.devices.login({ email:user.email,password:PASSWORD,deviceName:'Fixture phone' });
-  f.app.accountEmail.requestReset({ email:user.email });
+  (await f.app.accountEmail.requestReset({ email:user.email }));
   await f.app.accountEmail.deliverPending(); const verify = f.last('verify').token, reset = f.last('reset').token;
-  assert.ok(f.app.accounts.sessionFor(web.token));
+  assert.ok((await f.app.accounts.sessionFor(web.token)));
   const before = f.db.prepare('SELECT * FROM drivers').all();
   assert.deepEqual(await f.app.accountEmail.reset({ token:reset,password:NEW_PASSWORD }),{ reset:true });
-  assert.equal(f.app.accounts.sessionFor(web.token),null); assert.equal(f.app.accounts.sessionFor(second.token),null);
-  assert.equal(f.app.devices.sessionFor(device.credentials.accessToken),null);
-  assert.throws(() => f.app.devices.refresh({ refreshToken:device.credentials.refreshToken }),{ code:'UNAUTHENTICATED' });
-  assert.throws(() => f.app.accountEmail.verify({ token:verify }),invalidLink);
-  await assert.rejects(f.app.accountEmail.reset({ token:reset,password:PASSWORD }),invalidLink);
-  await assert.rejects(f.app.accounts.login({ email:user.email,password:PASSWORD }),{ code:'INVALID_CREDENTIALS' });
+  assert.equal((await f.app.accounts.sessionFor(web.token)),null); assert.equal((await f.app.accounts.sessionFor(second.token)),null);
+  assert.equal((await f.app.devices.sessionFor(device.credentials.accessToken)),null);
+  (await assert.rejects(async () => (await f.app.devices.refresh({ refreshToken:device.credentials.refreshToken })),{ code:'UNAUTHENTICATED' }));
+  (await assert.rejects(async () => (await f.app.accountEmail.verify({ token:verify })),invalidLink));
+  await assert.rejects((f.app.accountEmail.reset({ token:reset,password:PASSWORD })),invalidLink);
+  await assert.rejects((f.app.accounts.login({ email:user.email,password:PASSWORD })),{ code:'INVALID_CREDENTIALS' });
   const logged = await f.app.accounts.login({ email:user.email,password:NEW_PASSWORD });
   assert.equal(logged.id,user.id); assert.equal(logged.emailVerified,true); assert.deepEqual(logged.driver,driver.driver);
   assert.deepEqual(f.db.prepare('SELECT * FROM drivers').all(),before); assert.equal(f.count('sessions'),0);
-  assert.deepEqual(f.app.rides.get(logged,ride.id),ride);
+  assert.deepEqual((await f.app.rides.get(logged,ride.id)),ride);
   await f.app.accountEmail.deliverPending(); assert.equal(f.last('changed').token,null);
 });
 
 test('unknown, Google-only, staff and throttled addresses receive the same reset response without gaining password access', async (t) => {
   const f = fixture(t), customer = await f.register(), staff = await f.register('staff@example.test');
-  f.app.accounts.bootstrapAdmin(staff.email);
-  const google = f.app.accounts.resolveGoogle({ subject:'fixture-google',email:'google@example.test',name:'Google Fixture' });
+  (await f.app.accounts.bootstrapAdmin(staff.email));
+  const google = (await f.app.accounts.resolveGoogle({ subject:'fixture-google',email:'google@example.test',name:'Google Fixture' }));
   const expected = { accepted:true };
   for (const email of [customer.email,'missing@example.test',google.email,staff.email,customer.email]) {
-    assert.deepEqual(f.app.accountEmail.requestReset({ email }),expected);
+    assert.deepEqual((await f.app.accountEmail.requestReset({ email })),expected);
   }
   assert.equal(f.db.prepare("SELECT count(*) AS n FROM account_email_jobs WHERE purpose='reset'").get().n,1);
   await f.app.accountEmail.deliverPending(); await f.app.accountEmail.deliverPending();
   assert.deepEqual(f.mail.messages.filter((m) => m.purpose==='reset').map((m) => m.email),[customer.email]);
-  assert.equal(f.app.accounts.signInMethods(google.id).password,false);
-  assert.equal(f.app.accounts.emailState(staff.id),null);
+  assert.equal((await f.app.accounts.signInMethods(google.id)).password,false);
+  assert.equal((await f.app.accounts.emailState(staff.id)),null);
 });
 
 test('links are purpose-bound, expire exactly at the deadline and are superseded by a new delivery', async (t) => {
-  const f = fixture(t), user = await f.register(); f.app.accountEmail.requestReset({ email:user.email });
+  const f = fixture(t), user = await f.register(); (await f.app.accountEmail.requestReset({ email:user.email }));
   await f.app.accountEmail.deliverPending(); const verify = f.last('verify').token, old = f.last('reset').token;
-  assert.throws(() => f.app.accountEmail.verify({ token:old }),invalidLink);
-  await assert.rejects(f.app.accountEmail.reset({ token:verify,password:NEW_PASSWORD }),invalidLink);
-  f.advance(60_000); f.app.accountEmail.requestReset({ email:user.email }); await f.app.accountEmail.deliverPending();
-  await assert.rejects(f.app.accountEmail.reset({ token:old,password:NEW_PASSWORD }),invalidLink);
+  (await assert.rejects(async () => (await f.app.accountEmail.verify({ token:old })),invalidLink));
+  await assert.rejects((f.app.accountEmail.reset({ token:verify,password:NEW_PASSWORD })),invalidLink);
+  f.advance(60_000); (await f.app.accountEmail.requestReset({ email:user.email })); await f.app.accountEmail.deliverPending();
+  await assert.rejects((f.app.accountEmail.reset({ token:old,password:NEW_PASSWORD })),invalidLink);
   const fresh = f.last('reset').token;
-  const pending = f.app.accountEmail.reset({ token:fresh,password:NEW_PASSWORD });
+  const pending = (f.app.accountEmail.reset({ token:fresh,password:NEW_PASSWORD }));
   f.advance(30*60_000); await assert.rejects(pending,invalidLink);
-  await assert.rejects(f.app.accountEmail.reset({ token:fresh,password:NEW_PASSWORD }),invalidLink);
-  f.advance((24*60-31)*60_000); assert.throws(() => f.app.accountEmail.verify({ token:verify }),invalidLink);
-  for (const token of [null,123,'bad','a'.repeat(64)]) assert.throws(() => f.app.accountEmail.verify({ token }),invalidLink);
-  assert.equal(f.app.accounts.profile(user.id).emailVerified,false);
+  await assert.rejects((f.app.accountEmail.reset({ token:fresh,password:NEW_PASSWORD })),invalidLink);
+  f.advance((24*60-31)*60_000); (await assert.rejects(async () => (await f.app.accountEmail.verify({ token:verify })),invalidLink));
+  for (const token of [null,123,'bad','a'.repeat(64)]) (await assert.rejects(async () => (await f.app.accountEmail.verify({ token })),invalidLink));
+  assert.equal((await f.app.accounts.profile(user.id)).emailVerified,false);
 });
 
 test('simultaneous reset submissions have exactly one winner and no partial credential change', async (t) => {
-  const f = fixture(t), user = await f.register(); f.app.accountEmail.requestReset({ email:user.email }); await f.app.accountEmail.deliverPending();
+  const f = fixture(t), user = await f.register(); (await f.app.accountEmail.requestReset({ email:user.email })); await f.app.accountEmail.deliverPending();
   const token = f.last('reset').token;
-  const results = await Promise.allSettled([f.app.accountEmail.reset({ token,password:NEW_PASSWORD }),f.app.accountEmail.reset({ token,password:NEW_PASSWORD })]);
+  const results = await Promise.allSettled([(f.app.accountEmail.reset({ token,password:NEW_PASSWORD })),(f.app.accountEmail.reset({ token,password:NEW_PASSWORD }))]);
   assert.equal(results.filter((r) => r.status==='fulfilled').length,1);
   assert.equal(results.find((r) => r.status==='rejected').reason.code,'INVALID_EMAIL_LINK');
   assert.equal((await f.app.accounts.login({ email:user.email,password:NEW_PASSWORD })).id,user.id);
 });
 
 test('a pending password check cannot authenticate with credentials changed while hashing', async (t) => {
-  const f = fixture(t), user = await f.register(); let finish;
-  const accounts = createAccountsService({ repository:createAccountsRepository(f.db), passwords:{ verify:() => new Promise((resolve) => { finish=resolve; }) },
+  const f = fixture(t), user = await f.register(); let finish, entered;
+  const verifying = new Promise((resolve) => { entered = resolve; });
+  const accounts = createAccountsService({ repository:createAccountsRepository(f.db), passwords:{ verify:() => new Promise((resolve) => { finish=resolve; entered(); }) },
     driverProfiles:{ find:() => null }, clock:() => TEST_NOW });
   const result = accounts.login({ email:user.email,password:PASSWORD });
+  await verifying;
   f.db.prepare('UPDATE users SET password_hash=? WHERE id=?').run('changed-while-checking',user.id); finish(true);
   await assert.rejects(result,{ code:'INVALID_CREDENTIALS' });
 });
@@ -116,10 +118,10 @@ test('password proof is rechecked at web and native session issuance after a res
   const oldWeb=await f.app.accounts.login({email:user.email,password:PASSWORD});
   const oldNative=await f.app.accounts.login({email:user.email,password:PASSWORD});
   assert.ok(!JSON.stringify(oldWeb).includes('scrypt'));
-  f.app.accountEmail.requestReset({email:user.email}); await f.app.accountEmail.deliverPending();
+  (await f.app.accountEmail.requestReset({email:user.email})); await f.app.accountEmail.deliverPending();
   await f.app.accountEmail.reset({token:f.last('reset').token,password:NEW_PASSWORD});
-  assert.throws(()=>f.app.accounts.issueSession(user.id,null,oldWeb),{code:'INVALID_CREDENTIALS'});
-  assert.throws(()=>f.app.devices.issue(user.id,'Late phone',oldNative),{code:'INVALID_CREDENTIALS'});
+  (await assert.rejects(async ()=>(await f.app.accounts.issueSession(user.id,null,oldWeb)),{code:'INVALID_CREDENTIALS'}));
+  (await assert.rejects(async ()=>(await f.app.devices.issue(user.id,'Late phone',oldNative)),{code:'INVALID_CREDENTIALS'}));
   assert.equal(f.count('sessions'),0); assert.equal(f.count('device_sessions'),0);
 });
 
@@ -136,22 +138,22 @@ test('mail failures retry with new links, bound attempts, never expose provider 
 });
 
 test('role promotion and contact changes invalidate outstanding links', async (t) => {
-  const f = fixture(t), staff = await f.register(); f.app.accountEmail.requestReset({ email:staff.email }); await f.app.accountEmail.deliverPending();
+  const f = fixture(t), staff = await f.register(); (await f.app.accountEmail.requestReset({ email:staff.email })); await f.app.accountEmail.deliverPending();
   const reset=f.last('reset').token, verify=f.last('verify').token;
-  f.app.accounts.bootstrapAdmin(staff.email);
-  await assert.rejects(f.app.accountEmail.reset({ token:reset,password:NEW_PASSWORD }),invalidLink);
-  assert.throws(() => f.app.accountEmail.verify({ token:verify }),invalidLink);
+  (await f.app.accounts.bootstrapAdmin(staff.email));
+  await assert.rejects((f.app.accountEmail.reset({ token:reset,password:NEW_PASSWORD })),invalidLink);
+  (await assert.rejects(async () => (await f.app.accountEmail.verify({ token:verify })),invalidLink));
   const changed=await f.register('changed@example.test'); await f.app.accountEmail.deliverPending(); const link=f.last('verify').token;
   f.db.prepare('UPDATE users SET email=? WHERE id=?').run('new@example.test',changed.id);
-  assert.throws(() => f.app.accountEmail.verify({ token:link }),invalidLink);
+  (await assert.rejects(async () => (await f.app.accountEmail.verify({ token:link })),invalidLink));
 });
 
 test('failed password mutation rolls back link consumption, verification and session revocation together', async (t) => {
-  const f=fixture(t), user=await f.register(), session=f.app.accounts.issueSession(user.id);
-  f.app.accountEmail.requestReset({ email:user.email }); await f.app.accountEmail.deliverPending(); const token=f.last('reset').token;
+  const f=fixture(t), user=await f.register(), session=(await f.app.accounts.issueSession(user.id));
+  (await f.app.accountEmail.requestReset({ email:user.email })); await f.app.accountEmail.deliverPending(); const token=f.last('reset').token;
   f.db.exec("CREATE TRIGGER reject_reset BEFORE UPDATE OF password_hash ON users BEGIN SELECT RAISE(ABORT,'fixture failure'); END;");
-  await assert.rejects(f.app.accountEmail.reset({ token,password:NEW_PASSWORD }));
-  assert.ok(f.app.accounts.sessionFor(session.token)); assert.equal(f.app.accounts.profile(user.id).emailVerified,false);
+  await assert.rejects((f.app.accountEmail.reset({ token,password:NEW_PASSWORD })));
+  assert.ok((await f.app.accounts.sessionFor(session.token))); assert.equal((await f.app.accounts.profile(user.id)).emailVerified,false);
   f.db.exec('DROP TRIGGER reject_reset');
   assert.deepEqual(await f.app.accountEmail.reset({ token,password:NEW_PASSWORD }),{ reset:true });
 });
@@ -160,9 +162,13 @@ test('delivery intentions survive restarts; schema 14 upgrades preserve accounts
   const mail=mailFixture(), h=await harness(t,{ persistent:true,accountMail:mail }), web=h.client(); await web.register('restart');
   const before=h.db.prepare('SELECT * FROM users').all();
   await h.restart();
-  assert.equal(h.db.prepare('SELECT count(*) AS n FROM account_email_jobs').get().n,1);
+  assert.ok(h.db.prepare('SELECT count(*) AS n FROM account_email_jobs').get().n + mail.messages.length >= 1, 'the intention is retained or accepted by the restarted worker');
+  // A shutdown can leave an SMTP intention leased. Recovery is at least once,
+  // and the replacement worker must respect the lease before trying again.
+  await new Promise(setImmediate); h.advance(60_000);
   const app=createApplication({ db:h.db,clock:()=>h.now,accountMail:mail }); await app.accountEmail.deliverPending();
-  assert.equal(mail.messages.length,1); assert.deepEqual(app.accountEmail.verify({ token:mail.messages[0].token }),{ verified:true });
+  await new Promise(setImmediate);
+  assert.ok(mail.messages.length >= 1); assert.deepEqual((await app.accountEmail.verify({ token:mail.messages.at(-1).token })),{ verified:true });
   removeEatsFixtureTables(h.db); h.db.exec('DROP TABLE vehicle_photo_checks; DROP TABLE push_jobs; DROP TABLE push_registrations; DROP TABLE account_notifications; ALTER TABLE driver_availability DROP COLUMN native_session_id; DROP TABLE delivery_orders; ALTER TABLE rides DROP COLUMN vehicle_category; DROP TABLE account_email_tokens; DROP TABLE account_email_jobs; DROP TABLE account_email_verifications; PRAGMA user_version=14;');
   await h.restart(); assert.deepEqual(h.db.prepare('SELECT * FROM users').all(),before);
   assert.equal(h.db.prepare('PRAGMA user_version').get().user_version,SCHEMA_VERSION);
@@ -204,4 +210,15 @@ test('email defaults off and never silently claims delivery or marks an account 
   assert.equal((await native(h,'/auth/password/request',{email:web.user.email})).status,503);
   assert.equal(h.db.prepare('SELECT count(*) AS n FROM account_email_jobs').get().n,0);
   assert.equal(web.user.emailVerified,false);
+});
+
+test('independent email workers do not send the same live lease concurrently', async t => {
+ const f = fixture(t); await f.register(); let entered, finish;
+ const ready = new Promise(resolve => { entered = resolve; });
+ const release = new Promise(resolve => { finish = resolve; });
+ f.mail.state.wait = () => { entered(); return release; };
+ const replacement = createApplication({ db: f.db, clock: () => TEST_NOW, accountMail: f.mail });
+ const original = f.app.accountEmail.deliverPending(); await ready;
+ await replacement.accountEmail.deliverPending(); assert.equal(f.mail.messages.length, 1);
+ finish(); await original; assert.equal(f.count('account_email_jobs'), 0);
 });

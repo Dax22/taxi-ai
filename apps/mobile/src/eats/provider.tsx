@@ -23,17 +23,18 @@ export function EatsProvider({ children }: PropsWithChildren) {
 }
 export function useEatsScreen(screen: EatsScreen, id: string | null = null) {
   const controller = useContext(EatsContext); if (!controller) throw new Error('Eats provider is missing.');
-  const { blocked, user } = useSession();
+  const { blocked, user, client } = useSession();
   const state = useSyncExternalStore(controller.subscribe, controller.snapshot);
   useFocusEffect(useCallback(() => {
     if (blocked) return;
     controller.context(user); void controller.navigate(screen, id);
-    const timer = setInterval(() => {
+    const changed = client.subscribeChanges(async () => {
       controller.tick(); const current = controller.snapshot();
-      if (!current.busy && !current.uncertain && (current.screen !== screen || (screen === 'order' && current.orderId !== id))) void controller.navigate(screen, id);
-      else void controller.refresh({ quiet: true });
-    }, 5000);
-    return () => clearInterval(timer);
-  }, [controller, screen, id, blocked, user?.id]));
+      if (!current.busy && !current.uncertain && (current.screen !== screen || (screen === 'order' && current.orderId !== id))) await controller.navigate(screen, id);
+      else await controller.refresh({ quiet: true });
+    });
+    const tick = setInterval(() => controller.tick(), 1000);
+    return () => { changed(); clearInterval(tick); };
+  }, [controller, screen, id, blocked, user?.id, client]));
   return { state, controller, locked: state.busy || state.uncertain || state.stale || blocked };
 }

@@ -2,6 +2,10 @@ import { createSafetyAlertProvider } from '../../services/api/src/infrastructure
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
+import { openPostgresDatabase } from '../../services/api/src/infrastructure/postgres.mjs';
+import { asAsyncDatabase } from '../../services/api/src/infrastructure/async-database.mjs';
+import { createWorkerConfig } from '../../services/api/src/infrastructure/worker-config.mjs';
+import { createWorkerRuntime } from '../../services/api/src/infrastructure/worker-runtime.mjs';
 import { openDatabase } from '../../services/api/src/infrastructure/database.mjs';
 import { createApplication } from '../../services/api/src/application.mjs';
 import { createMobileRouter } from '../../services/api/src/http/mobile-router.mjs';
@@ -27,6 +31,7 @@ import { createAccountMail } from '../../services/api/src/infrastructure/account
 
 // Explicit allowlist: never serve the repository root or arbitrary disk paths.
 const routes = new Map([
+  ['/shared/realtime-client.mjs', ['../../packages/shared/src/realtime-client.mjs', 'text/javascript; charset=utf-8']],
   ...['/admin', '/admin/', '/admin/accounts', '/admin/trips', '/admin/analytics'].map((path) => [path, ['../admin/public/index.html', 'text/html; charset=utf-8']]),
   ['/admin/styles.css', ['../admin/public/styles.css', 'text/css; charset=utf-8']],
   ...['app', 'api-client', 'controller', 'view', 'navigation', 'pages', 'charts', 'ui'].map((name) => [`/admin/${name}.mjs`, [`../admin/public/${name}.mjs`, 'text/javascript; charset=utf-8']]),
@@ -156,7 +161,7 @@ const routes = new Map([
 export function createAppServer({ runtime = createRuntimeConfig({}), db = openDatabase(runtime.mode === 'staging' ? runtime.database : ':memory:'),
   clock = Date.now, callConfig = createCallConfig({ ...process.env, TAXI_AI_CALLS_MODE: process.env.TAXI_AI_CALLS_MODE ?? (runtime.mode === 'staging' ? 'off' : 'local') }),
   mapProvider = createMapProvider({ env: { ...process.env, TAXI_AI_MAPS_MODE: process.env.TAXI_AI_MAPS_MODE ?? (runtime.mode === 'staging' ? 'off' : 'community') } }),
-  dispatchConfig = createDispatchConfig(process.env),
+  dispatchConfig = createDispatchConfig(process.env), workerConfig = createWorkerConfig(process.env),
   telemetry = createTelemetry({ enabled: runtime.mode === 'staging' }),
   accountMail = createAccountMail({ config: createEmailConfig(process.env,runtime) }),
   safetyAlertProvider = createSafetyAlertProvider({env:process.env}),
@@ -164,23 +169,41 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
   vehicleVisionProvider = createVehicleVisionProvider({ env:process.env }),
   googleProvider = createGoogleProvider({ config: createGoogleConfig(process.env, runtime), clock }) } = {}) {
   if (runtime.mode === 'staging' && callConfig.mode === 'local') throw new Error('Staging calls require off or a configured relay.');
-  const application = createApplication({ db, clock, callConfig, mapProvider, dispatchConfig, googleProvider, accountMail, pushProvider, vehicleVisionProvider, safetyAlertProvider, allowSimulation: runtime.mode === 'local' });
-  const handleApi = createApiRouter(application, { secure: runtime.mode === 'staging' });
-  const handleMobile = createMobileRouter(application);
+  db = asAsyncDatabase(db);
+  if (workerConfig.role !== 'all' && db.kind !== 'postgres') throw new Error('Split API/worker deployments require PostgreSQL.');
+  const application = createApplication({ db, clock, callConfig, mapProvider,
+    dispatchConfig: { ...dispatchConfig, requestRefresh: workerConfig.role === 'all' }, workerConfig,
+    googleProvider, accountMail, pushProvider, vehicleVisionProvider, safetyAlertProvider, allowSimulation: runtime.mode === 'local' });
+  const httpApplication = workerConfig.role === 'api' ? { ...application, dispatch: { ...application.dispatch, refresh: async () => {} } } : application;
+  const handleApi = createApiRouter(httpApplication, { secure: runtime.mode === 'staging' });
+  const handleMobile = createMobileRouter(httpApplication);
   const handleGoogleCallback = createGoogleCallback(application, runtime.mode === 'staging');
   const health = createHealth(db);
-  const cleanup = setInterval(() => {
-    try { application.rides.sweep(); application.availability.sweep(); application.calls.sweep(); application.locations.sweep(); application.safety.sweep(); application.guestRides.sweep(); application.vehicleChecks.sweep(); application.devices.sweep(); application.googleAuth.sweep(); }
-    catch { telemetry.event('maintenance_failed'); }
-    void application.safetyMonitoring.deliverPending().catch(() => telemetry.event('safety_delivery_failed'));
-    void application.accountEmail.deliverPending().catch(() => telemetry.event('maintenance_failed'));
-    void application.notifications.deliverPending().catch(() => telemetry.event('maintenance_failed'));
-  }, 5000);
-  cleanup.unref();
-  const dispatchTimer = setInterval(() => {
-    void application.dispatch.refresh().catch(() => telemetry.event('dispatch_failed'));
-  }, 2000);
-  dispatchTimer.unref();
+  const workers = createWorkerRuntime({ coordinator: application.workerCoordinator, config: workerConfig,
+    regions: () => application.dispatch.regions(), dispatch: application.dispatch, onError: (name) => telemetry.event(name),
+    maintenance: async ({ lease, active }) => {
+      for (const service of [application.rides, application.availability, application.calls, application.locations,
+        application.safety, application.guestRides, application.vehicleChecks, application.devices, application.googleAuth]) {
+        if (!active()) return;
+        const held = await db.transaction(async () => {
+          if (!await application.workerCoordinator.guard(lease)) return false;
+          await service.sweep();
+          return true;
+        });
+        if (!held) return;
+      }
+      if (!active()) return;
+      await db.transaction(async () => {
+        if (await application.workerCoordinator.guard(lease)) await application.rateLimiter.sweep(clock());
+      });
+      // Provider I/O stays outside transactions. Each outbox separately claims
+      // jobs; the coordinator only permits starting the next bounded drain.
+      for (const service of [application.safetyMonitoring, application.accountEmail, application.notifications]) {
+        if (!active() || !await application.workerCoordinator.guard(lease)) return;
+        await service.deliverPending();
+      }
+    } });
+  workers.start();
   const server = createServer(async (request, response) => {
     let pathname = '';
     telemetry.observe(request, response, () => pathname);
@@ -207,11 +230,12 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
       }
       if (['/health/live', '/health/ready'].includes(pathname)) {
         check(['GET', 'HEAD'].includes(request.method), 'METHOD_NOT_ALLOWED', 'Use GET or HEAD.');
-        const ok = pathname === '/health/live' || health.ready();
+        const ok = pathname === '/health/live' || await health.ready();
         if (request.method === 'HEAD') { response.writeHead(ok ? 200 : 503); response.end(); }
         else json(response, ok ? 200 : 503, { status: ok ? pathname === '/health/live' ? 'alive' : 'ready' : 'unavailable' });
         return;
       }
+      check(workerConfig.role !== 'worker', 'SERVER_DRAINING', 'This process handles background work.');
       check(!health.draining(), 'SERVER_DRAINING', 'Taxi Ai is restarting. Please retry shortly.');
       if (pathname === '/auth/google/callback') {
         await handleGoogleCallback({ request, response, ...context }); return;
@@ -246,10 +270,30 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
   });
   server.requestTimeout = 15_000;
   server.headersTimeout = 10_000;
-  server.beginShutdown = () => { health.beginShutdown(); clearInterval(cleanup); clearInterval(dispatchTimer);
-    void application.dispatch.stop().catch(() => telemetry.event('dispatch_failed')); application.accountEmail.stop(); };
-  server.on('close', () => { clearInterval(cleanup); clearInterval(dispatchTimer); application.accountEmail.stop(); application.notifications.stop();
-    void Promise.allSettled([application.dispatch.stop(), application.safetyMonitoring.stop()]).finally(() => db.close()); });
+  let shutdown;
+  function stopServices() {
+    if (!shutdown) {
+      // Signal every producer immediately before waiting, so an in-flight route
+      // cannot publish another offer while the worker runtime is draining.
+      const tasks = [workers.stop(), application.dispatch.stop(), application.safetyMonitoring.stop(),
+        application.accountEmail.stop(), application.notifications.stop(), application.realtime.close()];
+      let deadline;
+      const completed = Promise.allSettled(tasks).then((results) => {
+        if (results.some((result) => result.status === 'rejected')) throw new Error('A background service could not finish shutting down.');
+      });
+      shutdown = Promise.race([completed, new Promise((_, reject) => {
+        deadline = setTimeout(() => reject(new Error('Background shutdown deadline exceeded.')), workerConfig.shutdownMs);
+      })]).finally(() => clearTimeout(deadline));
+    }
+    return shutdown;
+  }
+  server.beginShutdown = () => { health.beginShutdown(); void stopServices().catch(() => telemetry.event('worker_shutdown_failed')); };
+  let closedResources;
+  server.closeResources = () => {
+    if (!closedResources) closedResources = stopServices().finally(() => db.close());
+    return closedResources;
+  };
+  server.on('close', () => { void server.closeResources().catch(() => telemetry.event('worker_shutdown_failed')); });
   return server;
 }
 
@@ -257,13 +301,15 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   let db;
   try {
     const runtime = createRuntimeConfig();
+    const workerConfig = createWorkerConfig(process.env);
     const telemetry = createTelemetry();
-    db = openDatabase(runtime.database);
-    const server = createAppServer({ runtime, db, telemetry });
+    db = process.env.TAXI_AI_DATABASE_URL ? await openPostgresDatabase() : openDatabase(runtime.database);
+    const server = createAppServer({ runtime, db, telemetry, workerConfig });
     server.on('error', (error) => {
       telemetry.event('server_failed');
       console.error(error.code === 'EADDRINUSE' ? 'Taxi Ai port is already in use.' : 'Unable to listen on the configured address.');
-      db.close();
+      server.beginShutdown();
+      void server.closeResources().catch(() => telemetry.event('worker_shutdown_failed'));
       process.exitCode = 1;
     });
     server.listen(runtime.port, runtime.host, () => {
@@ -274,12 +320,17 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => {
       if (stopping) return; stopping = true;
       telemetry.event('server_stopping'); server.beginShutdown();
-      const deadline = setTimeout(() => { telemetry.event('shutdown_timeout'); server.closeAllConnections(); process.exitCode = 1; }, 20_000);
-      deadline.unref();
-      server.close(() => clearTimeout(deadline));
+      const deadline = setTimeout(() => {
+        telemetry.event('shutdown_timeout'); server.closeAllConnections(); process.exit(1);
+      }, workerConfig.shutdownMs + 1000);
+      server.close(async () => {
+        try { await server.closeResources(); }
+        catch { telemetry.event('worker_shutdown_failed'); process.exitCode = 1; }
+        finally { clearTimeout(deadline); }
+      });
     });
   } catch {
-    db?.close();
+    await db?.close();
     console.error('Taxi Ai could not start. Check runtime configuration and storage permissions; run npm run config:check for configuration errors.');
     process.exitCode = 1;
   }

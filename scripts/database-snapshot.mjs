@@ -2,7 +2,10 @@ import { saveSnapshot } from '../services/api/src/infrastructure/database-snapsh
 import { DEFAULT_DATABASE } from '../services/api/src/infrastructure/database.mjs';
 
 const [action, ...args] = process.argv.slice(2);
-if (!(['backup', 'restore'].includes(action)) || args.length !== (action === 'backup' ? 1 : 2)) {
+if (process.env.TAXI_AI_DATABASE_URL) {
+  console.error('This command is for SQLite snapshots. PostgreSQL requires pg_dump/pg_restore or managed backups; see docs/scalability.md.');
+  process.exitCode = 1;
+} else if (!(['backup', 'restore'].includes(action)) || args.length !== (action === 'backup' ? 1 : 2)) {
   console.error('Usage: npm run backup -- /absolute/new-backup.sqlite');
   console.error('   or: npm run restore -- /absolute/backup.sqlite /absolute/new-restored.sqlite');
   process.exitCode = 1;

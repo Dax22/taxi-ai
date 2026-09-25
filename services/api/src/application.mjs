@@ -9,7 +9,7 @@ import { createGuestRidesRepository } from './modules/guest-rides/repository.mjs
 import { createGuestRidesService } from './modules/guest-rides/service.mjs';
 import { MAX_DRIVER_FILE_BYTES } from '../../../packages/shared/src/driver-onboarding.mjs';
 import { createDriverDocumentCodec } from './infrastructure/driver-document-codec.mjs';
-import { transaction } from './infrastructure/database.mjs';
+import { asAsyncDatabase } from './infrastructure/async-database.mjs';
 import { passwords } from './infrastructure/passwords.mjs';
 import { tokens } from './infrastructure/tokens.mjs';
 import { createAudit } from './infrastructure/audit.mjs';
@@ -63,84 +63,94 @@ import { createVehicleVisionProvider } from './infrastructure/vehicle-vision-pro
 import { createVehiclePhotoCodec } from './infrastructure/vehicle-photo-codec.mjs';
 import { createVehicleChecksRepository } from './modules/vehicle-checks/repository.mjs';
 import { createVehicleChecksService } from './modules/vehicle-checks/service.mjs';
+import { createRealtimeRepository } from './modules/realtime/repository.mjs';
+import { createRealtimeService } from './modules/realtime/service.mjs';
+import { createWorkerCoordinationRepository } from './modules/worker-coordination/repository.mjs';
+import { createWorkerCoordinator } from './infrastructure/worker-coordinator.mjs';
+import { createWorkerConfig } from './infrastructure/worker-config.mjs';
 
 /** Composition root: the only place that wires business modules to adapters. */
 export function createApplication({ db, clock = Date.now, callConfig = createCallConfig(), mapProvider = createMapProvider(), allowSimulation = false,
-  dispatchConfig = createDispatchConfig(),
+  dispatchConfig = createDispatchConfig(), workerConfig = createWorkerConfig(),
   safetyAlertProvider = createSafetyAlertProvider(), accountMail = createAccountMail(), pushProvider = createPushProvider(), vehicleVisionProvider = createVehicleVisionProvider(),
   googleProvider = createGoogleProvider({ config: createGoogleConfig({}), clock }) }) {
-  const unitOfWork = (run) => transaction(db, run);
+  db = asAsyncDatabase(db);
+  const unitOfWork = async (run) => (await db.transaction(run));
   const audit = createAudit(db);
+  const realtime = createRealtimeService({ repository: createRealtimeRepository(db), clock });
+  const workerCoordinator = createWorkerCoordinator({ repository: createWorkerCoordinationRepository(db),
+    ownerId: workerConfig.ownerId, leaseMs: workerConfig.leaseMs });
   const accountRepository = createAccountsRepository(db);
   const driverRepository = createDriversRepository(db);
   const rideRepository = createRidesRepository(db);
   const guestRepository = createGuestRidesRepository(db);
   const eatsRepository = createEatsRepository(db, { deliveryAreas, legacyAreaIds: EATS_LEGACY_AREA_IDS, distanceMeters });
-  const hasDriverWork = (id) => rideRepository.hasDriverWork(id) || eatsRepository.hasWork(id);
+  const hasDriverWork = async (id) => (await rideRepository.hasDriverWork(id)) || (await eatsRepository.hasWork(id));
   let drivers, devices, accountEmail;
   const accounts = createAccountsService({ repository: accountRepository,
     driverProfiles: { insert: driverRepository.insert, remove: driverRepository.remove,
-      version: (id) => driverRepository.application(id)?.version, hasWork: hasDriverWork,
-      stopWork: (id, now) => { availability.onProfileDeleted(id, now); notifications.onProfileDeleted(id, now); },
-      validateVehicle: (data) => vehicleDetails(data, clock()), find: (id) => {
-      const driver = driverRepository.find(id);
-      return driver ? { ...driver, eligibility: drivers.eligibilityFor(id) } : null;
+      version: async (id) => (await driverRepository.application(id))?.version, hasWork: hasDriverWork,
+      stopWork: async (id, now) => { (await availability.onProfileDeleted(id, now)); (await notifications.onProfileDeleted(id, now)); },
+      validateVehicle: (data) => vehicleDetails(data, clock()), find: async (id) => {
+      const driver = (await driverRepository.find(id));
+      return driver ? { ...driver, eligibility: (await drivers.eligibilityFor(id)) } : null;
     } },
-    passwords, tokens, unitOfWork, audit, revokeDevices: (id) => devices.revokeUser(id),
-    onRegistered: (id) => accountEmail.onRegistered(id), hasRideHistory: rideRepository.hasHistory, clock });
+    passwords, tokens, unitOfWork, audit, revokeDevices: async (id) => (await devices.revokeUser(id)),
+    onRegistered: async (id) => (await accountEmail.onRegistered(id)), hasRideHistory: rideRepository.hasHistory, clock });
   devices = createDeviceSessionsService({ repository: createDeviceSessionsRepository(db),
-    authenticate: accounts.login, validatePasswordLogin: accounts.validatePasswordLogin,
+    authenticate: accounts.login, validatePasswordLogin: accounts.validatePasswordLogin, consumePasswordLogin: accounts.consumePasswordLogin,
     getAccount: accounts.profile, tokens, unitOfWork, audit, clock });
   drivers = createDriversService({ repository: driverRepository,
     getAccount: accounts.profile, hasDriverWork, codec: createDriverDocumentCodec(MAX_DRIVER_FILE_BYTES),
     tokens, unitOfWork, audit, clock });
   let calls, locations, payments, safety, guestRides, notifications;
   const availability = createAvailabilityService({ repository: createAvailabilityRepository(db),
-    getAccount: accounts.profile, sessionOwner: accounts.sessionOwner, nativeSessionFor: devices.sessionFor, nativeSessionOwner: devices.sessionOwner, isBusy: (id) => rideRepository.hasNegotiation(id) || rideRepository.hasCustomerWork(id, clock()) || eatsRepository.hasWork(id),
+    getAccount: accounts.profile, sessionOwner: accounts.sessionOwner, nativeSessionFor: devices.sessionFor, nativeSessionOwner: devices.sessionOwner, isBusy: async (id) => (await rideRepository.hasNegotiation(id)) || (await rideRepository.hasCustomerWork(id, clock())) || (await eatsRepository.hasWork(id)),
     unitOfWork, tokens, audit, clock, allowSimulation });
   const pickupEta = createPickupEtaProvider({ mapProvider, now: clock });
-  const dispatch = createDispatchService({ repository: createDispatchRepository(db), getAccount: accounts.profile,
-    candidates: (now, options) => rides.dispatchCandidates(now, options), candidateFor: (rideId, driverId, now) => rides.dispatchCandidateFor(rideId, driverId, now),
+  const dispatch = createDispatchService({ repository: createDispatchRepository(db), getAccount: accounts.profile, coordinator: workerCoordinator,
+    candidates: async (now, options) => (await rides.dispatchCandidates(now, options)), candidateFor: async (rideId, driverId, now) => (await rides.dispatchCandidateFor(rideId, driverId, now)),
     estimateMany: pickupEta.estimateMany, config: dispatchConfig, unitOfWork, tokens, audit, clock,
-    onOffer: (offer) => notifications.publish({ userId: offer.driverId, rideId: offer.rideId, kind: 'request',
-      mode: 'work', eventKey: `dispatch:${offer.id}`, now: offer.createdAt }) });
+    onOffer: async (offer) => (await notifications.publish({ userId: offer.driverId, rideId: offer.rideId, kind: 'request',
+      mode: 'work', eventKey: `dispatch:${offer.id}`, now: offer.createdAt })) });
   const rides = createRidesService({ repository: rideRepository,
     dispatch,
     passengerForRide: guestRepository.passenger, savePassenger: guestRepository.savePassenger,
     hasOtherWork: eatsRepository.hasWork,
     getAccount: accounts.profile, unitOfWork, audit, tokens, clock,
     deliveries: createDeliveriesService({ repository: createDeliveriesRepository(db), tokens }),
-    routeForRide: (id) => locations.routeForRide(id),
-    quoteForRide: (userId, id, now) => locations.quoteForRide(userId, id, now),
-    bindQuote: (userId, id, rideId, now) => locations.bindQuote(userId, id, rideId, now),
-    availabilityFor: availability.positionFor, onClaim: availability.onClaim, availableDriverIds: availability.driverIds, allowSimulation,
-    onEvent: ({ kind, ride, actorId, recipients = [], eventKey, now }) => {
-      dispatch.observe({ kind, rideId: ride.id, locationMode: locations.routeForRide(ride.id) ? 'gps' : 'sample', now });
+    routeForRide: async (id) => (await locations.routeForRide(id)),
+    quoteForRide: async (userId, id, now) => (await locations.quoteForRide(userId, id, now)),
+    bindQuote: async (userId, id, rideId, now) => (await locations.bindQuote(userId, id, rideId, now)),
+    availabilityFor: availability.positionFor, onClaim: availability.onClaim, availableDriverIds: availability.driverIds,
+    nearbyDriverIds: availability.nearbyDriverIds, allowSimulation,
+    onEvent: async ({ kind, ride, actorId, recipients = [], eventKey, now }) => {
+      (await dispatch.observe({ kind, rideId: ride.id, locationMode: (await locations.routeForRide(ride.id)) ? 'gps' : 'sample', now }));
       const targets = kind === 'request' ? recipients : [ride.customerId,ride.driverId].filter((id) => id && id !== actorId);
-      for (const userId of targets) notifications.publish({ userId, rideId: ride.id, kind,
-        mode: userId === ride.customerId ? 'customer' : 'work', eventKey, now });
+      for (const userId of targets) (await notifications.publish({ userId, rideId: ride.id, kind,
+        mode: userId === ride.customerId ? 'customer' : 'work', eventKey, now }));
     },
-    onTripCompleted: (data) => payments.recordCompletion(data),
-    onRideClosed: (id, now) => { calls.closeRide(id, now); locations.closeRide(id, now); safety.closeRide(id, now); guestRides.closeRide(id, now); } });
+    onTripCompleted: async (data) => (await payments.recordCompletion(data)),
+    onRideClosed: async (id, now) => { (await calls.closeRide(id, now)); (await locations.closeRide(id, now)); (await safety.closeRide(id, now)); (await guestRides.closeRide(id, now)); } });
   const chat = createChatService({ repository: createChatRepository(db), getAccount: accounts.profile,
     getRideContext: rides.conversationContext, listConversationIds: rides.conversationIds, unitOfWork, audit, tokens, clock,
-    onMessage: ({ ride, message }) => {
+    onMessage: async ({ ride, message }) => {
       const userId = ride.customerId === message.senderId ? ride.driverId : ride.customerId;
-      notifications.publish({ userId, rideId: ride.id, kind: 'message', mode: userId === ride.customerId ? 'customer' : 'work', eventKey: `message:${message.id}` });
+      (await notifications.publish({ userId, rideId: ride.id, kind: 'message', mode: userId === ride.customerId ? 'customer' : 'work', eventKey: `message:${message.id}` }));
     } });
   notifications = createNotificationsService({ repository: createNotificationsRepository(db), getAccount: accounts.profile,
     sessionOwner: devices.sessionOwner, provider: pushProvider, unitOfWork, clock,
-    shouldSendRequest: (userId, rideId) => !dispatch.enabled || dispatch.forDriver(userId, clock())?.rideId === rideId,
-    getArrival: (userId, rideId) => {
-      const ride = rideRepository.find(rideId), trip = rideRepository.findTrip(rideId);
+    shouldSendRequest: async (userId, rideId) => !dispatch.enabled || (await dispatch.forDriver(userId, clock()))?.rideId === rideId,
+    getArrival: async (userId, rideId) => {
+      const ride = (await rideRepository.find(rideId)), trip = (await rideRepository.findTrip(rideId));
       if (ride?.customerId !== userId || !trip?.arrivedAt || !ride.driverSnapshotJson) return null;
       return { status: trip.status, driver: JSON.parse(ride.driverSnapshotJson) };
     },
-    canOpen: (user, notification) => {
+    canOpen: async (user, notification) => {
       if (notification.kind === 'request') {
-        const available = rides.list(user, 'work').available.some((r) => r.id === notification.rideId);
-        if (!available) rides.conversationContext(user, notification.rideId);
-      } else rides.conversationContext(user, notification.rideId);
+        const available = (await rides.list(user, 'work')).available.some((r) => r.id === notification.rideId);
+        if (!available) (await rides.conversationContext(user, notification.rideId));
+      } else (await rides.conversationContext(user, notification.rideId));
     } });
   const rateLimiter = createRateLimiter({ db, unitOfWork, digest: tokens.digest });
   accountEmail = createAccountEmailService({ repository: createAccountEmailRepository(db), accounts, mail: accountMail,
@@ -165,9 +175,9 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
     locationForTrip: locations.safetyPosition, sessionOwner: accounts.sessionOwner, nativeSessionOwner: devices.sessionOwner, unitOfWork, tokens, audit, clock });
   const adminConsole = createAdminConsoleService({ repository: createAdminConsoleRepository(db), audit, clock, unitOfWork });
   const eats = createEatsService({ repository: eatsRepository, getAccount: accounts.profile, photoCodec: { normalize: normalizeDishPhoto },
-    hasOtherWork: (id) => rideRepository.hasDriverWork(id) || rideRepository.hasCustomerWork(id, clock()),
+    hasOtherWork: async (id) => (await rideRepository.hasDriverWork(id)) || (await rideRepository.hasCustomerWork(id, clock())),
     availabilityFor: availability.positionFor, onClaim: availability.onClaim, tokens, unitOfWork, audit, clock, normalisePhoto: normaliseFoodPhoto });
   const googleAuth = createGoogleAuthService({ repository: createGoogleAuthRepository(db), provider: googleProvider,
     accounts, devices, tokens, unitOfWork, clock });
-  return Object.freeze({ accounts, devices, drivers, rides, dispatch, eats, chat, calls, locations, availability, payments, safety, safetyMonitoring, guestRides, vehicleChecks, adminConsole, googleAuth, accountEmail, notifications, rateLimiter, clock });
+  return Object.freeze({ accounts, devices, drivers, rides, dispatch, eats, chat, calls, locations, availability, payments, safety, safetyMonitoring, guestRides, vehicleChecks, adminConsole, googleAuth, accountEmail, notifications, rateLimiter, realtime, workerCoordinator, clock });
 }

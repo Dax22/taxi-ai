@@ -54,7 +54,7 @@ test('writes require same-origin JSON and a session CSRF token; malformed, overs
   // Fetch implementations may normalize Host. Send the exact header using HTTP.
   const hostStatus = await new Promise((resolve, reject) => {
     httpGet(`${h.base}/api/session`, { headers: { Host: 'attacker.example' } }, (response) => {
-      response.resume(); response.on('end', () => resolve(response.statusCode));
+      response.resume(); response.on('end', async () => (await resolve(response.statusCode)));
     }).on('error', reject);
   });
   assert.equal(hostStatus, 403);
@@ -76,9 +76,9 @@ test('only the local first-admin command creates an admin and only admins can re
   assert.equal((await driver.post(`/api/rides/${ride.id}/claim`, { expectedVersion: 0 })).status, 403);
   assert.equal((await customer.send('/api/admin/drivers')).status, 403);
   assert.equal((await driver.post(`/api/admin/drivers/${driver.user.id}/review`, { decision: 'approved' })).status, 403);
-  bootstrapAdmin(h.db, admin.user.email);
+  (await bootstrapAdmin(h.db, admin.user.email));
   assert.equal((await admin.send('/api/rides')).status, 401, 'promotion revokes existing sessions');
-  assert.throws(() => bootstrapAdmin(h.db, customer.user.email), { code: 'ADMIN_EXISTS' });
+  (await assert.rejects(async () => (await bootstrapAdmin(h.db, customer.user.email)), { code: 'ADMIN_EXISTS' }));
   await admin.post('/api/auth/login', { email: admin.user.email, password: PASSWORD });
   await submitApplication(fixtureApi(driver));
   const approved = await approveApplication(fixtureApi(admin), driver.user.id);

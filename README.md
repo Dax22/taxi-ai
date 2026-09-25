@@ -14,6 +14,12 @@ and [mobile setup](apps/mobile/README.md).
 For the resolved VS Code/slider merge and database upgrade steps, see
 [the integration guide](docs/vscode-slider-integration.md).
 
+The backend now includes a PostgreSQL/PostGIS option, multiple API replicas,
+separate matching workers, account-change updates and load-test tooling. Local
+SQLite development continues to work. See [scalability and deployment](docs/scalability.md)
+for setup, data migration boundaries and measurement. This is not a claim of
+one-million-user capacity.
+
 ## What works today
 
 The yellow Taxi Ai website now includes **local customer, driver and administrator
@@ -26,7 +32,8 @@ simulate payment and view a saved receipt; drivers can check their earnings prev
 Trip Safety adds trusted contacts, private test SOS records, administrator review
 and expiring trip links. Contact notifications are simulated; nothing is sent.
 Accounts, requests, trip history and agreements survive refresh
-and server restart. Dashboards refresh every three seconds while visible.
+and server restart. Web and native dashboards use authenticated account-change
+signals with a slower refresh fallback; see [realtime updates](docs/realtime-updates.md).
 
 This is a **development prototype**, not a launched transport service.
 Use test details. Fares are fictional examples and all requests are test requests.
@@ -75,7 +82,10 @@ is not connected. Use fictional details and documents.
 - Explicit Online/Offline availability, nearby matching and five-minute request expiry.
 - GPS search expands from 5 km to 10 km after one minute; local sample-area matching
   supports testing outside Abuja without using device location.
-- Persistent SQLite data, password hashes and revocable sessions.
+- SQLite for local development or asynchronous PostgreSQL/PostGIS for multiple
+  API replicas, with shared password hashes, revocable sessions and retry records.
+- Timed ride offers and optional batch matching, with indexed nearby-driver
+  retrieval, coordinated regional workers and fresh eligibility checks before assignment.
 - One open request/active trip per customer and one negotiation/active trip per driver.
 - Explicit booking confirmation, driver progress, pickup PIN verification and completion.
 - Cancellation reasons, saved trip activity and paginated completed/cancelled/expired history.
@@ -233,18 +243,24 @@ yet been verified; automated tests cover the lifecycle and media orchestration.
 
 ## Your local data
 
-The database is created automatically at `data/taxi-ai.sqlite` inside this repo.
+Without `TAXI_AI_DATABASE_URL`, the local SQLite database is created automatically
+at `data/taxi-ai.sqlite` inside this repo.
 Keep that file and its SQLite sidecar files on your own computer. They are ignored
 by Git and are never served by the website. Source code goes to GitHub; accounts,
 password hashes and ride history do not.
 
 `TAXI_AI_DB=/absolute/path/to/test.sqlite npm run dev` selects another database.
-Use the same variable for `npm run admin` when using a custom path. Migrations run
-automatically at startup. `npm run backup -- /absolute/new-backup.sqlite` makes a
+Use the same variable for `npm run admin` when using a custom path. SQLite migrations
+run automatically at startup. `npm run backup -- /absolute/new-backup.sqlite` makes a
 validated copy without changing the source. See [staging and recovery](docs/staging.md)
 for restore, transient-data removal, scheduling and off-host backup requirements.
 
-The current schema is **19**: Trip Safety added schema 9, unified accounts added
+SQLite is now at **schema 30**; PostgreSQL uses a separate migration history.
+Schemas 28–30 add account revisions, indexed location/expiry fields and regional
+worker coordination. Selecting PostgreSQL requires its migration command and a
+separate import of any existing SQLite data; see the
+[PostgreSQL migration and recovery runbook](docs/postgresql.md).
+Earlier milestones remain preserved: Trip Safety added schema 9, unified accounts added
 schema 10, native device sessions added schema 11 and initial vehicle selections
 add schema 12 in 0.17. This new table preserves the car chosen before full driver
 details are complete without changing existing applications or approvals. Release
@@ -268,7 +284,8 @@ open the upgraded database; use a separate test database when comparing versions
 
 By default the server listens on **127.0.0.1** and accepts localhost origins.
 The optional `TAXI_AI_MODE=staging` requires a configured HTTPS origin, private
-gateway token, invited tester access file and explicit persistent database path.
+gateway token, invited tester access file and either a persistent SQLite path
+or PostgreSQL connection URL.
 It uses secure host-only cookies. The Docker/Caddy reference setup publishes only
 the HTTPS gateway; the app port remains internal. No host, domain or cloud account
 has been provisioned. Follow [the staging guide](docs/staging.md) to configure and
@@ -292,20 +309,23 @@ review a deployment; the Docker image deliberately refuses an incomplete setup.
 | `services/api/src/modules/safety/` | Trusted contacts, private incidents, simulated alerts and expiring trip links |
 | `services/api/src/http/` | Request parsing, routing, cookies and response mapping |
 | `services/api/src/infrastructure/` | Database, password, token, audit and rate-limit adapters |
-| `services/api/migrations/` | Versioned SQLite schema |
+| `services/api/migrations/` | Versioned SQLite schema and PostgreSQL migrations |
 | `services/api/test/` | API, permissions, competing-request and restart tests |
 | `packages/shared/` | Fare rules, trip lifecycle vocabulary, money helpers and sample-area fixtures |
 | `scripts/create-admin.mjs` | Local first-administrator setup |
 | `scripts/check.mjs` | Syntax, imports and module-boundary checks |
-| `deploy/staging/` | Private Docker Compose/Caddy deployment configuration |
+| `deploy/staging/` | Single-process SQLite staging configuration |
+| `deploy/scale/` | PostgreSQL/PostGIS, two API replicas, separate workers and Caddy |
 | `scripts/database-snapshot.mjs` | Checked backups/restores into new files |
 | `scripts/staging-access.mjs` | Add/remove invited tester access keys |
 | `.github/workflows/ci.yml` | Automated verification on Node 22.12.0 and 24 |
 | `apps/mobile/` | Expo iOS/Android accounts, driver onboarding and customer ride requests |
 | `docs/` | Requirements, architecture, roadmap and approved brand |
 
-The backend is a **modular monolith**: business modules share one process/database
-and communicate through explicitly supplied functions. HTTP and storage details
+The backend is a **modular monolith**: business modules share one codebase and
+transactional database and communicate through explicitly supplied functions.
+The same modules run in the combined local process or PostgreSQL-backed API and
+worker processes. HTTP and storage details
 stay outside business services. Versioned migrations preserve existing accounts, sessions and rides.
 
 The terminal example runs with `npm run demo`. Read [the architecture](docs/architecture.md),
@@ -314,8 +334,10 @@ The terminal example runs with `npm run demo`. Read [the architecture](docs/arch
 
 ## Development and review
 
-The latest development branch is `feat/nigeria-wide-coverage`, stacked on
-`feat/guest-rides`. It removes the Abuja-only geography restrictions and adds
+The combined development branch is `integration/resolved-vscode-slider`. It
+includes the nationwide and guest-ride work, the responsive homepage, timed
+dispatch and the scalability upgrades. Nationwide support removes Abuja-only
+geography restrictions and adds
 state/town selection, explicit kitchen coverage and nearby food-courier matching
 through private pickup locations. Schema 23 preserves existing records and adds
 private dispatch points. Nationwide location support does not imply live service

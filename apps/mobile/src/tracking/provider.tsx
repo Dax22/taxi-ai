@@ -39,10 +39,11 @@ class Registry {
   poll() {
     if (!this.active) return;
     for (const entry of this.entries.values()) {
-      if (this.needed(entry)) void entry.controller.heartbeat().then(() => entry.controller.refresh());
+      if (this.needed(entry)) void entry.controller.heartbeat();
       else entry.controller.pause();
     }
   }
+  refresh() { if (this.active) for (const entry of this.entries.values()) if (this.needed(entry)) void entry.controller.refresh(); }
   dispose() { this.active = false; for (const entry of this.entries.values()) entry.controller.dispose(); this.entries.clear(); this.listeners.clear(); }
 }
 const Context = createContext<Registry | null>(null);
@@ -53,8 +54,9 @@ export function TripLocationProvider({ children }: PropsWithChildren) {
     if (blocked || !user) { registry.pause(); return; }
     if (AppState.currentState === 'active') registry.activate();
     const state = AppState.addEventListener('change', next => { if (next !== 'active') registry.pause(); });
+    const changed = client.subscribeChanges(() => registry.refresh());
     const poll = setInterval(() => registry.poll(), 10_000), tick = setInterval(() => registry.tick(), 1000);
-    return () => { registry.pause(); state.remove(); clearInterval(poll); clearInterval(tick); };
+    return () => { registry.pause(); state.remove(); changed(); clearInterval(poll); clearInterval(tick); };
   }, [registry, blocked, user?.id]);
   const alive = useRef(false);
   useEffect(() => { alive.current = true; return () => { alive.current = false; queueMicrotask(() => { if (!alive.current) registry.dispose(); }); }; }, [registry]);

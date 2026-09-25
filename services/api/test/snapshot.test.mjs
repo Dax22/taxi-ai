@@ -80,9 +80,9 @@ test('a live WAL snapshot preserves rides and chat, clears transient data only i
     assert.equal(restored.prepare('SELECT body FROM chat_messages').get().body, 'Keep this saved message.');
     assert.equal(restored.prepare('SELECT count(*) AS n FROM sessions').get().n, 0);
     const app = createApplication({ db: restored, clock: () => TEST_NOW });
-    assert.equal(app.accounts.sessionFor(customer.cookie.split('=')[1]), null);
+    assert.equal((await app.accounts.sessionFor(customer.cookie.split('=')[1])), null);
     const account = await app.accounts.login({ email: customer.user.email, password: PASSWORD });
-    const saved = app.rides.get(account, ride.id);
+    const saved = (await app.rides.get(account, ride.id));
     assert.equal(saved.trip.pickupPin, pin); assert.equal(saved.negotiation.agreement.amountKobo, 470000);
   } finally { restored.close(); }
   assert.equal((await customer.post('/api/auth/login', { email: customer.user.email, password: PASSWORD })).status, 200);

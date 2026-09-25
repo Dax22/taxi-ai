@@ -183,7 +183,7 @@ test('failed incident persistence rolls back its queue and audit; concurrent rep
   for (const table of ['safety_incidents', 'safety_notifications', 'safety_incident_events', 'safety_notification_events']) assert.equal(h.db.prepare(`SELECT count(*) AS n FROM ${table}`).get().n, 0, table);
   assert.equal(h.db.prepare('SELECT count(*) AS n FROM audit_events').get().n, before);
   h.db.exec('DROP TRIGGER fail_safety_command');
-  const results = await Promise.all([report(customer, ride, [friend.id], key), report(customer, ride, [friend.id])]);
+  const results = await Promise.all([(report(customer, ride, [friend.id], key)), (report(customer, ride, [friend.id]))]);
   assert.deepEqual(results.map((r) => r.status).sort(), [200, 409]);
   assert.equal(h.db.prepare('SELECT count(*) AS n FROM safety_notifications').get().n, 1);
 });
@@ -244,11 +244,11 @@ test('hosted mode exposes no simulator writes, retries are bounded, and shared-l
   const { h, customer, admin, ride } = await booked(t), friend = await contact(customer);
   let incident = (await report(customer, ride, [friend.id])).body.incident, notice = incident.notifications[0];
   const hosted = createApplication({ db: h.db, allowSimulation: false, clock: () => TEST_NOW });
-  assert.equal(hosted.safety.get(admin.user.id, incident.id).settings.canSimulate, false);
-  assert.throws(() => hosted.safety.command({ userId: admin.user.id, action: 'notification.simulate', id: notice.id, key: randomUUID(), data: { expectedVersion: notice.version, outcome: 'sent' } }), { code: 'FORBIDDEN' });
+  assert.equal((await hosted.safety.get(admin.user.id, incident.id)).settings.canSimulate, false);
+  (await assert.rejects(async () => (await hosted.safety.command({ userId: admin.user.id, action: 'notification.simulate', id: notice.id, key: randomUUID(), data: { expectedVersion: notice.version, outcome: 'sent' } })), { code: 'FORBIDDEN' }));
   const simulationKey = randomUUID(), simulationData = { expectedVersion: notice.version, outcome: 'failed' };
   notice = (await simulate(admin, notice, 'failed', simulationKey)).body.incident.notifications[0];
-  assert.throws(() => hosted.safety.command({ userId: admin.user.id, action: 'notification.simulate', id: notice.id, key: simulationKey, data: simulationData }), { code: 'FORBIDDEN' });
+  (await assert.rejects(async () => (await hosted.safety.command({ userId: admin.user.id, action: 'notification.simulate', id: notice.id, key: simulationKey, data: simulationData })), { code: 'FORBIDDEN' }));
   notice = (await simulate(admin, notice, 'retry')).body.incident.notifications[0];
   for (let n = 1; n < 3; n++) {
     notice = (await simulate(admin, notice, 'failed')).body.incident.notifications[0];
@@ -264,11 +264,11 @@ test('administrator pagination handles tied timestamps, filters and reporter lim
   const app = createApplication({ db: h.db, allowSimulation: true, clock: () => TEST_NOW });
   const ids = [];
   for (let n = 0; n < 21; n++) {
-    let record = app.safety.command({ userId: n < 20 ? customer.user.id : driver.user.id, action: 'incident.create', id: ride.id,
-      key: randomUUID(), data: { kind: 'need_help', note: 'Private pagination fixture', contactIds: [] } }).incident;
+    let record = (await app.safety.command({ userId: n < 20 ? customer.user.id : driver.user.id, action: 'incident.create', id: ride.id,
+      key: randomUUID(), data: { kind: 'need_help', note: 'Private pagination fixture', contactIds: [] } })).incident;
     ids.push(record.id);
-    if (n < 20) for (const decision of ['acknowledge', 'resolve']) record = app.safety.command({ userId: admin.user.id, action: 'incident.review', id: record.id,
-      key: randomUUID(), data: { expectedVersion: record.version, decision, note: 'Administrator test review' } }).incident;
+    if (n < 20) for (const decision of ['acknowledge', 'resolve']) record = (await app.safety.command({ userId: admin.user.id, action: 'incident.review', id: record.id,
+      key: randomUUID(), data: { expectedVersion: record.version, decision, note: 'Administrator test review' } })).incident;
   }
   const first = (await admin.send('/api/admin/safety?status=all')).body;
   assert.equal(first.incidents.length, 20); assert.ok(first.nextBefore);
@@ -295,9 +295,9 @@ test('backup and restore retain private incident evidence and contacts but canno
   const restored = openDatabase(restoredPath);
   try {
     const app = createApplication({ db: restored, clock: () => (TEST_NOW + 200) });
-    assert.deepEqual(JSON.parse(JSON.stringify(app.safety.get(customer.user.id, record.id).incident)), record);
-    assert.equal(app.safety.contacts(customer.user.id).contacts[0].phone, friend.phone);
-    assert.throws(() => app.safety.sharedTrip({ token: shared.token }), { code: 'NOT_FOUND' });
+    assert.deepEqual(JSON.parse(JSON.stringify((await app.safety.get(customer.user.id, record.id)).incident)), record);
+    assert.equal((await app.safety.contacts(customer.user.id)).contacts[0].phone, friend.phone);
+    (await assert.rejects(async () => (await app.safety.sharedTrip({ token: shared.token })), { code: 'NOT_FOUND' }));
     const row = restored.prepare('SELECT * FROM trip_share_links WHERE id=?').get(shared.share.id);
     assert.equal(row.token_hash, null); assert.equal(row.session_hash, null); assert.equal(row.reason, 'snapshot_reset');
     assert.equal(restored.prepare('SELECT count(*) AS n FROM sessions').get().n, 0);

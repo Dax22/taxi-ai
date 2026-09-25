@@ -16,76 +16,76 @@ function application(row) {
 /** All application, document and retry writes join the caller's transaction. */
 export function createDriversRepository(db) {
   return Object.freeze({
-    find: (id) => profile(db.prepare(`SELECT d.*, CASE WHEN a.status='approved' THEN a.details_json END AS approved_details
-      FROM drivers d LEFT JOIN driver_applications a ON a.driver_id=d.user_id WHERE d.user_id = ?`).get(id)),
-    list: () => db.prepare(`SELECT d.*, CASE WHEN a.status='approved' THEN a.details_json END AS approved_details
+    find: async (id) => profile((await db.prepare(`SELECT d.*, CASE WHEN a.status='approved' THEN a.details_json END AS approved_details
+      FROM drivers d LEFT JOIN driver_applications a ON a.driver_id=d.user_id WHERE d.user_id = ?`).get(id))),
+    list: async () => (await db.prepare(`SELECT d.*, CASE WHEN a.status='approved' THEN a.details_json END AS approved_details
       FROM drivers d JOIN driver_applications a ON a.driver_id=d.user_id
       JOIN account_capabilities c ON c.user_id=d.user_id AND c.capability='driver'
-      ORDER BY (a.status='submitted') DESC, a.updated_at DESC, d.user_id LIMIT 100`).all().map(profile),
-    insert(id, vehicle, now) {
+      ORDER BY (a.status='submitted') DESC, a.updated_at DESC, d.user_id LIMIT 100`).all()).map(profile),
+    async insert(id, vehicle, now) {
       // Accounts checks that no active driver capability exists. Retain old IDs
       // and monotonic versions so history and stale command protection survive.
-      db.prepare(`INSERT INTO drivers (user_id, vehicle_model, vehicle_plate) VALUES (?, ?, ?)
+      (await db.prepare(`INSERT INTO drivers (user_id, vehicle_model, vehicle_plate) VALUES (?, ?, ?)
         ON CONFLICT(user_id) DO UPDATE SET vehicle_model=excluded.vehicle_model,vehicle_plate=excluded.vehicle_plate,
-        status='pending',reviewed_by=NULL,reviewed_at=NULL`).run(id, vehicle.model, vehicle.plate);
-      db.prepare(`INSERT INTO driver_applications(driver_id,updated_at) VALUES (?,?)
-        ON CONFLICT(driver_id) DO UPDATE SET version=version+1,updated_at=excluded.updated_at`).run(id, now);
-      if (vehicle.selection) db.prepare('INSERT INTO driver_vehicle_selections(driver_id,vehicle_json) VALUES (?,?)').run(id, JSON.stringify(vehicle.selection));
+        status='pending',reviewed_by=NULL,reviewed_at=NULL`).run(id, vehicle.model, vehicle.plate));
+      (await db.prepare(`INSERT INTO driver_applications(driver_id,updated_at) VALUES (?,?)
+        ON CONFLICT(driver_id) DO UPDATE SET version=version+1,updated_at=excluded.updated_at`).run(id, now));
+      if (vehicle.selection) (await db.prepare('INSERT INTO driver_vehicle_selections(driver_id,vehicle_json) VALUES (?,?)').run(id, JSON.stringify(vehicle.selection)));
     },
-    remove(id, now) {
+    async remove(id, now) {
       // Minimal rows and audit snapshots anchor historical trips/reviews. Active
       // profile details and current document bytes are removed atomically.
-      db.prepare('DELETE FROM driver_documents WHERE driver_id=?').run(id);
-      db.prepare('DELETE FROM driver_vehicle_selections WHERE driver_id=?').run(id);
-      db.prepare(`UPDATE drivers SET status='pending',vehicle_model='',vehicle_plate='',reviewed_by=NULL,reviewed_at=NULL WHERE user_id=?`).run(id);
-      db.prepare(`UPDATE driver_applications SET status='draft',version=version+1,details_json=NULL,submitted_at=NULL,
-        updated_at=?,reviewed_at=NULL,reviewed_by=NULL,review_reason=NULL,verification_json=NULL WHERE driver_id=?`).run(now,id);
-      db.prepare(`INSERT INTO driver_application_events(driver_id,actor_id,action,version,payload_json,created_at)
-        SELECT driver_id,driver_id,'profile_deleted',version,'{}',? FROM driver_applications WHERE driver_id=?`).run(now,id);
+      (await db.prepare('DELETE FROM driver_documents WHERE driver_id=?').run(id));
+      (await db.prepare('DELETE FROM driver_vehicle_selections WHERE driver_id=?').run(id));
+      (await db.prepare(`UPDATE drivers SET status='pending',vehicle_model='',vehicle_plate='',reviewed_by=NULL,reviewed_at=NULL WHERE user_id=?`).run(id));
+      (await db.prepare(`UPDATE driver_applications SET status='draft',version=version+1,details_json=NULL,submitted_at=NULL,
+        updated_at=?,reviewed_at=NULL,reviewed_by=NULL,review_reason=NULL,verification_json=NULL WHERE driver_id=?`).run(now,id));
+      (await db.prepare(`INSERT INTO driver_application_events(driver_id,actor_id,action,version,payload_json,created_at)
+        SELECT driver_id,driver_id,'profile_deleted',version,'{}',? FROM driver_applications WHERE driver_id=?`).run(now,id));
     },
-    selection(id) {
-      const row = db.prepare('SELECT vehicle_json FROM driver_vehicle_selections WHERE driver_id=?').get(id);
+    async selection(id) {
+      const row = (await db.prepare('SELECT vehicle_json FROM driver_vehicle_selections WHERE driver_id=?').get(id));
       return row ? JSON.parse(row.vehicle_json) : null;
     },
-    application: (id) => application(db.prepare('SELECT * FROM driver_applications WHERE driver_id=?').get(id)),
-    documents: (id) => db.prepare(`SELECT ${documentColumns} FROM driver_documents WHERE driver_id=? ORDER BY kind`).all(id),
-    document: (id) => db.prepare(`SELECT ${documentColumns} FROM driver_documents WHERE id=?`).get(id) ?? null,
-    content: (id) => db.prepare('SELECT content FROM driver_documents WHERE id=?').get(id)?.content,
-    storageBytes: () => db.prepare('SELECT COALESCE(SUM(size_bytes),0) AS bytes FROM driver_documents').get().bytes,
-    removeDocument: (id) => db.prepare('DELETE FROM driver_documents WHERE id=?').run(id),
-    insertDocument({ id, driverId, kind, name, mimeType, sizeBytes, sha256, expiresOn, content, now }) {
-      db.prepare(`INSERT INTO driver_documents(id,driver_id,kind,name,mime_type,size_bytes,sha256,expires_on,content,created_at)
-        VALUES (?,?,?,?,?,?,?,?,?,?)`).run(id, driverId, kind, name, mimeType, sizeBytes, sha256, expiresOn, content, now);
+    application: async (id) => application((await db.prepare('SELECT * FROM driver_applications WHERE driver_id=?').get(id))),
+    documents: async (id) => (await db.prepare(`SELECT ${documentColumns} FROM driver_documents WHERE driver_id=? ORDER BY kind`).all(id)),
+    document: async (id) => (await db.prepare(`SELECT ${documentColumns} FROM driver_documents WHERE id=?`).get(id)) ?? null,
+    content: async (id) => (await db.prepare('SELECT content FROM driver_documents WHERE id=?').get(id))?.content,
+    storageBytes: async () => (await db.prepare('SELECT COALESCE(SUM(size_bytes),0) AS bytes FROM driver_documents').get()).bytes,
+    removeDocument: async (id) => (await db.prepare('DELETE FROM driver_documents WHERE id=?').run(id)),
+    async insertDocument({ id, driverId, kind, name, mimeType, sizeBytes, sha256, expiresOn, content, now }) {
+      (await db.prepare(`INSERT INTO driver_documents(id,driver_id,kind,name,mime_type,size_bytes,sha256,expires_on,content,created_at)
+        VALUES (?,?,?,?,?,?,?,?,?,?)`).run(id, driverId, kind, name, mimeType, sizeBytes, sha256, expiresOn, content, now));
     },
-    readDocument(id, reviewerId, now) {
-      db.prepare(`INSERT INTO driver_document_reads(document_id,reviewer_id,read_at) VALUES (?,?,?)
-        ON CONFLICT(document_id,reviewer_id) DO UPDATE SET read_at=excluded.read_at`).run(id, reviewerId, now);
+    async readDocument(id, reviewerId, now) {
+      (await db.prepare(`INSERT INTO driver_document_reads(document_id,reviewer_id,read_at) VALUES (?,?,?)
+        ON CONFLICT(document_id,reviewer_id) DO UPDATE SET read_at=excluded.read_at`).run(id, reviewerId, now));
     },
-    readIds: (driverId, reviewerId) => db.prepare(`SELECT r.document_id AS id FROM driver_document_reads r
-      JOIN driver_documents d ON d.id=r.document_id WHERE d.driver_id=? AND r.reviewer_id=?`).all(driverId, reviewerId).map((row) => row.id),
-    save(app) {
-      if (app.details) db.prepare('DELETE FROM driver_vehicle_selections WHERE driver_id=?').run(app.driverId);
-      db.prepare(`UPDATE driver_applications SET status=?,version=?,details_json=?,submitted_at=?,updated_at=?,
+    readIds: async (driverId, reviewerId) => (await db.prepare(`SELECT r.document_id AS id FROM driver_document_reads r
+      JOIN driver_documents d ON d.id=r.document_id WHERE d.driver_id=? AND r.reviewer_id=?`).all(driverId, reviewerId)).map((row) => row.id),
+    async save(app) {
+      if (app.details) (await db.prepare('DELETE FROM driver_vehicle_selections WHERE driver_id=?').run(app.driverId));
+      (await db.prepare(`UPDATE driver_applications SET status=?,version=?,details_json=?,submitted_at=?,updated_at=?,
         reviewed_at=?,reviewed_by=?,review_reason=?,verification_json=? WHERE driver_id=?`).run(app.status, app.version,
         app.details ? JSON.stringify(app.details) : null, app.submittedAt, app.updatedAt, app.reviewedAt,
-        app.reviewedBy, app.reviewReason, app.verification ? JSON.stringify(app.verification) : null, app.driverId);
+        app.reviewedBy, app.reviewReason, app.verification ? JSON.stringify(app.verification) : null, app.driverId));
     },
-    setProfile(id, status, details, reviewerId, now) {
-      db.prepare(`UPDATE drivers SET status=?, reviewed_by=?, reviewed_at=?,
+    async setProfile(id, status, details, reviewerId, now) {
+      (await db.prepare(`UPDATE drivers SET status=?, reviewed_by=?, reviewed_at=?,
         vehicle_model=COALESCE(?,vehicle_model),vehicle_plate=COALESCE(?,vehicle_plate) WHERE user_id=?`)
         .run(status, reviewerId, reviewerId ? now : null, details ? `${details.vehicle.make} ${details.vehicle.model}` : null,
-          details?.vehicle.plate ?? null, id);
+          details?.vehicle.plate ?? null, id));
     },
-    event(driverId, actorId, action, version, payload, now) {
-      db.prepare(`INSERT INTO driver_application_events(driver_id,actor_id,action,version,payload_json,created_at)
-        VALUES (?,?,?,?,?,?)`).run(driverId, actorId, action, version, JSON.stringify(payload), now);
+    async event(driverId, actorId, action, version, payload, now) {
+      (await db.prepare(`INSERT INTO driver_application_events(driver_id,actor_id,action,version,payload_json,created_at)
+        VALUES (?,?,?,?,?,?)`).run(driverId, actorId, action, version, JSON.stringify(payload), now));
     },
-    events: (id) => db.prepare(`SELECT id,actor_id AS actorId,action,version,payload_json,created_at AS createdAt
-      FROM driver_application_events WHERE driver_id=? ORDER BY id DESC LIMIT 100`).all(id)
+    events: async (id) => (await db.prepare(`SELECT id,actor_id AS actorId,action,version,payload_json,created_at AS createdAt
+      FROM driver_application_events WHERE driver_id=? ORDER BY id DESC LIMIT 100`).all(id))
       .map(({ payload_json, ...row }) => ({ ...row, payload: JSON.parse(payload_json) })),
-    command: (actorId, key) => db.prepare(`SELECT fingerprint,driver_id AS driverId FROM driver_application_commands WHERE actor_id=? AND key=?`).get(actorId, key),
-    saveCommand(actorId, key, fingerprint, driverId) {
-      db.prepare('INSERT INTO driver_application_commands(actor_id,key,fingerprint,driver_id) VALUES (?,?,?,?)').run(actorId, key, fingerprint, driverId);
+    command: async (actorId, key) => (await db.prepare(`SELECT fingerprint,driver_id AS driverId FROM driver_application_commands WHERE actor_id=? AND key=?`).get(actorId, key)),
+    async saveCommand(actorId, key, fingerprint, driverId) {
+      (await db.prepare('INSERT INTO driver_application_commands(actor_id,key,fingerprint,driver_id) VALUES (?,?,?,?)').run(actorId, key, fingerprint, driverId));
     },
   });
 }

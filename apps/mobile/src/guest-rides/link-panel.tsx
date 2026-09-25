@@ -61,18 +61,18 @@ export function GuestRideLink({ rideId }: { rideId: string }) {
       }
     });
     const clock = setInterval(() => controller.tick(), 1000);
-    const refresh = setInterval(() => {
+    const refresh = client.subscribeChanges(() => {
       const latest = controller.snapshot();
       if (visible.current && !latest.pending && !latest.loading && !latest.uncertain && !sharingRef.current) {
-        void controller.load();
+        return controller.load();
       }
-    }, 10_000);
+    });
     return () => {
       clear();
       background.remove();
       account();
       clearInterval(clock);
-      clearInterval(refresh);
+      refresh();
     };
   }, [controller, client, user?.id, rideId, blocked]));
 

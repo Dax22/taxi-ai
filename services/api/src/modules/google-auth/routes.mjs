@@ -4,7 +4,7 @@ import { check } from '../../shared/errors.mjs';
 
 export function googleAuthRoutes(google, accounts, secure = false) {
   return [
-    { method: 'GET', path: /^\/api\/auth\/providers$/, access: 'public', handle: () => ({ body: { google: google.settings() } }) },
+    { method: 'GET', path: /^\/api\/auth\/providers$/, access: 'public', handle: async () => ({ body: { google: (await google.settings()) } }) },
     ...[false, true].map((link) => ({ method: 'POST', path: link ? /^\/api\/account\/google\/link$/ : /^\/api\/auth\/google\/start$/,
       access: link ? 'write' : 'auth', ...(link ? { role: 'customer' } : {}),
       async handle({ data, token, origin, cookieHeader }) {
@@ -12,7 +12,7 @@ export function googleAuthRoutes(google, accounts, secure = false) {
         return { cookie: googleCookie(result.binding, secure), body: { redirectUrl: result.redirectUrl } };
       } })),
     { method: 'GET', path: /^\/api\/account\/sign-in-methods$/, access: 'read', role: 'customer',
-      handle: ({ user }) => ({ body: { methods: accounts.signInMethods(user.id), google: google.settings() } }) },
+      handle: async ({ user }) => ({ body: { methods: (await accounts.signInMethods(user.id)), google: (await google.settings()) } }) },
     { method: 'POST', path: /^\/api\/account\/google\/unlink$/, access: 'write', role: 'customer',
       async handle({ user, data, token }) {
         const body = await accounts.unlinkGoogle(user.id, data, token);
@@ -28,7 +28,7 @@ export function createGoogleCallback({ googleAuth, accounts, rateLimiter, clock 
     ['GOOGLE_ACCOUNT_CONFLICT','conflict'], ['UNAUTHENTICATED','session'], ['FORBIDDEN','staff']]);
   return async ({ request, response, origin, clientAddress }) => {
     check(request.method === 'GET', 'METHOD_NOT_ALLOWED', 'Use GET.');
-    rateLimiter.consume(`google-return:${clientAddress}`, clock(), 30, 10 * 60_000);
+    await rateLimiter.consume(`google-return:${clientAddress}`, clock(), 30, 10 * 60_000);
     const cookies = [googleCookie('', secure, 0)];
     let destination;
     try {
@@ -38,7 +38,7 @@ export function createGoogleCallback({ googleAuth, accounts, rateLimiter, clock 
         error: query.get('error'), binding: readGoogleCookie(request.headers.cookie, secure), origin });
       if (result.linked) destination = '/account-access?google=connected';
       else {
-        const session = accounts.issueSession(result.user.id);
+        const session = await accounts.issueSession(result.user.id);
         cookies.push(sessionCookie(session.token, session.maxAgeSeconds, secure));
         destination = '/app?google=success';
       }

@@ -101,7 +101,8 @@ export function createPickupEtaProvider({ mapProvider, now = Date.now, cacheMs =
     if (typeof mapProvider?.pickupEstimates !== 'function') return Promise.all(pairs.map(estimate));
     if (mapProvider.mode === 'off') return pairs.map(() => null);
     const edges = pairs.map(edge), requested = new Map();
-    for (const item of edges) if (item && !remembered(item.key) && !pending.has(item.key) && requested.size < 16) requested.set(item.key, item);
+    const maxPairs = Math.min(64, Math.max(1, mapProvider.maxPickupPairs ?? 16));
+    for (const item of edges) if (item && !remembered(item.key) && !pending.has(item.key) && requested.size < maxPairs) requested.set(item.key, item);
     let batch;
     if (requested.size && active < maxConcurrent) {
       const selected = [...requested.values()];

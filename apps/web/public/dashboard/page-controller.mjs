@@ -9,14 +9,14 @@ const identity = (session) => session.user ? `${session.user.id}:${session.user.
 
 /** Session identity owns media. A separate, per-window mode owns workspace data. */
 export function createPageController({ client, activityClient = client, view, modeView, preferences,
-  conversation, conversationView, calls, sharing, availability, planner, payments, onboarding, safety, vehicleCheck, guests, authForm, feedback }) {
+  conversation, conversationView, calls, sharing, availability, planner, payments, onboarding, safety, vehicleCheck, guests, authForm, feedback, onAccount = () => {} }) {
   let state = emptyState(), sessionKey = null, generation = 0, refreshing = null, busy = false;
   const workspace = [conversation, planner, payments, ...[onboarding, safety, vehicleCheck, guests].filter(Boolean)];
   const features = [...workspace, calls, sharing, availability];
   function render() { view.render(state); modeView?.render(state, busy); }
   function setBusy(value) { busy = value; view.setBusy(value); conversationView.setBusy(value); modeView?.render(state, value); }
   function clear() {
-    generation++; sessionKey = null; state = emptyState(); refreshing = null; client.reset();
+    generation++; sessionKey = null; state = emptyState(); refreshing = null; client.reset(); onAccount(null);
     if (activityClient !== client) activityClient.reset();
     view.reset(); modeView?.reset();
     for (const feature of features) feature.reset();
@@ -34,7 +34,7 @@ export function createPageController({ client, activityClient = client, view, mo
     state.user = accountInMode(data.user, state.mode);
     client.setCsrf(data.csrfToken); activityClient.setCsrf(data.csrfToken);
     guests?.session?.(data);
-    client.setMode?.(state.mode); render();
+    client.setMode?.(state.mode); onAccount(sessionKey); render();
   }
   function resetWorkspace(mode) {
     generation++; refreshing = null;

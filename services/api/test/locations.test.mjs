@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
+import { createApplication } from '../src/application.mjs';
 import { TEST_NOW, harness, participants, claimRide } from './helpers.mjs';
 import { NIGERIA_BOUNDS, distanceMeters } from '../../../packages/shared/src/locations.mjs';
 import { checkedRoute, MAX_ROUTE_METERS, MAX_ROUTE_SECONDS, position } from '../src/modules/locations/domain.mjs';
@@ -33,7 +34,7 @@ async function booked(customer, driver) {
   let ride = await claimRide(driver, await routed(customer));
   ride = await change(driver, ride, 'offers', { amountKobo: 470000 });
   ride = await change(customer, ride, 'accept', { offerId: ride.negotiation.currentOffer.id });
-  return change(customer, ride, 'confirm');
+  return (await change(customer, ride, 'confirm'));
 }
 function windowFor(client) {
   const clientId = randomUUID();
@@ -136,7 +137,7 @@ test('shared trip GPS accepts nationwide locations but retains national bounds, 
 test('quote retries, ride consumption and their rollback remain consistent through restart', async (t) => {
   const { h, customer, driver } = await setup(t, { persistent: true });
   const quoteKey = randomUUID();
-  const [first, second] = await Promise.all([quote(customer, quoteKey), quote(customer, quoteKey)]);
+  const [first, second] = await Promise.all([(quote(customer, quoteKey)), (quote(customer, quoteKey))]);
   assert.equal(first.id, second.id);
   assert.equal((await customer.post('/api/locations/quotes', { ...points, pickup: { ...points.pickup, name: 'Different place' } }, quoteKey)).body.error.code, 'KEY_REUSED');
   const rideKey = randomUUID();
@@ -261,6 +262,8 @@ test('trip completion and approval revocation clear GPS; unused expired quotes a
   assert.equal((await customer.send(`/api/rides/${next.id}/location`)).body.share, null);
   h.advance(75 * 60_000 + 1);
   await customer.send(`/api/rides/${next.id}/location`);
+  assert.ok(h.db.prepare('SELECT id FROM location_quotes WHERE id = ?').get(unused.id), 'participant tracking does not perform global quote cleanup');
+  await createApplication({ db: h.db, clock: () => h.now }).locations.sweep();
   assert.equal(h.db.prepare('SELECT id FROM location_quotes WHERE id = ?').get(unused.id), undefined);
   assert.equal(h.db.prepare('SELECT count(*) AS n FROM location_quote_commands WHERE quote_id = ?').get(unused.id).n, 0);
   assert.equal(h.db.prepare('SELECT count(*) AS n FROM location_quotes WHERE ride_id IS NOT NULL').get().n, 2);

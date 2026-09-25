@@ -6,56 +6,68 @@ import { passengerDetails, passengerView } from '../../../../../packages/shared/
 import { REQUEST_MS, EXPAND_MS, searchRadius } from '../../../../../packages/shared/src/matching.mjs';
 import { rankEligibleMatches } from '../../../../../packages/shared/src/smart-matching.mjs';
 import { DISPATCH_POLICY } from '../../../../../packages/shared/src/dispatch.mjs';
+import { dispatchRegion } from '../../shared/dispatch-region.mjs';
 import { check } from '../../shared/errors.mjs';
 import { fields } from '../../shared/validation.mjs';
 import { hasCapability, requireRole, requireEligibleDriver } from '../../shared/policies.mjs';
 import { requireParticipant, requireVersion, restoreNegotiation, canonical } from './domain.mjs';
+import { asyncFilter, asyncMap, asyncFlatMap } from '../../shared/async-collections.mjs';
+
 
 /**
  * Ride use cases depend on repository operations and explicit ports, not SQLite
  * or HTTP objects. unitOfWork must encompass state, fare, audit and retry writes.
  */
 export function createRidesService({ repository, deliveries, passengerForRide, savePassenger, getAccount, unitOfWork, audit, tokens, clock, onRideClosed = () => {}, onTripCompleted = () => {},
-  routeForRide = () => null, quoteForRide, bindQuote, availabilityFor = () => null, onClaim = () => {}, onEvent = () => {}, availableDriverIds = () => [], hasOtherWork = () => false, allowSimulation = false,
+  routeForRide = () => null, quoteForRide, bindQuote, availabilityFor = () => null, onClaim = () => {}, onEvent = () => {}, availableDriverIds = () => [], nearbyDriverIds = null, hasOtherWork = () => false, allowSimulation = false,
   dispatch = null }) {
   // Expiry commits independently of a command that may fail afterward.
-  function sweep() {
-    unitOfWork(() => {
+  async function expireRequested(ride, now) {
+    if (!ride || ride.status !== 'requested' || now < ride.requestExpiresAt) return;
+    if (!await repository.expire(ride.id, now)) return;
+    await audit.record(ride.customerId, 'ride.request_expired', ride.id, now);
+    await onEvent({ kind: 'expired', ride, actorId: null, eventKey: `expired:${ride.id}`, now });
+  }
+  async function sweep() {
+    await unitOfWork(async () => {
       const now = clock();
-      for (const ride of repository.expiring(now)) {
-        repository.expire(ride.id, now);
-        audit.record(ride.customerId, 'ride.request_expired', ride.id, now);
-        onEvent({ kind: 'expired', ride, actorId: null, eventKey: `expired:${ride.id}`, now });
-      }
+      for (const ride of await repository.expiring(now)) await expireRequested(ride, now);
     });
   }
-  function record(id) {
-    const ride = repository.find(id);
+  async function expireTarget(userId, rideId = null) {
+    await unitOfWork(async () => {
+      const now = clock();
+      const rows = rideId ? [await repository.find(rideId)] : await repository.expiringForUser(userId, now);
+      for (const ride of rows) await expireRequested(ride, now);
+    });
+  }
+  async function record(id) {
+    const ride = (await repository.find(id));
     check(ride, 'NOT_FOUND', 'Ride request not found.');
-    return { ...ride, trip: repository.findTrip(id) };
+    return { ...ride, trip: (await repository.findTrip(id)) };
   }
 
-  function negotiationFor(ride) {
-    return restoreNegotiation(ride, ride.driverId ? repository.listFareEvents(ride.id) : []);
+  async function negotiationFor(ride) {
+    return restoreNegotiation(ride, ride.driverId ? (await repository.listFareEvents(ride.id)) : []);
   }
 
-  function peer(id, driver = false) {
+  async function peer(id, driver = false) {
     if (!id) return null;
-    const user = getAccount(id);
+    const user = (await getAccount(id));
     return { id: user.id, name: user.name, ...(driver ? { vehicle: user.driver.vehicle } : {}) };
   }
 
-  function view(ride, user) {
-    const route = routeForRide(ride.id);
+  async function view(ride, user) {
+    const route = (await routeForRide(ride.id));
     const quote = route ?? createDemoQuote(ride.pickupId, ride.destinationId);
-    const trip = ride.trip ?? repository.findTrip(ride.id);
+    const trip = ride.trip ?? (await repository.findTrip(ride.id));
     return { id: ride.id, status: trip?.status ?? (ride.closedReason === 'request_expired' ? 'expired' : ride.status), version: ride.version,
       pickup: quote.pickup, destination: quote.destination, suggestedFareKobo: ride.suggestedFareKobo,
       currency: 'NGN', isDemo: true, route, vehicleCategory: ride.vehicleCategory, service: transportCategory(ride.vehicleCategory).service,
-      delivery: deliveries.view(ride, user, trip?.status ?? ride.status), createdAt: ride.createdAt, updatedAt: ride.updatedAt,
-      passenger: passengerView(passengerForRide(ride.id), { isBooker: ride.customerId === user.id, bookerName: getAccount(ride.customerId).name }),
-      customer: peer(ride.customerId), driver: ride.driverSnapshotJson ? JSON.parse(ride.driverSnapshotJson) : peer(ride.driverId, true),
-      negotiation: negotiationFor(ride)?.snapshot() ?? null,
+      delivery: (await deliveries.view(ride, user, trip?.status ?? ride.status)), createdAt: ride.createdAt, updatedAt: ride.updatedAt,
+      passenger: passengerView((await passengerForRide(ride.id)), { isBooker: ride.customerId === user.id, bookerName: (await getAccount(ride.customerId)).name }),
+      customer: (await peer(ride.customerId)), driver: ride.driverSnapshotJson ? JSON.parse(ride.driverSnapshotJson) : (await peer(ride.driverId, true)),
+      negotiation: (await negotiationFor(ride))?.snapshot() ?? null,
       matching: ride.requestExpiresAt ? { expiresAt: ride.requestExpiresAt, expandedAt: ride.createdAt + EXPAND_MS,
         radiusMeters: route ? searchRadius(ride.createdAt, ride.matchedAt ?? (ride.closedReason ? ride.updatedAt : clock())) : null,
         mode: route ? 'gps' : 'sample', reason: ride.closedReason } : null,
@@ -63,28 +75,28 @@ export function createRidesService({ repository, deliveries, passengerForRide, s
         departedAt: trip.departedAt, arrivedAt: trip.arrivedAt, startedAt: trip.startedAt, completedAt: trip.completedAt,
         pinBlockedUntil: trip.pinBlockedUntil,
         ...(user.id === ride.customerId && trip.pickupPin ? { pickupPin: trip.pickupPin } : {}) } : null,
-      activity: repository.activity(ride.id), rating: repository.rating(ride.id) };
+      activity: (await repository.activity(ride.id)), rating: (await repository.rating(ride.id)) };
   }
 
-  function get(user, id) {
-    sweep();
-    const ride = record(id);
+  async function get(user, id) {
+    await expireTarget(user.id, id);
+    const ride = (await record(id));
     requireParticipant(ride, user);
-    return view(ride, user);
+    return (await view(ride, user));
   }
 
-  function rate(user, id, data) {
+  async function rate(user, id, data) {
     fields(data, ['stars'], ['stars']);
     check(Number.isInteger(data.stars) && data.stars >= 1 && data.stars <= 5, 'INVALID_RATING', 'Choose a rating from 1 to 5 stars.');
-    return unitOfWork(() => {
-      const ride = record(id);
+    return (await unitOfWork(async () => {
+      const ride = (await record(id));
       check(ride.customerId === user.id && ride.driverId && ride.trip?.status === 'completed'
         && transportCategory(ride.vehicleCategory).service === 'ride', 'RATING_UNAVAILABLE', 'Rate your driver after your completed ride.');
-      const existing = repository.rating(id);
+      const existing = (await repository.rating(id));
       check(existing === null || existing === data.stars, 'ALREADY_RATED', 'You have already rated this driver for this ride.');
-      if (existing === null && repository.saveRating(ride, data.stars, clock())) audit.record(user.id, 'ride.driver_rated', id, clock());
-      return { ride: view(record(id), user) };
-    });
+      if (existing === null && (await repository.saveRating(ride, data.stars, clock()))) (await audit.record(user.id, 'ride.driver_rated', id, clock()));
+      return { ride: (await view((await record(id)), user)) };
+    }));
   }
 
   function requireMode(user, mode) {
@@ -93,23 +105,22 @@ export function createRidesService({ repository, deliveries, passengerForRide, s
   }
   const inMode = (ride, user, mode) => !mode || (mode === 'work' ? ride.driverId : ride.customerId) === user.id;
 
-  function list(user, mode = null) {
+  async function list(user, mode = null) {
     requireMode(user, mode);
-    sweep();
+    await expireTarget(user.id);
     const now = clock();
-    const position = mode !== 'customer' && hasCapability(user, 'driver') && user.driver?.status === 'approved' ? availabilityFor(user.id, now) : null;
-    const offer = position ? dispatch?.forDriver(user.id, now) : null;
-    const open = dispatch?.enabled ? (offer ? [repository.find(offer.rideId)].filter(Boolean) : []) : position ? repository.listAvailable() : [];
-    const candidates = position ? open.filter((ride) => ride.customerId !== user.id && deliveries.matches(ride, user.driver.vehicle))
-      .map((ride) => ({ ride, metres: matchDistance(ride, position, now) })).filter((item) => item.metres !== null)
+    const position = mode !== 'customer' && hasCapability(user, 'driver') && user.driver?.status === 'approved' ? (await availabilityFor(user.id, now)) : null;
+    const offer = position ? (await dispatch?.forDriver(user.id, now)) : null;
+    const open = dispatch?.enabled ? (offer ? [(await repository.find(offer.rideId))].filter(Boolean) : []) : position ? (await repository.listAvailable({ now })) : [];
+    const candidates = position ? (await asyncMap((await asyncFilter(open, async (ride) => ride.customerId !== user.id && (await deliveries.matches(ride, user.driver.vehicle)))), async (ride) => ({ ride, metres: (await matchDistance(ride, position, now)) }))).filter((item) => item.metres !== null)
       .map(({ ride, metres }) => ({ ride, id: ride.id, createdAt: ride.createdAt, expiresAt: ride.requestExpiresAt,
         distanceMeters: position.mode === 'sample' ? null : metres })) : [];
     const available = rankEligibleMatches(candidates, now).slice(0, 50);
     return { matchingSettings: { allowSimulation, dispatchMode: dispatch?.mode ?? 'legacy' },
-      activeElsewhere: repository.activeFor(user.id).filter((ride) => !inMode(ride, user, mode)).map((ride) => ({
-        id: ride.id, mode: ride.customerId === user.id ? 'customer' : 'work', status: repository.findTrip(ride.id)?.status ?? ride.status })),
-      rides: repository.listFor(user.id, mode).map((ride) => view(ride, user)), available: available.map(({ ride, distanceMeters, recommendation }) => {
-      const route = routeForRide(ride.id);
+      activeElsewhere: (await asyncMap((await repository.activeFor(user.id)).filter((ride) => !inMode(ride, user, mode)), async (ride) => ({
+        id: ride.id, mode: ride.customerId === user.id ? 'customer' : 'work', status: (await repository.findTrip(ride.id))?.status ?? ride.status }))),
+      rides: (await asyncMap((await repository.listFor(user.id, mode)), async (ride) => (await view(ride, user)))), available: (await asyncMap(available, async ({ ride, distanceMeters, recommendation }) => {
+      const route = (await routeForRide(ride.id));
       const area = (point) => ({ name: `Near ${point.lat.toFixed(2)}, ${point.lng.toFixed(2)} (approximate area)` });
       const quote = route ? { pickup: area(route.pickup), destination: area(route.destination) }
         : createDemoQuote(ride.pickupId, ride.destinationId);
@@ -119,12 +130,12 @@ export function createRidesService({ repository, deliveries, passengerForRide, s
         ...(!dispatch?.enabled ? { recommendation } : {}),
         ...(dispatch?.enabled && offer ? { offer: { id: offer.id, expiresAt: offer.expiresAt, etaSource: offer.etaSource,
           pickupEtaMinutes: offer.etaSource === 'road' ? Math.max(1, Math.ceil(offer.pickupEtaSeconds / 60)) : null } } : {}) };
-    }) };
+    })) };
   }
 
-  function matchDistance(ride, availability, now) {
+  async function matchDistance(ride, availability, now) {
     if (ride.status !== 'requested' || now >= ride.requestExpiresAt) return null;
-    const route = routeForRide(ride.id);
+    const route = (await routeForRide(ride.id));
     if (!route) return availability.mode === 'sample' && availability.areaId === ride.pickupId ? 0 : null;
     if (availability.mode !== 'gps') return null;
     const metres = distanceMeters(availability.position, route.pickup);
@@ -132,79 +143,103 @@ export function createRidesService({ repository, deliveries, passengerForRide, s
   }
 
   // Internal matching ports. Exact points never enter an available-request response.
-  function dispatchCandidate(ride, driverId, now) {
-    const driver = getAccount(driverId);
+  async function dispatchCandidate(ride, driverId, now) {
+    const driver = (await getAccount(driverId));
     if (!ride || ride.customerId === driverId || !hasCapability(driver, 'driver') || driver.driver?.status !== 'approved'
-      || !driver.driver.eligibility?.eligible || repository.hasNegotiation(driverId) || hasOtherWork(driverId)
-      || repository.hasCustomerWork(driverId, now) || !deliveries.matches(ride, driver.driver.vehicle)) return null;
-    const availability = availabilityFor(driverId, now);
+      || !driver.driver.eligibility?.eligible || (await repository.hasNegotiation(driverId)) || (await hasOtherWork(driverId))
+      || (await repository.hasCustomerWork(driverId, now)) || !(await deliveries.matches(ride, driver.driver.vehicle))) return null;
+    const availability = (await availabilityFor(driverId, now));
     if (!availability) return null;
-    const metres = matchDistance(ride, availability, now);
+    const metres = (await matchDistance(ride, availability, now));
     if (metres === null) return null;
-    const route = routeForRide(ride.id);
-    return { rideId: ride.id, driverId, availabilityId: availability.id, version: ride.version,
+    const route = (await routeForRide(ride.id));
+    return { rideId: ride.id, region: ride.dispatchRegion, driverId, availabilityId: availability.id, version: ride.version,
       createdAt: ride.createdAt, expiresAt: ride.requestExpiresAt,
       distanceMeters: route ? metres : null, pickupEtaSeconds: null,
       from: route ? availability.position : null, to: route?.pickup ?? null };
   }
-  function dispatchCandidates(now, { excludeDriverIds = new Set(), excludeRideIds = new Set(),
+  const regionCursors = new Map(), driverCursors = new Map();
+  const CANDIDATE_PAGE = 200, DRIVER_BUDGET = 1600;
+  function rememberCursor(map, key, value) {
+    if (map.size >= 5000 && !map.has(key)) map.delete(map.keys().next().value);
+    if (value) map.set(key, value); else map.delete(key);
+  }
+  async function nearbyPage(ride, route, now, limit, afterId = '') {
+    if (!nearbyDriverIds) return { driverIds: (await availableDriverIds()).slice(0, limit), nextCursor: null };
+    return await nearbyDriverIds({ mode: route ? 'gps' : 'sample', areaId: ride.pickupId,
+      position: route?.pickup, radiusMeters: searchRadius(ride.createdAt, now), now, limit, afterId });
+  }
+  async function dispatchCandidates(now, { region = null, excludeDriverIds = new Set(), excludeRideIds = new Set(),
     attempted = () => false, minimumAgeMs = 0 } = {}) {
-    // Snapshot each driver's approval, workload and availability once per cycle.
-    // dispatchCandidateFor deliberately performs fresh reads again at commit.
-    const drivers = availableDriverIds().flatMap((id) => {
-      if (excludeDriverIds.has(id)) return [];
-      const user = getAccount(id);
-      if (!hasCapability(user, 'driver') || user.driver?.status !== 'approved' || !user.driver.eligibility?.eligible
-        || repository.hasNegotiation(id) || hasOtherWork(id) || repository.hasCustomerWork(id, now)) return [];
-      const availability = availabilityFor(id, now);
-      return availability ? [{ id, vehicle: user.driver.vehicle, availability }] : [];
-    });
-    if (!drivers.length) return [];
-    const result = [];
-    let eligibleRides = 0;
-    for (const ride of repository.listAvailable()) {
+    // Each regional cycle reads at most one ride page and a fixed driver budget.
+    // Cursors rotate past incompatible/exhausted requests instead of rescanning
+    // the same first page forever. Commit validation always reads fresh state.
+    const cursorKey = region ?? '*', cursor = regionCursors.get(cursorKey);
+    const rides = await repository.listAvailable({ region, after: cursor, limit: CANDIDATE_PAGE, now });
+    const cache = new Map(), result = [];
+    let eligibleRides = 0, driverReads = 0, lastRide = null, consumed = 0;
+    for (const ride of rides) {
+      if (driverReads >= DRIVER_BUDGET) break;
+      lastRide = ride; consumed++;
       if (ride.status !== 'requested' || now >= ride.requestExpiresAt || excludeRideIds.has(ride.id)
         || now < ride.createdAt + minimumAgeMs) continue;
-      const route = routeForRide(ride.id), radius = searchRadius(ride.createdAt, now), edges = [];
-      for (const { id, vehicle, availability } of drivers) {
-        if (ride.customerId === id || !deliveries.matches(ride, vehicle) || attempted(ride.id, id)) continue;
+      const route = await routeForRide(ride.id), radius = searchRadius(ride.createdAt, now), edges = [];
+      const driverCursor = driverCursors.get(ride.id);
+      const pageLimit = Math.min(CANDIDATE_PAGE, DRIVER_BUDGET - driverReads);
+      const page = await nearbyPage(ride, route, now, pageLimit, driverCursor?.expiresAt > now ? driverCursor.id : '');
+      // Charge the fetched page budget even when eligibility removes every row.
+      driverReads += Math.max(1, page.scanned ?? (page.nextCursor ? pageLimit : page.driverIds.length));
+      rememberCursor(driverCursors, ride.id, page.nextCursor ? { id: page.nextCursor, expiresAt: ride.requestExpiresAt } : null);
+      for (const id of page.driverIds) {
+        if (excludeDriverIds.has(id) || ride.customerId === id || await attempted(ride.id, id)) continue;
+        if (!cache.has(id)) {
+          const user = await getAccount(id);
+          let candidate = null;
+          if (hasCapability(user, 'driver') && user.driver?.status === 'approved' && user.driver.eligibility?.eligible
+            && !await repository.hasNegotiation(id) && !await hasOtherWork(id) && !await repository.hasCustomerWork(id, now)) {
+            const availability = await availabilityFor(id, now);
+            if (availability) candidate = { vehicle: user.driver.vehicle, availability };
+          }
+          cache.set(id, candidate);
+        }
+        const driver = cache.get(id);
+        if (!driver || !await deliveries.matches(ride, driver.vehicle)) continue;
+        const { availability } = driver;
         const metres = route ? (availability.mode === 'gps' ? distanceMeters(availability.position, route.pickup) : null)
           : availability.mode === 'sample' && availability.areaId === ride.pickupId ? 0 : null;
         if (metres === null || route && metres > radius) continue;
-        edges.push({ rideId: ride.id, driverId: id, availabilityId: availability.id, version: ride.version,
+        edges.push({ rideId: ride.id, region: ride.dispatchRegion, driverId: id, availabilityId: availability.id, version: ride.version,
           createdAt: ride.createdAt, expiresAt: ride.requestExpiresAt, distanceMeters: route ? metres : null,
           pickupEtaSeconds: null, from: route ? availability.position : null, to: route?.pickup ?? null });
       }
       if (!edges.length) continue;
-      // Keep 32 nearest eligible drivers per ride, then let the shared policy
-      // choose a global set. With at most 32 rides, this neighbour budget retains
-      // enough alternatives for maximum cardinality while limiting output to 1024.
       edges.sort((a, b) => (a.distanceMeters ?? 0) - (b.distanceMeters ?? 0)
         || (a.driverId < b.driverId ? -1 : a.driverId > b.driverId ? 1 : 0));
       result.push(...edges.slice(0, DISPATCH_POLICY.maxDrivers));
-      eligibleRides += 1;
-      if (eligibleRides >= DISPATCH_POLICY.maxRides) break;
+      if (++eligibleRides >= DISPATCH_POLICY.maxRides) break;
     }
+    rememberCursor(regionCursors, cursorKey, lastRide && (consumed < rides.length || rides.length === CANDIDATE_PAGE)
+      ? { createdAt: lastRide.createdAt, id: lastRide.id } : null);
     return result;
   }
 
-  function history(user, beforeId = null, mode = null) {
+  async function history(user, beforeId = null, mode = null) {
     requireMode(user, mode);
-    sweep();
+    await expireTarget(user.id);
     let before = null;
     if (beforeId !== null) {
       check(typeof beforeId === 'string' && /^[a-f0-9-]{36}$/.test(beforeId), 'INVALID_CURSOR', 'Invalid history cursor.');
-      before = record(beforeId);
+      before = (await record(beforeId));
       requireParticipant(before, user);
       check(inMode(before, user, mode), 'INVALID_CURSOR', 'This history cursor belongs to another mode.');
       check(before.status === 'cancelled' || before.trip?.status === 'completed', 'INVALID_CURSOR', 'Use a completed, cancelled or expired journey as the cursor.');
     }
-    const rows = repository.history(user.id, before, 21, mode);
+    const rows = (await repository.history(user.id, before, 21, mode));
     const page = rows.slice(0, 20);
-    return { rides: page.map((ride) => view(ride, user)), nextBefore: rows.length > 20 ? page.at(-1).id : null };
+    return { rides: (await asyncMap(page, async (ride) => (await view(ride, user)))), nextBefore: rows.length > 20 ? page.at(-1).id : null };
   }
 
-  function create(user, data, now) {
+  async function create(user, data, now) {
     requireRole(user, 'customer');
     const routed = Boolean(data && Object.hasOwn(data, 'quoteId'));
     const required = routed ? ['quoteId'] : ['pickupId', 'destinationId'];
@@ -213,62 +248,62 @@ export function createRidesService({ repository, deliveries, passengerForRide, s
     check(transportCategory(category), 'INVALID_CATEGORY', 'Choose a vehicle category.');
     let passenger;
     try { passenger = passengerDetails(data.passenger, category); } catch (error) { check(false, 'INVALID_PASSENGER', error.message); }
-    const delivery = deliveries.validate(category, data.delivery);
+    const delivery = (await deliveries.validate(category, data.delivery));
     let quote;
     if (routed) {
       check(typeof data.quoteId === 'string' && /^[a-f0-9-]{36}$/.test(data.quoteId), 'INVALID_ROUTE', 'Preview a route before requesting a ride.');
-      quote = quoteForRide(user.id, data.quoteId, now);
+      quote = (await quoteForRide(user.id, data.quoteId, now));
       check((quote.vehicleCategory ?? 'standard') === category, 'QUOTE_CATEGORY_MISMATCH', 'Preview this category again before booking.');
     } else {
       check(allowSimulation, 'FORBIDDEN', 'Sample requests are available only in local development. Use a route preview for hosted testing.');
       try { quote = createDemoQuote(data.pickupId, data.destinationId); quote.suggestedFareKobo = categoryFare(quote.suggestedFareKobo, category); }
       catch (error) { check(false, 'INVALID_ROUTE', error.message); }
     }
-    check(!repository.hasOpenRequest(user.id), 'OPEN_REQUEST_EXISTS', 'You already have an open request. Finish or cancel it first.');
-    check(!repository.hasDriverWork(user.id) && !hasOtherWork(user.id), 'DRIVER_BUSY', 'Finish or cancel your assigned work before requesting a personal ride.');
-    check(!availabilityFor(user.id, now), 'DRIVER_ONLINE', 'Go offline from Work before requesting a personal ride.');
+    check(!(await repository.hasOpenRequest(user.id)), 'OPEN_REQUEST_EXISTS', 'You already have an open request. Finish or cancel it first.');
+    check(!(await repository.hasDriverWork(user.id)) && !(await hasOtherWork(user.id)), 'DRIVER_BUSY', 'Finish or cancel your assigned work before requesting a personal ride.');
+    check(!(await availabilityFor(user.id, now)), 'DRIVER_ONLINE', 'Go offline from Work before requesting a personal ride.');
     const id = tokens.id();
-    repository.insert({ id, customerId: user.id, pickupId: quote.pickup.id,
-      destinationId: quote.destination.id, suggestedFareKobo: quote.suggestedFareKobo, vehicleCategory: category, now, expiresAt: now + REQUEST_MS });
-    deliveries.create(id, delivery);
-    savePassenger(id, passenger);
-    if (routed) bindQuote(user.id, data.quoteId, id, now);
-    audit.record(user.id, 'ride.requested', id, now);
+    (await repository.insert({ id, customerId: user.id, pickupId: quote.pickup.id,
+      destinationId: quote.destination.id, suggestedFareKobo: quote.suggestedFareKobo, vehicleCategory: category, region: dispatchRegion(routed ? quote.pickup : null, quote.pickup.id), now, expiresAt: now + REQUEST_MS }));
+    (await deliveries.create(id, delivery));
+    (await savePassenger(id, passenger));
+    if (routed) (await bindQuote(user.id, data.quoteId, id, now));
+    (await audit.record(user.id, 'ride.requested', id, now));
     return id;
   }
 
-  function claim(user, id, data, now) {
+  async function claim(user, id, data, now) {
     requireEligibleDriver(user);
     fields(data, ['expectedVersion', 'offerId'], ['expectedVersion']);
-    const ride = record(id);
+    const ride = (await record(id));
     check(ride.customerId !== user.id, 'FORBIDDEN', 'You cannot drive your own request.');
-    check(deliveries.matches(ride, user.driver.vehicle), 'VEHICLE_MISMATCH', 'This request needs a different approved vehicle category or load capacity.');
+    check((await deliveries.matches(ride, user.driver.vehicle)), 'VEHICLE_MISMATCH', 'This request needs a different approved vehicle category or load capacity.');
     check(ride.status === 'requested', 'REQUEST_UNAVAILABLE', 'Another driver took this request, or it is no longer open.');
     requireVersion(ride, data.expectedVersion);
-    check(!repository.hasNegotiation(user.id) && !hasOtherWork(user.id), 'DRIVER_BUSY', 'Finish your current negotiation, trip or food delivery first.');
-    check(!repository.hasCustomerWork(user.id, now), 'CUSTOMER_BUSY', 'Finish or cancel your personal journey before accepting work.');
-    const availability = availabilityFor(user.id, now);
+    check(!(await repository.hasNegotiation(user.id)) && !(await hasOtherWork(user.id)), 'DRIVER_BUSY', 'Finish your current negotiation, trip or food delivery first.');
+    check(!(await repository.hasCustomerWork(user.id, now)), 'CUSTOMER_BUSY', 'Finish or cancel your personal journey before accepting work.');
+    const availability = (await availabilityFor(user.id, now));
     check(availability, 'DRIVER_OFFLINE', 'Go online with a fresh location before selecting a request.');
-    check(matchDistance(ride, availability, now) !== null, 'OUTSIDE_MATCH_AREA', 'This request is outside your current matching area. Refresh nearby requests.');
-    dispatch?.accept(user, id, data.offerId, now);
-    check(repository.claim({ id, driverId: user.id, driverSnapshot: peer(user.id, true), expectedVersion: ride.version, now }),
+    check((await matchDistance(ride, availability, now)) !== null, 'OUTSIDE_MATCH_AREA', 'This request is outside your current matching area. Refresh nearby requests.');
+    (await dispatch?.accept(user, id, data.offerId, now));
+    check((await repository.claim({ id, driverId: user.id, driverSnapshot: (await peer(user.id, true)), expectedVersion: ride.version, now })),
       'STALE_VERSION', 'This request has changed. Refresh and try again.');
-    audit.record(user.id, 'ride.claimed', id, now);
-    onClaim(user.id, now);
+    (await audit.record(user.id, 'ride.claimed', id, now));
+    (await onClaim(user.id, now));
     return id;
   }
 
-  function changeFare(user, id, action, data, now) {
+  async function changeFare(user, id, action, data, now) {
     check(['propose', 'accept'].includes(action), 'NOT_FOUND', 'Action not found.');
     fields(data, action === 'propose' ? ['expectedVersion', 'amountKobo']
       : ['expectedVersion', 'offerId']);
-    const ride = record(id);
+    const ride = (await record(id));
     requireParticipant(ride, user);
     if (ride.driverId === user.id) requireRole(user, 'driver');
     requireVersion(ride, data.expectedVersion);
     check(['requested', 'negotiating'].includes(ride.status), 'REQUEST_CLOSED', 'This request has already ended.');
     check(ride.status === 'negotiating', 'NO_DRIVER', 'Wait for a driver before negotiating a fare.');
-    const negotiation = negotiationFor(ride);
+    const negotiation = (await negotiationFor(ride));
     const current = negotiation.snapshot();
     check(action !== 'propose' || current.offers.length < 100,
       'OFFER_LIMIT', 'This request has reached its offer limit. Accept the current offer or cancel.');
@@ -277,18 +312,18 @@ export function createRidesService({ repository, deliveries, passengerForRide, s
     if (action === 'accept') payload.offerId = data.offerId;
     const next = negotiation[action](payload);
     const status = next.status === 'open' ? 'negotiating' : next.status;
-    repository.appendFareEvent(id, next.version, action, payload);
-    check(repository.updateState({ id, status, expectedVersion: ride.version, now }),
+    (await repository.appendFareEvent(id, next.version, action, payload));
+    check((await repository.updateState({ id, status, expectedVersion: ride.version, now })),
       'STALE_VERSION', 'This request has changed. Refresh and try again.');
-    audit.record(user.id, `fare.${action}`, id, now);
+    (await audit.record(user.id, `fare.${action}`, id, now));
     return id;
   }
 
-  function changeTrip(user, id, action, data, now) {
+  async function changeTrip(user, id, action, data, now) {
     fields(data, action === 'start' ? ['expectedVersion', 'pickupPin']
       : action === 'cancel' ? ['expectedVersion', 'reason'] : action === 'complete' ? ['expectedVersion', 'deliveryPin'] : ['expectedVersion'],
     action === 'start' ? ['expectedVersion', 'pickupPin'] : ['expectedVersion']);
-    const ride = record(id);
+    const ride = (await record(id));
     requireParticipant(ride, user);
     if (ride.driverId === user.id) requireRole(user, 'driver');
     requireVersion(ride, data.expectedVersion);
@@ -299,31 +334,31 @@ export function createRidesService({ repository, deliveries, passengerForRide, s
       requireRole(user, 'customer');
       check(ride.customerId === user.id, 'FORBIDDEN', 'Only the booking account can confirm this trip.');
       check(ride.status === 'agreed' && !ride.trip, 'INVALID_TRIP_STATE', 'An agreed fare is required before confirming this booking.');
-      const driver = getAccount(ride.driverId);
+      const driver = (await getAccount(ride.driverId));
       requireEligibleDriver(driver);
-      check(deliveries.matches(ride, driver.driver.vehicle), 'VEHICLE_MISMATCH', 'The approved vehicle no longer matches this request.');
-      check(!repository.hasOpenRequest(user.id), 'OPEN_REQUEST_EXISTS', 'Finish or cancel your other request or trip before confirming.');
-      check(!repository.hasNegotiation(ride.driverId) && !hasOtherWork(ride.driverId), 'DRIVER_BUSY', 'This driver has another negotiation, trip or food delivery. Ask them to finish it before confirming.');
-      check(!repository.hasDriverWork(user.id) && !hasOtherWork(user.id), 'DRIVER_BUSY', 'Finish your assigned work before confirming a personal ride.');
-      check(!repository.hasCustomerWork(ride.driverId, now), 'CUSTOMER_BUSY', 'This driver has a personal journey to finish before taking work.');
-      check(!availabilityFor(user.id, now), 'DRIVER_ONLINE', 'Go offline from Work before confirming a personal ride.');
-      const agreement = negotiationFor(ride).snapshot().agreement;
+      check((await deliveries.matches(ride, driver.driver.vehicle)), 'VEHICLE_MISMATCH', 'The approved vehicle no longer matches this request.');
+      check(!(await repository.hasOpenRequest(user.id)), 'OPEN_REQUEST_EXISTS', 'Finish or cancel your other request or trip before confirming.');
+      check(!(await repository.hasNegotiation(ride.driverId)) && !(await hasOtherWork(ride.driverId)), 'DRIVER_BUSY', 'This driver has another negotiation, trip or food delivery. Ask them to finish it before confirming.');
+      check(!(await repository.hasDriverWork(user.id)) && !(await hasOtherWork(user.id)), 'DRIVER_BUSY', 'Finish your assigned work before confirming a personal ride.');
+      check(!(await repository.hasCustomerWork(ride.driverId, now)), 'CUSTOMER_BUSY', 'This driver has a personal journey to finish before taking work.');
+      check(!(await availabilityFor(user.id, now)), 'DRIVER_ONLINE', 'Go offline from Work before confirming a personal ride.');
+      const agreement = (await negotiationFor(ride)).snapshot().agreement;
       check(agreement, 'INVALID_TRIP_STATE', 'Both participants must agree the fare first.');
-      repository.bookTrip({ ride, fareKobo: agreement.amountKobo, pin: tokens.pickupPin(), now });
-      deliveries.confirm(id);
+      (await repository.bookTrip({ ride, fareKobo: agreement.amountKobo, pin: tokens.pickupPin(), now }));
+      (await deliveries.confirm(id));
       next = 'booked';
     } else if (action === 'cancel') {
       check(canCancelRide(status), 'REQUEST_CLOSED', 'Only a request or a trip that has not started can be cancelled.');
       reason = data.reason ?? 'other';
       check(typeof reason === 'string' && Object.hasOwn(CANCELLATION_REASONS, reason), 'INVALID_REASON', 'Choose a cancellation reason.');
       if (ride.status === 'negotiating') {
-        const negotiation = negotiationFor(ride);
+        const negotiation = (await negotiationFor(ride));
         const payload = { actorId: user.id, expectedVersion: negotiation.snapshot().version, now };
         const cancelled = negotiation.cancel(payload);
-        repository.appendFareEvent(id, cancelled.version, 'cancel', payload);
+        (await repository.appendFareEvent(id, cancelled.version, 'cancel', payload));
       }
-      if (ride.trip) repository.updateTrip(id, 'cancelled', now);
-      deliveries.cancel(id);
+      if (ride.trip) (await repository.updateTrip(id, 'cancelled', now));
+      (await deliveries.cancel(id));
       next = 'cancelled';
     } else {
       requireRole(user, 'driver');
@@ -332,71 +367,71 @@ export function createRidesService({ repository, deliveries, passengerForRide, s
       check(transition && status === transition.from, 'INVALID_TRIP_STATE', 'This trip action is not available at the current stage.');
       if (action === 'start') {
         requireEligibleDriver(user);
-        check(deliveries.matches(ride, user.driver.vehicle), 'VEHICLE_MISMATCH', 'The approved vehicle no longer matches this request.');
+        check((await deliveries.matches(ride, user.driver.vehicle)), 'VEHICLE_MISMATCH', 'The approved vehicle no longer matches this request.');
         check(typeof data.pickupPin === 'string' && /^\d{6}$/.test(data.pickupPin), 'INVALID_PIN_FORMAT', 'Enter the customer’s six-digit pickup PIN.');
         const trip = ride.trip;
         check(!trip.pinBlockedUntil || trip.pinBlockedUntil <= now, 'PICKUP_PIN_LOCKED', 'Too many incorrect PINs. Wait five minutes from the last failed attempt before trying again.');
         if (!tokens.equal(data.pickupPin, trip.pickupPin)) {
           const failures = (trip.pinBlockedUntil && trip.pinBlockedUntil <= now ? 0 : trip.pinFailures) + 1;
-          repository.failPin(id, failures, failures >= 5 ? now + 5 * 60_000 : null);
+          (await repository.failPin(id, failures, failures >= 5 ? now + 5 * 60_000 : null));
           // Do not throw inside the transaction: failure counters and retry keys must persist.
-          audit.record(user.id, 'trip.pin_rejected', id, now);
+          (await audit.record(user.id, 'trip.pin_rejected', id, now));
           return { rideId: id, errorCode: 'INVALID_PICKUP_PIN' };
         }
       }
       if (action === 'complete') {
         const delivery = transportCategory(ride.vehicleCategory).service === 'delivery';
         check(delivery || data.deliveryPin === undefined, 'INVALID_FIELDS', 'Passenger trips do not use a drop-off code.');
-        if (delivery && !deliveries.verify(id, data.deliveryPin, now)) {
-          audit.record(user.id, 'delivery.pin_rejected', id, now);
+        if (delivery && !(await deliveries.verify(id, data.deliveryPin, now))) {
+          (await audit.record(user.id, 'delivery.pin_rejected', id, now));
           return { rideId: id, errorCode: 'INVALID_DELIVERY_PIN' };
         }
       }
       next = transition.to;
-      repository.updateTrip(id, next, now);
+      (await repository.updateTrip(id, next, now));
     }
-    check(repository.updateState({ id, status: next === 'cancelled' ? 'cancelled' : 'agreed', expectedVersion: ride.version, now }),
+    check((await repository.updateState({ id, status: next === 'cancelled' ? 'cancelled' : 'agreed', expectedVersion: ride.version, now })),
       'STALE_VERSION', 'This trip has changed. Refresh and try again.');
-    repository.appendActivity(id, user.id, next, now, reason);
-    audit.record(user.id, `trip.${next}`, id, now);
-    if (next === 'completed') onTripCompleted({ rideId: id, customerId: ride.customerId,
-      driverId: ride.driverId, amountKobo: ride.trip.fareKobo, completedAt: now });
-    if (['completed', 'cancelled'].includes(next)) onRideClosed(id, now);
+    (await repository.appendActivity(id, user.id, next, now, reason));
+    (await audit.record(user.id, `trip.${next}`, id, now));
+    if (next === 'completed') (await onTripCompleted({ rideId: id, customerId: ride.customerId,
+      driverId: ride.driverId, amountKobo: ride.trip.fareKobo, completedAt: now }));
+    if (['completed', 'cancelled'].includes(next)) (await onRideClosed(id, now));
     return { rideId: id };
   }
 
-  function mutate({ userId, key, action, id = null, data }) {
+  async function mutate({ userId, key, action, id = null, data }) {
     check(typeof key === 'string' && /^[A-Za-z0-9_-]{16,128}$/.test(key),
       'INVALID_IDEMPOTENCY_KEY', 'A unique request key is required.');
     const fingerprint = tokens.digest(canonical({ action, id, data }));
-    sweep();
-    const result = unitOfWork(() => {
-      const user = getAccount(userId);
+    await expireTarget(userId, id);
+    const result = (await unitOfWork(async () => {
+      const user = (await getAccount(userId));
       check(user, 'UNAUTHENTICATED', 'Sign in to continue.');
-      const previous = repository.findCommand(userId, key);
+      const previous = (await repository.findCommand(userId, key));
       if (previous) {
         check(previous.fingerprint === fingerprint, 'KEY_REUSED', 'This request key was already used for another action.');
-        requireParticipant(record(previous.rideId), user);
-        if (record(previous.rideId).driverId === user.id) requireRole(user, 'driver');
+        requireParticipant((await record(previous.rideId)), user);
+        if ((await record(previous.rideId)).driverId === user.id) requireRole(user, 'driver');
         return previous.errorCode ? { errorCode: previous.errorCode }
-          : { ride: view(record(previous.rideId), user), replayed: true };
+          : { ride: (await view((await record(previous.rideId)), user)), replayed: true };
       }
       const now = clock();
       const tripAction = ['confirm', 'depart', 'arrive', 'start', 'complete', 'cancel'].includes(action);
-      const outcome = tripAction ? changeTrip(user, id, action, data, now) : { rideId:
-        action === 'create' ? create(user, data, now) : action === 'claim' ? claim(user, id, data, now)
-          : changeFare(user, id, action, data, now) };
-      repository.saveCommand(userId, key, fingerprint, outcome.rideId, outcome.errorCode);
+      const outcome = tripAction ? (await changeTrip(user, id, action, data, now)) : { rideId:
+        action === 'create' ? (await create(user, data, now)) : action === 'claim' ? (await claim(user, id, data, now))
+          : (await changeFare(user, id, action, data, now)) };
+      (await repository.saveCommand(userId, key, fingerprint, outcome.rideId, outcome.errorCode));
       if (!outcome.errorCode) {
-        const ride = record(outcome.rideId);
-        const recipients = action === 'create' && !dispatch?.enabled ? availableDriverIds().filter((driverId) => {
-          const driver = getAccount(driverId), position = availabilityFor(driverId, now);
-          return driverId !== userId && driver?.driver && position && deliveries.matches(ride, driver.driver.vehicle) && matchDistance(ride, position, now) !== null;
-        }) : [];
-        onEvent({ kind: action === 'create' ? 'request' : action, ride, actorId: userId, recipients, eventKey: `ride:${ride.id}:${ride.version}`, now });
+        const ride = (await record(outcome.rideId));
+        const recipients = action === 'create' && !dispatch?.enabled ? (await asyncFilter((await nearbyPage(ride, await routeForRide(ride.id), now, CANDIDATE_PAGE)).driverIds, async (driverId) => {
+          const driver = (await getAccount(driverId)), position = (await availabilityFor(driverId, now));
+          return driverId !== userId && driver?.driver && position && (await deliveries.matches(ride, driver.driver.vehicle)) && (await matchDistance(ride, position, now)) !== null;
+        })) : [];
+        (await onEvent({ kind: action === 'create' ? 'request' : action, ride, actorId: userId, recipients, eventKey: `ride:${ride.id}:${ride.version}`, now }));
       }
-      return outcome.errorCode ? outcome : { ride: view(record(outcome.rideId), user), replayed: false };
-    });
+      return outcome.errorCode ? outcome : { ride: (await view((await record(outcome.rideId)), user)), replayed: false };
+    }));
     check(!result.errorCode, result.errorCode, result.errorCode === 'INVALID_DELIVERY_PIN'
       ? 'The drop-off code is incorrect. Ask the recipient to check it. After five incorrect attempts, verification pauses for five minutes.'
       : 'The pickup PIN is incorrect. Ask the customer to check it. After five incorrect attempts, verification pauses for five minutes.');
@@ -404,37 +439,37 @@ export function createRidesService({ repository, deliveries, passengerForRide, s
   }
 
   // Narrow read ports for communication: no fare replay or peer-profile loading.
-  function conversationContext(user, id) {
-    const ride = record(id);
+  async function conversationContext(user, id) {
+    const ride = (await record(id));
     requireParticipant(ride, user);
     return { id: ride.id, status: ride.trip?.status ?? ride.status, driverId: ride.driverId, customerId: ride.customerId };
   }
 
-  function conversationIds(user) {
-    return repository.listFor(user.id).filter((ride) => ride.driverId).map((ride) => ride.id);
+  async function conversationIds(user) {
+    return (await repository.listFor(user.id)).filter((ride) => ride.driverId).map((ride) => ride.id);
   }
 
-  function paymentContext(user, id) {
-    const ride = record(id);
+  async function paymentContext(user, id) {
+    const ride = (await record(id));
     requireParticipant(ride, user);
-    const route = routeForRide(id) ?? createDemoQuote(ride.pickupId, ride.destinationId);
+    const route = (await routeForRide(id)) ?? createDemoQuote(ride.pickupId, ride.destinationId);
     return { rideId: id, customerId: ride.customerId, driverId: ride.driverId,
       status: ride.trip?.status ?? ride.status, amountKobo: ride.trip?.fareKobo ?? null,
       completedAt: ride.trip?.completedAt ?? null, pickup: route.pickup.name, destination: route.destination.name };
   }
 
-  function safetyContext(user, id) {
-    const ride = record(id); requireParticipant(ride, user);
-    const route = routeForRide(id) ?? createDemoQuote(ride.pickupId, ride.destinationId);
+  async function safetyContext(user, id) {
+    const ride = (await record(id)); requireParticipant(ride, user);
+    const route = (await routeForRide(id)) ?? createDemoQuote(ride.pickupId, ride.destinationId);
     return { rideId: id, customerId: ride.customerId, driverId: ride.driverId, status: ride.trip?.status ?? ride.status, pickup: route.pickup.name, destination: route.destination.name,
-      driver: ride.driverSnapshotJson ? JSON.parse(ride.driverSnapshotJson) : peer(ride.driverId, true) };
+      driver: ride.driverSnapshotJson ? JSON.parse(ride.driverSnapshotJson) : (await peer(ride.driverId, true)) };
   }
   // Read-only port for the guest use case; the caller owns any surrounding transaction.
-  function guestContext(user, id) {
-    const ride = record(id); requireParticipant(ride, user);
-    return { ...safetyContext(user, id), passenger: passengerForRide(id), bookerName: getAccount(ride.customerId).name,
+  async function guestContext(user, id) {
+    const ride = (await record(id)); requireParticipant(ride, user);
+    return { ...(await safetyContext(user, id)), passenger: (await passengerForRide(id)), bookerName: (await getAccount(ride.customerId)).name,
       pickupPin: ride.trip?.pickupPin ?? null };
   }
   return Object.freeze({ get, list, history, mutate, rate, conversationContext, conversationIds, paymentContext, safetyContext, guestContext, sweep,
-    dispatchCandidates, dispatchCandidateFor: (rideId, driverId, now) => dispatchCandidate(repository.find(rideId), driverId, now) });
+    dispatchCandidates, dispatchCandidateFor: async (rideId, driverId, now) => (await dispatchCandidate((await repository.find(rideId)), driverId, now)) });
 }

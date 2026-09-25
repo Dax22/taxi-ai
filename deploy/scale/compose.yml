@@ -1,0 +1,134 @@
+name: taxi-ai-scale
+
+x-app-environment: &app-environment
+  TAXI_AI_MODE: staging
+  TAXI_AI_PUBLIC_ORIGIN: https://${TAXI_AI_DOMAIN:?Set the invited staging DNS name}
+  TAXI_AI_PROXY_TOKEN: ${TAXI_AI_PROXY_TOKEN:?Generate a private proxy token}
+  TAXI_AI_STAGING_ACCESS_FILE: /run/secrets/testers
+  TAXI_AI_DATABASE_URL: postgresql://taxi_app:${TAXI_AI_APP_DATABASE_PASSWORD:?Set a random hex application database password}@postgres:5432/taxi_ai
+  TAXI_AI_DATABASE_POOL_SIZE: ${TAXI_AI_DATABASE_POOL_SIZE:-10}
+  TAXI_AI_MAPS_MODE: ${TAXI_AI_MAPS_MODE:-off}
+  TAXI_AI_SEARCH_URL: ${TAXI_AI_SEARCH_URL:-}
+  TAXI_AI_ROUTING_URL: ${TAXI_AI_ROUTING_URL:-}
+  TAXI_AI_TILE_URL: ${TAXI_AI_TILE_URL:-}
+  TAXI_AI_MAPS_API_KEY: ${TAXI_AI_MAPS_API_KEY:-}
+  TAXI_AI_MAPS_REQUESTS_PER_SECOND: ${TAXI_AI_MAPS_REQUESTS_PER_SECOND:-3}
+  TAXI_AI_MAPS_MAX_CONCURRENT: ${TAXI_AI_MAPS_MAX_CONCURRENT:-4}
+  TAXI_AI_CALLS_MODE: 'off'
+  TAXI_AI_EMAIL_MODE: 'off'
+  TAXI_AI_PUSH_ENABLED: 'false'
+  TAXI_AI_VEHICLE_VISION_MODE: 'off'
+  TAXI_AI_DISPATCH_MODE: ${TAXI_AI_DISPATCH_MODE:-sequential}
+
+x-app: &app
+  build:
+    context: ../..
+  image: taxi-ai-scale:local
+  init: true
+  restart: unless-stopped
+  read_only: true
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  stop_grace_period: 25s
+  secrets:
+    - testers
+  tmpfs:
+    - /tmp:size=64m,mode=1777
+  mem_limit: 1g
+  cpus: 1.0
+  pids_limit: 128
+  logging:
+    driver: json-file
+    options:
+      max-size: 10m
+      max-file: '3'
+  depends_on:
+    migrate:
+      condition: service_completed_successfully
+
+services:
+  postgres:
+    image: postgis/postgis:16-3.5
+    platform: linux/amd64
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: taxi_ai
+      POSTGRES_USER: taxi_owner
+      POSTGRES_PASSWORD: ${TAXI_AI_MIGRATION_DATABASE_PASSWORD:?Set a different random hex migration password}
+      TAXI_AI_APP_DATABASE_PASSWORD: ${TAXI_AI_APP_DATABASE_PASSWORD:?Set a random hex application database password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-database.sh:/docker-entrypoint-initdb.d/20-taxi-ai.sh:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U taxi_owner -d taxi_ai']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    mem_limit: 2g
+    cpus: 2.0
+    shm_size: 256m
+    # No published database port. Only the private Compose network can connect.
+  migrate:
+    <<: *app
+    restart: 'no'
+    command: ['node', '--experimental-sqlite', 'scripts/postgres-migrate.mjs', '--grant-app-role', 'taxi_app']
+    environment:
+      TAXI_AI_DATABASE_URL: postgresql://taxi_owner:${TAXI_AI_MIGRATION_DATABASE_PASSWORD:?Set the migration database password}@postgres:5432/taxi_ai
+    healthcheck:
+      disable: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+  api-a:
+    <<: *app
+    environment:
+      <<: *app-environment
+      TAXI_AI_PROCESS_ROLE: api
+  api-b:
+    <<: *app
+    environment:
+      <<: *app-environment
+      TAXI_AI_PROCESS_ROLE: api
+  worker:
+    <<: *app
+    command: ['node', '--experimental-sqlite', 'apps/web/server.mjs']
+    environment:
+      <<: *app-environment
+      TAXI_AI_PROCESS_ROLE: worker
+      TAXI_AI_WORKER_REGIONS: auto
+      TAXI_AI_WORKER_CONCURRENCY: ${TAXI_AI_WORKER_CONCURRENCY:-4}
+    # Worker mode exposes health only on the private network. Docker checks
+    # readiness using the image's loopback probe; no business routes are served.
+  gateway:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      api-a:
+        condition: service_healthy
+      api-b:
+        condition: service_healthy
+    ports:
+      - '80:80'
+      - '443:443'
+    environment:
+      TAXI_AI_DOMAIN: ${TAXI_AI_DOMAIN:?Set the invited staging DNS name}
+      TAXI_AI_PROXY_TOKEN: ${TAXI_AI_PROXY_TOKEN:?Generate a private proxy token}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'
+
+secrets:
+  testers:
+    file: ./secrets/staging-testers.json
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:

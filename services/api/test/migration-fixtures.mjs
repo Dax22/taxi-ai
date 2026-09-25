@@ -40,6 +40,7 @@ export function removeSafetyMonitoringFixtureTables(db) {
 
 /** Reconstruct schema 26 without removing any original ride or fare records. */
 export function removeDispatchFixtureTables(db) {
+  removeRealtimeFixtureTables(db);
   for (const table of ['dispatch_commands', 'dispatch_offers', 'dispatch_journeys']) {
     if (!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(table)) continue;
     // Journey rows are derived measurements written even under the legacy
@@ -50,4 +51,28 @@ export function removeDispatchFixtureTables(db) {
     }
     db.exec(`DROP TABLE ${table}`);
   }
+}
+
+
+/** Revisions are derived invalidations; domain records remain unchanged by this fixture downgrade. */
+export function removeRealtimeFixtureTables(db) {
+  removeLocationScaleFixtureFields(db);
+  for (const { name } of db.prepare("SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE 'realtime_%'").all()) {
+    if (!/^realtime_[a-z_]+$/.test(name)) throw new Error('Unexpected realtime fixture trigger.');
+    db.exec(`DROP TRIGGER ${name}`);
+  }
+  db.exec('DROP TABLE IF EXISTS account_revisions');
+}
+
+export function removeLocationScaleFixtureFields(db) {
+  removeWorkerScaleFixtureFields(db);
+  for (const index of ['availability_expiry_page', 'availability_active_page', 'availability_gps_candidates', 'availability_sample_candidates',
+    'location_shares_expiry_page', 'location_shares_active_page', 'location_quotes_prunable']) db.exec(`DROP INDEX IF EXISTS ${index}`);
+  const columns = db.prepare('PRAGMA table_info(driver_availability)').all().map(row => row.name);
+  for (const column of ['expires_at', 'latitude', 'longitude']) if (columns.includes(column)) db.exec(`ALTER TABLE driver_availability DROP COLUMN ${column}`);
+}
+
+export function removeWorkerScaleFixtureFields(db) {
+  db.exec('DROP INDEX IF EXISTS rides_dispatch_region; DROP INDEX IF EXISTS worker_lease_expiry; DROP TABLE IF EXISTS worker_leases');
+  if (db.prepare('PRAGMA table_info(rides)').all().some(row => row.name === 'dispatch_region')) db.exec('ALTER TABLE rides DROP COLUMN dispatch_region');
 }

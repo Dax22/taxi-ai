@@ -125,3 +125,16 @@ test('mode changes reject late reads, preserve uncertain keys in their mode and 
   assert.equal(client.pendingWrites(), true); assert.throws(() => client.setMode('work'), /current action/);
   resolveWrite(response(200, {})); await writing; assert.equal(client.pendingWrites(), false);
 });
+
+test('a long-poll caller can abort its request without leaving a pending write', async () => {
+  let transportSignal;
+  const client = createApiClient({ fetchImpl: async (_path, options) => {
+    transportSignal = options.signal;
+    return new Promise((_resolve, reject) => options.signal.addEventListener('abort', () => reject(new Error('Aborted')), { once: true }));
+  } });
+  const controller = new AbortController();
+  const pending = client.request('/api/events?cursor=0&wait=25000', { signal: controller.signal });
+  controller.abort();
+  await assert.rejects(pending, /Connection interrupted/);
+  assert.equal(transportSignal.aborted, true); assert.equal(client.pendingWrites(), false);
+});

@@ -1,3 +1,4 @@
+import { createRealtimeClient } from '../../../../packages/shared/src/realtime-client.mjs';
 import { readContacts, readSafety, readSafetyResult } from '../safety/contracts.ts';
 import { readPayment, readReceipt, readEarnings } from '../payments/contracts.ts';
 import { readTracking, readTrackingResult } from '../tracking/contracts.ts';
@@ -44,12 +45,24 @@ export class MobileClient {
   private refreshPromise: Promise<void> | null = null;
   private storageQueue: Promise<void> = Promise.resolve();
   private listeners = new Set<(user: Account | null) => void>();
+  private changeListeners = new Set<() => void | Promise<unknown>>();
+  private updates = createRealtimeClient({
+    read: async (cursor, signal) => {
+      const value = await this.request(`/events?cursor=${cursor}&wait=25000`, undefined, undefined, signal);
+      if (typeof value.cursor !== 'string' || typeof value.changed !== 'boolean') throw new ApiError('Invalid update response.', 'INVALID_RESPONSE');
+      return { cursor: value.cursor, changed: value.changed };
+    },
+    refresh: async () => { await Promise.all([...this.changeListeners].map(listener => listener())); },
+  });
+  subscribeChanges(listener: () => void | Promise<unknown>) { this.changeListeners.add(listener); return () => { this.changeListeners.delete(listener); }; }
+  resumeUpdates() { if (this.user) this.updates.resume(); }
+  pauseUpdates() { this.updates.pause(); }
   constructor({ origin, vault, fetchImpl = fetch, development = false }: { origin: string; vault: Vault; fetchImpl?: typeof fetch; development?: boolean }) {
     this.origin = apiOrigin(origin, development); this.vault = vault; this.fetchImpl = fetchImpl;
   }
   subscribe(listener: (user: Account | null) => void) { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; }
   account() { return this.user; }
-  private publish(user: Account | null) { this.user = user; for (const listener of this.listeners) listener(user); }
+  private publish(user: Account | null) { if (this.user?.id !== user?.id) this.updates.reset(); this.user = user; for (const listener of this.listeners) listener(user); }
   private store(run: () => Promise<void>) {
     const job = this.storageQueue.catch(() => {}).then(run); this.storageQueue = job; return job;
   }
@@ -58,9 +71,12 @@ export class MobileClient {
     ++this.epoch; this.credentials = null; this.saved = null; this.publish(null);
     await this.store(() => this.vault.clear());
   }
-  private async send(path: string, { data, token, preview = this.saved?.previewAccess ?? '', key }: { data?: unknown; token?: string; preview?: string; key?: string } = {}) {
+  private async send(path: string, { data, token, preview = this.saved?.previewAccess ?? '', key, signal }: { data?: unknown; token?: string; preview?: string; key?: string; signal?: AbortSignal } = {}) {
     if (!/^\/[a-z0-9/?=&_-]+$/i.test(path)) throw new Error('Invalid mobile API path.');
-    const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), path === '/driver/application/upload' ? 45_000 : path.startsWith('/vehicle-checks/') || /^\/eats\/stores\/[a-f0-9-]{36}\/photo$/.test(path) ? 35_000 : 12_000);
+    const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), path.startsWith('/events?') ? 30_000 : path === '/driver/application/upload' ? 45_000 : path.startsWith('/vehicle-checks/') || /^\/eats\/stores\/[a-f0-9-]{36}\/photo$/.test(path) ? 35_000 : 12_000);
+    const cancel = () => controller.abort();
+    signal?.addEventListener('abort', cancel, { once: true });
+    if (signal?.aborted) cancel();
     try {
       const response = await this.fetchImpl(`${this.origin}/api/mobile/v1${path}`, { method: data === undefined ? 'GET' : 'POST',
         credentials: 'omit', redirect: 'error', signal: controller.signal,
@@ -73,7 +89,7 @@ export class MobileClient {
     } catch (error) {
       if (error instanceof ApiError) throw error;
       throw new ApiError('Connection interrupted. Check your connection and try again.');
-    } finally { clearTimeout(timeout); }
+    } finally { clearTimeout(timeout); signal?.removeEventListener('abort', cancel); }
   }
   private async adopt(result: SignIn, epoch: number, preview: string) {
     if (epoch !== this.epoch) {
@@ -152,19 +168,19 @@ export class MobileClient {
     this.refreshPromise = run();
     try { await this.refreshPromise; } finally { this.refreshPromise = null; }
   }
-  private async request(path: string, data?: unknown, key?: string) {
+  private async request(path: string, data?: unknown, key?: string, signal?: AbortSignal) {
     const epoch = this.epoch;
     if (!this.credentials) await this.refresh();
     if (epoch !== this.epoch) throw changed();
     const token = this.credentials!.accessToken;
     let result;
-    try { result = await this.send(path, { data, token, key }); }
+    try { result = await this.send(path, { data, token, key, signal }); }
     catch (error) {
       if (epoch !== this.epoch) throw changed();
       if (!(error instanceof ApiError) || error.code !== 'UNAUTHENTICATED') throw error;
       if (this.credentials?.accessToken === token) await this.refresh();
       if (epoch !== this.epoch || !this.credentials) throw changed();
-      try { result = await this.send(path, { data, token: this.credentials.accessToken, key }); }
+      try { result = await this.send(path, { data, token: this.credentials.accessToken, key, signal }); }
       catch (retryError) {
         if (retryError instanceof ApiError && retryError.code === 'UNAUTHENTICATED') await this.forget(epoch);
         throw retryError;

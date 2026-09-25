@@ -1,7 +1,9 @@
 # Taxi Ai architecture
 
-Taxi Ai uses a **modular monolith**: one backend process and database, with
-separate business modules and explicit dependencies. The current code implements
+Taxi Ai uses a **modular monolith**: separate business modules and explicit
+dependencies share one application codebase and transactional storage. Local
+development uses one combined process with SQLite. The PostgreSQL option runs
+multiple HTTP replicas and separate coordinated workers against a shared database. The current code implements
 accounts, driver review, ride/fare negotiation, trip lifecycle, participant chat
 and audio calling, route quotes, driver location sharing, availability/nearby matching and simulated payments/receipts/earnings. Category-aware bookings use the shared
 journey engine; a deliveries module owns parcel details and handover verification.
@@ -11,6 +13,9 @@ See [Eats architecture and acceptance](eats.md).
 The guest-rides module owns immutable passenger details and revocable trip links;
 the booking account retains fare, trip-management and payment authority.
 See [booking for someone else](guest-rides.md).
+See [scalability and deployment](scalability.md) for the PostgreSQL/PostGIS path,
+worker roles, routing capacity and load-test limits. The implementation does not
+establish capacity for one million users.
 See [ADR 0001](decisions/0001-modular-monolith.md) for the decision and tradeoffs.
 
 The target product is now one app and website with Customer, Drive & deliver
@@ -67,7 +72,10 @@ See [vehicle photo checks](vehicle-photo-checks.md) for configuration and limits
 | Availability | Driver Online/Offline, separate location consent, freshness and lease expiry | `driver_availability`, `availability_commands` |
 | Payments | Completed-trip simulated payments, attempts, receipts and earnings summaries | `payments`, `payment_attempts`, `payment_receipts`, `payment_commands` |
 | Shared domain | Pure fare state machine, lifecycle vocabulary, money, coordinate helpers and sample quotes | No storage or network |
-| Infrastructure | SQLite, migrations, password hashing, random tokens, audit and rate limits | `audit_events`, `rate_limits`, connection lifecycle |
+| Dispatch | Timed invitations, bounded regional matching and matching metrics | `dispatch_offers`, `dispatch_commands`, `dispatch_journeys` |
+| Realtime | Account-scoped change revisions and authenticated long polling | `account_revisions` |
+| Worker coordination | Expiring leases and commit fencing for shared background jobs | `worker_leases` |
+| Infrastructure | SQLite/PostgreSQL adapters, migrations, password hashing, random tokens, audit and rate limits | `audit_events`, `rate_limits`, connection lifecycle |
 | HTTP | Route dispatch, request parsing, cookies, CSRF and error/status translation | No business state |
 
 Every feature lives under `services/api/src/modules/<feature>/`:
@@ -107,7 +115,7 @@ flowchart TD
   Calls --> Repos
   Calls --> Accounts
   Calls --> Rides
-  Repos --> DB[SQLite]
+  Repos --> DB["SQLite or PostgreSQL/PostGIS"]
 ```
 
 Arrows represent calls, not permission to import an implementation. The
@@ -124,7 +132,7 @@ These are test journeys; the homepage demo remains an independent in-memory exam
 
 For each authenticated ride mutation, the service:
 
-1. Validates the command key and begins a synchronous unit of work.
+1. Validates the command key and begins an awaited database unit of work.
 2. Reloads the actor, checks a previous key's command fingerprint, or validates
    permissions and the current ride version.
 3. Applies the command using server time and the pure fare rules.
@@ -142,19 +150,23 @@ key returns the current saved ride; a different command with that key is rejecte
 Rate-limit counters are intentionally a separate transaction so failed attempts
 still count. Expensive password work runs outside transactions.
 
-Repository operations and `unitOfWork(callback)` are synchronous contracts in
-this version. Async callbacks and promise results are rejected; never schedule
-background writes inside them. A future PostgreSQL adapter requires coordinated
-async contract changes, migration and transaction/concurrency tests. Changing the
-repository constructor alone is insufficient.
+Repository operations and `unitOfWork(callback)` are asynchronous contracts.
+The local SQLite adapter serializes access to its connection for the whole
+transaction, including awaited calls. PostgreSQL pins a pooled connection to a
+serializable transaction and retries serialization/deadlock failures within a
+bounded budget. Nested units use savepoints. Every business write must be awaited;
+external routing, mail and other provider I/O stays outside the transaction.
+Foreign keys, unique constraints and version checks remain database-enforced.
+See [scalability](scalability.md) for pool sizing and operational verification.
 
-The existing `data/taxi-ai.sqlite` location is preserved. Ordered migrations
-`002_chat.sql`, `003_trip_lifecycle.sql`, `004_voice_calls.sql` and
-`005_locations.sql`, `006_matching.sql`, `007_payments.sql`, `008_driver_onboarding.sql`
-and `009_trip_safety.sql`, followed by `010_account_capabilities.sql`, advance
-the current schema to 10 without resetting
-records or silently booking prior agreements. Older binaries refuse the upgraded
-database. Local data and secrets are excluded from Git and static serving.
+The existing `data/taxi-ai.sqlite` location is preserved. Ordered SQLite
+migrations preserve accounts, fares and journeys; the current schema includes
+realtime revisions, indexed locations and worker regions/leases through migration
+30. PostgreSQL has its own migrations, including PostGIS indexes, applied with
+`npm run db:postgres:migrate` before application startup. Setting a PostgreSQL URL
+does not copy an existing SQLite database; follow [PostgreSQL migration and recovery](postgresql.md).
+Older SQLite binaries refuse a newer
+schema. Local data and secrets are excluded from Git and static serving.
 See [API notes](../services/api/README.md) for routes and current security limits.
 
 ## Fare rules
@@ -300,7 +312,7 @@ Search uses the Nigeria country filter and search extent; shared polygon validat
 guards coordinates independently of the provider. Local matching radii remain
 unchanged when routes and GPS are accepted elsewhere in Nigeria.
 
-External I/O runs outside synchronous database transactions. Quote creation then
+External I/O runs outside database transactions. Quote creation then
 rechecks the live session, role, retry fingerprint and per-user limit inside the
 transaction. Rides receives `quoteForRide`, `bindQuote` and `routeForRide` ports;
 insertion, quote consumption, audit and retry key commit together. This creates
@@ -348,7 +360,7 @@ gateway token and tester-key hashes before startup. HTTP enforces the gateway
 and tester boundary before routing; business authorization still uses account
 sessions. Staging cookies use the `__Host-` prefix, Secure, HttpOnly and
 SameSite=Strict, without Domain. Local cookies are never accepted in staging.
-The staging configuration itself adds no schema changes; the current application schema is 9.
+Staging keeps the same business schema and authorization rules as local development.
 
 `health.mjs` checks database/schema readability and shutdown state. Telemetry
 records only generated request IDs, coarse categories, method, status and timing;
@@ -361,9 +373,13 @@ consistent SQLite snapshot, clears transient authentication/communication/locati
 state in the copy, validates integrity/foreign keys and atomically publishes to
 a new filename. It cannot overwrite a destination. Restoring repeats validation
 and sanitization and requires an explicit database-path switch while the app is
-stopped. The reference deployment uses one non-root app container, one persistent
-local volume and an HTTPS gateway; multi-replica deployment is unsupported.
-See [staging](staging.md) for secret handling, recovery and remaining live checks.
+stopped. This snapshot command is specific to SQLite. PostgreSQL needs its own
+protected backups and tested restore procedure; it is not backed up by copying a
+SQLite file. The SQLite staging template keeps one app process and local volume.
+The scale template uses two HTTP replicas, separate workers and PostgreSQL behind
+an HTTPS gateway. It remains a single-host example, not a highly available cluster.
+See [staging](staging.md) and [scalability](scalability.md) for recovery, deployment
+boundaries and required live checks.
 
 `npm run check` checks syntax, missing imports, dependency direction, cycles and
 our SQL/network placement conventions. It assumes static ESM imports and uses a
@@ -374,8 +390,9 @@ runs the same command on Node 22.12.0 and Node 24 for pushes and pull requests.
 A modular structure is a maintainability foundation, not production readiness.
 Before real bookings, implement verified onboarding/account recovery,
 production session operations, operated encrypted off-host backups and retention, deployment
-monitoring and measured concurrency/scale. Actual dispatch, production trip
-safety operations, production mapping and payments are additional product milestones. Current
+monitoring and measured concurrency/scale. Timed dispatch is implemented for test
+journeys; production trip safety operations, operated mapping and payments remain
+additional product milestones. Current
 administrator approval records manual review evidence and gates new test rides; it does not contact identity/licence providers.
 
 ## Driver availability and request matching
@@ -390,10 +407,22 @@ API projection over a cancelled storage record, with an explicit closure reason.
 It is committed before a rejected late command; successful claims instead commit
 the request, availability closure, audit and retry key together.
 
-The current preview scans open requests, filters by fresh availability and distance,
-then sorts and caps at 50. Larger deployments need indexed geospatial retrieval.
-No new external geocoding or routing request occurs during candidate matching.
-See [matching](matching.md) for consent, privacy, lifecycle and validation.
+Timed dispatch partitions requests into 0.05-degree pickup cells; driver searches
+cross cell borders using the pickup radius. PostgreSQL uses a PostGIS index and
+SQLite uses coordinate bounds, followed by the shared distance and eligibility
+checks. Each cycle has bounded ride/driver pages with continuation cursors so
+exhausted early candidates do not permanently hide later candidates. Pending
+offers are excluded across regions and global unique indexes prevent competing
+workers from issuing two active offers to the same driver or request.
+
+Road ETA queries run outside transactions. Before writing offers, workers check
+lease ownership, ride versions, current location, approval, availability and
+workload again. Fare acceptance and booking confirmation remain explicit.
+Ordinary availability, trip-location and ride requests validate only their own
+state; workers handle indexed expiry and rotating maintenance pages. The legacy
+request-list mode remains available for local compatibility testing.
+See [matching](matching.md), [realtime updates](realtime-updates.md) and
+[scalability](scalability.md) for consent, privacy, lifecycle and measurement limits.
 
 ## Simulated payments
 
@@ -441,7 +470,7 @@ must receive the same access controls as the database.
 `modules/safety/` separates pure validation/state transitions, SQL, service rules
 and route adapters. Composition injects readonly account, participant trip,
 current shared-location and session-owner ports. Incident creation snapshots those
-ports within one synchronous transaction; it does not reach into another module's
+ports within one awaited transaction; it does not reach into another module's
 repository or open a nested transaction. Notifications are durable simulated rows,
 not external side effects. Contact removal and administrator closure cancel queued
 work in the same transaction. Trip closure revokes links through a narrow callback

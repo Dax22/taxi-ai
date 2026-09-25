@@ -30,44 +30,44 @@ export function createMobileJourneys({ rides, dispatch, availability, chat, cloc
     const context = { userId: user.id, sessionToken: accessToken, native: true, clientId: query.get('clientId') };
     if (path === '/work' && !write) {
       await dispatch?.refresh();
-      if (reauthenticate) user = reauthenticate();
-      const state = availability.get(context), list = rides.list(user,'work');
+      if (reauthenticate) user = (await reauthenticate());
+      const state = (await availability.get(context)), list = (await rides.list(user,'work'));
       return { ...state, settings: { ...state.settings, dispatchMode: list.matchingSettings.dispatchMode }, areas: state.settings.allowSimulation ? DEMO_AREAS : [], current: list.rides.filter((r) => !['completed','cancelled','expired'].includes(r.status)).map((r) => projection(r,user,clock())),
         activeElsewhere: list.activeElsewhere, available: list.available.map((r) => ({ id: r.id, version: r.version, vehicleCategory: r.vehicleCategory,
           pickup: r.pickup.name, destination: r.destination.name, suggestedFareKobo: r.suggestedFareKobo, expiresAt: r.expiresAt, approximateDistanceKm: r.approximateDistanceKm,
           recommendation: r.recommendation, ...(r.offer ? { offer: r.offer } : {}) })) };
     }
     const declined = path.match(/^\/work\/offers\/([a-f0-9-]{36})\/decline$/);
-    if (write && declined) return dispatch.decline({ userId: user.id, offerId: declined[1], key, data });
-    if (write && path === '/work/online') return availability.command(context,'online',null,data,key);
+    if (write && declined) return (await dispatch.decline({ userId: user.id, offerId: declined[1], key, data }));
+    if (write && path === '/work/online') return (await availability.command(context,'online',null,data,key));
     const lease = path.match(/^\/work\/([a-f0-9-]{36})\/(offline|heartbeat)$/);
-    if (write && lease) return lease[2] === 'offline' ? availability.command(context,'offline',lease[1],data,key) : availability.update(context,lease[1],data);
+    if (write && lease) return lease[2] === 'offline' ? (await availability.command(context,'offline',lease[1],data,key)) : (await availability.update(context,lease[1],data));
     const rating = path.match(/^\/journeys\/([a-f0-9-]{36})\/rating$/);
-    if (write && rating) return { ride: projection(rides.rate(user,rating[1],data).ride,user,clock()) };
+    if (write && rating) return { ride: projection((await rides.rate(user,rating[1],data)).ride,user,clock()) };
     const journey = path.match(/^\/journeys\/([a-f0-9-]{36})(?:\/(claim|propose|accept|confirm|depart|arrive|start|complete|cancel))?$/);
     if (journey) {
-      if (!write && !journey[2]) return { ride: projection(rides.get(user,journey[1]),user,clock()) };
-      if (write && journey[2]) { const result = rides.mutate({ userId: user.id, action: journey[2], id: journey[1], data, key });
+      if (!write && !journey[2]) return { ride: projection((await rides.get(user,journey[1])),user,clock()) };
+      if (write && journey[2]) { const result = (await rides.mutate({ userId: user.id, action: journey[2], id: journey[1], data, key }));
         return { ride: projection(result.ride,user,clock()), replayed: result.replayed }; }
     }
     const conversation = path.match(/^\/journeys\/([a-f0-9-]{36})\/chat(?:\/(messages|read)|\/messages\/([a-f0-9-]{36})\/report)?$/);
     if (conversation) {
       const id = conversation[1];
-      if (!write && !conversation[2] && !conversation[3]) { const thread = chat.thread(user.id,id,Number(query.get('after') ?? 0));
+      if (!write && !conversation[2] && !conversation[3]) { const thread = (await chat.thread(user.id,id,Number(query.get('after') ?? 0)));
         return { ...thread, messages: thread.messages.map((m) => message(m,user.id)) }; }
-      if (write && conversation[2] === 'messages') { const result = chat.send({ userId: user.id, rideId: id, key,data }); return { message: message(result.message,user.id), replayed: result.replayed }; }
-      if (write && conversation[2] === 'read') return chat.markRead(user.id,id,data);
-      if (write && conversation[3]) { chat.report(user.id,id,conversation[3],data); return { reported: true }; }
+      if (write && conversation[2] === 'messages') { const result = (await chat.send({ userId: user.id, rideId: id, key,data })); return { message: message(result.message,user.id), replayed: result.replayed }; }
+      if (write && conversation[2] === 'read') return (await chat.markRead(user.id,id,data));
+      if (write && conversation[3]) { (await chat.report(user.id,id,conversation[3],data)); return { reported: true }; }
     }
     check(false,'NOT_FOUND','Journey endpoint not found.');
   };
 }
 
-export function mobileNotifications({ notifications,user,sessionId,path,write,query,data }) {
-  if (!write && path === '/notifications') return notifications.list(user.id,query.has('before') ? Number(query.get('before')) : null,sessionId);
-  if (write && path === '/notifications/push') return notifications.register(user.id,sessionId,data);
-  if (write && path === '/notifications/push/disable') return notifications.unregister(user.id,sessionId,data);
-  const match = path.match(/^\/notifications\/(\d+)\/(open|read)$/);
-  if (write && match) { fields(data,[]); return notifications[match[2]](user.id,Number(match[1])); }
+export async function mobileNotifications({ notifications,user,sessionId,path,write,query,data }) {
+  if (!write && path === '/notifications') return (await notifications.list(user.id,(await query.has('before')) ? Number((await query.get('before'))) : null,sessionId));
+  if (write && path === '/notifications/push') return (await notifications.register(user.id,sessionId,data));
+  if (write && path === '/notifications/push/disable') return (await notifications.unregister(user.id,sessionId,data));
+  const match = (await path.match(/^\/notifications\/(\d+)\/(open|read)$/));
+  if (write && match) { fields(data,[]); return (await notifications[match[2]](user.id,Number(match[1]))); }
   check(false,'NOT_FOUND','Updates endpoint not found.');
 }

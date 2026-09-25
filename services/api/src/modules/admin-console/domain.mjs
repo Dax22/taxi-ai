@@ -92,10 +92,10 @@ function finish(summary) {
     averageFareKobo: summary.completed ? String(summary.completedFareKobo / BigInt(summary.completed)) : null };
 }
 /** Iterator input bounds memory; amounts stay exact even beyond Number.MAX_SAFE_INTEGER. */
-export function summarize(rows, selectedRange = null, accountId = null) {
+export async function summarize(rows, selectedRange = null, accountId = null) {
   const summary = emptySummary(), passenger = emptySummary(), driving = emptySummary(), days = new Map(), statuses = new Map();
   if (selectedRange?.from) for (let day = dayStart(selectedRange.from); day < selectedRange.end; day += DAY) days.set(localDay(day), emptySummary());
-  for (const row of rows) {
+  for await (const row of rows) {
     add(summary, row); statuses.set(row.status, (statuses.get(row.status) ?? 0) + 1);
     if (accountId === row.customerId) add(passenger, row);
     if (accountId === row.driverId) add(driving, row);
