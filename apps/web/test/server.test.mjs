@@ -14,10 +14,10 @@ async function withServer(run, mode = 'local', maps = 'community') {
   finally { await new Promise((resolve) => server.close(resolve)); }
 }
 
-test('account and Eats seller pages serve their entire browser module dependency graph', async () => {
+test('homepage, account and recipient pages serve their entire browser module dependency graph', async () => {
   await withServer(async (base) => {
     const pending = [], visited = new Set();
-    for (const page of ['/app', '/eats/sell', '/parcels']) {
+    for (const page of ['/', '/app', '/app?service=courier', '/eats/sell', '/parcels']) {
       const response = await fetch(base + page);
       assert.equal(response.status, 200, page);
       const scripts = [...(await response.text()).matchAll(/<script\b([^>]*)>/g)]
@@ -41,6 +41,30 @@ test('account and Eats seller pages serve their entire browser module dependency
         assert.match(specifier, /^(?:\/|\.\.?\/)/, `Browser import must resolve to a URL: ${specifier}`);
         pending.push({ url: new URL(specifier, url), parent: url.pathname });
       }
+    }
+  });
+});
+
+test('every homepage Courier entry navigates directly to served parcel booking without demo JavaScript', async () => {
+  await withServer(async (base) => {
+    const home = await (await fetch(base)).text();
+    const links = [...home.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/g)]
+      .filter((match) => /\bcourier\b/i.test(match[2].replace(/<[^>]*>/g, '')));
+    assert.equal(links.length, 3, 'Navigation, service selector and service card must each offer a real Courier link');
+    assert.ok(links.some((match) => /id="courier-booking-link"/.test(match[1])));
+    for (const [, attributes] of links) {
+      const href = attributes.match(/\bhref="([^"]+)"/)?.[1];
+      assert.ok(href, 'Courier must work as a native browser link');
+      const target = new URL(href, base);
+      assert.equal(target.origin, base);
+      assert.equal(target.pathname, '/app');
+      assert.equal(target.searchParams.get('service'), 'courier');
+      const response = await fetch(target);
+      assert.equal(response.status, 200);
+      const page = await response.text();
+      assert.match(page, /id="auth-panel"/);
+      assert.match(page, /id="delivery-details-form"/);
+      assert.match(page, /src="\/dashboard.mjs"/);
     }
   });
 });

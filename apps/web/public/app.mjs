@@ -21,7 +21,9 @@ const categories = createVehicleCategoryPicker($('home-vehicle-categories'), { o
 } });
 
 function selectService(service, focus = false) {
-  for (const name of ['ride', 'eats', 'courier']) {
+  if (service === 'courier') { location.assign('/app?service=courier'); return; }
+  if (!['ride', 'eats'].includes(service)) return;
+  for (const name of ['ride', 'eats']) {
     const selected = name === service;
     $(`tab-${name}`).setAttribute('aria-selected', String(selected));
     $(`tab-${name}`).tabIndex = selected ? 0 : -1;
@@ -33,7 +35,7 @@ function selectService(service, focus = false) {
 document.querySelectorAll('[data-tab]').forEach((button) => {
   button.addEventListener('click', () => selectService(button.dataset.tab));
   button.addEventListener('keydown', (event) => {
-    const names = ['ride', 'eats', 'courier'];
+    const names = ['ride', 'eats'];
     const current = names.indexOf(button.dataset.tab);
     let next;
     if (event.key === 'ArrowRight') next = (current + 1) % names.length;
@@ -44,7 +46,10 @@ document.querySelectorAll('[data-tab]').forEach((button) => {
   });
 });
 document.querySelectorAll('[data-service]').forEach((link) => {
-  link.addEventListener('click', () => selectService(link.dataset.service));
+  link.addEventListener('click', (event) => {
+    if (link.dataset.service === 'courier') event.preventDefault();
+    selectService(link.dataset.service);
+  });
 });
 document.querySelectorAll('[data-switch]').forEach((button) => {
   button.addEventListener('click', () => selectService(button.dataset.switch, true));

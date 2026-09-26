@@ -56,7 +56,8 @@
   h1 { font-size: clamp(60px, 6.5vw, 94px); line-height: .98; letter-spacing: -.065em; }
   h1 span { color: #70706a; }
   .service-tabs { display: flex; border-bottom: 1px solid var(--line); margin-bottom: 24px; }
-  .service-tabs button { flex: 1; font-size: 12px; background: transparent; color: var(--muted); padding: 6px 12px 15px; border-bottom: 2px solid transparent; }
+  .service-tab-options { display: flex; flex: 2; min-width: 0; }
+  .service-tabs button, .service-tabs > a { flex: 1; text-align: center; font-size: 12px; background: transparent; color: var(--muted); padding: 6px 12px 15px; border-bottom: 2px solid transparent; }
   .service-tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--brand-strong); background: var(--brand-soft); font-weight: 700; }
   .service-tabs button span { margin-left: 8px; }
   .card-heading h2 { font-size: 25px; letter-spacing: -.05em; }

@@ -8,9 +8,10 @@ const closed = (ride) => ['completed', 'cancelled', 'expired'].includes(ride.sta
 const identity = (session) => session.user ? `${session.user.id}:${session.user.role}:${session.csrfToken}` : null;
 
 /** Session identity owns media. A separate, per-window mode owns workspace data. */
-export function createPageController({ client, activityClient = client, view, modeView, preferences,
+export function createPageController({ client, activityClient = client, view, modeView, preferences, initialMode = null,
   conversation, conversationView, calls, sharing, availability, planner, payments, onboarding, safety, vehicleCheck, guests, parcels, authForm, feedback, onAccount = () => {} }) {
   let state = emptyState(), sessionKey = null, generation = 0, refreshing = null, busy = false;
+  let entryMode = initialMode;
   const workspace = [conversation, planner, payments, ...[onboarding, safety, vehicleCheck, guests, parcels].filter(Boolean)];
   const features = [...workspace, calls, sharing, availability];
   function render() { view.render(state); modeView?.render(state, busy); }
@@ -27,7 +28,9 @@ export function createPageController({ client, activityClient = client, view, mo
     if (changed) clear();
     sessionKey = identity(data); state.account = data.user;
     if (changed && data.user) {
-      const saved = preferences?.get(data.user.id);
+      // A booking link selects its workspace once, after sign-in, without changing availability or permissions.
+      const saved = canUseMode(data.user, entryMode) ? entryMode : preferences?.get(data.user.id);
+      entryMode = null;
       state.mode = canUseMode(data.user, saved) ? saved : 'customer';
     }
     if (state.mode === 'work' && !canUseMode(data.user, 'work')) resetWorkspace('customer');

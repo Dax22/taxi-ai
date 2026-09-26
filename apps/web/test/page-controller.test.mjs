@@ -23,7 +23,7 @@ test('confirmed Work deletion clears driver controls and restores Customer witho
   assert.ok(h.feedback.some(([name, message]) => name === 'notice' && /Work profile was deleted/.test(message)));
 });
 
-function setup() {
+function setup(options = {}) {
   let current = session(), rendered, selected = null, intercept = async () => undefined;
   const requests = [], feedback = [], resets = [], contexts = [], commands = [];
   let mode = 'customer', writes = false, offline = true;
@@ -58,13 +58,61 @@ function setup() {
   const calls = feature('calls'), sharing = feature('sharing'), availability = feature('availability');
   availability.prepareSwitch = async (confirmed) => confirmed || offline;
   const activityClient = { reset() { resets.push('activityClient'); }, setCsrf() {} };
-  const page = createPageController({ client, activityClient, view, conversation: feature('conversation'), calls, sharing, availability, planner: feature('planner'), payments: feature('payments'),
+  const page = createPageController({ ...options, client, activityClient, view, conversation: feature('conversation'), calls, sharing, availability, planner: feature('planner'), payments: feature('payments'),
     onboarding: feature('onboarding'), safety: feature('safety'),
     conversationView: { setBusy() {} }, authForm: { reset() { resets.push('auth'); } },
     feedback: Object.fromEntries(['clear', 'error', 'notice', 'synced', 'offline'].map((name) => [name, (...args) => feedback.push([name, ...args])])) });
   return { page, calls, sharing, availability, setWrites(value) { writes = value; }, setOffline(value) { offline = value; }, requests, feedback, resets, contexts, commands, rendered: () => rendered,
     session(next) { current = next; }, intercept(fn) { intercept = fn; } };
 }
+
+test('Courier entry opens customer booking despite saved Work mode, then respects explicit mode changes', async () => {
+  const saved = new Map([[driver.id, 'work']]);
+  const h = setup({ initialMode: 'customer', preferences: { get: (id) => saved.get(id), set: (id, value) => saved.set(id, value) } });
+  h.session(session(driver)); h.setOffline(false);
+  let offlineRequests = 0;
+  h.availability.prepareSwitch = async (confirmed) => { offlineRequests++; return confirmed; };
+  h.availability.stop = async () => { offlineRequests++; };
+  await h.page.refresh();
+  assert.equal(h.rendered().mode, 'customer'); assert.equal(h.rendered().user.role, 'customer');
+  assert.equal(h.rendered().account.role, 'driver', 'the account and its capabilities stay unchanged');
+  assert.ok(h.requests.includes('/api/rides?mode=customer'));
+  assert.ok(!h.requests.includes('/api/rides?mode=work'));
+  assert.equal(offlineRequests, 0, 'opening a booking link does not change Work availability');
+  assert.equal(saved.get(driver.id), 'work', 'the entry intent does not overwrite the saved preference');
+  assert.equal(await h.page.switchMode('work'), true);
+  await h.page.refresh();
+  assert.equal(h.rendered().mode, 'work', 'later refreshes do not replay the entry intent');
+  assert.equal(await h.page.switchMode('customer'), false, 'later switches retain offline confirmation');
+  assert.equal(h.page.snapshot().modePrompt, true);
+  assert.equal(await h.page.switchMode('customer', true), true);
+});
+
+test('Courier entry intent survives anonymous checks until the first sign-in', async () => {
+  const h = setup({ initialMode: 'customer', preferences: { get: () => 'work' } });
+  h.session(session(null)); await h.page.refresh(); await h.page.refresh();
+  assert.equal(h.rendered().user, null);
+  h.intercept(async (path) => {
+    if (path === '/api/auth/login') { h.session(session(driver)); return session(driver); }
+  });
+  await h.page.authenticate('/api/auth/login', { email: 'courier-sender@example.test', password: 'fixture' });
+  assert.equal(h.rendered().mode, 'customer'); assert.equal(h.rendered().user.role, 'customer');
+  assert.ok(h.requests.includes('/api/rides?mode=customer'));
+  assert.ok(!h.requests.includes('/api/rides?mode=work'));
+});
+
+test('ordinary account entry retains saved Work mode and booking intent grants no administrator capabilities', async () => {
+  const h = setup({ preferences: { get: () => 'work' } });
+  h.session(session(driver)); await h.page.refresh();
+  assert.equal(h.rendered().mode, 'work'); assert.equal(h.rendered().user.role, 'driver');
+  assert.ok(h.requests.includes('/api/rides?mode=work'));
+  const staff = setup({ initialMode: 'customer', preferences: { get: () => 'work' } });
+  staff.session(session(admin)); await staff.page.refresh();
+  assert.deepEqual(staff.rendered().user, admin);
+  assert.ok(staff.requests.includes('/api/admin/drivers'));
+  assert.ok(!staff.requests.some((path) => path.startsWith('/api/rides')));
+  assert.equal(await staff.page.switchMode('customer'), false);
+});
 
 test('declining a timed offer refreshes Work without treating the result as a claimed journey', async () => {
   const h = setup(); h.session(session(driver));

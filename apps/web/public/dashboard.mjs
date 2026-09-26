@@ -124,6 +124,7 @@ const liveUpdates = createRealtimeClient({
   refresh: async () => { await page.poll(); await Promise.all([calls.poll(), sharing.poll()]); },
 });
 const page = createPageController({ client, activityClient, view, modeView, preferences: modePreferences(storage),
+  initialMode: new URLSearchParams(location.search).get('service') === 'courier' ? 'customer' : null,
   conversation, conversationView, calls, sharing, availability,
   planner, payments, onboarding, safety, vehicleCheck, guests, parcels, authForm,
   onAccount(identity) {

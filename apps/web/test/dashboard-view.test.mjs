@@ -151,6 +151,7 @@ test('courier deep link survives authentication and books standard car parcels w
   const oldLocation = globalThis.location; globalThis.location = { search: '?service=courier' };
   t.after(() => { globalThis.location = oldLocation; });
   const h = setup(t); h.view.render(state(null, [])); h.view.reset(); h.view.render(state(customer, []));
+  assert.equal(h.node('dashboard-title').textContent, 'Send a parcel across Nigeria.');
   assert.equal(h.node('delivery-details-form').hidden, false); assert.equal(h.node('passenger-panel').hidden, true);
   assert.equal(h.node('delivery-weight').max, '30');
   const group = h.node('account-vehicle-categories').children[0];
@@ -163,6 +164,7 @@ test('courier deep link survives authentication and books standard car parcels w
   h.view.render(state({ ...customer, id: 'other-customer' }, []));
   assert.equal(h.node('delivery-recipient').value, '', 'replacement accounts never inherit parcel drafts');
   h.node('booking-service-ride').handlers.click();
+  assert.equal(h.node('dashboard-title').textContent, 'Where will today take you?');
   assert.equal(h.node('delivery-details-form').hidden, true); assert.equal(h.node('passenger-panel').hidden, false);
   assert.deepEqual(h.view.requestOptions(), { vehicleCategory: 'standard', passenger: { kind: 'self' } });
 });

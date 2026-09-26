@@ -43,6 +43,10 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
     $('booking-service-note').textContent = isDelivery() ? 'Choose a car, motorcycle, van or truck, then add your parcel and recipient details.' : 'Choose a vehicle for your passenger journey.';
     $('delivery-load-hint').textContent = maxLoadKg ? `${category.id === 'standard' ? 'Car' : category.name} parcel limit: ${maxLoadKg} kg. Matching also respects the driver’s approved load capacity.` : '';
     $('request-submit').textContent = `Request a test ${isDelivery() ? 'delivery' : 'ride'}`;
+    if (customer) {
+      $('dashboard-title').textContent = isDelivery() ? 'Send a parcel across Nigeria.' : 'Where will today take you?';
+      $('dashboard-description').textContent = isDelivery() ? 'Choose pickup and delivery locations, add parcel details and invite your recipient to track it.' : 'Request a journey and agree a fare with your driver.';
+    }
     onCategoryChange(category.id); updateQuote();
   }
   function selectedRide() { return state.rides.find((ride) => ride.id === selectedId) ?? state.history?.find((ride) => ride.id === selectedId); }
@@ -99,9 +103,11 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
     const driver = user.role === 'driver';
     const admin = user.role === 'admin';
     $('dashboard-role').textContent = `TAXI AI / ${driver ? 'WORK' : user.role.toUpperCase()}`;
-    $('dashboard-title').textContent = admin ? 'Keep the city moving.' : driver ? 'Your next connection.' : 'Where will today take you?';
-    $('dashboard-description').textContent = admin ? 'Review driver applications for the development preview.'
-      : driver ? 'Go online to find nearby requests and agree a fare with the customer.' : 'Request a journey and agree a fare with your driver.';
+    if (admin || driver) {
+      $('dashboard-title').textContent = admin ? 'Keep the city moving.' : 'Your next connection.';
+      $('dashboard-description').textContent = admin ? 'Review driver applications for the development preview.'
+        : 'Go online to find nearby requests and agree a fare with the customer.';
+    }
     $('request-form').hidden = !state.sampleMatchingEnabled;
     $('sample-disabled-note').hidden = Boolean(state.sampleMatchingEnabled);
     $('driver-panel').hidden = !driver;
