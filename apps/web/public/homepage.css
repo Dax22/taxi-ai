@@ -20,7 +20,7 @@
   /* Artwork starts directly at the header and reaches both page edges.
      The in-flow overlay lets the hero grow when text wraps or is enlarged. */
   .hero-visual { position: relative; width: 100%; margin: 0; }
-  .hero-slide-viewport { position: relative; isolation: isolate; display: grid; width: 100%; min-height: clamp(480px, 40vw, 640px); background: #f8f9f7; }
+  .hero-slide-viewport { position: relative; isolation: isolate; display: grid; width: 100%; min-height: clamp(480px, 40vw, 640px); background: #f8f9f7; touch-action: pan-y; }
   .hero-service-slide { position: absolute; inset: 0; margin: 0; overflow: hidden; animation: hero-scene-appear .55s cubic-bezier(.2,.7,.2,1) both; }
   .hero-service-slide::after { content: ''; position: absolute; inset: 0; z-index: 1; pointer-events: none; background: linear-gradient(90deg, rgba(248,249,247,.84) 0%, rgba(248,249,247,.58) 28%, rgba(248,249,247,.08) 52%, rgba(248,249,247,.04) 100%); }
   .hero-service-slide:has(.hero-slide-copy-right)::after { background: linear-gradient(270deg, rgba(248,249,247,.86) 0%, rgba(248,249,247,.60) 28%, rgba(248,249,247,.08) 52%, rgba(248,249,247,.04) 100%); }
@@ -53,6 +53,7 @@
   .hero-carousel-progress button::after { content: ''; position: absolute; left: 7px; right: 7px; bottom: 5px; height: 2px; border-radius: 2px; background: #d9ddd7; }
   .hero-carousel-progress button[aria-current="true"] { color: #222722; background: #fff8dd; }
   .hero-carousel-progress button[aria-current="true"]::after { background: var(--brand); }
+  [data-homepage-carousel][data-carousel-playing="true"] .hero-carousel-progress button[aria-current="true"]::after { transform-origin: left center; animation: hero-progress-fill 7s linear both; }
   .hero-carousel-progress button:hover { background: var(--brand-soft); }
   .hero-art-note { margin: 13px 24px 0; text-align: center; color: #656b63; font-size: 8px; letter-spacing: .05em; }
   .hero-carousel-announcement { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
@@ -102,7 +103,7 @@
   @media (max-width: 800px) {
     .landing-page .site-header { height: 80px; }
     .hero-slide-viewport { min-height: 560px; }
-    .hero-phone-preview { top: 104px; right: auto; left: 50%; transform: translateX(-50%); width: min(76%, 350px); height: calc(100% - 300px); }
+    .hero-phone-preview { top: 230px; right: auto; left: 50%; transform: translateX(-50%); width: min(76%, 350px); height: calc(100% - 330px); }
     .hero-image { object-fit: cover; }
     .hero-slide-copy { justify-content: flex-start; padding: 42px 28px 150px; align-items: flex-start; text-align: left; }
     .hero-slide-copy-left, .hero-slide-copy-right { padding-right: 28px; padding-left: 28px; }
@@ -163,7 +164,8 @@
 
 @keyframes hero-scene-appear { from { opacity: 0; } to { opacity: 1; } }
 @keyframes hero-image-arrive { from { transform: scale(1.012); } to { transform: scale(1); } }
-@media (prefers-reduced-motion: reduce) { .hero-service-slide { animation: none; } }
+@keyframes hero-progress-fill { from { transform: scaleX(.05); } to { transform: scaleX(1); } }
+@media (prefers-reduced-motion: reduce) { .hero-service-slide, .hero-image, .hero-carousel-progress button::after { animation: none !important; } }
 
 /* Native releases have a permanent home; links activate only for real listings. */
 .download-section { display: grid; grid-template-columns: 1.1fr 1fr; gap: clamp(28px, 6vw, 88px); align-items: center; padding-block: 88px; scroll-margin-top: 32px; }
