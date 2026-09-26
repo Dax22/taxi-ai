@@ -78,7 +78,7 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
     routeForRide: (id) => locations.routeForRide(id),
     quoteForRide: (userId, id, now) => locations.quoteForRide(userId, id, now),
     bindQuote: (userId, id, rideId, now) => locations.bindQuote(userId, id, rideId, now),
-    availabilityFor: availability.positionFor, onClaim: availability.onClaim, availableDriverIds: availability.driverIds, allowSimulation,
+    availabilityFor: availability.positionFor, onClaim: availability.onClaim, availableDriverIds: availability.driverIds, driverPhotoFor: drivers.profilePhoto, allowSimulation,
     onEvent: ({ kind, ride, actorId, recipients = [], eventKey, now }) => {
       const targets = kind === 'request' ? recipients : [ride.customerId,ride.driverId].filter((id) => id && id !== actorId);
       for (const userId of targets) notifications.publish({ userId, rideId: ride.id, kind,

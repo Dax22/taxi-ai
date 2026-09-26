@@ -12,10 +12,11 @@ import { createVehicleCategoryPicker } from './vehicle-categories.mjs';
 
 
 /** DOM rendering and UI events. No network, session storage or backend imports. */
-export function createDashboardView({ onCommand, onReview, onReportReview, onSelectionChange, onHistory, serverNow, onCategoryChange = () => {} }) {
+export function createDashboardView({ onCommand, onReview, onReportReview, onSelectionChange, onHistory, serverNow, onCategoryChange = () => {}, onDriverPhoto = async () => null }) {
   let state = { user: null, rides: [], available: [], drivers: [] };
   let selectedId = null, detailId = null;
   let renderedLists = '', renderedDetail = '';
+  const avatarCache = new Map(); let avatarGeneration = 0;
   let busy = false;
   let initialCategory = typeof location === 'undefined' ? null : new URLSearchParams(location.search).get('category');
   const tripView = createTripView({ onCommand, serverNow });
@@ -178,6 +179,22 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
     const offer = ride.negotiation?.currentOffer;
     const agreement = ride.negotiation?.agreement;
     const isDriver = state.user.role === 'driver';
+    const avatar = $('detail-driver-avatar'), avatarKey = ride.driver ? `${ride.id}:${ride.driver.id}` : null;
+    avatarGeneration++;
+    const generation = avatarGeneration;
+    if (!ride.driver || isDriver) { avatar.hidden = true; avatar.removeAttribute('src'); avatar.alt = ''; }
+    else {
+      const cached = avatarCache.get(avatarKey);
+      if (cached) { avatar.src = cached; avatar.alt = `${ride.driver.name} driver profile photo`; avatar.hidden = false; }
+      else {
+        avatar.hidden = true; avatar.removeAttribute('src'); avatar.alt = '';
+        void onDriverPhoto(ride.id).then((photo) => {
+          if (generation !== avatarGeneration || selectedRide()?.id !== ride.id || !photo) return;
+          const uri = `data:${photo.mimeType};base64,${photo.base64}`;
+          avatarCache.set(avatarKey, uri); avatar.src = uri; avatar.alt = `${ride.driver.name} driver profile photo`; avatar.hidden = false;
+        }).catch(() => { /* Keep the journey usable if the approved photo cannot load. */ });
+      }
+    }
     $('detail-title').textContent = `${ride.pickup.name} → ${ride.destination.name}`;
     $('detail-status').textContent = `${vehicleCategory(ride.vehicleCategory ?? 'standard')?.name} · ${ride.delivery && ride.status === 'completed' ? 'Delivered' : statuses[ride.status]}`;
     $('detail-delivery').hidden = !ride.delivery;
@@ -280,7 +297,7 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
       categories.reset();
       for (const id of ['delivery-description', 'delivery-weight', 'delivery-recipient', 'delivery-pickup', 'delivery-dropoff']) $(id).value = '';
       $('detail-delivery').textContent = ''; $('detail-delivery').hidden = true;
-      selectedId = null; detailId = null; renderedLists = ''; renderedDetail = '';
+      selectedId = null; detailId = null; renderedLists = ''; renderedDetail = ''; avatarGeneration++; avatarCache.clear(); $('detail-driver-avatar').hidden = true; $('detail-driver-avatar').removeAttribute('src');
       $('ride-detail').hidden = true;
       for (const id of ['detail-title', 'detail-person', 'detail-reference', 'detail-status', 'fare-value', 'fare-label',
         'fare-guidance', 'fare-expiry', 'driver-vehicle', 'driver-status', 'driver-guidance', 'account-identity', 'matching-status']) $(id).textContent = '';

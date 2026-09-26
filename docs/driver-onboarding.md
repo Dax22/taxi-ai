@@ -13,9 +13,11 @@ statement of all requirements for operating in Nigeria.
    select **Apply to drive**, and add fictional car details. Continue in Work.
 2. In **Your driver application**, save the legal name, international contact
    number, licence number and vehicle make/model/year/colour/plate.
-3. Upload a driver photo, driving-licence image, vehicle document, insurance
-   document and vehicle photo showing the plate. Only PNG/JPEG images up to 2 MiB
-   each are accepted. The licence, vehicle document and insurance need expiry
+3. Upload a **driver profile face photo**, driving-licence image, vehicle document,
+   insurance document and vehicle photo showing the plate. The face photo is mandatory
+   and must be a clear recent portrait of the driver only. After approval, Taxi Ai uses
+   it as the rider-facing profile icon on assigned journeys. Only PNG/JPEG images up to
+   2 MiB each are accepted. The licence, vehicle document and insurance need expiry
    dates. Photos have no expiry date.
 4. Click **Submit for review**. The submitted version is locked. **Reopen for
    changes** withdraws it; reopening an approved application pauses new rides.
@@ -71,9 +73,10 @@ and vehicle snapshot, so subsequent vehicle changes do not rewrite trip history.
 The drivers module owns rules, SQL, application events and command retries. A
 small injected Node adapter handles byte decoding and hashing. Accounts exposes
 only the public vehicle/status and a safe eligibility summary. Availability and
-rides consume that summary; they do not read document storage. Driver contact
-numbers and licence details are absent from rider peers and the administrator
-queue. Only opening the authorised private application returns them.
+rides consume that summary; they do not read document storage. Driver contact numbers and licence details are absent from rider peers and the administrator
+queue. The approved profile face photo is a deliberate exception: it is available only to
+participants on an assigned journey so the rider can identify the driver. Unassigned users
+cannot request it. Only opening the authorised private application returns the remaining evidence.
 
 | Method and path | Access and result |
 | --- | --- |

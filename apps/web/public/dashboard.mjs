@@ -78,6 +78,7 @@ const safety = createSafetyController({ client, view: safetyView, origin: locati
   copy: (value) => navigator.clipboard.writeText(value) });
 const view = createDashboardView({
   onCategoryChange: (id) => planner.setCategory(id),
+  onDriverPhoto: async (id) => (await client.request(`/api/rides/${id}/driver-photo`)).photo,
   serverNow: () => serverTime.now + performance.now() - serverTime.received,
   onCommand: (...args) => page.rideCommand(...args),
   onSelectionChange: (ride) => page.selection(ride),

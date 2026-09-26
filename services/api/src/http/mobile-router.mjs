@@ -52,6 +52,7 @@ export function createMobileRouter({ devices, accounts, drivers, rides, location
     else if (write && path === '/account/email/request') body = accountEmail.requestVerification(session.user.id,data);
     else if (path === '/booking' || path.startsWith('/booking/')) body = await booking({ path, write, user: session.user,
       accessToken, data, key: request.headers['idempotency-key'] });
+    else if (!write && /^\/journeys\/[a-f0-9-]{36}\/driver-photo$/.test(path)) body = { photo: rides.driverPhoto(session.user, path.split('/')[2]) };
     else if (path === '/work' || path.startsWith('/work/') || path.startsWith('/journeys/')) body = journeys({ path, write, user: session.user,
       accessToken, query, data, key: request.headers['idempotency-key'] });
     else if (path === '/notifications' || path.startsWith('/notifications/')) body = mobileNotifications({ notifications, user: session.user, sessionId: session.id, path, write, query, data });

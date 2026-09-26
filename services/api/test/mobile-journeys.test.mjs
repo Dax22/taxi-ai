@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { harness, participants, PASSWORD } from './helpers.mjs';
-import { DETAILS, submitApplication, approveApplication, fixtureApi } from './driver-fixtures.mjs';
+import { DETAILS, IMAGE, submitApplication, approveApplication, fixtureApi } from './driver-fixtures.mjs';
 import { parseJourney, parseWork, parseThread, parseSentMessage, parseNotifications } from '../../../packages/shared/src/mobile-journeys.mjs';
 import { TRANSPORT_CATEGORIES } from '../../../packages/shared/src/transport-categories.mjs';
 const sample={pickupId:'wuse-ii',destinationId:'maitama'},parcel={description:'Fictional parcel',weightKg:2,recipientName:'Test recipient'};
@@ -61,6 +61,22 @@ test('native passenger and delivery journeys complete across all vehicle categor
     assert.equal(updates.filter((n)=>n.rideId===r.id&&n.kind==='complete').length,1);
     for(const field of ['pickupPin','dropoffPin','description','body','accessToken'])assert.equal(JSON.stringify(updates).includes(`"${field}"`),false);
   }
+});
+
+
+test('approved driver face photo is participant-only and becomes available after assignment',async(t)=>{
+  const h=await harness(t),{customer,admin}=await participants(h,0),c=await phone(h,customer);
+  const driver=h.client();await driver.register('native-avatar','driver');
+  await submitApplication(fixtureApi(driver));await approveApplication(fixtureApi(admin),driver.user.id);
+  const d=await phone(h,driver),outsider=h.client();await outsider.register('native-avatar-outsider');const o=await phone(h,outsider);
+  ok(await d.online());let r=ok(await c.send('/booking/requests',sample)).ride;
+  assert.equal((await c.send(`/journeys/${r.id}/driver-photo`)).status,404);
+  r=await act(d,r,'claim');
+  const riderPhoto=ok(await c.send(`/journeys/${r.id}/driver-photo`)).photo;
+  assert.equal(riderPhoto.driverId,driver.user.id);assert.equal(riderPhoto.mimeType,IMAGE.mimeType);assert.equal(riderPhoto.base64,IMAGE.base64);
+  assert.equal(ok(await d.send(`/journeys/${r.id}/driver-photo`)).photo.base64,IMAGE.base64);
+  assert.equal((await o.send(`/journeys/${r.id}/driver-photo`)).status,404);
+  assert.equal(JSON.stringify(parseJourney(ok(await c.send(`/journeys/${r.id}`)))).includes(IMAGE.base64),false,'normal polling never embeds the photo payload');
 });
 
 test('native availability survives access rotation, rejects another device and expires after revocation or heartbeat loss',async(t)=>{

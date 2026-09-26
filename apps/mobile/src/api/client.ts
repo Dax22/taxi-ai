@@ -177,6 +177,15 @@ export class MobileClient {
     return parseBookingRide(await this.request(`/booking/requests/${id}/cancel`, { expectedVersion, reason: 'plans_changed' }, key));
   }
   async journey(id: string) { return parseJourney(await this.request(`/journeys/${id}`)); }
+  async driverPhoto(id: string) {
+    const body = await this.request(`/journeys/${id}/driver-photo`), photo = body.photo;
+    if (!photo || typeof photo.driverId !== 'string' || !/^[a-f0-9-]{36}$/.test(photo.driverId)
+      || !['image/jpeg','image/png'].includes(photo.mimeType) || typeof photo.base64 !== 'string'
+      || photo.base64.length > 2_800_000 || !/^[A-Za-z0-9+/=]+$/.test(photo.base64)) {
+      throw new ApiError('Taxi Ai returned an invalid driver photo.', 'INVALID_RESPONSE');
+    }
+    return { driverId: photo.driverId, mimeType: photo.mimeType as 'image/jpeg'|'image/png', base64: photo.base64 };
+  }
   async journeyCommand(id: string, action: JourneyAction, data: JourneyData, key: string) { return parseJourney(await this.request(`/journeys/${id}/${action}`,data,key)); }
   async work(clientId: string) { return parseWork(await this.request(`/work?clientId=${clientId}`)); }
   async online(clientId: string, data: OnlineData, key: string) { return parseAvailability(await this.request(`/work/online?clientId=${clientId}`,data,key)); }
