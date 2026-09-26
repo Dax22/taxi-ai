@@ -31,7 +31,7 @@ export function createMobileRouter({ devices, accounts, drivers, rides, dispatch
   // An explicit owner-only projection keeps reviewer identities, hashes and audit internals off native clients.
   function onboarding(user, application) {
     return { driverId: application.driverId, status: application.status, version: application.version,
-      details: application.details, busy: application.busy, eligibility: application.eligibility,
+      details: application.details, busy: application.busy, eligibility: application.eligibility, faceCheck: application.faceCheck,
       reviewReason: application.reviewReason, vehicle: application.vehicle ?? user.driver.vehicle,
       documents: application.documents.map(({ id, kind, name, mimeType, sizeBytes, expiresOn }) =>
         ({ id, kind, name, mimeType, sizeBytes, expiresOn })) };
@@ -132,9 +132,10 @@ export function createMobileRouter({ devices, accounts, drivers, rides, dispatch
     } else if (!write && path === '/driver/onboarding') {
       check(hasCapability(session.user, 'driver'), 'FORBIDDEN', 'Add a driver profile first.');
       body = { application: onboarding(session.user, (await drivers.get(session.user, session.user.id))) };
-    } else if (write && /^\/driver\/application\/(save|upload|remove|submit|reopen)$/.test(path)) {
+    } else if (write && /^\/driver\/application\/(save|upload|remove|submit|reopen|face-check)$/.test(path)) {
       check(hasCapability(session.user, 'driver'), 'FORBIDDEN', 'Add a driver profile first.');
-      const result = (await drivers.command(session.user, session.user.id, path.split('/').at(-1), data, request.headers['idempotency-key']));
+      const result = (await drivers.command(session.user, session.user.id, path.split('/').at(-1), data, request.headers['idempotency-key'],
+        async () => { const fresh = await devices.sessionFor(accessToken); check(fresh, 'UNAUTHENTICATED', 'Sign in to continue.'); return fresh.user; }));
       body = { application: onboarding(session.user, result.application), replayed: result.replayed };
     } else if (write && path === '/account/driver-profile') body = (await accounts.addDriverProfile(session.user.id, data, request.headers['idempotency-key']));
     else if (write && path === '/account/driver-profile/delete') body = (await accounts.deleteDriverProfile(session.user.id, data, request.headers['idempotency-key']));

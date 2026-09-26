@@ -39,8 +39,10 @@ This is a **development prototype**, not a launched transport service.
 Use test details. Fares are fictional examples and all requests are test requests.
 Drivers can explicitly share their browser-reported location during a confirmed
 test trip. There is no live dispatch or payment. Driver applications now store
-private documents and recorded manual checks; external identity/licence verification
-is not connected. Use fictional details and documents.
+private documents and recorded manual checks. Optional
+[automatic selfie-to-licence comparison](docs/driver-face-checks.md) is implemented
+but requires AWS configuration; liveness and licence-database verification are
+not connected. Use fictional details and documents.
 
 - One personal login, Customer/Work mode switching and optional driver enrollment.
 - Book a passenger ride for an adult friend on web/mobile, with separate booker
@@ -86,6 +88,8 @@ is not connected. Use fictional details and documents.
 - Additive schema-13 reporting indexes preserve existing accounts, sessions and trip history.
 - Server-checked trip roles, self-claim prevention and conflicting-work protection.
 - Private driver applications, contact/licence/vehicle details and bounded image uploads.
+- Optional automatic selfie-to-licence face comparison on web, iOS and Android,
+  with explicit consent, private results and staff review for uncertain outcomes.
 - Administrator approval, rejection and corrections with recorded manual checks and review history.
 - Current-document eligibility for new work, and stable driver/vehicle snapshots in trip history.
 - Explicit Online/Offline availability, nearby matching and five-minute request expiry.

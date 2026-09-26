@@ -330,6 +330,47 @@ test('application edits preserve their version and request key through token rot
   await assert.rejects(app.application(),{ code:'SESSION_CHANGED' });
 });
 
+test('native face comparison sends consent and version once per request key without storing biometric results', async () => {
+  const result = { driverId: user.id, status: 'draft', version: 4, busy: false, details: null,
+    vehicle: { model: 'Toyota Corolla', plate: 'TEST-123' }, documents: [], eligibility: { eligible: false, missing: [], expired: [] }, reviewReason: null,
+    faceCheck: { available: true, provider: 'aws_rekognition', status: 'matched', reason: null, checkedAt: 1000, similarity: 98.75, threshold: 95,
+      consentVersion: 'driver-face-match-v1', retryAfter: 61000 } };
+  const calls: Array<{ url: string; options: RequestInit }> = [];
+  const { app, storage } = client(async (url, options) => {
+    if (url.endsWith('/auth/login')) return response(auth());
+    if (url.endsWith('/auth/refresh')) return response(auth(2));
+    calls.push({ url, options });
+    return new Headers(options.headers).get('Authorization') === `Bearer ${auth().credentials.accessToken}` ? unauthorized() : ok({ application: result });
+  });
+  await app.login(user.email, 'Test password', 'Phone');
+  const application = await app.applicationCommand('face-check', { expectedVersion: 2, consent: true }, 'face-comparison-request');
+  assert.equal(calls.length, 2);
+  for (const { url, options } of calls) {
+    assert.ok(url.endsWith('/driver/application/face-check'));
+    assert.deepEqual(JSON.parse(String(options.body)), { expectedVersion: 2, consent: true });
+    assert.equal(new Headers(options.headers).get('Idempotency-Key'), 'face-comparison-request');
+  }
+  assert.equal(application.faceCheck?.status, 'matched');
+  assert.equal(application.status, 'draft'); assert.equal(application.eligibility.eligible, false);
+  assert.ok(!storage.value!.includes('98.75')); assert.ok(!storage.value!.includes('faceCheck'));
+});
+
+test('native face comparison allows provider processing beyond the ordinary timeout but aborts after 45 seconds', async (t) => {
+  let signal!: AbortSignal;
+  const { app } = client(async (url, options) => {
+    if (url.endsWith('/auth/login')) return response(auth());
+    signal = options.signal!;
+    return new Promise((_resolve, reject) => signal.addEventListener('abort', () => reject(new Error('Timed out')), { once: true }));
+  });
+  await app.login(user.email, 'Test password', 'Phone');
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const result = app.applicationCommand('face-check', { expectedVersion: 2, consent: true }, 'bounded-face-check');
+  const rejected = assert.rejects(result, { code: 'NETWORK' });
+  t.mock.timers.tick(12000); assert.equal(signal.aborted, false);
+  t.mock.timers.tick(32999); assert.equal(signal.aborted, false);
+  t.mock.timers.tick(1); assert.equal(signal.aborted, true); await rejected;
+});
+
 test('native live updates share one authenticated request and abort on background or logout', async () => {
   const reads: RequestInit[] = [];
   const { app } = client(async (url, options) => {

@@ -67,12 +67,18 @@ export function parseOnboarding(value) {
   const details = (d) => record(d) && text(d.legalName) && text(d.phone) && text(d.licenceNumber)
     && vehicle(d.vehicle) && text(d.vehicle.make) && text(d.vehicle.colour) && integer(d.vehicle.year);
   const kinds = ['profile_photo','driving_licence','vehicle_registration','insurance','vehicle_photo'];
+  const score = (v) => typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 100;
+  const faceCheck = (f) => record(f) && typeof f.available === 'boolean' && text(f.provider)
+    && ['not_started','pending','matched','needs_review','unavailable'].includes(f.status) && nullableText(f.reason)
+    && (f.checkedAt === null || integer(f.checkedAt)) && (f.similarity === null || score(f.similarity))
+    && (f.threshold === null || score(f.threshold)) && text(f.consentVersion) && (f.retryAfter === null || integer(f.retryAfter));
   expect(record(a) && text(a.driverId) && ['draft','submitted','changes_requested','rejected','approved'].includes(a.status)
     && integer(a.version) && typeof a.busy === 'boolean' && eligibility(a.eligibility) && nullableText(a.reviewReason)
     && (a.details === null || details(a.details)) && vehicle(a.vehicle) && Array.isArray(a.documents) && a.documents.length <= kinds.length
     && a.documents.every((d) => record(d) && text(d.id) && kinds.includes(d.kind) && text(d.name)
       && ['image/png','image/jpeg'].includes(d.mimeType) && integer(d.sizeBytes) && d.sizeBytes > 0 && d.sizeBytes <= 2 * 1024 * 1024
       && (kinds.indexOf(d.kind) === 0 || d.kind === 'vehicle_photo' ? d.expiresOn === null : text(d.expiresOn) && /^\d{4}-\d{2}-\d{2}$/.test(d.expiresOn)))
-    && new Set(a.documents.map((d) => d.kind)).size === a.documents.length);
+    && new Set(a.documents.map((d) => d.kind)).size === a.documents.length
+    && (a.faceCheck === undefined || faceCheck(a.faceCheck)));
   return a;
 }

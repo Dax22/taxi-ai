@@ -7,7 +7,8 @@ export function createApiClient({ fetchImpl = globalThis.fetch, makeKey = () => 
     if (!path.startsWith('/api/')) throw new Error('Use a same-origin API path.');
     const epoch = generation;
     const abort = new AbortController(), cancel = () => abort.abort();
-    const timeout = setTimeout(cancel, path.startsWith('/api/events?') ? 30_000 : path.startsWith('/api/vehicle-checks/') || /\/api\/eats\/stores\/[a-f0-9-]{36}\/photo$/.test(path) ? 35_000 : 12_000);
+    const timeout = setTimeout(cancel, path === '/api/driver/application/face-check' ? 45_000
+      : path.startsWith('/api/events?') ? 30_000 : path.startsWith('/api/vehicle-checks/') || /\/api\/eats\/stores\/[a-f0-9-]{36}\/photo$/.test(path) ? 35_000 : 12_000);
     signal?.addEventListener('abort', cancel, { once: true });
     if (signal?.aborted) cancel();
     if (method === 'POST') writes++;

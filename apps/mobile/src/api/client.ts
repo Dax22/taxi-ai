@@ -75,7 +75,7 @@ export class MobileClient {
   }
   private async send(path: string, { data, token, preview = this.saved?.previewAccess ?? '', key, signal }: { data?: unknown; token?: string; preview?: string; key?: string; signal?: AbortSignal } = {}) {
     if (!/^\/[a-z0-9/?=&_-]+$/i.test(path)) throw new Error('Invalid mobile API path.');
-    const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), path.startsWith('/events?') ? 30_000 : path === '/driver/application/upload' ? 45_000 : path.startsWith('/vehicle-checks/') || /^\/eats\/stores\/[a-f0-9-]{36}\/photo$/.test(path) ? 35_000 : 12_000);
+    const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), path.startsWith('/events?') ? 30_000 : ['/driver/application/upload', '/driver/application/face-check'].includes(path) ? 45_000 : path.startsWith('/vehicle-checks/') || /^\/eats\/stores\/[a-f0-9-]{36}\/photo$/.test(path) ? 35_000 : 12_000);
     const cancel = () => controller.abort();
     signal?.addEventListener('abort', cancel, { once: true });
     if (signal?.aborted) cancel();
@@ -266,7 +266,7 @@ export class MobileClient {
     if (application.driverId !== this.user?.id) throw changed();
     return application;
   }
-  async application() { return this.ownApplication(await this.request('/driver/onboarding')); }
+  async application(signal?: AbortSignal) { return this.ownApplication(await this.request('/driver/onboarding', undefined, undefined, signal)); }
   async applicationCommand<A extends keyof DriverCommands>(action: A, data: DriverCommands[A], key: string) {
     return this.ownApplication(await this.request(`/driver/application/${action}`, data, key));
   }

@@ -1,6 +1,6 @@
 export const DRIVER_DOCUMENTS = Object.freeze({
-  profile_photo: Object.freeze({ label: 'Driver photo', expires: false }),
-  driving_licence: Object.freeze({ label: 'Driving licence', expires: true }),
+  profile_photo: Object.freeze({ label: 'Driver selfie', expires: false }),
+  driving_licence: Object.freeze({ label: 'Driving licence (front)', expires: true }),
   vehicle_registration: Object.freeze({ label: 'Vehicle document', expires: true }),
   insurance: Object.freeze({ label: 'Insurance document', expires: true }),
   vehicle_photo: Object.freeze({ label: 'Vehicle photo showing number plate', expires: false }),

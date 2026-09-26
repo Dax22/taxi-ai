@@ -131,7 +131,7 @@ export function removeAdminWorkspaceFixtureTables(db) {
 
 /** Compliance tasks are durable operator work; an older-schema fixture may remove only empty tables. */
 export function removeAdminExpansionFixtureTables(db) {
-  const tables = ['admin_compliance_commands', 'admin_compliance_events', 'admin_compliance_followups'];
+  const tables = ['driver_face_checks', 'admin_compliance_commands', 'admin_compliance_events', 'admin_compliance_followups'];
   const present = tables.filter(table => db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(table));
   for (const table of present) {
     if (db.prepare(`SELECT count(*) AS count FROM ${table}`).get().count) throw new Error(`Cannot downgrade a populated ${table} fixture.`);

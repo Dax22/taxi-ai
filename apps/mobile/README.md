@@ -31,6 +31,9 @@ keyboard, accessibility and tablet QA remain pending.
 - Shared rounded 3D-style vehicle icons in ten colours in Driver and journey details.
   Illustrations are labelled; exact-model 3D assets are not included.
 - The same manual approval workflow as the web. Administrators review on the web.
+- Optional [automatic face comparison](../../docs/driver-face-checks.md): capture a
+  selfie and licence front, consent, compare, and submit the result for review.
+  Requires the configured backend provider; no AWS credentials belong in the app.
 - Native device list and remote sign-out; web recovery at `/devices`.
 - Delivery requests and recipient drop-off codes.
 - Completed-trip test payments, saved receipts and a paginated Driver earnings preview use the same records as the website. Payment simulation only runs on the local development server; no money moves.

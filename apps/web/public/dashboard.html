@@ -118,8 +118,19 @@
           <form id="onboarding-upload-form" class="stack-form"><fieldset id="onboarding-upload-fields"><legend>Upload or replace a document</legend><div class="onboarding-grid">
             <div><label for="onboarding-kind">Document category</label><select id="onboarding-kind" required></select></div>
             <div id="onboarding-expiry-row"><label for="onboarding-expiresOn">Expiry date</label><input id="onboarding-expiresOn" type="date"></div>
-            <div><label for="onboarding-file">Choose image</label><input id="onboarding-file" type="file" accept="image/png,image/jpeg" required></div>
+            <div><label for="onboarding-file">Take or choose image</label><input id="onboarding-file" type="file" accept="image/png,image/jpeg" capture="user" aria-describedby="onboarding-photo-hint" required><p id="onboarding-photo-hint" class="small-note"></p></div>
           </div><p class="small-note">Save any changes to your details before uploading or submitting.</p><button type="submit" class="button button-outline button-small">Upload document</button></fieldset></form>
+          <section id="onboarding-face-panel" class="quote-preview" aria-labelledby="onboarding-face-title" hidden>
+            <h3 id="onboarding-face-title">Automatic face comparison</h3>
+            <p id="onboarding-face-status" class="supporting-copy" role="status" aria-live="polite"></p>
+            <p id="onboarding-face-detail"></p><p id="onboarding-face-evidence" class="small-note"></p>
+            <p class="small-note">Compares your selfie with the portrait on your licence. This does not establish liveness or confirm that the licence is genuine or valid.</p>
+            <div id="onboarding-face-controls">
+              <label class="onboarding-check"><input id="onboarding-face-consent" type="checkbox"><span id="onboarding-face-consent-text"></span></label>
+              <p id="onboarding-face-guidance" class="small-note"></p>
+              <button id="onboarding-face-run" type="button" class="button button-primary button-small" disabled>Compare my face</button>
+            </div>
+          </section>
           <div id="onboarding-final-review" class="onboarding-actions"><button id="onboarding-submit" type="button" class="button button-primary">Submit for review</button><button id="onboarding-close" type="button" class="button button-outline">Close application</button></div>
           <form id="onboarding-review-form" class="stack-form"><fieldset id="onboarding-review-fields"><legend>3. Record your review</legend>
             <p class="small-note">Download and inspect all five current documents. Approval requires all four checks and a reference to the manual verification performed. A download alone is not a completed check.</p>

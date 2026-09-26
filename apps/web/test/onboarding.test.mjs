@@ -12,6 +12,7 @@ const application = { driverId: 'driver', name: '<Driver name>', version: 7, sta
   vehicle: { make: 'Toyota', model: 'Corolla', year: 2020, colour: 'Yellow', plate: 'TEST-123' } },
   documents: [{ id: 'doc', kind: 'profile_photo', name: 'private.png', sizeBytes: 50 }],
   eligibility: { eligible: false, missing: ['insurance'], expired: [] }, events: [], busy: false };
+
 function controller() {
   const f = { commands: [], saved: [], views: [], resets: 0, accepted: 0 };
   f.client = { request: async () => ({ application }), command: async (path, data) => { f.commands.push({ path, data }); return { application: { ...application, version: 8 } }; } };
@@ -72,10 +73,16 @@ const fieldsSource = (await readFile(new URL('../public/dashboard/vehicle-fields
   .replace("'/shared/vehicle-categories.mjs'", `'${new URL('../../../packages/shared/src/vehicle-categories.mjs', import.meta.url)}'`)
   .replace("'/shared/vehicle-registration.mjs'", `'${new URL('../../../packages/shared/src/vehicle-registration.mjs', import.meta.url)}'`);
 const fieldsModule = `data:text/javascript;base64,${Buffer.from(fieldsSource).toString('base64')}`;
+const faceSource = (await readFile(new URL('../public/dashboard/driver-face-view.mjs', import.meta.url), 'utf8'))
+  .replace("'./dom.mjs'", `'${new URL('../public/dashboard/dom.mjs', import.meta.url)}'`)
+  .replace("'/shared/driver-face-check.mjs'", `'${new URL('../../../packages/shared/src/driver-face-check.mjs', import.meta.url)}'`);
+const faceModule = `data:text/javascript;base64,${Buffer.from(faceSource).toString('base64')}`;
 const source = (await readFile(new URL('../public/dashboard/onboarding-view.mjs', import.meta.url), 'utf8'))
   .replace("'./dom.mjs'", `'${new URL('../public/dashboard/dom.mjs', import.meta.url)}'`)
   .replace("'./vehicle-card.mjs'", `'${vehicleModule}'`)
   .replace("'./vehicle-fields.mjs'", `'${fieldsModule}'`)
+  .replace("'./driver-face-view.mjs'", `'${faceModule}'`)
+  .replace("'/shared/driver-face-check.mjs'", `'${new URL('../../../packages/shared/src/driver-face-check.mjs', import.meta.url)}'`)
   .replace("'/shared/vehicle-profile.mjs'", `'${new URL('../../../packages/shared/src/vehicle-profile.mjs', import.meta.url)}'`)
   .replace("'/shared/driver-onboarding.mjs'", `'${new URL('../../../packages/shared/src/driver-onboarding.mjs', import.meta.url)}'`);
 const { createOnboardingView } = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
@@ -338,4 +345,41 @@ test('deletion does not replace application state with an account response or ac
   assert.equal(deleted.length, 0); assert.equal(responses.at(-1).user.id, 'someone-else');
   c.context(driver); await c.poll(); await c.run('delete-profile', { expectedVersion: 7, confirmation: 'DELETE' });
   assert.equal(deleted.length, 1); assert.equal(responses.at(-1).application, null);
+});
+
+test('automatic face comparison requires saved images and explicit current consent; changed evidence clears consent', (t) => {
+  const f = dom(t), faceCheck = { available: true, provider: 'aws-rekognition', status: 'not_started', checkedAt: null, retryAfter: null };
+  const complete = { ...application, eligibility: { eligible: false, missing: [], expired: [] }, faceCheck,
+    documents: [...application.documents, { id: 'licence', kind: 'driving_licence', name: 'licence.png', sizeBytes: 50 }] };
+  f.render({ ...application, faceCheck });
+  f.node('onboarding-face-consent').checked = true; f.node('onboarding-face-consent').handlers.change();
+  f.node('onboarding-face-run').handlers.click(); assert.equal(f.actions.length, 0, 'both saved images required');
+  f.render(complete); f.node('onboarding-face-consent').checked = false;
+  f.node('onboarding-face-run').handlers.click(); assert.equal(f.actions.length, 0, 'consent required');
+  assert.equal(f.node('onboarding-submit').disabled, true);
+  f.node('onboarding-face-consent').checked = true; f.node('onboarding-face-consent').handlers.change();
+  assert.equal(f.node('onboarding-face-run').disabled, false); f.node('onboarding-face-run').handlers.click();
+  assert.deepEqual(f.actions[0], ['face-check', { expectedVersion: 7, consent: true }]);
+  f.render({ ...complete, version: 8 }); assert.equal(f.node('onboarding-face-consent').checked, false);
+  f.render({ ...complete, faceCheck: { ...faceCheck, status: 'pending' } });
+  assert.equal(f.node('onboarding-face-run').disabled, true); assert.equal(f.node('onboarding-submit').disabled, true);
+  f.render({ ...complete, faceCheck: { ...faceCheck, status: 'matched', checkedAt: 100, similarity: 99.7 } });
+  assert.equal(f.node('onboarding-submit').disabled, false); assert.match(f.node('onboarding-face-status').textContent, /passed/);
+  assert.match(f.node('onboarding-face-detail').textContent, /still needs document review/);
+  f.render({ ...complete, faceCheck: { ...faceCheck, status: 'unavailable', checkedAt: 100 } });
+  assert.equal(f.node('onboarding-submit').disabled, false, 'provider outage permits staff review, not a fabricated match');
+  f.render(complete, admin); assert.equal(f.node('onboarding-face-controls').hidden, true);
+  f.node('onboarding-face-run').handlers.click(); assert.equal(f.actions.length, 1, 'staff cannot initiate a driver consent action');
+  f.view.reset(); assert.equal(f.node('onboarding-face-panel').hidden, true); assert.equal(f.node('onboarding-face-consent').checked, false);
+});
+
+test('face comparison blocks unsaved details and retries during a cooldown', (t) => {
+  const f = dom(t), ready = { ...application, documents: [...application.documents, { id: 'licence', kind: 'driving_licence', name: 'licence.png', sizeBytes: 50 }],
+    faceCheck: { available: true, status: 'needs_review', checkedAt: 100, retryAfter: Date.now() + 60_000 } };
+  f.render(ready); f.node('onboarding-face-consent').checked = true;
+  f.node('onboarding-face-run').handlers.click(); assert.equal(f.actions.length, 0);
+  f.render({ ...ready, faceCheck: { ...ready.faceCheck, retryAfter: null } });
+  f.node('onboarding-details-form').handlers.input(); f.node('onboarding-face-consent').checked = true;
+  f.node('onboarding-face-run').handlers.click(); assert.equal(f.actions.length, 0);
+  assert.match(f.node('onboarding-face-guidance').textContent, /Save your detail changes/);
 });

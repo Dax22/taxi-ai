@@ -12,6 +12,12 @@ function application(row) {
     updatedAt: row.updated_at, reviewedAt: row.reviewed_at, reviewedBy: row.reviewed_by,
     reviewReason: row.review_reason, verification: row.verification_json ? JSON.parse(row.verification_json) : null } : null;
 }
+function faceCheck(row) {
+  return row ? { id: row.id, driverId: row.driver_id, applicationVersion: row.application_version,
+    documents: JSON.parse(row.documents_json), consentVersion: row.consent_version, consentedAt: row.consented_at,
+    provider: row.provider, status: row.status, reason: row.reason, similarity: row.similarity,
+    threshold: row.threshold, startedAt: row.started_at, checkedAt: row.checked_at } : null;
+}
 
 /** All application, document and retry writes join the caller's transaction. */
 export function createDriversRepository(db) {
@@ -36,6 +42,7 @@ export function createDriversRepository(db) {
       // Minimal rows and audit snapshots anchor historical trips/reviews. Active
       // profile details and current document bytes are removed atomically.
       (await db.prepare('DELETE FROM driver_documents WHERE driver_id=?').run(id));
+      (await db.prepare("UPDATE driver_face_checks SET status='superseded' WHERE driver_id=?").run(id));
       (await db.prepare('DELETE FROM driver_vehicle_selections WHERE driver_id=?').run(id));
       (await db.prepare(`UPDATE drivers SET status='pending',vehicle_model='',vehicle_plate='',reviewed_by=NULL,reviewed_at=NULL WHERE user_id=?`).run(id));
       (await db.prepare(`UPDATE driver_applications SET status='draft',version=version+1,details_json=NULL,submitted_at=NULL,
@@ -86,6 +93,19 @@ export function createDriversRepository(db) {
     command: async (actorId, key) => (await db.prepare(`SELECT fingerprint,driver_id AS driverId FROM driver_application_commands WHERE actor_id=? AND key=?`).get(actorId, key)),
     async saveCommand(actorId, key, fingerprint, driverId) {
       (await db.prepare('INSERT INTO driver_application_commands(actor_id,key,fingerprint,driver_id) VALUES (?,?,?,?)').run(actorId, key, fingerprint, driverId));
+    },
+    faceCheck: async (id) => faceCheck(await db.prepare("SELECT * FROM driver_face_checks WHERE driver_id=? AND status<>'superseded'").get(id)),
+    faceAttempt: async (id) => faceCheck(await db.prepare('SELECT * FROM driver_face_checks WHERE id=?').get(id)),
+    faceAttempts: async (id, since) => (await db.prepare('SELECT * FROM driver_face_checks WHERE driver_id=? AND started_at>=? ORDER BY started_at DESC,id').all(id, since)).map(faceCheck),
+    invalidateFaceChecks: async (id) => await db.prepare("UPDATE driver_face_checks SET status='superseded' WHERE driver_id=? AND status<>'superseded'").run(id),
+    async insertFaceCheck(row) {
+      await db.prepare(`INSERT INTO driver_face_checks(id,driver_id,application_version,documents_json,consent_version,consented_at,
+        provider,status,threshold,started_at) VALUES(?,?,?,?,?,?,?,'pending',?,?)`).run(row.id, row.driverId, row.applicationVersion,
+        JSON.stringify(row.documents), row.consentVersion, row.consentedAt, row.provider, row.threshold, row.startedAt);
+    },
+    async completeFaceCheck(id, { status, reason, similarity, checkedAt }) {
+      await db.prepare('UPDATE driver_face_checks SET status=?,reason=?,similarity=?,checked_at=? WHERE id=?')
+        .run(status, reason, similarity, checkedAt, id);
     },
   });
 }

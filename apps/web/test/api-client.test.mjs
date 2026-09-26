@@ -4,6 +4,18 @@ import { createApiClient } from '../public/dashboard/api-client.mjs';
 
 const response = (status, body) => ({ ok: status < 400, status, json: async () => body });
 
+test('driver face comparison has time for bounded provider processing and still aborts stalled requests', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  let finish, signal;
+  const client = createApiClient({ fetchImpl: (path, options) => {
+    signal = options.signal; return new Promise(resolve => { finish = resolve; });
+  } });
+  const comparison = client.command('/api/driver/application/face-check', { expectedVersion: 2, consent: true });
+  t.mock.timers.tick(35_000); assert.equal(signal.aborted, false, 'image processing and a 30-second provider call can finish');
+  t.mock.timers.tick(10_001); assert.equal(signal.aborted, true, 'a stuck transport is bounded');
+  finish(response(200, { application: {} })); await comparison;
+});
+
 test('a lost response retries the same command key and keeps the original offer/version', async () => {
   const calls = [];
   let sequence = 0;

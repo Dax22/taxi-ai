@@ -29,6 +29,7 @@
     "db:postgres:import": "node --env-file-if-exists=.env --experimental-sqlite scripts/postgres-import.mjs"
   },
   "dependencies": {
+    "@aws-sdk/client-rekognition": "3.1141.0",
     "google-auth-library": "11.1.0",
     "nodemailer": "10.0.10",
     "pg": "8.16.3",

@@ -8,6 +8,7 @@ import { createEmailConfig } from '../services/api/src/infrastructure/email-conf
 import { createPushProvider } from '../services/api/src/infrastructure/push-provider.mjs';
 import { createVehicleVisionProvider } from '../services/api/src/infrastructure/vehicle-vision-provider.mjs';
 import { createStaffMfaConfig } from '../services/api/src/infrastructure/staff-config.mjs';
+import { readDriverFaceConfig } from '../services/api/src/infrastructure/driver-face-config.mjs';
 
 try {
   const runtime = createRuntimeConfig();
@@ -22,6 +23,7 @@ try {
   const push = createPushProvider({ env: process.env });
   const vision = createVehicleVisionProvider({ env:process.env });
   const staffMfa = createStaffMfaConfig(process.env);
+  const driverFace = readDriverFaceConfig(process.env);
   const calls = createCallConfig({ ...process.env, TAXI_AI_CALLS_MODE: process.env.TAXI_AI_CALLS_MODE ?? (runtime.mode === 'staging' ? 'off' : 'local') });
   const maps = createMapProvider({ env: { ...process.env, TAXI_AI_MAPS_MODE: process.env.TAXI_AI_MAPS_MODE ?? (runtime.mode === 'staging' ? 'off' : 'community') } });
   const dispatch = createDispatchConfig(process.env);
@@ -31,6 +33,7 @@ try {
   console.log(`Staff authenticator: ${staffMfa.factor.available ? 'configured' : 'unavailable'}; required=${staffMfa.required}.`);
   console.log(`Storage: ${process.env.TAXI_AI_DATABASE_URL ? 'PostgreSQL (schema must already be migrated)' : 'SQLite (single instance)'}; process role=${workers.role}.`);
   console.log(`Vehicle photo checks: ${vision.enabled ? 'configured' : 'off'}.`);
+  console.log(`Driver face comparison: ${driverFace.provider}; this does not validate credentials, licence records or liveness.`);
   console.log(`Ride matching: ${dispatch.mode}; pickup road estimates ${maps.mode === 'off' ? 'unavailable (distance fallback)' : 'use the configured router'}.`);
   console.log('This checks configuration only, not TLS, network providers, disk persistence or a deployed server.');
 } catch (error) { console.error(error.message); process.exitCode = 1; }

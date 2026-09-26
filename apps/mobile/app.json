@@ -38,8 +38,8 @@
       [
         "expo-image-picker",
         {
-          "cameraPermission": "Allow Taxi Ai to take a food or vehicle photo when you choose to add one.",
-          "photosPermission": "Allow Taxi Ai to use the food or vehicle photo you select.",
+          "cameraPermission": "Allow Taxi Ai to take your driver selfie, licence, food or vehicle photo when you choose to add one.",
+          "photosPermission": "Allow Taxi Ai to use the driver document, food or vehicle photo you select.",
           "microphonePermission": false
         }
       ],

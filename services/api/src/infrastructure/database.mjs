@@ -22,6 +22,7 @@ migrations.push('030_worker_scale.sql');
 migrations.push('031_family_safety.sql', '032_family_delivery.sql');
 migrations.push('033_staff_access.sql', '034_admin_cases.sql', '035_admin_operations.sql');
 migrations.push('036_admin_compliance.sql');
+migrations.push('037_driver_face_checks.sql');
 export const SCHEMA_VERSION = migrations.length;
 
 export function transaction(db, run) {

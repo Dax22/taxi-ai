@@ -6,8 +6,10 @@ import { DRIVER_REVIEW_CHECKS } from '../../../../../packages/shared/src/driver-
 import { asyncMap } from '../../shared/async-collections.mjs';
 
 
-/** Manual review records evidence; it does not perform external identity checks. */
-export function createDriversService({ repository, getAccount, hasDriverWork, codec, tokens, unitOfWork, audit, clock }) {
+/** Automatic face comparison supplies evidence; staff still review licence, vehicle and insurance. */
+export function createDriversService({ repository, getAccount, hasDriverWork, codec, faceProvider, faceChecksFactory, tokens, unitOfWork, audit, clock }) {
+  const faceChecks = faceChecksFactory({ repository, provider: faceProvider, getAccount, hasDriverWork,
+    access, editable, view, canonical, tokens, unitOfWork, audit, clock });
   async function access(user, id) {
     check(user?.role === 'admin' || (hasCapability(user, 'driver') && user.id === id), 'FORBIDDEN', 'Only the applicant and administrators can access this application.');
     check(hasCapability((await getAccount(id)), 'driver'), 'NOT_FOUND', 'This Work profile has been deleted.');
@@ -20,7 +22,7 @@ export function createDriversService({ repository, getAccount, hasDriverWork, co
     const documents = (await repository.documents(id)).map((doc) => ({ ...doc, readByReviewer: read.includes(doc.id) }));
     return { ...app, vehicle: app.details?.vehicle ?? (await repository.selection(id)) ?? (await repository.find(id)).vehicle,
       name: (await getAccount(id)).name, documents, eligibility: eligibility(app, documents, clock()),
-      busy: (await hasDriverWork(id)), events: (await repository.events(id)) };
+      faceCheck: await faceChecks.project(id, documents), busy: (await hasDriverWork(id)), events: (await repository.events(id)) };
   }
   async function list(user) {
     requireRole(user, 'admin');
@@ -36,7 +38,8 @@ export function createDriversService({ repository, getAccount, hasDriverWork, co
     // Recheck old drafts/submissions against today's policy without rewriting approved history.
     applicationDetails(app.details, now);
   }
-  async function command(user, id, action, data, key) {
+  async function command(user, id, action, data, key, reauthenticate) {
+    if (action === 'face-check') return await faceChecks.run(user, id, data, key, reauthenticate);
     (await access(user, id));
     if (action === 'review') { requireRole(user, 'admin'); check(user.id !== id, 'FORBIDDEN', 'You cannot review your own application.'); }
     else check(hasCapability(user, 'driver') && user.id === id, 'FORBIDDEN', 'Only the applicant can change the application.');
@@ -85,11 +88,15 @@ export function createDriversService({ repository, getAccount, hasDriverWork, co
           (await repository.removeDocument(doc.id)); event = { documentId: doc.id, kind: doc.kind };
         }
         app.status = 'draft'; app.verification = null;
+        await repository.invalidateFaceChecks(id);
       } else if (action === 'reopen') {
         check(['approved', 'submitted', 'rejected', 'changes_requested'].includes(app.status), 'APPLICATION_LOCKED', 'This application is already a draft.');
         app.status = 'draft'; app.verification = null;
+        await repository.invalidateFaceChecks(id);
       } else if (action === 'submit') {
-        editable(app); ready(app, (await repository.documents(id)), now);
+        const documents = await repository.documents(id);
+        editable(app); ready(app, documents, now);
+        await faceChecks.requireCompleted(id, documents);
         app.status = 'submitted'; app.submittedAt = now; app.verification = null;
       } else {
         check(app.status === 'submitted', 'APPLICATION_LOCKED', 'Only a submitted application can be reviewed.');
@@ -97,13 +104,15 @@ export function createDriversService({ repository, getAccount, hasDriverWork, co
         const reason = label(data.reason, 'Review reason', 10, 1000);
         if (data.decision === 'approved') {
           const documents = (await repository.documents(id)); ready(app, documents, now);
+          const faceCheck = await faceChecks.requireCompleted(id, documents);
           fields(data.checks, Object.keys(DRIVER_REVIEW_CHECKS));
           check(Object.values(data.checks).every((value) => value === true), 'INVALID_REVIEW', 'Record all four manual checks before approval.');
           const read = (await repository.readIds(id, user.id));
           check(documents.every((doc) => read.includes(doc.id)), 'INVALID_REVIEW', 'Download and inspect every current document before approval.');
           app.verification = { method: 'manual', reference: label(data.reference, 'Verification reference', 5, 200),
             checks: { ...data.checks }, documents: documents.map(({ id, kind, sha256, expiresOn }) => ({ id, kind, sha256, expiresOn })),
-            reviewerId: user.id, checkedAt: now };
+            reviewerId: user.id, checkedAt: now,
+            ...(faceCheck.checkedAt !== null ? { faceCheck: { ...faceCheck, attemptId: (await repository.faceCheck(id))?.id ?? null } } : {}) };
         } else app.verification = null;
         app.status = data.decision; app.reviewedAt = now; app.reviewedBy = user.id; app.reviewReason = reason;
         event = { reason, details: app.details, verification: app.verification };

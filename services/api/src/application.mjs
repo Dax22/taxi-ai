@@ -9,6 +9,8 @@ import { createGuestRidesRepository } from './modules/guest-rides/repository.mjs
 import { createGuestRidesService } from './modules/guest-rides/service.mjs';
 import { MAX_DRIVER_FILE_BYTES } from '../../../packages/shared/src/driver-onboarding.mjs';
 import { createDriverDocumentCodec } from './infrastructure/driver-document-codec.mjs';
+import { createDriverFaceProvider } from './infrastructure/driver-face-provider.mjs';
+import { readDriverFaceConfig } from './infrastructure/driver-face-config.mjs';
 import { asAsyncDatabase } from './infrastructure/async-database.mjs';
 import { passwords } from './infrastructure/passwords.mjs';
 import { tokens } from './infrastructure/tokens.mjs';
@@ -18,6 +20,7 @@ import { createAccountsRepository } from './modules/accounts/repository.mjs';
 import { createAccountsService } from './modules/accounts/service.mjs';
 import { createDriversRepository } from './modules/drivers/repository.mjs';
 import { createDriversService } from './modules/drivers/service.mjs';
+import { createDriverFaceChecks } from './modules/driver-face-checks/service.mjs';
 import { vehicleDetails } from './modules/drivers/domain.mjs';
 import { createRidesRepository } from './modules/rides/repository.mjs';
 import { createDeliveriesRepository } from './modules/deliveries/repository.mjs';
@@ -89,6 +92,7 @@ import { createAdminDemandService } from './modules/admin-demand/service.mjs';
 /** Composition root: the only place that wires business modules to adapters. */
 export function createApplication({ db, clock = Date.now, callConfig = createCallConfig(), mapProvider = createMapProvider(), allowSimulation = false,
   dispatchConfig = createDispatchConfig(), workerConfig = createWorkerConfig(), staffMfa = createStaffMfaConfig(),
+  driverFaceProvider = createDriverFaceProvider({ config: readDriverFaceConfig({}) }),
   safetyAlertProvider = createSafetyAlertProvider(), accountMail = createAccountMail(), pushProvider = createPushProvider(), vehicleVisionProvider = createVehicleVisionProvider(),
   googleProvider = createGoogleProvider({ config: createGoogleConfig({}), clock }) }) {
   db = asAsyncDatabase(db);
@@ -123,7 +127,7 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
     getAccount: accounts.profile, tokens, unitOfWork, audit, clock });
   drivers = createDriversService({ repository: driverRepository,
     getAccount: accounts.profile, hasDriverWork, codec: createDriverDocumentCodec(MAX_DRIVER_FILE_BYTES),
-    tokens, unitOfWork, audit, clock });
+    faceProvider: driverFaceProvider, faceChecksFactory: createDriverFaceChecks, tokens, unitOfWork, audit, clock });
   let calls, locations, payments, safety, guestRides, notifications, family, familyDelivery, adminCases;
   const staffAccess = createStaffAccessService({ repository: createStaffAccessRepository(db), getAccount: accounts.profile,
     getAccountByEmail: async email => {

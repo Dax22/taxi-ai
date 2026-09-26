@@ -1,4 +1,6 @@
 import { createSafetyAlertProvider } from '../../services/api/src/infrastructure/safety-alert-provider.mjs';
+import { readDriverFaceConfig } from '../../services/api/src/infrastructure/driver-face-config.mjs';
+import { createDriverFaceProvider } from '../../services/api/src/infrastructure/driver-face-provider.mjs';
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
@@ -174,13 +176,14 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
   safetyAlertProvider = createSafetyAlertProvider({env:process.env}),
   pushProvider = createPushProvider({ env: process.env }),
   vehicleVisionProvider = createVehicleVisionProvider({ env:process.env }),
+  driverFaceProvider = createDriverFaceProvider({ config: readDriverFaceConfig(process.env) }),
   googleProvider = createGoogleProvider({ config: createGoogleConfig(process.env, runtime), clock }) } = {}) {
   if (runtime.mode === 'staging' && callConfig.mode === 'local') throw new Error('Staging calls require off or a configured relay.');
   db = asAsyncDatabase(db);
   if (workerConfig.role !== 'all' && db.kind !== 'postgres') throw new Error('Split API/worker deployments require PostgreSQL.');
   const application = createApplication({ db, clock, callConfig, mapProvider,
     dispatchConfig: { ...dispatchConfig, requestRefresh: workerConfig.role === 'all' }, workerConfig,
-    googleProvider, accountMail, pushProvider, vehicleVisionProvider, safetyAlertProvider, staffMfa, allowSimulation: runtime.mode === 'local' });
+    googleProvider, accountMail, pushProvider, vehicleVisionProvider, driverFaceProvider, safetyAlertProvider, staffMfa, allowSimulation: runtime.mode === 'local' });
   const httpApplication = workerConfig.role === 'api' ? { ...application, dispatch: { ...application.dispatch, refresh: async () => {} } } : application;
   const handleApi = createApiRouter(httpApplication, { secure: runtime.mode === 'staging' });
   const handleMobile = createMobileRouter(httpApplication);

@@ -2,6 +2,8 @@ import { $, element } from './dom.mjs';
 import { DRIVER_DOCUMENTS, DRIVER_REVIEW_CHECKS, DRIVER_APPLICATION_LABELS } from '/shared/driver-onboarding.mjs';
 import { renderVehicleCard } from './vehicle-card.mjs';
 import { createVehicleFields } from './vehicle-fields.mjs';
+import { createDriverFaceView } from './driver-face-view.mjs';
+import { driverFaceCheckComplete } from '/shared/driver-face-check.mjs';
 
 const detailFields = ['legalName', 'phone', 'licenceNumber', 'make', 'model', 'year', 'colour', 'plate'];
 const editable = (app) => ['draft', 'changes_requested', 'rejected'].includes(app?.status);
@@ -11,6 +13,7 @@ export function createOnboardingView({ onAction, onDownload, onClose }) {
   const input = (name) => $(`onboarding-${name}`);
   function changedDetails() { dirty = true; notice = ''; if (lastState) render(lastState); }
   const vehicleFields = createVehicleFields({ onChange: changedDetails });
+  const faceView = createDriverFaceView({ onAction });
   for (const [kind, spec] of Object.entries(DRIVER_DOCUMENTS)) {
     const option = element('option', spec.label); option.value = kind; input('kind').append(option);
   }
@@ -23,6 +26,10 @@ export function createOnboardingView({ onAction, onDownload, onClose }) {
     const required = DRIVER_DOCUMENTS[input('kind').value]?.expires;
     input('expiresOn').required = Boolean(required); input('expiry-row').hidden = !required;
     if (!required) input('expiresOn').value = '';
+    const selfie = input('kind').value === 'profile_photo';
+    input('file').setAttribute('capture', selfie ? 'user' : 'environment');
+    input('photo-hint').textContent = selfie ? 'Take a clear, recent selfie in good lighting, with only your face visible.'
+      : input('kind').value === 'driving_licence' ? 'Photograph the front of your licence. Keep its portrait and all details readable, without glare.' : '';
   }
   input('kind').addEventListener('change', expiry); expiry();
   $('onboarding-details-form').addEventListener('input', changedDetails);
@@ -90,7 +97,7 @@ export function createOnboardingView({ onAction, onDownload, onClose }) {
     cancelDelete(); input('edit-confirm').hidden = true;
     input('details-form').hidden = true; input('notice').textContent = '';
     for (const id of ['details', 'upload', 'review']) $(`onboarding-${id}-form`).reset();
-    vehicleFields.load();
+    vehicleFields.load(); faceView.reset();
     for (const id of ['documents', 'history', 'summary']) $(`onboarding-${id}`).replaceChildren();
     input('title').textContent = 'Your Work profile'; input('eligibility').textContent = ''; input('stale').hidden = true;
     input('status').textContent = ''; input('reason-note').textContent = ''; input('error').textContent = '';
@@ -104,8 +111,9 @@ export function createOnboardingView({ onAction, onDownload, onClose }) {
     input('error').textContent = error;
     input('notice').textContent = notice;
     input('loading').hidden = Boolean(app); input('content').hidden = !app;
-    if (!app) return;
+    if (!app) { faceView.reset(); return; }
     const owner = user.role === 'driver', canEdit = owner && editable(app) && !app.busy;
+    faceView.render({ app, owner, pending, dirty });
     if (editorOpen === null) editorOpen = owner && editable(app) && !app.details;
     if (!owner || !editable(app)) editorOpen = false;
     input('owner-controls').hidden = !owner;
@@ -151,7 +159,7 @@ export function createOnboardingView({ onAction, onDownload, onClose }) {
     input('details-form').hidden = !owner || !editorOpen; input('details-fields').disabled = !canEdit || pending || !editorOpen;
     input('upload-form').hidden = !owner; input('upload-fields').disabled = !canEdit || pending || dirty;
     input('submit').hidden = !owner || !editable(app);
-    input('submit').disabled = pending || app.busy || dirty || !app.details || app.eligibility.missing.length > 0 || app.eligibility.expired.length > 0;
+    input('submit').disabled = pending || app.busy || dirty || !app.details || app.eligibility.missing.length > 0 || app.eligibility.expired.length > 0 || !driverFaceCheckComplete(app.faceCheck);
     input('reopen').hidden = !owner || !['approved', 'submitted'].includes(app.status);
     input('reopen').disabled = pending || app.busy;
     input('close').hidden = owner; input('close').disabled = pending;
