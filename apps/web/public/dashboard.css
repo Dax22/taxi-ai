@@ -360,3 +360,124 @@
 #guest-link-panel .review-actions { flex-wrap: wrap; }
 #guest-details dd { overflow-wrap: anywhere; }
 #guest-pin { font-size: clamp(2rem, 8vw, 3.4rem); letter-spacing: .2em; font-weight: 800; }
+
+
+/* Password recovery UX */
+@layer components {
+  .password-field {
+    position: relative;
+  }
+
+  .password-field input {
+    padding-right: 72px;
+  }
+
+  .password-toggle {
+    position: absolute;
+    top: 50%;
+    right: 8px;
+    transform: translateY(-50%);
+    min-width: 54px;
+    min-height: 36px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    background: var(--soft);
+    color: var(--ink);
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .password-toggle:hover {
+    background: var(--brand-soft);
+  }
+
+  .password-toggle:disabled {
+    opacity: .55;
+    cursor: not-allowed;
+  }
+
+  .forgot-password-row {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 10px;
+  }
+
+  .forgot-password-row .text-link {
+    font-size: 12px;
+  }
+
+  .recovery-card {
+    max-width: 680px;
+    border-radius: 18px;
+    padding: clamp(24px, 4vw, 40px);
+    box-shadow: 0 14px 42px #2022250a;
+  }
+
+  .recovery-card h1 {
+    max-width: 560px;
+  }
+
+  .recovery-success-icon {
+    width: 48px;
+    height: 48px;
+    display: grid;
+    place-items: center;
+    margin-bottom: 18px;
+    border-radius: 50%;
+    background: var(--brand);
+    color: var(--ink);
+    font-size: 24px;
+    font-weight: 800;
+  }
+
+  .recovery-next-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px 18px;
+    margin-top: 22px;
+  }
+
+  .recovery-next-actions .button {
+    min-height: 44px;
+  }
+
+  .recovery-return {
+    margin-top: 22px;
+  }
+
+  #recovery-google {
+    margin-top: 18px;
+    padding-top: 16px;
+    border-top: 1px solid var(--line);
+  }
+
+  #recovery-status:not(:empty) {
+    border-left: 4px solid var(--brand);
+  }
+}
+
+@layer responsive {
+  @media (max-width: 580px) {
+    .password-toggle {
+      min-width: 52px;
+      right: 6px;
+    }
+
+    .recovery-card {
+      margin-top: 16px;
+      padding: 22px 18px;
+    }
+
+    .recovery-next-actions {
+      display: grid;
+      grid-template-columns: 1fr;
+    }
+
+    .recovery-next-actions .button,
+    .recovery-next-actions .text-link {
+      width: 100%;
+      justify-content: center;
+    }
+  }
+}
