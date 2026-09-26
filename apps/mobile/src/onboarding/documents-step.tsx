@@ -9,8 +9,8 @@ export function DocumentsStep({ application, kind, onKind, expiresOn, onExpiry, 
     file: DriverFile | null; onChoose(): void; onClear(): void; onUpload(): void; onRemove(id: string): void; onContinue(): void; disabled: boolean; pending: boolean }) {
   const ready = application.details && !application.eligibility.missing.length && !application.eligibility.expired.length;
   return <><Card><Pill>{`${application.documents.length} OF 5 DOCUMENTS ADDED`}</Pill><Text style={styles.h2}>A few checks. A better journey.</Text>
-    <Text style={styles.body}>Add clear PNG or JPEG images up to 2 MiB each. Include the car and its readable number plate in the vehicle photo.</Text>
-    <Text style={styles.small}>These uploads are private to you and the review team. They are not customer-facing vehicle photos. Expiry dates use Abuja time.</Text>
+    <Text style={styles.body}>Add clear PNG or JPEG images up to 2 MiB each. Your driver profile face photo is mandatory: use a recent portrait showing only your face. Include the car and its readable number plate in the vehicle photo.</Text>
+    <Text style={styles.small}>The approved face photo becomes your rider-facing profile icon. Licence and vehicle documents stay private to you and the review team. Expiry dates use Abuja time.</Text>
   </Card><Card>{(Object.entries(DRIVER_DOCUMENTS) as [DocumentKind, { label: string; expires: boolean }][]).map(([key,spec]) => {
     const doc = application.documents.find((d) => d.kind === key), expired = application.eligibility.expired.includes(key);
     return <View key={key} style={[styles.stack,{ paddingVertical: 12 }]}><Text style={styles.body}>{spec.label}</Text>
