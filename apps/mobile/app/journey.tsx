@@ -12,6 +12,7 @@ import { PaymentCard } from '../src/payments/payment-card';
 import { useSession } from '../src/session/provider';
 import { GuestRideLink } from '../src/guest-rides/link-panel';
 import { PassengerSummary } from '../src/guest-rides/passenger-summary';
+import { ParcelRecipientLink } from '../src/parcels/link-panel';
 import { bookingStatusLabel } from '../../../packages/shared/src/mobile-booking.mjs';
 import { vehicleCategory } from '../../../packages/shared/src/vehicle-categories.mjs';
 import type { JourneyAction } from '../../../packages/shared/src/mobile-journeys.mjs';
@@ -39,6 +40,7 @@ function JourneyScreen({id}:{id:string}){
       </Card>
       {r.mode==='customer'&&r.passenger?.kind==='guest'&&['booked','on_way','arrived','in_progress'].includes(r.status)&&<GuestRideLink rideId={r.id}/>}
       <PickupIdentity ride={r}/>
+      {r.mode === 'customer' && r.delivery && <ParcelRecipientLink rideId={r.id}/>}
       {r.delivery&&<Card><Text style={styles.h2}>Delivery details</Text><Text style={styles.body}>{r.delivery.description} · {r.delivery.weightKg} kg</Text><Text style={styles.body}>Recipient · {r.delivery.recipientName}</Text>
         {Boolean(r.delivery.pickupInstructions)&&<Text style={styles.body}>Pickup · {r.delivery.pickupInstructions}</Text>}{Boolean(r.delivery.dropoffInstructions)&&<Text style={styles.body}>Drop-off · {r.delivery.dropoffInstructions}</Text>}
         {r.delivery.dropoffPin&&<><Text style={styles.label}>RECIPIENT’S DROP-OFF CODE</Text><Text selectable style={styles.title}>{r.delivery.dropoffPin}</Text><Text style={styles.small}>Share privately with your recipient. They give this code to the driver only after receiving the parcel.</Text></>}

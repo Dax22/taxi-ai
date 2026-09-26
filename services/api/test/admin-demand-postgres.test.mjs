@@ -31,11 +31,14 @@ test('PostgreSQL demand aggregates preserve WAT buckets, request cohorts, unknow
     await db.prepare(`INSERT INTO driver_availability(id,driver_id,active,mode,position_json,session_hash,client_hash,sequence,started_at,seen_at,expires_at,latitude,longitude)
       VALUES (?,?,1,'gps',?,'demand-test','test',1,?,?,?,?,?)`).run(availabilityId, driverId,
       JSON.stringify({ lat: 9.08, lng: 7.41, capturedAt: now, accuracy: 10 }), now, now, now + 30_000, 9.08, 7.41);
-    async function ride({ createdAt = midnight, region = 'ng:181:148', category = 'standard', matched = false } = {}) {
+    async function ride({ createdAt = midnight, region = 'ng:181:148', category = 'standard', matched = false,
+      delivery = ['van', 'truck', 'motorcycle'].includes(category) } = {}) {
       const id = randomUUID(), customerId = await user(), assignedDriver = matched ? await user() : null;
       await db.prepare(`INSERT INTO rides(id,customer_id,driver_id,pickup_id,destination_id,suggested_fare_kobo,status,created_at,updated_at,request_expires_at,dispatch_region,vehicle_category,matched_at)
         VALUES (?, ?, ?, 'private-pickup','private-destination',300000,?,?,?,?,?,?,?)`).run(id, customerId, assignedDriver,
         matched ? 'negotiating' : 'requested', createdAt, createdAt, now - 1, region, category, matched ? createdAt + 60_000 : null);
+      if (delivery) await db.prepare('INSERT INTO delivery_orders(ride_id,details_json) VALUES (?,?)')
+        .run(id, JSON.stringify({ recipientName: 'Private recipient', packageDescription: 'Private parcel' }));
       return id;
     }
     const eligibleRide = await ride();
@@ -56,10 +59,16 @@ test('PostgreSQL demand aggregates preserve WAT buckets, request cohorts, unknow
     assert.equal(result.supply.availableDrivers, 1); assert.equal(result.supply.capturedAt, now);
     assert.equal(result.areas.items.find((row) => row.region.key === 'unassigned').requests, 2);
     assert.equal((await service.get({ id: staffId }, { ...query, service: 'courier' })).totals.requests, 1);
-    assert.equal((await service.get({ id: staffId }, { ...query, service: 'courier' })).supply.availableDrivers, 0);
+    assert.equal((await service.get({ id: staffId }, { ...query, service: 'courier' })).supply.availableDrivers, 1);
     assert.equal((await service.get({ id: staffId }, { ...query, region: 'unassigned' })).totals.requests, 2);
     const cell = await service.get({ id: staffId }, { ...query, region: 'ng:181:148', service: 'ride' });
     assert.equal(cell.totals.requests, 1); assert.equal(cell.supply.availableDrivers, 1);
+    await ride({ category: 'standard', delivery: true });
+    const withParcel = await service.get({ id: staffId }, query);
+    const parcelDemand = await service.get({ id: staffId }, { ...query, service: 'courier' });
+    const passengerDemand = await service.get({ id: staffId }, { ...query, service: 'ride' });
+    assert.equal(withParcel.totals.requests, 5); assert.equal(parcelDemand.totals.requests, 2); assert.equal(passengerDemand.totals.requests, 3);
+    assert.equal(withParcel.supply.availableDrivers, 1); assert.equal(parcelDemand.supply.availableDrivers, 1); assert.equal(passengerDemand.supply.availableDrivers, 1);
     for (const value of ['Private person', 'legacy-private-address', 'private-pickup', 'latitude', 'longitude', 'driverId', 'customerId']) {
       assert.ok(!JSON.stringify(result).includes(value), value);
     }

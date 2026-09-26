@@ -7,6 +7,8 @@ import { createSafetyRepository } from './modules/safety/repository.mjs';
 import { createSafetyService } from './modules/safety/service.mjs';
 import { createGuestRidesRepository } from './modules/guest-rides/repository.mjs';
 import { createGuestRidesService } from './modules/guest-rides/service.mjs';
+import { createParcelTrackingRepository } from './modules/parcel-tracking/repository.mjs';
+import { createParcelTrackingService } from './modules/parcel-tracking/service.mjs';
 import { MAX_DRIVER_FILE_BYTES } from '../../../packages/shared/src/driver-onboarding.mjs';
 import { createDriverDocumentCodec } from './infrastructure/driver-document-codec.mjs';
 import { createDriverFaceProvider } from './infrastructure/driver-face-provider.mjs';
@@ -128,7 +130,7 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
   drivers = createDriversService({ repository: driverRepository,
     getAccount: accounts.profile, hasDriverWork, codec: createDriverDocumentCodec(MAX_DRIVER_FILE_BYTES),
     faceProvider: driverFaceProvider, faceChecksFactory: createDriverFaceChecks, tokens, unitOfWork, audit, clock });
-  let calls, locations, payments, safety, guestRides, notifications, family, familyDelivery, adminCases;
+  let calls, locations, payments, safety, guestRides, parcelTracking, notifications, family, familyDelivery, adminCases;
   const staffAccess = createStaffAccessService({ repository: createStaffAccessRepository(db), getAccount: accounts.profile,
     getAccountByEmail: async email => {
       const record = await accountRepository.findByEmail(email);
@@ -150,6 +152,7 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
       mode: 'work', eventKey: `dispatch:${offer.id}`, now: offer.createdAt })) });
   const rides = createRidesService({ repository: rideRepository,
     dispatch,
+    isParcelRecipient: async (userId, rideId) => await parcelTracking.isRecipient(userId, rideId),
     passengerForRide: guestRepository.passenger, savePassenger: guestRepository.savePassenger,
     hasOtherWork: eatsRepository.hasWork,
     getAccount: accounts.profile, unitOfWork, audit, tokens, clock,
@@ -213,6 +216,13 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
     sessionOwner:accounts.sessionOwner,nativeSessionOwner:devices.sessionOwner,unitOfWork,tokens,audit,clock});
   guestRides = createGuestRidesService({ repository: guestRepository, getAccount: accounts.profile, getTrip: rides.guestContext,
     locationForTrip: locations.safetyPosition, sessionOwner: accounts.sessionOwner, nativeSessionOwner: devices.sessionOwner, unitOfWork, tokens, audit, clock });
+  parcelTracking = createParcelTrackingService({ repository: createParcelTrackingRepository(db), getAccount: accounts.profile,
+    getTrip: async (user, rideId) => {
+      const ride = await rides.get(user, rideId);
+      return { rideId: ride.id, customerId: ride.customer.id, driverId: ride.driver?.id ?? null,
+        status: ride.status, destination: ride.destination.name, driver: ride.driver,
+        delivery: ride.delivery, updatedAt: ride.updatedAt };
+    }, locationForTrip: locations.safetyPosition, unitOfWork, tokens, audit, clock });
   family = createFamilyService({ repository: createFamilyRepository(db), getAccount: accounts.profile,
     getAccountByEmail: async (email) => {
       const account = await accountRepository.findByEmail(email);
@@ -221,7 +231,7 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
     listTrips: async (user) => (await rides.list(user, 'customer')).rides.map(ride => ({
       rideId: ride.id, customerId: user.id, status: ride.trip?.status ?? ride.status,
       pickup: ride.pickup.name, destination: ride.destination.name,
-      passenger: ride.passenger, vehicleCategory: ride.vehicleCategory })),
+      passenger: ride.passenger, vehicleCategory: ride.vehicleCategory, service: ride.service })),
     locationForTrip: locations.safetyPosition, unitOfWork, tokens, audit, clock,
     publish: realtime.publish,
     enqueue: async (eventId, userId) => await familyDelivery.enqueue(eventId, userId),
@@ -254,5 +264,5 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
     availabilityFor: availability.positionFor, onClaim: availability.onClaim, tokens, unitOfWork, audit, clock, normalisePhoto: normaliseFoodPhoto });
   const googleAuth = createGoogleAuthService({ repository: createGoogleAuthRepository(db), provider: googleProvider,
     accounts, devices, tokens, unitOfWork, clock });
-  return Object.freeze({ accounts, devices, drivers, rides, dispatch, eats, chat, calls, locations, availability, payments, safety, safetyMonitoring, guestRides, family, familyDelivery, vehicleChecks, adminConsole, staffAccess, adminCases, adminOperations, adminFinance, adminCompliance, adminDemand, googleAuth, accountEmail, notifications, rateLimiter, realtime, workerCoordinator, clock });
+  return Object.freeze({ accounts, devices, drivers, rides, dispatch, eats, chat, calls, locations, availability, payments, safety, safetyMonitoring, guestRides, parcelTracking, family, familyDelivery, vehicleChecks, adminConsole, staffAccess, adminCases, adminOperations, adminFinance, adminCompliance, adminDemand, googleAuth, accountEmail, notifications, rateLimiter, realtime, workerCoordinator, clock });
 }

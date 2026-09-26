@@ -1,4 +1,4 @@
-import { categoryFare, deliveryDetails, transportCategory } from '/shared/transport-categories.mjs';
+import { categoryFare, deliveryDetails, transportCategory, supportsParcelCategory, parcelLoadLimit } from '/shared/transport-categories.mjs';
 import { vehicleCategory } from '/shared/vehicle-categories.mjs';
 import { DRIVER_APPLICATION_LABELS } from '/shared/driver-onboarding.mjs';
 import { DEMO_AREAS, matchSampleArea, createDemoQuote, formatNaira, nairaToKobo } from '/shared/demo-booking.mjs';
@@ -21,27 +21,35 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
   let offerCountdowns = [];
   let busy = false;
   let passengerCategory = 'standard', passengerAccount = null;
+  let courier = typeof location !== 'undefined' && new URLSearchParams(location.search).get('service') === 'courier';
   let initialCategory = typeof location === 'undefined' ? null : new URLSearchParams(location.search).get('category');
   const tripView = createTripView({ onCommand, serverNow, onVehicleMismatch });
   const categories = createVehicleCategoryPicker($('account-vehicle-categories'), { onSelect() { updateCategoryVisibility(); updateButtons(); } });
+  function isDelivery() { return courier || transportCategory(categories.selected().id).service === 'delivery'; }
+  function clearDelivery() { for (const id of ['delivery-description', 'delivery-weight', 'delivery-recipient', 'delivery-pickup', 'delivery-dropoff']) $(id).value = ''; }
   function updateCategoryVisibility() {
     const customer = state.user?.role === 'customer';
     $('vehicle-categories-panel').hidden = !customer;
     $('standard-ride-planner').hidden = !customer || !categories.selected().ridePreview;
     $('customer-panel').hidden = !customer;
-    const category = categories.selected(), policy = transportCategory(category.id);
+    const category = categories.selected();
     if (passengerCategory !== category.id) { clearPassenger(); passengerCategory = category.id; }
-    $('passenger-panel').hidden = !customer || policy.service !== 'ride';
-    $('delivery-details-form').hidden = !customer || policy.service !== 'delivery';
-    $('delivery-weight').max = String(policy.maxLoadKg ?? '');
-    $('delivery-load-hint').textContent = policy.maxLoadKg ? `${category.name} preview limit: ${policy.maxLoadKg} kg. Matching also respects the driver’s approved load capacity.` : '';
-    $('request-submit').textContent = `Request a test ${policy.service === 'delivery' ? 'delivery' : 'ride'}`;
+    $('passenger-panel').hidden = !customer || isDelivery();
+    $('delivery-details-form').hidden = !customer || !isDelivery();
+    const maxLoadKg = isDelivery() ? parcelLoadLimit(category.id) : null;
+    $('delivery-weight').max = String(maxLoadKg ?? '');
+    $('booking-service-ride').setAttribute('aria-pressed', String(!isDelivery()));
+    $('booking-service-courier').setAttribute('aria-pressed', String(isDelivery()));
+    $('booking-service-note').textContent = isDelivery() ? 'Choose a car, motorcycle, van or truck, then add your parcel and recipient details.' : 'Choose a vehicle for your passenger journey.';
+    $('delivery-load-hint').textContent = maxLoadKg ? `${category.id === 'standard' ? 'Car' : category.name} parcel limit: ${maxLoadKg} kg. Matching also respects the driver’s approved load capacity.` : '';
+    $('request-submit').textContent = `Request a test ${isDelivery() ? 'delivery' : 'ride'}`;
     onCategoryChange(category.id); updateQuote();
   }
   function selectedRide() { return state.rides.find((ride) => ride.id === selectedId) ?? state.history?.find((ride) => ride.id === selectedId); }
 
   function updateButtons() {
     categories.setDisabled(busy);
+    $('booking-service-ride').disabled = $('booking-service-courier').disabled = busy;
     const ride = selectedRide();
     const offer = ride?.negotiation?.currentOffer;
     const remaining = offer ? offer.expiresAt - serverNow() : 0;
@@ -64,13 +72,13 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
       node.textContent = seconds > 0 ? `Respond within ${seconds} seconds.` : 'Offer expired. Waiting for the next request.';
     }
     for (const button of document.querySelectorAll('button')) {
-      if (button.closest('#guest-link-panel, #vehicle-categories-panel, #google-auth, #account-modes, #calls-panel, #location-planner, #location-tracking, #availability-panel, #payment-panel, #earnings-panel, #payments-admin-panel, #onboarding-panel, #trusted-contacts-panel, #safety-panel, #safety-admin-panel')) continue; // Feature controllers own their controls.
+      if (button.closest('#parcel-link-panel, #guest-link-panel, #vehicle-categories-panel, #google-auth, #account-modes, #calls-panel, #location-planner, #location-tracking, #availability-panel, #payment-panel, #earnings-panel, #payments-admin-panel, #onboarding-panel, #trusted-contacts-panel, #safety-panel, #safety-admin-panel')) continue; // Feature controllers own their controls.
       button.disabled = busy || button.dataset.locked === 'true';
     }
-    $('delivery-details-fields').disabled = busy || state.user?.role !== 'customer' || transportCategory(categories.selected().id).service !== 'delivery'
+    $('delivery-details-fields').disabled = busy || state.user?.role !== 'customer' || !isDelivery()
       || state.activeElsewhere?.length > 0 || state.rides.some((item) => isActiveRide(item.status));
     $('request-fields').disabled = busy || (state.activeElsewhere?.length > 0 || state.rides.some((item) => isActiveRide(item.status)));
-    $('passenger-fields').disabled = busy || state.user?.role !== 'customer' || transportCategory(categories.selected().id).service !== 'ride'
+    $('passenger-fields').disabled = busy || state.user?.role !== 'customer' || isDelivery()
       || state.activeElsewhere?.length > 0 || state.rides.some((item) => isActiveRide(item.status));
   }
 
@@ -78,7 +86,8 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
     state = nextState;
     const user = state.user;
     const account = user ? `${user.id}:${user.role}` : null;
-    if (account !== passengerAccount) { clearPassenger(); passengerAccount = account; }
+    if (account !== passengerAccount) { clearPassenger(); clearDelivery(); passengerAccount = account; }
+    if (courier) categories.allow(['standard', 'motorcycle', 'van', 'truck']);
     if (user?.role === 'customer' && initialCategory) { const id = initialCategory; initialCategory = null; categories.select(id); }
     $('loading').hidden = true;
     $('auth-panel').hidden = Boolean(user);
@@ -294,7 +303,7 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
   }
   function requestOptions() {
     const vehicleCategory = categories.selected().id;
-    if (transportCategory(vehicleCategory).service === 'ride') return { vehicleCategory,
+    if (!isDelivery()) return { vehicleCategory,
       passenger: passengerDetails($('passenger-kind').value === 'guest' ? { kind: 'guest', name: $('passenger-name').value,
         phone: $('passenger-phone').value, consent: $('passenger-consent').checked === true } : { kind: 'self' }, vehicleCategory) };
     const delivery = deliveryDetails(vehicleCategory, { description: $('delivery-description').value, weightKg: Number($('delivery-weight').value),
@@ -335,12 +344,14 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
     onCommand(`/api/rides/${ride.id}/offers`, data, 'Offer sent. The other person must accept it.');
   });
 
+  $('booking-service-ride').addEventListener('click', () => { if (busy) return; courier = false; clearPassenger(); clearDelivery(); categories.allow(null); categories.select('standard'); });
+  $('booking-service-courier').addEventListener('click', () => { if (busy) return; courier = true; clearPassenger(); categories.allow(['standard', 'motorcycle', 'van', 'truck']); if (!supportsParcelCategory(categories.selected().id)) categories.select('standard'); updateCategoryVisibility(); updateButtons(); });
   updateQuote();
   $('driver-edit-vehicle').addEventListener('click', () => { if (!busy && state.user?.role === 'driver') return onEditVehicle(); });
   $('history-refresh').addEventListener('click', () => onHistory(null));
   $('history-more').addEventListener('click', () => { if (state.historyCursor) onHistory(state.historyCursor); });
   return Object.freeze({
-    render, requestOptions, rideCreated() { clearPassenger(); },
+    render, requestOptions, rideCreated() { clearPassenger(); clearDelivery(); },
     tick: updateButtons,
     setBusy(value) { busy = value; tripView.setBusy(value); updateButtons(); },
     select(id) { selectedId = id; },

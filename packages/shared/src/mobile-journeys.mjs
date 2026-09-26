@@ -47,6 +47,7 @@ export function parseWork(v) {
     && Array.isArray(v.activeElsewhere) && v.activeElsewhere.length <= 50 && v.activeElsewhere.every((a) => uuid(a.id) && mode(a.mode) && text(a.status,50)));
   v.current.forEach((r) => journey(r,v));
   expect(v.available.every((r) => object(r) && uuid(r.id) && integer(r.version) && transportCategory(r.vehicleCategory) && text(r.pickup) && text(r.destination)
+    && (r.service === undefined || ['ride','delivery'].includes(r.service))
     && positive(r.suggestedFareKobo) && integer(r.expiresAt) && (r.approximateDistanceKm === null || integer(r.approximateDistanceKm))
     && (r.recommendation === undefined || validMatchRecommendation(r.recommendation))
     && (r.offer === undefined || object(r.offer) && uuid(r.offer.id) && integer(r.offer.expiresAt) && r.offer.expiresAt <= r.expiresAt

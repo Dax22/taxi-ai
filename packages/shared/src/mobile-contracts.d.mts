@@ -9,7 +9,7 @@ export interface Account { id: string; name: string; email: string; emailVerifie
 export interface Credentials { sessionId: string; accessToken: string; refreshToken: string; accessExpiresAt: number; refreshExpiresAt: number }
 export interface Envelope { apiVersion: 1; serverNow: number; [key: string]: unknown }
 export interface SignIn extends Envelope { user: Account; credentials: Credentials }
-export interface RideSummary { vehicleCategory?: VehicleCategoryId; passenger?: PassengerView; id: string; status: string; pickup: string; destination: string;
+export interface RideSummary { vehicleCategory?: VehicleCategoryId; service?: 'ride' | 'delivery'; passenger?: PassengerView; id: string; status: string; pickup: string; destination: string;
   fareKobo: number | null; suggestedFareKobo: number; createdAt: number; isDemo: boolean;
   driver?: { id: string; name: string; vehicle: Vehicle } | null }
 export interface Activity extends Envelope { current: RideSummary[]; history: RideSummary[];

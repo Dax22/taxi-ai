@@ -20,7 +20,7 @@ import { asyncFilter, asyncMap, asyncFlatMap } from '../../shared/async-collecti
  */
 export function createRidesService({ repository, deliveries, passengerForRide, savePassenger, getAccount, unitOfWork, audit, tokens, clock, onRideClosed = () => {}, onTripCompleted = () => {},
   routeForRide = () => null, quoteForRide, bindQuote, availabilityFor = () => null, onClaim = () => {}, onEvent = () => {}, availableDriverIds = () => [], nearbyDriverIds = null, hasOtherWork = () => false, allowSimulation = false,
-  dispatch = null }) {
+  dispatch = null, isParcelRecipient = async () => false }) {
   // Expiry commits independently of a command that may fail afterward.
   async function expireRequested(ride, now) {
     if (!ride || ride.status !== 'requested' || now < ride.requestExpiresAt) return;
@@ -61,10 +61,11 @@ export function createRidesService({ repository, deliveries, passengerForRide, s
     const route = (await routeForRide(ride.id));
     const quote = route ?? createDemoQuote(ride.pickupId, ride.destinationId);
     const trip = ride.trip ?? (await repository.findTrip(ride.id));
+    const delivery = await deliveries.view(ride, user, trip?.status ?? ride.status);
     return { id: ride.id, status: trip?.status ?? (ride.closedReason === 'request_expired' ? 'expired' : ride.status), version: ride.version,
       pickup: quote.pickup, destination: quote.destination, suggestedFareKobo: ride.suggestedFareKobo,
-      currency: 'NGN', isDemo: true, route, vehicleCategory: ride.vehicleCategory, service: transportCategory(ride.vehicleCategory).service,
-      delivery: (await deliveries.view(ride, user, trip?.status ?? ride.status)), createdAt: ride.createdAt, updatedAt: ride.updatedAt,
+      currency: 'NGN', isDemo: true, route, vehicleCategory: ride.vehicleCategory, service: delivery ? 'delivery' : 'ride',
+      delivery, createdAt: ride.createdAt, updatedAt: ride.updatedAt,
       passenger: passengerView((await passengerForRide(ride.id)), { isBooker: ride.customerId === user.id, bookerName: (await getAccount(ride.customerId)).name }),
       customer: (await peer(ride.customerId)), driver: ride.driverSnapshotJson ? JSON.parse(ride.driverSnapshotJson) : (await peer(ride.driverId, true)),
       negotiation: (await negotiationFor(ride))?.snapshot() ?? null,
@@ -91,7 +92,7 @@ export function createRidesService({ repository, deliveries, passengerForRide, s
     return (await unitOfWork(async () => {
       const ride = (await record(id));
       check(ride.customerId === user.id && ride.driverId && ride.trip?.status === 'completed'
-        && transportCategory(ride.vehicleCategory).service === 'ride', 'RATING_UNAVAILABLE', 'Rate your driver after your completed ride.');
+        && !(await deliveries.isDelivery(id)), 'RATING_UNAVAILABLE', 'Rate your driver after your completed ride.');
       const existing = (await repository.rating(id));
       check(existing === null || existing === data.stars, 'ALREADY_RATED', 'You have already rated this driver for this ride.');
       if (existing === null && (await repository.saveRating(ride, data.stars, clock()))) (await audit.record(user.id, 'ride.driver_rated', id, clock()));
@@ -112,7 +113,7 @@ export function createRidesService({ repository, deliveries, passengerForRide, s
     const position = mode !== 'customer' && hasCapability(user, 'driver') && user.driver?.status === 'approved' ? (await availabilityFor(user.id, now)) : null;
     const offer = position ? (await dispatch?.forDriver(user.id, now)) : null;
     const open = dispatch?.enabled ? (offer ? [(await repository.find(offer.rideId))].filter(Boolean) : []) : position ? (await repository.listAvailable({ now })) : [];
-    const candidates = position ? (await asyncMap((await asyncFilter(open, async (ride) => ride.customerId !== user.id && (await deliveries.matches(ride, user.driver.vehicle)))), async (ride) => ({ ride, metres: (await matchDistance(ride, position, now)) }))).filter((item) => item.metres !== null)
+    const candidates = position ? (await asyncMap((await asyncFilter(open, async (ride) => ride.customerId !== user.id && !(await isParcelRecipient(user.id, ride.id)) && (await deliveries.matches(ride, user.driver.vehicle)))), async (ride) => ({ ride, metres: (await matchDistance(ride, position, now)) }))).filter((item) => item.metres !== null)
       .map(({ ride, metres }) => ({ ride, id: ride.id, createdAt: ride.createdAt, expiresAt: ride.requestExpiresAt,
         distanceMeters: position.mode === 'sample' ? null : metres })) : [];
     const available = rankEligibleMatches(candidates, now).slice(0, 50);
@@ -124,7 +125,7 @@ export function createRidesService({ repository, deliveries, passengerForRide, s
       const area = (point) => ({ name: `Near ${point.lat.toFixed(2)}, ${point.lng.toFixed(2)} (approximate area)` });
       const quote = route ? { pickup: area(route.pickup), destination: area(route.destination) }
         : createDemoQuote(ride.pickupId, ride.destinationId);
-      return { id: ride.id, version: ride.version, vehicleCategory: ride.vehicleCategory, service: transportCategory(ride.vehicleCategory).service, pickup: quote.pickup, destination: quote.destination,
+      return { id: ride.id, version: ride.version, vehicleCategory: ride.vehicleCategory, service: (await deliveries.isDelivery(ride.id)) ? 'delivery' : 'ride', pickup: quote.pickup, destination: quote.destination,
         suggestedFareKobo: ride.suggestedFareKobo, currency: 'NGN', isDemo: true, hasRoute: Boolean(route), createdAt: ride.createdAt,
         expiresAt: ride.requestExpiresAt, approximateDistanceKm: route ? Math.ceil(distanceMeters / 1000) : null,
         ...(!dispatch?.enabled ? { recommendation } : {}),
@@ -147,7 +148,7 @@ export function createRidesService({ repository, deliveries, passengerForRide, s
     const driver = (await getAccount(driverId));
     if (!ride || ride.customerId === driverId || !hasCapability(driver, 'driver') || driver.driver?.status !== 'approved'
       || !driver.driver.eligibility?.eligible || (await repository.hasNegotiation(driverId)) || (await hasOtherWork(driverId))
-      || (await repository.hasCustomerWork(driverId, now)) || !(await deliveries.matches(ride, driver.driver.vehicle))) return null;
+      || (await repository.hasCustomerWork(driverId, now)) || await isParcelRecipient(driverId, ride.id) || !(await deliveries.matches(ride, driver.driver.vehicle))) return null;
     const availability = (await availabilityFor(driverId, now));
     if (!availability) return null;
     const metres = (await matchDistance(ride, availability, now));
@@ -191,7 +192,7 @@ export function createRidesService({ repository, deliveries, passengerForRide, s
       driverReads += Math.max(1, page.scanned ?? (page.nextCursor ? pageLimit : page.driverIds.length));
       rememberCursor(driverCursors, ride.id, page.nextCursor ? { id: page.nextCursor, expiresAt: ride.requestExpiresAt } : null);
       for (const id of page.driverIds) {
-        if (excludeDriverIds.has(id) || ride.customerId === id || await attempted(ride.id, id)) continue;
+        if (excludeDriverIds.has(id) || ride.customerId === id || await isParcelRecipient(id, ride.id) || await attempted(ride.id, id)) continue;
         if (!cache.has(id)) {
           const user = await getAccount(id);
           let candidate = null;
@@ -249,6 +250,7 @@ export function createRidesService({ repository, deliveries, passengerForRide, s
     let passenger;
     try { passenger = passengerDetails(data.passenger, category); } catch (error) { check(false, 'INVALID_PASSENGER', error.message); }
     const delivery = (await deliveries.validate(category, data.delivery));
+    check(!delivery || passenger.kind === 'self', 'INVALID_PASSENGER', 'Parcel deliveries cannot include a passenger booking.');
     let quote;
     if (routed) {
       check(typeof data.quoteId === 'string' && /^[a-f0-9-]{36}$/.test(data.quoteId), 'INVALID_ROUTE', 'Preview a route before requesting a ride.');
@@ -277,6 +279,7 @@ export function createRidesService({ repository, deliveries, passengerForRide, s
     fields(data, ['expectedVersion', 'offerId'], ['expectedVersion']);
     const ride = (await record(id));
     check(ride.customerId !== user.id, 'FORBIDDEN', 'You cannot drive your own request.');
+    check(!(await isParcelRecipient(user.id, id)), 'FORBIDDEN', 'You cannot deliver a parcel that you are receiving.');
     check((await deliveries.matches(ride, user.driver.vehicle)), 'VEHICLE_MISMATCH', 'This request needs a different approved vehicle category or load capacity.');
     check(ride.status === 'requested', 'REQUEST_UNAVAILABLE', 'Another driver took this request, or it is no longer open.');
     requireVersion(ride, data.expectedVersion);
@@ -380,7 +383,7 @@ export function createRidesService({ repository, deliveries, passengerForRide, s
         }
       }
       if (action === 'complete') {
-        const delivery = transportCategory(ride.vehicleCategory).service === 'delivery';
+        const delivery = await deliveries.isDelivery(id);
         check(delivery || data.deliveryPin === undefined, 'INVALID_FIELDS', 'Passenger trips do not use a drop-off code.');
         if (delivery && !(await deliveries.verify(id, data.deliveryPin, now))) {
           (await audit.record(user.id, 'delivery.pin_rejected', id, now));
@@ -478,6 +481,7 @@ export function createRidesService({ repository, deliveries, passengerForRide, s
       pickup: context.pickup, destination: context.destination,
       driver: context.driver ? { name: context.driver.name, vehicle: context.driver.vehicle } : null,
       passenger: await passengerForRide(id), vehicleCategory: ride.vehicleCategory,
+      service: (await deliveries.isDelivery(id)) ? 'delivery' : 'ride',
       completedAt: ride.trip?.completedAt ?? null };
   }
   return Object.freeze({ get, list, history, mutate, rate, conversationContext, conversationIds, paymentContext, safetyContext, guestContext, familyContext, sweep,

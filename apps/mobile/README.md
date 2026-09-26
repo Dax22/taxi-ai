@@ -10,7 +10,7 @@ keyboard, accessibility and tablet QA remain pending.
 
 - In-app account creation and sign-in, one-time Customer or Driver setup saved securely per account on this phone, session restore and per-device sign-out.
 - Customer Home or Driver tab, plus Activity, Updates and Account; driver application, booking and journey screens. The app does not switch between Customer and Driver after setup.
-- **Book a ride or delivery**: Standard/SUV passenger trips and van/truck/motorcycle
+- **Book a ride or delivery**: Standard/SUV passenger trips and car/van/truck/motorcycle
   parcels with recipient details, category pricing and approved capacity matching; explicit Nigeria-wide address search, route/fare review, shared ride requests,
   same-command retries, current status, registered vehicle and pre-start cancellation.
   Local sample journeys work without live providers. [Booking guide](../../docs/mobile-booking.md).
@@ -35,7 +35,19 @@ keyboard, accessibility and tablet QA remain pending.
   selfie and licence front, consent, compare, and submit the result for review.
   Requires the configured backend provider; no AWS credentials belong in the app.
 - Native device list and remote sign-out; web recovery at `/devices`.
-- Delivery requests and recipient drop-off codes.
+- **Taxi Ai Courier**: Home → Send a parcel opens a dedicated courier form, including
+  a car option (30 kg maximum). Passenger details never enter parcel requests.
+  Senders create, replace, share through the phone's share menu, or revoke a private
+  recipient invitation from their journey. Incoming parcels is available from Home,
+  Activity and Account: paste the sender's `/parcels#token=…` URL and explicitly accept
+  it into the signed-in account. An already signed-in Customer can also open the
+  `taxiai:///parcels?token=…` route to prefill, without accepting automatically.
+  The recipient sees delivery status, assigned driver/vehicle and, after collection,
+  fresh driver-shared location and the handover code. No SMS is sent automatically.
+  Tracking polls every five seconds in the foreground, uses the configured native
+  Apple/Google map, and clears private snapshots on failed permission checks,
+  backgrounding and account changes. Drivers must opt in to location sharing and
+  keep Taxi Ai open; continuous background GPS is not implemented.
 - Completed-trip test payments, saved receipts and a paginated Driver earnings preview use the same records as the website. Payment simulation only runs on the local development server; no money moves.
 - **Taxi Ai Eats** on Home, **My food orders** in Activity, **My store** in Account
   and **Food deliveries** in Work, with the same restaurant/menu/order records as

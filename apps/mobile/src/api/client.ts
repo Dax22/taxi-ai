@@ -285,6 +285,10 @@ export class MobileClient {
     if (!path.startsWith('/guest-rides/')) throw new Error('Use a guest ride API path.');
     return this.request(path, data, key);
   }
+  async parcels(path: string, data?: unknown, key?: string, signal?: AbortSignal) {
+    if (!/^\/parcels\/(?:received(?:\/[a-f0-9-]{36})?|accept|[a-f0-9-]{36}\/(?:invitation|link|revoke))$/.test(path)) throw new Error('Invalid parcel API path.');
+    return this.request(path, data, key, signal);
+  }
   async emailStatus() { return parseEmailStatus(await this.request('/account/email')); }
   private accepted(body: Record<string, unknown>) {
     if (body.accepted !== true) throw new ApiError('Taxi Ai returned an incompatible response. Try again later.', 'INVALID_RESPONSE');

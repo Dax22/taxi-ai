@@ -1,5 +1,6 @@
 import { safetyMonitoringRoutes } from '../modules/safety-monitoring/routes.mjs';
 import { familyRoutes } from '../modules/family/routes.mjs';
+import { parcelTrackingRoutes } from '../modules/parcel-tracking/routes.mjs';
 import { MOBILE_API_VERSION } from '../../../../packages/shared/src/mobile-contracts.mjs';
 import { check } from '../shared/errors.mjs';
 import { fields } from '../shared/validation.mjs';
@@ -16,16 +17,17 @@ import { eatsRoutes } from '../modules/eats/routes.mjs';
 import { realtimeResponse, requestAbortSignal } from '../modules/realtime/routes.mjs';
 
 /** Versioned native surface. Cookie identity and browser CSRF are never reused. */
-export function createMobileRouter({ devices, accounts, drivers, rides, dispatch, eats, locations, availability, chat, notifications, safety, safetyMonitoring, guestRides, family, vehicleChecks, payments, clock, rateLimiter, googleAuth, accountEmail, realtime }) {
+export function createMobileRouter({ devices, accounts, drivers, rides, dispatch, eats, locations, availability, chat, notifications, safety, safetyMonitoring, guestRides, parcelTracking, family, vehicleChecks, payments, clock, rateLimiter, googleAuth, accountEmail, realtime }) {
   const monitorRoutes = safetyMonitoringRoutes(safetyMonitoring).filter(r=>!r.role);
   const foodRoutes = eatsRoutes(eats);
   const relativesRoutes = familyRoutes(family);
+  const parcelRoutes = parcelTrackingRoutes(parcelTracking);
   const booking = createMobileBooking({ rides, locations, availability, clock });
   const journeys = createMobileJourneys({ rides, dispatch, availability, chat, clock });
   function summary(ride) {
     return { id: ride.id, status: ride.status, pickup: ride.pickup.name, destination: ride.destination.name,
       fareKobo: ride.trip?.fareKobo ?? ride.negotiation?.agreement?.amountKobo ?? null,
-      vehicleCategory: ride.vehicleCategory, passenger: ride.passenger, suggestedFareKobo: ride.suggestedFareKobo, createdAt: ride.createdAt, isDemo: ride.isDemo,
+      vehicleCategory: ride.vehicleCategory, service: ride.service, passenger: ride.passenger, suggestedFareKobo: ride.suggestedFareKobo, createdAt: ride.createdAt, isDemo: ride.isDemo,
       driver: ride.driver ? { id: ride.driver.id, name: ride.driver.name, vehicle: ride.driver.vehicle } : null };
   }
   // An explicit owner-only projection keeps reviewer identities, hashes and audit internals off native clients.
@@ -63,7 +65,17 @@ export function createMobileRouter({ devices, accounts, drivers, rides, dispatch
       return;
     }
     let body;
-    if (path === '/family' || path.startsWith('/family/')) {
+    if (path.startsWith('/parcels/')) {
+      const parcelPath = `/api${path}`;
+      const route = parcelRoutes.find(entry => entry.method === request.method && entry.path.test(parcelPath));
+      check(route, 'NOT_FOUND', 'Parcel endpoint not found.');
+      body = (await route.handle({ user: session.user, match: parcelPath.match(route.path), data, query,
+        key: request.headers['idempotency-key'], reauthenticate: async () => {
+          const fresh = await devices.sessionFor(accessToken);
+          check(fresh, 'UNAUTHENTICATED', 'Sign in to continue.'); return fresh.user;
+        } })).body;
+    }
+    else if (path === '/family' || path.startsWith('/family/')) {
       if (write && path === '/family/invite') await rateLimiter.consume(`family-invite:${session.user.id}`, clock(), 10, 60_000);
       const familyPath = `/api${path}`;
       const route = relativesRoutes.find(entry => entry.method === request.method && entry.path.test(familyPath));

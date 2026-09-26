@@ -30,6 +30,8 @@ function clearTransientState(db, now) {
       ended_at=?,reason='snapshot_reset' WHERE active=1`).run(now);
     db.prepare(`UPDATE guest_ride_links SET active=0,token_hash=NULL,session_binding=NULL,version=version+1,
       ended_at=?,reason='snapshot_reset' WHERE active=1`).run(now);
+    db.prepare(`UPDATE parcel_tracking_links SET active=0,token_hash=NULL,version=version+1,
+      ended_at=?,reason='snapshot_reset' WHERE active=1`).run(now);
     db.prepare(`UPDATE family_shares SET active=0,version=version+1,ended_at=?,reason='snapshot_reset'
       WHERE active=1 OR reason='completed'`).run(now);
     db.exec("UPDATE family_push_jobs SET status='suppressed',token='',ticket=NULL,lease_until=0 WHERE status IN ('queued','provider_accepted');");

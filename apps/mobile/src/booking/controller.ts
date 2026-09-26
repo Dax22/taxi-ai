@@ -1,4 +1,4 @@
-import { transportCategory, deliveryDetails } from '../../../../packages/shared/src/transport-categories.mjs';
+import { transportCategory, deliveryDetails, supportsParcelCategory } from '../../../../packages/shared/src/transport-categories.mjs';
 import { matchSampleArea } from '../../../../packages/shared/src/demo-booking.mjs';
 import { passengerDetails } from '../../../../packages/shared/src/guest-rides.mjs';
 import type { VehicleCategoryId } from '../../../../packages/shared/src/vehicle-categories.mjs';
@@ -16,7 +16,7 @@ export interface PassengerDraft { kind: 'self' | 'guest'; name: string; phone: s
 const emptyPassenger = (): PassengerDraft => ({ kind: 'self', name: '', phone: '', consent: false });
 const emptyDelivery = (): DeliveryDraft => ({ description: '', weightKg: '', recipientName: '', pickupInstructions: '', dropoffInstructions: '' });
 export interface BookingState {
-  category: VehicleCategoryId; delivery: DeliveryDraft; passenger: PassengerDraft;
+  category: VehicleCategoryId; service: 'ride' | 'courier'; delivery: DeliveryDraft; passenger: PassengerDraft;
   settings: Booking | null; mode: 'route' | 'sample' | null; consent: boolean; pickup: Search; destination: Search;
   pickupId: string; destinationId: string; sampleDestinationQuery: string; preview: BookingPreview | null; lastRide: BookingRide | null;
   loading: boolean; locatingPickup: boolean; busy: 'preview' | 'request' | 'cancel' | null; uncertain: 'request' | 'cancel' | null;
@@ -39,7 +39,7 @@ export class BookingController {
   private searches = { pickup: 0, destination: 0 };
   private command: Command | null = null;
   private anchor = { server: 0, local: 0 };
-  private state: BookingState = { category: 'standard', delivery: emptyDelivery(), passenger: emptyPassenger(), settings: null, mode: null, consent: false, pickup: emptySearch(), destination: emptySearch(),
+  private state: BookingState = { category: 'standard', service: 'ride', delivery: emptyDelivery(), passenger: emptyPassenger(), settings: null, mode: null, consent: false, pickup: emptySearch(), destination: emptySearch(),
     pickupId: '', destinationId: '', sampleDestinationQuery: '', preview: null, lastRide: null, loading: false, locatingPickup: false, busy: null, uncertain: null, error: '', stale: true, now: 0 };
   constructor(api: Api, key: () => string, clock: () => number = () => performance.now(),
     locatePickup: LocatePickup = async () => { throw new Error('Current location is unavailable on this device.'); }) {
@@ -85,19 +85,24 @@ export class BookingController {
   private locked() { return !!this.state.busy || !!this.command; }
   private canPlan() { return this.active && !!this.state.settings && !this.state.stale && !this.state.settings.current.length && !this.state.settings.blockedBy; }
   chooseCategory(category: VehicleCategoryId) {
-    if (this.locked() || !transportCategory(category) || category === this.state.category) return;
+    if (this.locked() || !transportCategory(category) || category === this.state.category || this.state.service === 'courier' && !supportsParcelCategory(category)) return;
     this.patch({ category, passenger: emptyPassenger(), delivery: emptyDelivery(), preview: null, error: '' });
   }
+  chooseService(service: 'ride' | 'courier') {
+    if (this.locked() || service === this.state.service) return;
+    this.patch({ service, category: service === 'courier' && !supportsParcelCategory(this.state.category) ? 'standard' : this.state.category,
+      passenger: emptyPassenger(), delivery: emptyDelivery(), preview: null, error: '' });
+  }
   choosePassenger(kind: PassengerDraft['kind']) {
-    if (this.locked() || transportCategory(this.state.category)?.service !== 'ride' || kind === this.state.passenger.kind) return;
+    if (this.locked() || this.state.service === 'courier' || transportCategory(this.state.category)?.service !== 'ride' || kind === this.state.passenger.kind) return;
     this.patch({ passenger: { ...emptyPassenger(), kind }, error: '' });
   }
   editPassenger(field: 'name' | 'phone', value: string) {
-    if (this.locked() || this.state.passenger.kind !== 'guest' || transportCategory(this.state.category)?.service !== 'ride') return;
+    if (this.locked() || this.state.service === 'courier' || this.state.passenger.kind !== 'guest' || transportCategory(this.state.category)?.service !== 'ride') return;
     this.patch({ passenger: { ...this.state.passenger, [field]: value, consent: false }, error: '' });
   }
   consentPassenger(consent: boolean) {
-    if (this.locked() || this.state.passenger.kind !== 'guest' || transportCategory(this.state.category)?.service !== 'ride') return;
+    if (this.locked() || this.state.service === 'courier' || this.state.passenger.kind !== 'guest' || transportCategory(this.state.category)?.service !== 'ride') return;
     this.patch({ passenger: { ...this.state.passenger, consent }, error: '' });
   }
   editDelivery(field: keyof DeliveryDraft, value: string) {
@@ -168,7 +173,7 @@ export class BookingController {
     const preview = this.state.preview;
     if (preview.expiresAt !== null && this.now() >= preview.expiresAt) { this.patch({ error: 'This route preview has expired. Preview the route again.', preview: null }); return; }
     let delivery, passenger;
-    try { delivery = deliveryDetails(this.state.category, transportCategory(this.state.category)?.service === 'delivery'
+    try { delivery = deliveryDetails(this.state.category, this.state.service === 'courier' || transportCategory(this.state.category)?.service === 'delivery'
       ? { ...this.state.delivery, weightKg: Number(this.state.delivery.weightKg) } : undefined);
       if (!delivery) passenger = passengerDetails(this.state.passenger.kind === 'self' ? { kind: 'self' } : this.state.passenger, this.state.category);
     }

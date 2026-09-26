@@ -8,7 +8,7 @@ const terminal = new Set(['completed', 'cancelled', 'expired']);
 const geometry = (route) => route ? { distanceMeters: route.distanceMeters, durationSeconds: route.durationSeconds,
   coordinates: route.coordinates, distanceKind: route.distanceKind ?? 'road' } : null;
 export function bookingProjection(ride) {
-  return { id: ride.id, version: ride.version, status: ride.status, vehicleCategory: ride.vehicleCategory, delivery: ride.delivery, passenger: ride.passenger, pickup: ride.pickup.name, destination: ride.destination.name,
+  return { id: ride.id, version: ride.version, status: ride.status, vehicleCategory: ride.vehicleCategory, service: ride.service, delivery: ride.delivery, passenger: ride.passenger, pickup: ride.pickup.name, destination: ride.destination.name,
     suggestedFareKobo: ride.suggestedFareKobo, fareKobo: ride.trip?.fareKobo ?? ride.negotiation?.agreement?.amountKobo ?? null,
     expiresAt: ride.status === 'requested' ? ride.matching.expiresAt : null, canCancel: canCancelRide(ride.status),
     driver: ride.driver ? { name: ride.driver.name, vehicle: ride.driver.vehicle } : null };

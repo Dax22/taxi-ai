@@ -21,13 +21,15 @@ function ride(r) {
   expect(r.driver === null || (record(r.driver) && text(r.driver.name)));
   expect(transportCategory(r.vehicleCategory));
   readPassenger(r.passenger, r.vehicleCategory);
-  if (transportCategory(r.vehicleCategory).service === 'delivery') {
+  if (r.delivery != null || transportCategory(r.vehicleCategory).service === 'delivery') {
     expect(record(r.delivery));
+    expect(r.passenger?.kind !== 'guest');
     const { verifiedAt, pinBlockedUntil, dropoffPin, ...details } = r.delivery;
     deliveryDetails(r.vehicleCategory, details);
     expect((verifiedAt === null || number(verifiedAt)) && (pinBlockedUntil === null || number(pinBlockedUntil))
       && (dropoffPin === undefined || (r.status === 'in_progress' && /^\d{6}$/.test(dropoffPin))));
   } else expect(r.delivery == null);
+  expect(r.service === undefined || r.service === (r.delivery ? 'delivery' : 'ride'));
   if (r.driver) parseVehicle(r.driver.vehicle);
   return r;
 }

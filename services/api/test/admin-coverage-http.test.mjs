@@ -152,7 +152,7 @@ test('coverage separates dated pickup demand, live waiting and supply, and only 
   }
   const courier = must(await f.operations.send(coveragePath + '?service=courier&bbox=7.42,9.04,7.50,9.11'));
   assert.equal(courier.historicalTotals.requests, 0); assert.equal(courier.currentTotals.waitingRequests, 0);
-  assert.equal(courier.currentTotals.availableDrivers, 0);
+  assert.equal(courier.currentTotals.availableDrivers, 1);
   const lagos = must(await f.operations.send(coveragePath + '?from=2026-01-01&to=2026-01-01&place=map-lagos'));
   assert.equal(lagos.historicalTotals.requests, 1); assert.equal(lagos.currentTotals.waitingRequests, 1);
   assert.equal(lagos.currentTotals.availableDrivers, 0);

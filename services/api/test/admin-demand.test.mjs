@@ -22,12 +22,15 @@ function seedUser(h) {
 }
 function seedRide(h, { customerId = seedUser(h), status = 'requested', createdAt = h.now - 60_000,
   expiresAt = h.now + 120_000, region = 'ng:181:148', category = 'standard', matchedAt = null, closedReason = null,
-  driverId = matchedAt === null ? null : seedUser(h), completedAt = null } = {}) {
+  driverId = matchedAt === null ? null : seedUser(h), completedAt = null,
+  delivery = ['van', 'truck', 'motorcycle'].includes(category) } = {}) {
   const id = randomUUID();
   h.db.prepare(`INSERT INTO rides(id,customer_id,driver_id,pickup_id,destination_id,suggested_fare_kobo,status,created_at,updated_at,
     request_expires_at,dispatch_region,vehicle_category,matched_at,closed_reason)
     VALUES (?,?,?,'private-pickup','private-destination',300000,?,?,?,?,?,?,?,?)`)
     .run(id, customerId, driverId, status, createdAt, createdAt, expiresAt, region, category, matchedAt, closedReason);
+  if (delivery) h.db.prepare('INSERT INTO delivery_orders(ride_id,details_json) VALUES (?,?)')
+    .run(id, JSON.stringify({ recipientName: 'Private recipient', packageDescription: 'Private parcel' }));
   if (completedAt !== null) h.db.prepare(`INSERT INTO ride_trips(ride_id,customer_id,driver_id,status,fare_kobo,booked_at,departed_at,arrived_at,started_at,completed_at)
     VALUES (?,?,?,'completed',300000,?,?,?,?,?)`).run(id, customerId, driverId, matchedAt, matchedAt, matchedAt, matchedAt, completedAt);
   return id;
@@ -102,6 +105,25 @@ test('offer decisions use the selected request cohort and include expiry before 
   assert.equal(h.db.prepare("SELECT count(*) AS n FROM dispatch_offers WHERE status='pending'").get().n, 1);
 });
 
+test('car parcels count as courier demand while shared car supply is counted once in all-service totals', async (t) => {
+  const h = await harness(t), { admin, drivers } = await participants(h, 5), service = demand(h, admin);
+  for (const [index, category] of ['standard', 'suv', 'van', 'truck', 'motorcycle'].entries()) {
+    h.db.prepare("UPDATE driver_applications SET details_json=json_set(details_json,'$.vehicle.category',?) WHERE driver_id=?")
+      .run(category, drivers[index].user.id);
+    seedRide(h, { category });
+  }
+  const parcel = seedRide(h, { category: 'standard', delivery: true, expiresAt: h.now });
+  const all = await service.get(admin.user), ride = await service.get(admin.user, { service: 'ride' }), courier = await service.get(admin.user, { service: 'courier' });
+  assert.equal(all.totals.requests, 6); assert.equal(ride.totals.requests, 2); assert.equal(courier.totals.requests, 4);
+  assert.equal(ride.totals.unserved, 0); assert.equal(courier.totals.unserved, 1);
+  assert.equal(all.supply.availableDrivers, 5); assert.equal(ride.supply.availableDrivers, 2); assert.equal(courier.supply.availableDrivers, 4);
+  assert.equal(courier.areas.items.reduce((count, area) => count + (area.requests ?? 0), 0), 4);
+  assert.equal(courier.daily.reduce((count, day) => count + day.requests, 0), 4);
+  assert.equal(courier.hours.reduce((count, hour) => count + hour.requests, 0), 4);
+  assert.equal(ride.totals.requests + courier.totals.requests, all.totals.requests);
+  for (const secret of [parcel, 'Private recipient', 'Private parcel']) assert.ok(!JSON.stringify(courier).includes(secret));
+});
+
 test('current supply stays separate from historical requests and requires current eligibility, service and region', async (t) => {
   const h = await harness(t), { admin, drivers } = await participants(h, 4), service = demand(h, admin);
   h.db.prepare("UPDATE driver_applications SET details_json=json_set(details_json,'$.vehicle.category','motorcycle') WHERE driver_id=?").run(drivers[3].user.id);
@@ -109,7 +131,7 @@ test('current supply stays separate from historical requests and requires curren
   assert.equal(result.totals.requests, 0); assert.equal(result.supply.availableDrivers, 4);
   assert.equal(result.supply.capturedAt, h.now); assert.equal(result.supply.scope, 'current');
   assert.equal(result.areas.items[0].requests, 0); assert.equal(result.areas.items[0].availableDrivers, 4);
-  assert.equal((await service.get(admin.user, { service: 'courier' })).supply.availableDrivers, 1);
+  assert.equal((await service.get(admin.user, { service: 'courier' })).supply.availableDrivers, 4);
   assert.equal((await service.get(admin.user, { service: 'ride' })).supply.availableDrivers, 3);
   h.db.prepare("UPDATE driver_documents SET expires_on='2025-12-31' WHERE driver_id=? AND kind='insurance'").run(drivers[0].user.id);
   h.db.prepare('DELETE FROM sessions WHERE user_id=?').run(drivers[1].user.id);

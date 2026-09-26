@@ -30,11 +30,11 @@ export default function Work(){
         <Button title="Refresh work" secondary busy={s.loading} disabled={s.busy} onPress={()=>void c.refresh()}/>
       </Card>
       {s.work?.activeElsewhere.map((j)=><Card key={j.id}><Text style={styles.body}>You have a personal journey to finish.</Text><Button title="View personal journey" onPress={()=>router.push({pathname:'/journey',params:{id:j.id}})}/></Card>)}
-      {s.work?.current.map((j)=><Card key={j.id}><Pill>CURRENT JOB</Pill><Text style={styles.h2}>{j.pickup} → {j.destination}</Text><PassengerSummary passenger={j.passenger} bookedBy={j.customerName}/><Button title="Open journey" onPress={()=>router.push({pathname:'/journey',params:{id:j.id}})}/></Card>)}
+      {s.work?.current.map((j)=><Card key={j.id}><Pill>{j.delivery ? 'CURRENT PARCEL DELIVERY' : 'CURRENT JOB'}</Pill><Text style={styles.h2}>{j.pickup} → {j.destination}</Text><PassengerSummary passenger={j.passenger} bookedBy={j.customerName}/><Button title="Open journey" onPress={()=>router.push({pathname:'/journey',params:{id:j.id}})}/></Card>)}
       <Heading title={timedOffers?'Ride offers.':'Nearby requests.'} subtitle={online?(timedOffers?'Review each timed offer, then accept to negotiate the fare.':'Eligible requests are ordered by pickup distance and customer waiting time.'):'Go online to see available work.'}/>
       {online&&!s.work?.available.length&&<Text style={styles.body}>No matching requests yet. This screen refreshes while the app is open.</Text>}
-      {online&&s.work?.available.map((job)=><Card key={job.id}><Pill>{vehicleCategory(job.vehicleCategory)?.name.toUpperCase()??'REQUEST'}</Pill>
-        {job.offer&&<Text style={styles.h2}>Ride offer</Text>}
+      {online&&s.work?.available.map((job)=><Card key={job.id}><Pill>{`${job.service === 'delivery' ? 'PARCEL DELIVERY · ' : ''}${vehicleCategory(job.vehicleCategory)?.name.toUpperCase()??'REQUEST'}`}</Pill>
+        {job.offer&&<Text style={styles.h2}>{job.service === 'delivery' ? 'Delivery offer' : 'Ride offer'}</Text>}
         <Text style={styles.h2}>{job.pickup} → {job.destination}</Text><Text style={styles.body}>Suggested fare · {fare(job.suggestedFareKobo)}</Text>
         <Text style={styles.small}>Matches your approved vehicle category and capacity.</Text>
         {job.offer?.etaSource==='road'&&<Text style={styles.body}>About {job.offer.pickupEtaMinutes} min to pickup · road estimate</Text>}

@@ -30,6 +30,7 @@ import { adminOperationsRoutes } from '../modules/admin-operations/routes.mjs';
 import { adminFinanceRoutes } from '../modules/admin-finance/routes.mjs';
 import { adminComplianceRoutes } from '../modules/admin-compliance/routes.mjs';
 import { adminDemandRoutes } from '../modules/admin-demand/routes.mjs';
+import { parcelTrackingRoutes } from '../modules/parcel-tracking/routes.mjs';
 
 /** HTTP owns parsing, cookies, CSRF and response codes; services own decisions. */
 export function createApiRouter(application, { secure = false } = {}) {
@@ -42,6 +43,7 @@ export function createApiRouter(application, { secure = false } = {}) {
   routes.push(...vehicleCheckRoutes(application.vehicleChecks));
   routes.push(...eatsRoutes(application.eats));
   routes.push(...guestRideRoutes(application.guestRides));
+  routes.push(...parcelTrackingRoutes(application.parcelTracking));
   routes.push(...familyRoutes(application.family));
   return async function handleApi({ request, response, pathname, origin, clientAddress }) {
     const write = request.method === 'POST';

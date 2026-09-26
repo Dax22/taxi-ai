@@ -12,7 +12,7 @@ function RideCard({ ride, mode }: { ride: RideSummary; mode: Mode }) {
   const [showVehicle, setShowVehicle] = useState(false);
   return <Card><Pill>{readable(ride.status).toUpperCase()}</Pill><Text style={styles.h2}>{ride.pickup} → {ride.destination}</Text>
     <PassengerSummary passenger={ride.passenger} bookedBy={mode === 'customer' ? 'You' : 'Customer account'}/>
-    <Text style={styles.small}>{vehicleCategory(ride.vehicleCategory ?? 'standard')?.name}</Text><Text style={styles.body}>{ride.fareKobo === null ? `Suggested fare ${fare(ride.suggestedFareKobo)}` : `Agreed fare ${fare(ride.fareKobo)}`}</Text>
+    <Text style={styles.small}>{ride.service === 'delivery' ? 'Parcel delivery · ' : ''}{vehicleCategory(ride.vehicleCategory ?? 'standard')?.name}</Text><Text style={styles.body}>{ride.fareKobo === null ? `Suggested fare ${fare(ride.suggestedFareKobo)}` : `Agreed fare ${fare(ride.fareKobo)}`}</Text>
     <Text style={styles.small}>{new Date(ride.createdAt).toLocaleDateString()} · {ride.isDemo ? 'Preview journey' : 'Journey'}</Text>
     {ride.driver && <><Button title={showVehicle ? 'Hide vehicle details' : 'View vehicle details'} secondary onPress={() => setShowVehicle((v) => !v)}/>
       {showVehicle && <><Text style={styles.body}>Driver: {ride.driver.name}</Text><VehicleCard vehicle={ride.driver.vehicle} label="VEHICLE FOR THIS JOURNEY" compact/></>}</>}
@@ -43,6 +43,7 @@ function Journeys({ mode }: { mode: Mode }) {
 export default function Activity() {
   const { user, role, mode } = useSession();
   return <Screen><Heading title="Your activity." subtitle="The same saved journeys, across the app and website."/>
+    {role === 'customer' && <Button title="Parcels sent to me" secondary onPress={() => router.push('/parcels')}/>}
     {role === 'customer' && <Card><Text style={styles.h2}>Taxi Ai Eats orders</Text><Text style={styles.body}>Track your food, view past orders and check handover details.</Text><Button title="My food orders" secondary onPress={() => router.push({ pathname: '/eats', params: { section: 'orders' } })}/></Card>}
     {role === 'driver' && !user?.driver ? <Card><Text style={styles.h2}>Complete your Driver setup</Text><Text style={styles.body}>Your driver journeys will appear here after you create your driver profile.</Text><Button title="Start driver application" onPress={() => router.push('/driver-application')}/></Card>
       : <Journeys key={`${user?.id}:${mode}`} mode={mode}/>}

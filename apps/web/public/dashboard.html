@@ -17,7 +17,7 @@
   <a class="skip-link" href="#account-main">Skip to account</a>
   <header class="site-header shell">
     <a class="brand" href="/" aria-label="Taxi Ai home"><img class="brand-mark" src="/assets/taxi-ai-mark.svg" width="48" height="36" alt=""><span>Taxi Ai</span></a>
-    <div class="account-header-actions"><span id="account-identity"></span><button class="button button-outline button-small" id="logout" type="button" hidden>Sign out</button><a class="text-link" href="/">Home ↗</a></div>
+    <div class="account-header-actions"><span id="account-identity"></span><button class="button button-outline button-small" id="logout" type="button" hidden>Sign out</button><a class="text-link" href="/parcels">Incoming parcels ↗</a><a class="text-link" href="/">Home ↗</a></div>
   </header>
   <main id="account-main" class="shell account-shell">
     <p class="environment-note"><span class="tiny-dot" aria-hidden="true"></span> DEVELOPMENT PREVIEW · NIGERIA · NO LIVE RIDES</p>
@@ -150,6 +150,7 @@
       </section>
       <section id="vehicle-categories-panel" class="account-card" hidden aria-labelledby="vehicle-categories-title">
         <p class="eyebrow">RIDES & DELIVERIES</p><h2 id="vehicle-categories-title">Choose your vehicle</h2>
+        <div class="auth-mode" role="group" aria-label="Choose service"><button id="booking-service-ride" type="button" aria-pressed="true">Ride</button><button id="booking-service-courier" type="button" aria-pressed="false">Send a parcel</button></div><p id="booking-service-note" class="small-note"></p>
         <div id="account-vehicle-categories"></div>
         <form id="delivery-details-form" class="stack-form" hidden><fieldset id="delivery-details-fields"><legend>Delivery details</legend>
           <div class="onboarding-grid">
@@ -158,7 +159,7 @@
             <div><label for="delivery-recipient">Recipient name</label><input id="delivery-recipient" minlength="2" maxlength="100" required autocomplete="off"></div>
             <div><label for="delivery-pickup">Pickup instructions (optional)</label><input id="delivery-pickup" maxlength="240"></div>
             <div><label for="delivery-dropoff">Drop-off instructions (optional)</label><input id="delivery-dropoff" maxlength="240"></div>
-          </div><p id="delivery-load-hint" class="small-note"></p><p class="small-note">Confirm the load fits with the driver before collection. Share the drop-off code privately with your recipient after pickup. This preview does not contact the recipient.</p>
+          </div><p id="delivery-load-hint" class="small-note"></p><p class="small-note">Confirm the load fits with the driver before collection. After creating your parcel request, share a private tracking invitation with your recipient. They sign in to accept it and receive the handover code after collection.</p>
         </fieldset></form>
       </section>
       <section id="passenger-panel" class="account-card" hidden aria-labelledby="passenger-title">
@@ -281,6 +282,14 @@
             <form id="trip-cancel-form" class="stack-form cancellation-form" hidden><fieldset id="trip-cancel-fields"><legend>Cancel this journey?</legend><label for="trip-cancel-reason">Reason</label><select id="trip-cancel-reason" required><option value="plans_changed">Plans changed</option><option value="pickup_problem">Pickup problem</option><option value="other">Other reason</option></select><p class="small-note">This ends the request or booking. No cancellation fee is charged in this preview.</p><div class="review-actions"><button id="trip-cancel-submit" type="submit" class="button button-outline button-small">Confirm cancellation</button><button id="trip-cancel-dismiss" type="button" class="button button-primary button-small">Keep journey</button></div></fieldset></form>
             <section id="trip-activity" class="history-section" hidden aria-labelledby="trip-activity-title"><h3 id="trip-activity-title">Trip activity</h3><ol id="trip-timeline" class="trip-timeline"></ol></section>
             <div id="live-history" class="history-section" hidden><h3>Fare history</h3><ol id="live-offer-history"></ol></div>
+          </section>
+          <section id="parcel-link-panel" class="account-card" hidden aria-labelledby="parcel-link-title">
+            <p class="eyebrow">RECIPIENT TRACKING</p><h2 id="parcel-link-title">Invite your recipient</h2>
+            <p class="small-note">Send the private invitation only to your recipient. They must sign in and accept it to see this delivery and its handover code. Driver location is shared after collection. Replacing or revoking an invitation removes the previous recipient’s access.</p>
+            <p id="parcel-link-message" class="small-note" role="status"></p><p id="parcel-link-error" class="error-text" role="alert"></p>
+            <div class="review-actions"><button id="parcel-link-create" type="button" class="button button-primary button-small">Create invitation</button><button id="parcel-link-replace" type="button" class="button button-outline button-small" hidden>Replace invitation</button><button id="parcel-link-revoke" type="button" class="button button-outline button-small" hidden>Revoke access</button><button id="parcel-link-retry" type="button" class="button button-outline button-small" hidden>Retry the same action</button><button id="parcel-link-refresh" type="button" class="button button-outline button-small">Refresh</button></div>
+            <div id="parcel-link-confirm" class="mode-confirm" hidden><p>Replacing or revoking this invitation immediately removes the current recipient’s tracking access.</p><button id="parcel-link-confirm-action" type="button" class="button button-primary button-small">Confirm</button><button id="parcel-link-keep" type="button" class="button button-outline button-small">Keep current invitation</button></div>
+            <div id="parcel-link-secret" class="stack-form" hidden><label for="parcel-link-url">Private recipient invitation</label><input id="parcel-link-url" readonly autocomplete="off" spellcheck="false"><div class="review-actions"><button id="parcel-link-copy" type="button" class="button button-primary button-small">Copy invitation</button><button id="parcel-link-share" type="button" class="button button-outline button-small" hidden>Share privately</button></div></div>
           </section>
           <section id="guest-link-panel" class="account-card" hidden aria-labelledby="guest-link-title">
             <p class="eyebrow">BOOKED FOR YOUR FRIEND</p><h2 id="guest-link-title">Your friend’s private trip link</h2>

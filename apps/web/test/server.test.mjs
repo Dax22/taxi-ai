@@ -17,7 +17,7 @@ async function withServer(run, mode = 'local', maps = 'community') {
 test('account and Eats seller pages serve their entire browser module dependency graph', async () => {
   await withServer(async (base) => {
     const pending = [], visited = new Set();
-    for (const page of ['/app', '/eats/sell']) {
+    for (const page of ['/app', '/eats/sell', '/parcels']) {
       const response = await fetch(base + page);
       assert.equal(response.status, 200, page);
       const scripts = [...(await response.text()).matchAll(/<script\b([^>]*)>/g)]

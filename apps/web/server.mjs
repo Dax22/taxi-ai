@@ -71,6 +71,12 @@ const routes = new Map([
   ['/dashboard/sign-in-methods.mjs', ['public/dashboard/sign-in-methods.mjs', 'text/javascript; charset=utf-8']],
   ['/trip-share', ['public/trip-share.html', 'text/html; charset=utf-8']],
   ['/trip-share.mjs', ['public/trip-share.mjs', 'text/javascript; charset=utf-8']],
+  ['/parcels', ['public/parcels.html', 'text/html; charset=utf-8']],
+  ['/parcels.mjs', ['public/parcels.mjs', 'text/javascript; charset=utf-8']],
+  ...['controller', 'view'].map((name) => [`/parcels/${name}.mjs`, [`public/parcels/${name}.mjs`, 'text/javascript; charset=utf-8']]),
+  ['/dashboard/parcel-links-panel.mjs', ['public/dashboard/parcel-links-panel.mjs', 'text/javascript; charset=utf-8']],
+  ['/shared/mobile-contracts.mjs', ['../../packages/shared/src/mobile-contracts.mjs', 'text/javascript; charset=utf-8']],
+  ['/shared/parcels.mjs', ['../../packages/shared/src/parcels.mjs', 'text/javascript; charset=utf-8']],
   ['/guest-trip', ['public/guest-trip.html', 'text/html; charset=utf-8']],
   ['/guest-trip.mjs', ['public/guest-trip.mjs', 'text/javascript; charset=utf-8']],
   ...['guest-rides-panel', 'guest-rides-transport', 'guest-trip-controller'].map((name) => [`/dashboard/${name}.mjs`, [`public/dashboard/${name}.mjs`, 'text/javascript; charset=utf-8']]),
@@ -227,7 +233,7 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
     response.setHeader('Content-Security-Policy', `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'${pathname === '/eats' ? ' data:' : ''}${mapProvider.mode === 'off' ? '' : ` ${mapProvider.tileOrigin}`}; media-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'`);
     try {
       pathname = new URL(request.url, 'http://localhost').pathname;
-      if (['/app', '/family'].includes(pathname) && mapProvider.mode !== 'off') response.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+      if (['/app', '/family', '/parcels'].includes(pathname) && mapProvider.mode !== 'off') response.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
       response.setHeader('Permissions-Policy', `camera=${pathname === '/app' ? '(self)' : '()'}, microphone=${pathname === '/app' ? '(self)' : '()'}, geolocation=${['/app', '/eats'].includes(pathname) ? '(self)' : '()'}, accelerometer=${pathname === '/app' ? '(self)' : '()'}, gyroscope=${pathname === '/app' ? '(self)' : '()'}`);
     } catch {
       response.writeHead(400);

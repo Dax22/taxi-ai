@@ -11,7 +11,7 @@ export function createFamilyService({ repository, getAccount, getAccountByEmail,
   enqueue = async () => {}, deliveryFor = async () => null, onHelp = async () => {} }) {
   const actor = async id => { const user = await getAccount(id); check(user, 'UNAUTHENTICATED', 'Sign in to use Family Safety.'); check(hasCapability(user,'customer'),'FORBIDDEN','A customer account is required for Family Safety.'); return user; };
   const activeTrip = ride => ACTIVE_TRIP_STATUSES.includes(ride.status);
-  const ownSelfTrip = (ride,userId) => ride?.customerId === userId && ride.passenger?.kind !== 'guest'
+  const ownSelfTrip = (ride,userId) => ride?.customerId === userId && ride.passenger?.kind !== 'guest' && ride.service !== 'delivery'
     && transportCategory(ride.vehicleCategory ?? ride.driver?.vehicle?.category ?? 'standard')?.service === 'ride';
   const adult = async (id, consent, now) => {
     check(consent === true, 'INVALID_INPUT', 'Confirm you are 18 or older to use adult Family Safety.');

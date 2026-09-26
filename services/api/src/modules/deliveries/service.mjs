@@ -29,6 +29,7 @@ export function createDeliveriesService({ repository, tokens }) {
     return true;
   }
   return Object.freeze({ validate, matches, view, verify,
+    isDelivery: async (id) => Boolean(await repository.find(id)),
     create: async (id, details) => { if (details) (await repository.insert(id, details)); },
     confirm: async (id) => { if ((await repository.find(id))) (await repository.issue(id, tokens.pickupPin())); },
     cancel: async (id) => (await repository.close(id, null)) });

@@ -254,3 +254,29 @@ test('disposing a guest booking clears contact drafts and ignores late request r
   assert.equal(c.snapshot().lastRide, null); assert.equal(c.snapshot().settings, null); assert.equal(c.snapshot().uncertain, null);
   const next = new BookingController(f.api, () => 'new-account'); assert.equal(next.snapshot().passenger.kind, 'self'); next.dispose();
 });
+
+test('courier car mode requires a parcel, suppresses passenger data and restricts vehicles', async () => {
+  const f = fixture(); await start(f); const c = f.controller;
+  c.choosePassenger('guest'); c.editPassenger('name', 'Private passenger'); c.editPassenger('phone', '08012345678');
+  await sample(f); c.chooseService('courier');
+  assert.equal(c.snapshot().preview, null); assert.equal(c.snapshot().passenger.name, '');
+  c.chooseCategory('suv'); assert.equal(c.snapshot().category, 'standard');
+  c.choosePassenger('guest'); c.editPassenger('name', 'Must not persist'); assert.equal(c.snapshot().passenger.kind, 'self');
+  await sample(f); await c.submit(); assert.match(c.snapshot().error, /weight|description/i);
+  c.editDelivery('description', 'Small sealed parcel'); c.editDelivery('recipientName', 'Ada'); c.editDelivery('weightKg', '31');
+  await c.submit(); assert.ok(c.snapshot().error); assert.equal(f.settings.current.length, 0);
+  c.editDelivery('weightKg', '5'); let submitted: unknown;
+  f.api.requestRide = async (data) => { submitted = data; return { ...envelope, ride }; }; await c.submit();
+  assert.deepEqual(submitted, { ...preview.request, vehicleCategory: 'standard', delivery: {
+    description: 'Small sealed parcel', weightKg: 5, recipientName: 'Ada', pickupInstructions: '', dropoffInstructions: '',
+  } }); c.dispose();
+});
+
+test('switching courier car back to ride clears parcel details and requires a new quote', async () => {
+  const f = fixture(); await start(f); const c = f.controller; c.chooseService('courier');
+  c.editDelivery('description', 'Private parcel'); c.editDelivery('recipientName', 'Ada'); c.editDelivery('weightKg', '2');
+  await sample(f); c.chooseService('ride'); assert.equal(c.snapshot().preview, null); assert.equal(c.snapshot().delivery.recipientName, '');
+  await sample(f); let submitted: unknown;
+  f.api.requestRide = async data => { submitted = data; return { ...envelope, ride }; }; await c.submit();
+  assert.deepEqual(submitted, { ...preview.request, vehicleCategory: 'standard', passenger: { kind: 'self' } }); c.dispose();
+});

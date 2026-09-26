@@ -211,7 +211,7 @@ test('demand is a request-date cohort, separates current supply and never publis
     assert.ok(!serialized.includes(forbidden), forbidden);
   }
   const courier = must(await f.operations.send(base + '/demand?from=2026-01-01&to=2026-01-01&service=courier'));
-  assert.equal(courier.totals.requests, 0); assert.equal(courier.supply.availableDrivers, 0);
+  assert.equal(courier.totals.requests, 0); assert.equal(courier.supply.availableDrivers, 1);
   for (const query of ['from=2026-01-02', 'from=2025-01-01&to=2026-01-01', 'limit=51', 'service=eats', 'region=precise-private-address',
     'from=2026-01-01&from=2025-12-31', 'userId=' + f.customer.user.id]) {
     assert.equal((await f.operations.send(base + '/demand?' + query)).status, 400, query);

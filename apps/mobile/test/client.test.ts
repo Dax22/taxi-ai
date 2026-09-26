@@ -23,6 +23,37 @@ function client(fetcher: (url: string, options: RequestInit) => Promise<Response
   return { app: new MobileClient({ origin: 'https://taxi.example.test', vault: v.port, fetchImpl: ((url, options) => fetcher(String(url), options ?? {})) as typeof fetch }), ...v };
 }
 
+test('parcel accept retains its token and key through auth refresh without saving the invitation', async () => {
+  const calls: Array<{ url: string; options: RequestInit }> = [], token = 'd'.repeat(64);
+  const { app, storage } = client(async (url, options) => {
+    if (url.endsWith('/auth/login')) return response(auth());
+    if (url.endsWith('/auth/refresh')) return response(auth(2));
+    calls.push({ url, options });
+    return new Headers(options.headers).get('Authorization') === `Bearer ${auth().credentials.accessToken}` ? unauthorized() : ok({ accepted: true });
+  });
+  await app.login(user.email, 'Test password', 'Phone');
+  await app.parcels('/parcels/accept', { token }, 'parcel-claim-key'); assert.equal(calls.length, 2);
+  assert.equal(calls[0].url, 'https://taxi.example.test/api/mobile/v1/parcels/accept');
+  assert.equal(calls[0].options.body, calls[1].options.body);
+  for (const call of calls) assert.equal(new Headers(call.options.headers).get('Idempotency-Key'), 'parcel-claim-key');
+  assert.equal(storage.value!.includes(token), false);
+  await assert.rejects(app.parcels('/family/accept'), /Invalid parcel API path/);
+});
+
+test('late parcel responses cannot cross logout into another account', async () => {
+  let finish!: (value: Response) => void;
+  const { app } = client(async url => {
+    if (url.endsWith('/auth/login')) return response(auth());
+    if (url.endsWith('/parcels/received')) return new Promise(resolve => { finish = resolve; });
+    return ok();
+  });
+  await app.login(user.email, 'Test password', 'Phone');
+  const pending = app.parcels('/parcels/received'), rejected = assert.rejects(pending, { code: 'SESSION_CHANGED' });
+  await settleRequest(); await app.logout(); finish(ok({ parcels: [] })); await rejected;
+});
+
+async function settleRequest() { await delay(0); }
+
 test('ride offer decline keeps its identity, empty body and idempotency key through access refresh', async () => {
   const calls: Array<{ url: string; options: RequestInit }> = [];
   const { app } = client(async (url, options) => {

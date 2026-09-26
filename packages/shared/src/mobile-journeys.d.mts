@@ -15,7 +15,7 @@ export interface Availability { id: string; online: boolean; owned: boolean; mod
 export interface AvailabilityResult extends Envelope { availability: Availability | null }
 export interface DispatchOffer { id: string; expiresAt: number; pickupEtaMinutes: number | null; etaSource: 'road' | 'distance_fallback' | 'sample' }
 export interface DeclinedOffer extends Envelope { declined: true; replayed: boolean }
-export interface AvailableJob { id: string; version: number; vehicleCategory: VehicleCategoryId; pickup: string; destination: string; suggestedFareKobo: number; expiresAt: number; approximateDistanceKm: number | null; recommendation?: MatchRecommendation; offer?: DispatchOffer }
+export interface AvailableJob { id: string; version: number; vehicleCategory: VehicleCategoryId; service?: 'ride' | 'delivery'; pickup: string; destination: string; suggestedFareKobo: number; expiresAt: number; approximateDistanceKm: number | null; recommendation?: MatchRecommendation; offer?: DispatchOffer }
 export interface Work extends AvailabilityResult { settings: { allowSimulation: boolean; heartbeatSeconds: number; leaseSeconds: number; freshPositionSeconds: number; dispatchMode?: 'legacy' | 'sequential' | 'batch' };
  areas: { id: string; name: string }[]; current: Journey[]; activeElsewhere: { id: string; mode: Mode; status: string }[]; available: AvailableJob[] }
 export interface Message { id: string; sequence: number; body: string; createdAt: number; fromYou: boolean }

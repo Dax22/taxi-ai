@@ -26,6 +26,7 @@ import { createSafetyView } from './dashboard/safety-view.mjs';
 import { createVehiclePhotoCheck } from './dashboard/vehicle-checks.mjs';
 import { createAccountModeView, modePreferences } from './dashboard/account-mode-view.mjs';
 import { createGoogleSignIn, consumeGoogleOutcome } from './dashboard/google-auth.mjs';
+import { createParcelLinksPanel } from './dashboard/parcel-links-panel.mjs';
 import { createGuestRidesPanel } from './dashboard/guest-rides-panel.mjs';
 
 let serverTime = { now: Date.now(), received: performance.now() };
@@ -87,7 +88,8 @@ const safety = createSafetyController({ client, monitor: createSafetyMonitoring(
 const guests = createGuestRidesPanel({ client, origin: location.origin,
   now: () => serverTime.now + performance.now() - serverTime.received,
   onSessionChanged: () => void page.poll() });
-if (document.hidden) guests.pause();
+const parcels = createParcelLinksPanel({ client, origin: location.origin, now: () => serverTime.now + performance.now() - serverTime.received });
+if (document.hidden) { guests.pause(); parcels.pause(); }
 const vehicleCheck = createVehiclePhotoCheck({client,onReport:(id,checkId)=>safetyView.vehicleMismatch(id,checkId)});
 const view = createDashboardView({
   onEditVehicle: () => page.editVehicle(),
@@ -123,7 +125,7 @@ const liveUpdates = createRealtimeClient({
 });
 const page = createPageController({ client, activityClient, view, modeView, preferences: modePreferences(storage),
   conversation, conversationView, calls, sharing, availability,
-  planner, payments, onboarding, safety, vehicleCheck, guests, authForm,
+  planner, payments, onboarding, safety, vehicleCheck, guests, parcels, authForm,
   onAccount(identity) {
     if (identity !== liveIdentity) { liveIdentity = identity; liveUpdates.reset(); }
     if (identity && !document.hidden) liveUpdates.resume(); else liveUpdates.pause();
@@ -143,10 +145,10 @@ const page = createPageController({ client, activityClient, view, modeView, pref
 const poll = () => { if (!document.hidden) void page.poll(); };
 $('logout').addEventListener('click', () => page.logout());
 $('refresh').addEventListener('click', () => page.poll());
-document.addEventListener('visibilitychange', () => { if (document.hidden) { liveUpdates.pause(); availability.shutdown(); guests.pause(); } else { if (liveIdentity) liveUpdates.resume(); guests.resume(); poll(); } });
-window.addEventListener('pagehide', () => { liveUpdates.reset(); calls.shutdown(); sharing.shutdown(); availability.shutdown(); safety.reset(); vehicleCheck.reset(); guests.reset(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden) { liveUpdates.pause(); availability.shutdown(); guests.pause(); parcels.pause(); } else { if (liveIdentity) liveUpdates.resume(); guests.resume(); parcels.resume(); poll(); } });
+window.addEventListener('pagehide', () => { liveUpdates.reset(); calls.shutdown(); sharing.shutdown(); availability.shutdown(); safety.reset(); vehicleCheck.reset(); guests.reset(); parcels.reset(); });
 window.addEventListener('afterprint', () => document.body.classList.remove('print-receipt'));
-setInterval(() => { view.tick(); conversationView.tick(); calls.tick(); planner.tick(); sharing.tick(); availability.tick(); guests.tick(); }, 1000);
+setInterval(() => { view.tick(); conversationView.tick(); calls.tick(); planner.tick(); sharing.tick(); availability.tick(); guests.tick(); parcels.tick(); }, 1000);
 setInterval(() => { if (calls.hasMedia()) void calls.poll(); }, 2000);
 // Location publication remains on sharing.tick(); reception uses account invalidations.
 // Anonymous sessions use a slow check; authenticated sessions refresh on invalidation.

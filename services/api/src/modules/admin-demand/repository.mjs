@@ -36,9 +36,16 @@ const eligibleDrivers = `FROM driver_availability a JOIN drivers d ON d.user_id=
   AND NOT EXISTS (SELECT 1 FROM eats_orders job WHERE job.courier_id=a.driver_id AND job.status IN ('assigned','picked_up','arrived'))
   AND NOT EXISTS (SELECT 1 FROM dispatch_offers offer WHERE offer.driver_id=a.driver_id AND offer.status='pending' AND offer.expires_at>$now)`;
 
-function serviceClause(category, filter) {
+// A car can carry a passenger or a parcel. The saved delivery record identifies
+// the requested service; vehicle category alone cannot classify its demand.
+function requestServiceClause(filter) {
+  const delivery = 'EXISTS (SELECT 1 FROM delivery_orders delivery WHERE delivery.ride_id=r.id)';
+  return filter.service === 'ride' ? ` AND NOT ${delivery}`
+    : filter.service === 'courier' ? ` AND ${delivery}` : '';
+}
+function supplyServiceClause(category, filter) {
   return filter.service === 'ride' ? ` AND ${category} IN ('standard','suv')`
-    : filter.service === 'courier' ? ` AND ${category} IN ('van','truck','motorcycle')` : '';
+    : filter.service === 'courier' ? ` AND ${category} IN ('standard','van','truck','motorcycle')` : '';
 }
 function cohort(filter) {
   return `cohort AS (SELECT r.id,${region(filter)} AS regionKey,r.created_at AS createdAt,
@@ -48,10 +55,10 @@ function cohort(filter) {
       WHEN r.closed_reason='request_expired' OR (r.status='requested' AND r.driver_id IS NULL AND r.request_expires_at<=$now) THEN 'unserved'
       WHEN r.status='cancelled' OR t.status='cancelled' THEN 'cancelled' ELSE 'open' END AS outcome
     FROM rides r LEFT JOIN ride_trips t ON t.ride_id=r.id
-    WHERE r.created_at>=$since AND r.created_at<$until${serviceClause('r.vehicle_category', filter)}${filter.region ? ` AND ${region(filter)}=$region` : ''})`;
+    WHERE r.created_at>=$since AND r.created_at<$until${requestServiceClause(filter)}${filter.region ? ` AND ${region(filter)}=$region` : ''})`;
 }
 function supply(filter) {
-  return `supply AS (SELECT ${driverRegion(filter)} AS regionKey ${eligibleDrivers}${serviceClause(driverCategory, filter)}${filter.region ? ` AND ${driverRegion(filter)}=$region` : ''})`;
+  return `supply AS (SELECT ${driverRegion(filter)} AS regionKey ${eligibleDrivers}${supplyServiceClause(driverCategory, filter)}${filter.region ? ` AND ${driverRegion(filter)}=$region` : ''})`;
 }
 const metrics = `count(*) AS requests,COALESCE(sum(matched),0) AS matched,
   COALESCE(sum(CASE WHEN outcome='completed' THEN 1 ELSE 0 END),0) AS completed,
@@ -86,11 +93,11 @@ function coverageRecords(filter) {
     CASE WHEN ${liveWaiting} THEN ($now-r.created_at)/1000.0 ELSE NULL END AS waitingSeconds,
     0 AS availableDrivers
     FROM rides r LEFT JOIN location_quotes q ON q.ride_id=r.id LEFT JOIN ride_trips t ON t.ride_id=r.id
-    WHERE ((r.created_at>=$since AND r.created_at<$until) OR (${liveWaiting}))${serviceClause('r.vehicle_category', filter)}),
+    WHERE ((r.created_at>=$since AND r.created_at<$until) OR (${liveWaiting}))${requestServiceClause(filter)}),
   coverage_supply AS (SELECT CASE WHEN a.mode='sample' THEN 'sample' ELSE 'gps' END AS sourceKind,
     a.latitude AS lat,a.longitude AS lng,0 AS historical,0 AS unserved,CAST(NULL AS DOUBLE PRECISION) AS pickupWait,
     0 AS waiting,CAST(NULL AS DOUBLE PRECISION) AS waitingSeconds,
-    1 AS availableDrivers ${eligibleDrivers}${serviceClause(driverCategory, filter)}),
+    1 AS availableDrivers ${eligibleDrivers}${supplyServiceClause(driverCategory, filter)}),
   coverage_records AS (SELECT * FROM coverage_requests UNION ALL SELECT * FROM coverage_supply),
   located AS (SELECT *,CASE WHEN sourceKind='sample' THEN 'sample'
     WHEN lat IS NULL OR lng IS NULL OR lat<$nationalSouth OR lat>$nationalNorth OR lng<$nationalWest OR lng>$nationalEast THEN 'unlocated'

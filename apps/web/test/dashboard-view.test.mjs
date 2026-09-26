@@ -147,6 +147,26 @@ test('category keyboard navigation keeps focus and blocks switching while a comm
   assert.equal(buttons[0]['aria-checked'], 'true'); assert.equal(buttons[0].focused, true);
 });
 
+test('courier deep link survives authentication and books standard car parcels without passenger details', (t) => {
+  const oldLocation = globalThis.location; globalThis.location = { search: '?service=courier' };
+  t.after(() => { globalThis.location = oldLocation; });
+  const h = setup(t); h.view.render(state(null, [])); h.view.reset(); h.view.render(state(customer, []));
+  assert.equal(h.node('delivery-details-form').hidden, false); assert.equal(h.node('passenger-panel').hidden, true);
+  assert.equal(h.node('delivery-weight').max, '30');
+  const group = h.node('account-vehicle-categories').children[0];
+  assert.equal(group.children.find((button) => button.dataset.category === 'suv').hidden, true);
+  assert.equal(group.children[0].children[1].textContent, 'Car');
+  h.node('delivery-description').value = 'Books and clothes'; h.node('delivery-weight').value = '4';
+  h.node('delivery-recipient').value = 'Recipient';
+  const options = h.view.requestOptions();
+  assert.equal(options.vehicleCategory, 'standard'); assert.equal(options.delivery.weightKg, 4); assert.equal(options.passenger, undefined);
+  h.view.render(state({ ...customer, id: 'other-customer' }, []));
+  assert.equal(h.node('delivery-recipient').value, '', 'replacement accounts never inherit parcel drafts');
+  h.node('booking-service-ride').handlers.click();
+  assert.equal(h.node('delivery-details-form').hidden, true); assert.equal(h.node('passenger-panel').hidden, false);
+  assert.deepEqual(h.view.requestOptions(), { vehicleCategory: 'standard', passenger: { kind: 'self' } });
+});
+
 test('dashboard reset removes trip identities, fare, plate, history and PIN before a different account renders', (t) => {
   const h = setup(t); h.view.render(state(customer));
   assert.match(h.node('detail-person').textContent, /TEST-001/);

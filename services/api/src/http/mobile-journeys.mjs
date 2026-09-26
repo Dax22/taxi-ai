@@ -33,7 +33,7 @@ export function createMobileJourneys({ rides, dispatch, availability, chat, cloc
       if (reauthenticate) user = (await reauthenticate());
       const state = (await availability.get(context)), list = (await rides.list(user,'work'));
       return { ...state, settings: { ...state.settings, dispatchMode: list.matchingSettings.dispatchMode }, areas: state.settings.allowSimulation ? DEMO_AREAS : [], current: list.rides.filter((r) => !['completed','cancelled','expired'].includes(r.status)).map((r) => projection(r,user,clock())),
-        activeElsewhere: list.activeElsewhere, available: list.available.map((r) => ({ id: r.id, version: r.version, vehicleCategory: r.vehicleCategory,
+        activeElsewhere: list.activeElsewhere, available: list.available.map((r) => ({ id: r.id, version: r.version, vehicleCategory: r.vehicleCategory, service: r.service,
           pickup: r.pickup.name, destination: r.destination.name, suggestedFareKobo: r.suggestedFareKobo, expiresAt: r.expiresAt, approximateDistanceKm: r.approximateDistanceKm,
           recommendation: r.recommendation, ...(r.offer ? { offer: r.offer } : {}) })) };
     }

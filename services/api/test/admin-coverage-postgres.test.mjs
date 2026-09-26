@@ -67,6 +67,16 @@ test('PostgreSQL coverage keeps JSON numeric guards, bounded GPS aggregates, cur
     const outsideDates = await service.coverage({ id: owner }, { from: '2025-12-20', to: '2025-12-20' });
     assert.equal(outsideDates.historicalTotals.requests, 0); assert.equal(outsideDates.currentTotals.waitingRequests, 2);
     assert.equal(outsideDates.currentTotals.availableDrivers, 1);
+    await db.prepare('INSERT INTO delivery_orders(ride_id,details_json) VALUES (?,?)')
+      .run(ids[0], JSON.stringify({ recipientName: 'PRIVATE-RECIPIENT', packageDescription: 'PRIVATE-PARCEL' }));
+    const courier = await service.coverage({ id: owner }, { service: 'courier' });
+    const passenger = await service.coverage({ id: owner }, { service: 'ride' });
+    const all = await service.coverage({ id: owner });
+    assert.equal(courier.historicalTotals.requests, 1); assert.equal(courier.currentTotals.waitingRequests, 1);
+    assert.equal(courier.currentTotals.availableDrivers, 1); assert.equal(passenger.currentTotals.availableDrivers, 1);
+    assert.equal(all.currentTotals.availableDrivers, 1);
+    assert.equal(courier.nationwideTotals.historical.requests + passenger.nationwideTotals.historical.requests, all.nationwideTotals.historical.requests);
+    for (const secret of ['PRIVATE-RECIPIENT', 'PRIVATE-PARCEL']) assert.ok(!JSON.stringify(courier).includes(secret));
     for (const secret of [...customers, driver, ...ids, 'PRIVATE-NAME', 'PRIVATE-ADDRESS', 'PRIVATE-PICKUP', '9.076541', '7.462321']) assert.ok(!JSON.stringify(result).includes(secret), secret);
     await db.prepare('DELETE FROM sessions WHERE token_hash=?').run(sessionHash);
     assert.equal((await service.coverage({ id: owner })).currentTotals.availableDrivers, 0);

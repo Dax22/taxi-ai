@@ -22,11 +22,14 @@ const mapProvider = { mode: 'community', tileOrigin: 'https://tile.openstreetmap
 async function step(actor, ride, action, extra = {}) {
   return ok(await actor.post(`/api/rides/${ride.id}/${action}`, { expectedVersion: ride.version, ...extra })).ride;
 }
-async function booked(h, actors, { routed = false, guest = false } = {}) {
+async function booked(h, actors, { routed = false, guest = false, delivery = false } = {}) {
   let ride;
   if (routed) {
     const quote = ok(await actors.customer.post('/api/locations/quotes', points), 201).quote;
     ride = ok(await actors.customer.post('/api/rides', { quoteId: quote.id }), 201).ride;
+  } else if (delivery) {
+    ride = ok(await actors.customer.post('/api/rides', { pickupId: 'wuse-ii', destinationId: 'maitama', vehicleCategory: 'standard',
+      delivery: { description: 'Sealed test parcel', weightKg: 2, recipientName: 'Fictional parcel recipient' } }), 201).ride;
   } else if (guest) {
     ride = ok(await actors.customer.post('/api/rides', { pickupId: 'wuse-ii', destinationId: 'maitama',
       passenger: { kind: 'guest', name: 'Adult guest', phone: '+2348000000088', consent: true } }), 201).ride;
@@ -282,7 +285,7 @@ test('family events invalidate only authorized accounts and acknowledging an eve
   assert.deepEqual(Object.keys(ok(await observer.send('/api/events?wait=0'))).sort(), ['changed', 'cursor', 'serverNow']);
 });
 
-test('family invitations are bounded and guest passengers cannot be enrolled through the booker account', async t => {
+test('family invitations are bounded and guest passengers or car parcels cannot be enrolled through the booker account', async t => {
   const h = await harness(t), owner = h.client(); await owner.register('bounded-owner');
   for (let index = 0; index < 5; index++) ok(await command(owner, 'invite', { email: `fictional-${index}@example.test`, adultConfirmed: true }));
   const sixth = await command(owner, 'invite', { email: 'fictional-over-limit@example.test', adultConfirmed: true });
@@ -291,6 +294,12 @@ test('family invitations are bounded and guest passengers cannot be enrolled thr
   const f = await people(t), contact = await link(f.customer, f.observer), guest = await booked(f.h, f, { guest: true });
   assert.equal((await command(f.customer, 'share', { contactId: contact.id, rideId: guest.id })).status, 409);
   assert.equal((await family(f.customer)).availableTrips.length, 0);
+  assert.equal((await family(f.observer)).trips.length, 0);
+  await step(f.customer, guest, 'cancel');
+  const parcel = await booked(f.h, f, { delivery: true });
+  assert.equal(parcel.vehicleCategory, 'standard'); assert.equal(parcel.service, 'delivery');
+  assert.equal((await family(f.customer)).availableTrips.length, 0);
+  assert.equal((await command(f.customer, 'share', { contactId: contact.id, rideId: parcel.id })).status, 409);
   assert.equal((await family(f.observer)).trips.length, 0);
 });
 

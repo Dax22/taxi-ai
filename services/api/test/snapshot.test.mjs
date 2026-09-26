@@ -12,6 +12,31 @@ import { TEST_NOW, harness, participants, requestRide, claimRide, PASSWORD } fro
 
 function folder(t) { const path = mkdtempSync(join(tmpdir(), 'taxi-snapshot-')); t.after(() => rmSync(path, { recursive: true, force: true })); return path; }
 
+test('snapshots preserve parcel records but revoke recipient tracking grants only in the restored copy', async (t) => {
+  const dir = folder(t), h = await harness(t, { persistent: true });
+  const sender = h.client(), recipient = h.client();
+  await sender.register('snapshot-parcel-sender'); await recipient.register('snapshot-parcel-recipient');
+  const requested = await sender.post('/api/rides', { pickupId: 'wuse-ii', destinationId: 'maitama', vehicleCategory: 'standard',
+    delivery: { description: 'Sealed parcel', weightKg: 2, recipientName: 'Recipient' } });
+  assert.equal(requested.status, 201, JSON.stringify(requested.body));
+  const rideId = requested.body.ride.id;
+  const invitation = await sender.post(`/api/parcels/${rideId}/link`, { expectedLinkId: null });
+  assert.equal(invitation.status, 200, JSON.stringify(invitation.body));
+  assert.equal((await recipient.post('/api/parcels/accept', { token: invitation.body.token })).status, 200);
+  const source = h.db.prepare('SELECT * FROM parcel_tracking_links').get();
+  const path = join(dir, 'parcel-backup.sqlite'); saveSnapshot(h.filename, path, { now: h.now });
+  assert.deepEqual(h.db.prepare('SELECT * FROM parcel_tracking_links').get(), source);
+  const copy = new DatabaseSync(path, { readOnly: true });
+  try {
+    const grant = copy.prepare('SELECT * FROM parcel_tracking_links').get();
+    assert.equal(grant.active, 0); assert.equal(grant.token_hash, null); assert.equal(grant.reason, 'snapshot_reset');
+    assert.equal(grant.version, source.version + 1);
+    assert.equal(copy.prepare('SELECT count(*) AS n FROM delivery_orders WHERE ride_id=?').get(rideId).n, 1);
+    assert.equal(copy.prepare('SELECT count(*) AS n FROM parcel_tracking_commands').get().n, 2);
+    assert.deepEqual(copy.prepare('PRAGMA foreign_key_check').all(), []);
+  } finally { copy.close(); }
+});
+
 test('a live WAL snapshot preserves rides and chat, clears transient data only in the copy and restores into a new database', async (t) => {
   const dir = folder(t), h = await harness(t, { persistent: true });
   const { customer, driver, admin } = await participants(h);

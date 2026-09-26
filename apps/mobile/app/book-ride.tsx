@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { Redirect, useLocalSearchParams } from 'expo-router';
-import { transportCategory } from '../../../packages/shared/src/transport-categories.mjs';
+import { transportCategory, parcelLoadLimit } from '../../../packages/shared/src/transport-categories.mjs';
 import type { DeliveryDraft } from '../src/booking/controller';
 import { Alert, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { Text } from '../src/ui/typography';
@@ -18,9 +18,9 @@ import type { VehicleCategoryId } from '../../../packages/shared/src/vehicle-cat
 
 function BookingScreen() {
   const { state: s, controller: c } = useBooking(), { width, fontScale } = useWindowDimensions();
-  const { category: initialCategory } = useLocalSearchParams<{ category?: string }>();
-  useEffect(() => { if (vehicleCategory(initialCategory)) c.chooseCategory(initialCategory as VehicleCategoryId); }, [c, initialCategory]);
-  const policy = transportCategory(s.category), delivery = policy?.service === 'delivery';
+  const { category: initialCategory, service } = useLocalSearchParams<{ category?: string; service?: string }>();
+  useEffect(() => { c.chooseService(service === 'courier' ? 'courier' : 'ride'); if (vehicleCategory(initialCategory)) c.chooseCategory(initialCategory as VehicleCategoryId); }, [c, initialCategory, service]);
+  const policy = transportCategory(s.category), delivery = s.service === 'courier' || policy?.service === 'delivery';
   const settings = s.settings, locked = !!s.busy || !!s.uncertain, disabled = locked || s.stale;
   const planningDisabled = disabled || s.locatingPickup;
   const wide = width >= 820 && fontScale <= 1.3;
@@ -29,7 +29,7 @@ function BookingScreen() {
     { text: 'Keep journey', style: 'cancel' }, { text: 'Cancel journey', style: 'destructive', onPress: () => void c.cancel(ride) },
   ]);
   const shown = settings?.current.length ? settings.current : s.lastRide ? [s.lastRide] : [];
-  return <Screen><Pill>RIDES & DELIVERIES · NIGERIA</Pill><Heading title="Where to?" subtitle="Your route. Your choice. A fare you both agree."/>
+  return <Screen><Pill>RIDES & DELIVERIES · NIGERIA</Pill><Heading title={delivery ? 'Send a parcel.' : 'Where to?'} subtitle={delivery ? 'Choose pickup and delivery addresses, a suitable vehicle and an agreed fare.' : 'Your route. Your choice. A fare you both agree.'}/>
     <Text style={styles.small}>Development preview · no live rides or payments.</Text><Notice message={s.error}/>
     {s.uncertain && <Card><Text style={styles.h2}>Let’s confirm that action.</Text><Text style={styles.body}>The connection ended before confirmation arrived. Retrying reuses the original action to avoid creating a duplicate request.</Text>
       <Button title={s.uncertain === 'request' ? 'Retry the same request' : 'Retry the same cancellation'} busy={!!s.busy} onPress={() => void c.retry()}/></Card>}
@@ -39,12 +39,12 @@ function BookingScreen() {
     {shown.map((ride) => <RequestCard key={ride.id} ride={ride} now={s.now} disabled={disabled} onCancel={() => cancel(ride)}/>)}
     {settings?.blockedBy && <Card><Text style={styles.h2}>{settings.blockedBy === 'online' ? 'You’re online as a driver.' : 'You have active driver work.'}</Text>
       <Text style={styles.body}>{settings.blockedBy === 'online' ? 'Go offline from your driver account on the website before requesting a ride.' : 'Finish or cancel your driver journey before requesting a ride.'}</Text></Card>}
-    {settings && !settings.current.length && !settings.blockedBy && <VehicleCategories value={s.category} onChange={(id) => c.chooseCategory(id)} disabled={locked}/>}
+    {settings && !settings.current.length && !settings.blockedBy && <VehicleCategories value={s.category} onChange={(id) => c.chooseCategory(id)} disabled={locked} courier={s.service === 'courier'}/>}
     {settings && !settings.current.length && !settings.blockedBy && <>
       {!delivery && <PassengerForm passenger={s.passenger} controller={c} disabled={disabled}/>}
       {delivery && <Card><Text style={styles.h2}>What are you sending?</Text>
         {([['description', 'Parcel description and size'], ['weightKg', 'Total weight (kg)'], ['recipientName', 'Recipient name'], ['pickupInstructions', 'Pickup instructions (optional)'], ['dropoffInstructions', 'Drop-off instructions (optional)']] as [keyof DeliveryDraft, string][]).map(([field, label]) => <Field key={field} label={label} value={s.delivery[field]} editable={!disabled} keyboardType={field === 'weightKg' ? 'decimal-pad' : 'default'} maxLength={field === 'weightKg' ? 10 : field === 'recipientName' ? 100 : 240} onChangeText={(value) => c.editDelivery(field, value)}/>)}
-        <Text style={styles.small}>{vehicleCategory(s.category)?.name} preview limit: {policy?.maxLoadKg} kg. Matching also checks the driver’s approved load capacity. Confirm the load fits before collection.</Text><Text style={styles.small}>After pickup, share the drop-off code privately with your recipient. They give it to the driver at handover. This preview does not contact the recipient.</Text>
+        <Text style={styles.small}>{s.category === 'standard' ? 'Car' : vehicleCategory(s.category)?.name} parcel limit: {parcelLoadLimit(s.category)} kg. Matching also checks the driver’s approved load capacity. Confirm the load fits before collection.</Text><Text style={styles.small}>After requesting, share a private tracking invitation from your journey. Your recipient signs in and accepts it to follow the delivery. They give the drop-off code to the driver only after receiving the parcel.</Text>
       </Card>}
       {!s.mode ? <Card><Text style={styles.h2}>Route planning is unavailable.</Text><Text style={styles.body}>Address search and sample routes are disabled in this environment. Please check again later.</Text></Card> : <>
         <View style={styles.row}>{settings.online.enabled && <Button title="Search addresses" secondary={s.mode !== 'route'} disabled={locked} onPress={() => c.chooseMode('route')}/>}

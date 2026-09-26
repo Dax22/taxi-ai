@@ -23,12 +23,14 @@ function user(h) {
 }
 function ride(h, { point = { lat: 9.076541, lng: 7.462321 }, createdAt = h.now - 600000,
   expiresAt = h.now + 60000, status = 'requested', region = 'ng:181:149', category = 'standard',
-  matchedAt = null, closedReason = null, trip = null } = {}) {
+  matchedAt = null, closedReason = null, trip = null, delivery = ['van', 'truck', 'motorcycle'].includes(category) } = {}) {
   const id = randomUUID(), customerId = user(h), driverId = matchedAt === null ? null : user(h);
   h.db.prepare(`INSERT INTO rides(id,customer_id,driver_id,pickup_id,destination_id,suggested_fare_kobo,status,created_at,updated_at,
     request_expires_at,dispatch_region,vehicle_category,matched_at,closed_reason)
     VALUES (?,?,?,'PRIVATE-PICKUP','PRIVATE-DESTINATION',300000,?,?,?,?,?,?,?,?)`)
     .run(id, customerId, driverId, status, createdAt, createdAt, expiresAt, region, category, matchedAt, closedReason);
+  if (delivery) h.db.prepare('INSERT INTO delivery_orders(ride_id,details_json) VALUES (?,?)')
+    .run(id, JSON.stringify({ recipientName: 'Private recipient', packageDescription: 'Private parcel' }));
   if (point) h.db.prepare('INSERT INTO location_quotes(id,customer_id,created_at,expires_at,route_json,ride_id) VALUES (?,?,?,?,?,?)')
     .run(randomUUID(), customerId, createdAt, h.now + 60000, JSON.stringify({ pickup: { ...point, label: 'PRIVATE-ADDRESS' }, destination: { lat: 9.1, lng: 7.4 } }), id);
   if (trip) h.db.prepare(`INSERT INTO ride_trips(ride_id,customer_id,driver_id,status,fare_kobo,booked_at,departed_at,arrived_at,started_at,completed_at)
@@ -113,14 +115,33 @@ test('current waiting and eligible supply share one snapshot regardless of histo
   assert.equal(result.currentTotals.availableDrivers, 2); assert.equal(result.offMap.current.sample.availableDrivers, 1);
   assert.equal(result.currentTotals.meanWaitingSeconds, 25 * DAY_MS / 1000); assert.equal(result.currentTotals.maxWaitingSeconds, 30 * DAY_MS / 1000);
   result = await service.coverage(admin.user, { service: 'courier' });
-  assert.equal(result.currentTotals.waitingRequests, 1); assert.equal(result.currentTotals.availableDrivers, 1);
+  assert.equal(result.currentTotals.waitingRequests, 1); assert.equal(result.currentTotals.availableDrivers, 2);
   const availability = h.db.prepare('SELECT id FROM driver_availability WHERE driver_id=? AND active=1').get(drivers[1].user.id);
   h.db.prepare(`INSERT INTO dispatch_offers(id,ride_id,driver_id,availability_id,status,mode,policy_version,eta_source,created_at,expires_at)
     VALUES (?,?,?,?,'pending','sequential','test','sample',?,?)`).run(randomUUID(), expired, drivers[1].user.id, availability.id, h.now - 1, h.now + 60000);
-  assert.equal((await service.coverage(admin.user, { service: 'courier' })).currentTotals.availableDrivers, 0);
+  assert.equal((await service.coverage(admin.user, { service: 'courier' })).currentTotals.availableDrivers, 1);
   h.db.prepare("UPDATE driver_documents SET expires_on='2025-12-31' WHERE driver_id=? AND kind='insurance'").run(drivers[0].user.id);
   assert.equal((await service.coverage(admin.user)).currentTotals.availableDrivers, 0);
   assert.equal((await serviceFor(h, admin, { allowSimulation: false }).coverage(admin.user)).offMap.current.sample.availableDrivers, 0);
+});
+
+test('coverage places car parcels in courier demand and eligible car supply in both services without duplicating nationwide totals', async t => {
+  const h = await harness(t), { admin, drivers } = await participants(h, 3), service = serviceFor(h, admin);
+  for (const [index, category] of ['standard', 'suv', 'truck'].entries()) {
+    await drivers[index].online({ mode: 'gps', lat: 9.076541, lng: 7.462321 });
+    h.db.prepare("UPDATE driver_applications SET details_json=json_set(details_json,'$.vehicle.category',?) WHERE driver_id=?")
+      .run(category, drivers[index].user.id);
+    ride(h, { category });
+  }
+  const parcel = ride(h, { category: 'standard', delivery: true, expiresAt: h.now });
+  const all = await service.coverage(admin.user), passenger = await service.coverage(admin.user, { service: 'ride' }), courier = await service.coverage(admin.user, { service: 'courier' });
+  assert.equal(all.historicalTotals.requests, 4); assert.equal(passenger.historicalTotals.requests, 2); assert.equal(courier.historicalTotals.requests, 2);
+  assert.equal(courier.historicalTotals.unserved, 1); assert.equal(passenger.historicalTotals.unserved, 0);
+  assert.equal(all.currentTotals.waitingRequests, 3); assert.equal(passenger.currentTotals.waitingRequests, 2); assert.equal(courier.currentTotals.waitingRequests, 1);
+  assert.equal(all.currentTotals.availableDrivers, 3); assert.equal(passenger.currentTotals.availableDrivers, 2); assert.equal(courier.currentTotals.availableDrivers, 2);
+  assert.equal(sum(courier.cells, 'requests'), 2); assert.equal(sum(courier.cells, 'availableDrivers'), 2);
+  assert.equal(all.nationwideTotals.historical.requests, 4); assert.equal(all.nationwideTotals.current.availableDrivers, 3);
+  for (const secret of [parcel, 'Private recipient', 'Private parcel']) assert.ok(!JSON.stringify(courier).includes(secret));
 });
 
 test('sub-cell viewports query the same complete cells and regional output has no hidden top-N truncation', async t => {
