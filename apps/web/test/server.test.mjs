@@ -4,6 +4,7 @@ import { once } from 'node:events';
 import { createAppServer } from '../server.mjs';
 import { createCallConfig } from '../../../services/api/src/infrastructure/call-config.mjs';
 import { createMapProvider } from '../../../services/api/src/infrastructure/map-provider.mjs';
+import { importSpecifiers } from '../../../scripts/architecture-rules.mjs';
 
 async function withServer(run, mode = 'local', maps = 'community') {
   const server = createAppServer({ callConfig: createCallConfig({ TAXI_AI_CALLS_MODE: mode }), mapProvider: createMapProvider({ env: { TAXI_AI_MAPS_MODE: maps } }) });
@@ -12,6 +13,37 @@ async function withServer(run, mode = 'local', maps = 'community') {
   try { await run(`http://127.0.0.1:${server.address().port}`); }
   finally { await new Promise((resolve) => server.close(resolve)); }
 }
+
+test('account and Eats seller pages serve their entire browser module dependency graph', async () => {
+  await withServer(async (base) => {
+    const pending = [], visited = new Set();
+    for (const page of ['/app', '/eats/sell']) {
+      const response = await fetch(base + page);
+      assert.equal(response.status, 200, page);
+      const scripts = [...(await response.text()).matchAll(/<script\b([^>]*)>/g)]
+        .map((match) => match[1]).filter((attributes) => /\btype=["']module["']/.test(attributes));
+      assert.ok(scripts.length > 0, `${page} must load a browser module`);
+      for (const attributes of scripts) {
+        const src = attributes.match(/\bsrc=["']([^"']+)["']/)?.[1];
+        assert.ok(src, `${page} must use an external module allowed by its CSP`);
+        pending.push({ url: new URL(src, base + page), parent: page });
+      }
+    }
+    for (const { url, parent } of pending) {
+      if (visited.has(url.href)) continue;
+      visited.add(url.href);
+      const context = `${url.pathname} imported by ${parent}`;
+      assert.equal(url.origin, base, context);
+      const response = await fetch(url);
+      assert.equal(response.status, 200, context);
+      assert.match(response.headers.get('content-type') ?? '', /^text\/javascript\b/, context);
+      for (const specifier of importSpecifiers(await response.text())) {
+        assert.match(specifier, /^(?:\/|\.\.?\/)/, `Browser import must resolve to a URL: ${specifier}`);
+        pending.push({ url: new URL(specifier, url), parent: url.pathname });
+      }
+    }
+  });
+});
 
 test('the local site serves HTML, modules and artwork with correct content types', async () => {
   await withServer(async (base) => {
