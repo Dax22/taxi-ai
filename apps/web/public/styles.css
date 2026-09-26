@@ -57,9 +57,12 @@
   h1 span { color: #70706a; }
   .service-tabs { display: flex; border-bottom: 1px solid var(--line); margin-bottom: 24px; }
   .service-tab-options { display: flex; flex: 2; min-width: 0; }
-  .service-tabs button, .service-tabs > a { flex: 1; text-align: center; font-size: 12px; background: transparent; color: var(--muted); padding: 6px 12px 15px; border-bottom: 2px solid transparent; }
+  .service-tabs button, .service-tabs > a { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 8px; text-align: center; font-size: 12px; background: transparent; color: var(--muted); padding: 6px 12px 15px; border-bottom: 2px solid transparent; }
   .service-tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--brand-strong); background: var(--brand-soft); font-weight: 700; }
-  .service-tabs button span { margin-left: 8px; }
+  .service-tabs .service-vehicle-icon { width: 32px; height: 24px; object-fit: contain; flex: 0 0 auto; }
+  .service-tabs .service-tab-icon { width: 24px; height: 24px; flex: 0 0 auto; fill: none; stroke: currentColor; stroke-width: 2.1; stroke-linecap: round; stroke-linejoin: round; }
+  .service-tabs .service-tab-label, .service-tabs .service-tab-arrow { margin: 0; }
+  .service-tabs .service-tab-arrow { font-size: 13px; line-height: 1; }
   .card-heading h2 { font-size: 25px; letter-spacing: -.05em; }
   .card-heading p { color: var(--muted); font-size: 12px; margin-top: 8px; }
   .location-fields { position: relative; margin: 24px 0 16px; }
