@@ -4,6 +4,7 @@ import { useJourney } from '../src/journeys/provider';
 import { JourneyChat } from '../src/journeys/chat';
 import { Button, Card, Field, Heading, Loading, Notice, Pill, Screen, fare, styles } from '../src/ui/components';
 import { VehicleCard } from '../src/ui/vehicle-card';
+import { DriverAvatar } from '../src/ui/driver-avatar';
 import { bookingStatusLabel } from '../../../packages/shared/src/mobile-booking.mjs';
 import { vehicleCategory } from '../../../packages/shared/src/vehicle-categories.mjs';
 import type { JourneyAction } from '../../../packages/shared/src/mobile-journeys.mjs';
@@ -15,7 +16,7 @@ function JourneyScreen({id}:{id:string}){
     {s.uncertain&&<Button title="Retry the same action" busy={s.busy} onPress={()=>void c.retry()}/>}
     {r&&<><Pill>{bookingStatusLabel(r.status).toUpperCase()}</Pill><Heading title={`${r.pickup} → ${r.destination}`} subtitle={`${vehicleCategory(r.vehicleCategory??'standard')?.name} · ${r.mode==='work'?'Work':'Customer'}`}/>
       <Card><Text style={styles.h2}>{r.fareKobo===null?'Suggested fare':'Agreed fare'} · {fare(r.fareKobo??r.suggestedFareKobo)}</Text>
-        <Text style={styles.body}>{r.mode==='work'?`Customer · ${r.customerName}`:r.driver?`Driver · ${r.driver.name}`:'Waiting for a driver to take your request.'}</Text>
+        {r.driver&&<DriverAvatar rideId={r.id} name={r.driver.name}/>}<Text style={styles.body}>{r.mode==='work'?`Customer · ${r.customerName}`:r.driver?`Driver · ${r.driver.name}`:'Waiting for a driver to take your request.'}</Text>
         {r.driver&&<VehicleCard vehicle={r.driver.vehicle} label="VEHICLE FOR THIS JOURNEY" compact/>}
         {r.offer&&r.status==='negotiating'&&<><Pill>{r.offer.fromYou?'YOUR OFFER':'NEW OFFER'}</Pill><Text style={styles.h2}>{fare(r.offer.amountKobo)}</Text><Text style={styles.small}>{s.now>=r.offer.expiresAt?'This offer has expired.':`Expires in ${Math.max(0,Math.ceil((r.offer.expiresAt-s.now)/1000))} seconds`}</Text></>}
         {r.allowedActions.includes('accept')&&<Button title={`Accept ${fare(r.offer!.amountKobo)}`} disabled={locked||s.now>=r.offer!.expiresAt} onPress={()=>confirm('accept','Accept fare',`Accept this exact offer of ${fare(r.offer!.amountKobo)}?`)}/>}
