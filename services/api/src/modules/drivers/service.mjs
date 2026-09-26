@@ -29,7 +29,7 @@ export function createDriversService({ repository, getAccount, hasDriverWork, co
   }
   function ready(app, documents, now) {
     const state = eligibility(app, documents, now);
-    check(app.details && !state.missing.length && !state.expired.length, 'APPLICATION_INCOMPLETE', 'Complete the details and upload all five current documents before submitting or approving.');
+    check(app.details && !state.missing.length && !state.expired.length, 'APPLICATION_INCOMPLETE', 'Complete the details and upload all five current documents, including a clear driver profile face photo, before submitting or approving.');
     // Recheck old drafts/submissions against today's policy without rewriting approved history.
     applicationDetails(app.details, now);
   }
@@ -106,6 +106,14 @@ export function createDriversService({ repository, getAccount, hasDriverWork, co
       return { application: view(user, id), replayed: false };
     });
   }
+  function profilePhoto(driverId) {
+    const app = repository.application(driverId);
+    check(app?.status === 'approved', 'NOT_FOUND', 'Approved driver photo not found.');
+    const doc = repository.documents(driverId).find((item) => item.kind === 'profile_photo');
+    check(doc, 'NOT_FOUND', 'Approved driver photo not found.');
+    return { id: doc.id, mimeType: doc.mimeType, base64: codec.encode(repository.content(doc.id)) };
+  }
+
   function download(user, documentId) {
     return unitOfWork(() => {
       const doc = repository.document(documentId);
@@ -116,5 +124,5 @@ export function createDriversService({ repository, getAccount, hasDriverWork, co
         base64: codec.encode(repository.content(documentId)) };
     });
   }
-  return Object.freeze({ list, get: view, command, download, eligibilityFor });
+  return Object.freeze({ list, get: view, command, download, eligibilityFor, profilePhoto });
 }
