@@ -13,7 +13,7 @@ import { requireParticipant, requireVersion, restoreNegotiation, canonical } fro
  * or HTTP objects. unitOfWork must encompass state, fare, audit and retry writes.
  */
 export function createRidesService({ repository, deliveries, getAccount, unitOfWork, audit, tokens, clock, onRideClosed = () => {}, onTripCompleted = () => {},
-  routeForRide = () => null, quoteForRide, bindQuote, availabilityFor = () => null, onClaim = () => {}, onEvent = () => {}, availableDriverIds = () => [], allowSimulation = false }) {
+  routeForRide = () => null, quoteForRide, bindQuote, availabilityFor = () => null, onClaim = () => {}, onEvent = () => {}, availableDriverIds = () => [], driverPhotoFor = () => null, allowSimulation = false }) {
   // Expiry commits independently of a command that may fail afterward.
   function sweep() {
     unitOfWork(() => {
@@ -66,6 +66,16 @@ export function createRidesService({ repository, deliveries, getAccount, unitOfW
     const ride = record(id);
     requireParticipant(ride, user);
     return view(ride, user);
+  }
+
+  function driverPhoto(user, id) {
+    sweep();
+    const ride = record(id);
+    requireParticipant(ride, user);
+    check(ride.driverId, 'NOT_FOUND', 'Driver profile photo is not available before a driver is assigned.');
+    const photo = driverPhotoFor(ride.driverId);
+    check(photo, 'NOT_FOUND', 'Approved driver profile photo is unavailable.');
+    return { driverId: ride.driverId, mimeType: photo.mimeType, base64: photo.base64 };
   }
 
   function requireMode(user, mode) {
@@ -340,5 +350,5 @@ export function createRidesService({ repository, deliveries, getAccount, unitOfW
     return { rideId: id, customerId: ride.customerId, driverId: ride.driverId, status: ride.trip?.status ?? ride.status, pickup: route.pickup.name, destination: route.destination.name,
       driver: ride.driverSnapshotJson ? JSON.parse(ride.driverSnapshotJson) : peer(ride.driverId, true) };
   }
-  return Object.freeze({ get, list, history, mutate, conversationContext, conversationIds, paymentContext, safetyContext, sweep });
+  return Object.freeze({ get, list, history, mutate, conversationContext, conversationIds, paymentContext, safetyContext, sweep, driverPhoto });
 }
