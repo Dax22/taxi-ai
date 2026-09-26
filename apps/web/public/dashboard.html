@@ -34,8 +34,13 @@
         <form id="auth-form" class="stack-form">
           <div id="registration-fields" hidden><label for="account-name">Your name</label><input id="account-name" autocomplete="name" minlength="2" maxlength="80" disabled></div>
           <label for="account-email">Email address</label><input id="account-email" type="email" autocomplete="username" maxlength="254" required>
-          <label for="account-password">Password</label><input id="account-password" type="password" autocomplete="current-password" minlength="12" maxlength="128" required aria-describedby="password-help"><p id="password-help" class="small-note">Use 12–128 characters.</p>
-          <p id="forgot-password"><a class="text-link" href="/account-recovery">Forgot password?</a></p>
+          <label for="account-password">Password</label>
+          <div class="password-field">
+            <input id="account-password" type="password" autocomplete="current-password" minlength="12" maxlength="128" required aria-describedby="password-help">
+            <button id="account-password-toggle" class="password-toggle" type="button" aria-controls="account-password" aria-pressed="false">Show</button>
+          </div>
+          <p id="password-help" class="small-note">Use 12–128 characters.</p>
+          <p id="forgot-password" class="forgot-password-row"><a class="text-link" href="/account-recovery">Forgot password?</a></p>
 
           <button id="auth-submit" class="button button-primary button-full" type="submit">Sign in <span aria-hidden="true">↗</span></button>
         </form>
