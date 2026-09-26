@@ -333,3 +333,5 @@
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
+
+.driver-avatar{width:72px;height:72px;border-radius:50%;object-fit:cover;border:2px solid #fff;background:#dfe3dc;box-shadow:0 0 0 1px #c9cec8;margin:.35rem 0 .6rem}
