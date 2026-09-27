@@ -6,7 +6,9 @@ import { fields } from '../shared/validation.mjs';
 
 const terminal = new Set(['completed', 'cancelled', 'expired']);
 const geometry = (route) => route ? { distanceMeters: route.distanceMeters, durationSeconds: route.durationSeconds,
-  coordinates: route.coordinates, distanceKind: route.distanceKind ?? 'road' } : null;
+  coordinates: route.coordinates, distanceKind: route.distanceKind ?? 'road',
+  pricing: route.pricing ? { baseKobo: route.pricing.baseKobo, distanceKobo: route.pricing.distanceKobo, timeKobo: route.pricing.timeKobo,
+    minimumKobo: route.pricing.minimumKobo, incrementKobo: route.pricing.incrementKobo } : undefined } : null;
 export function bookingProjection(ride) {
   return { id: ride.id, version: ride.version, status: ride.status, vehicleCategory: ride.vehicleCategory, service: ride.service, delivery: ride.delivery, passenger: ride.passenger, pickup: ride.pickup.name, destination: ride.destination.name,
     suggestedFareKobo: ride.suggestedFareKobo, fareKobo: ride.trip?.fareKobo ?? ride.negotiation?.agreement?.amountKobo ?? null,
