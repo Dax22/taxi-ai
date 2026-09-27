@@ -155,6 +155,7 @@ export class BookingController {
     }
   }
   async findRides() {
+    if (!this.state.consent) this.patch({ consent: true });
     const places = await this.search('destination');
     if (places.length === 1) await this.chooseRideDestination(places[0]);
   }
