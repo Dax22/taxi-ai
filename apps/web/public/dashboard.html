@@ -195,7 +195,7 @@
         <div class="passenger-destination">
           <p class="eyebrow">YOUR DESTINATION</p><h3>Where are you going?</h3>
           <p class="small-note">Type an address, landmark, town or city anywhere in Nigeria. This is a nationwide address search, not an Abuja-area list.</p>
-          <form id="location-destination-form" class="stack-form"><fieldset id="location-destination-fields"><legend class="visually-hidden">Destination</legend><label for="location-destination-query">Destination</label><div class="location-input-row"><input id="location-destination-query" type="search" minlength="3" maxlength="160" required autocomplete="off" placeholder="e.g. Lekki Phase 1, Lagos"><button id="location-destination-search" type="submit" class="button button-primary button-small">Find destination</button></div><ul id="location-destination-results" class="location-results" aria-label="Destination search results"></ul><p id="location-destination-selected" class="small-note"></p></fieldset></form>
+          <form id="location-destination-form" class="stack-form"><fieldset id="location-destination-fields"><legend class="visually-hidden">Destination</legend><label for="location-destination-query">Destination</label><div class="location-input-row"><input id="location-destination-query" type="search" minlength="3" maxlength="160" required autocomplete="off" placeholder="e.g. Lekki Phase 1, Lagos"><button id="location-destination-search" type="submit" class="button button-primary button-small">Find rides</button></div><ul id="location-destination-results" class="location-results" aria-label="Destination search results"></ul><p id="location-destination-selected" class="small-note"></p></fieldset></form>
           <button id="planner-online" class="button button-outline button-small" type="button">Enable address search</button>
           <p id="planner-provider-note" class="small-note"></p>
         </div>
@@ -212,8 +212,16 @@
           <div id="planner-map" class="location-map"></div>
           <p class="map-attribution">© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a> · Photon search · OSRM routing · <a href="https://www.openstreetmap.org/fixthemap" target="_blank" rel="noopener">Fix the map</a></p>
           <details class="coordinate-details"><summary>Enter a pin by coordinates</summary><form id="location-coordinate-form" class="stack-form"><fieldset id="location-coordinate-fields"><legend>Use coordinates for the selected pin</legend><div class="location-coordinate-grid"><div><label for="location-latitude">Latitude</label><input id="location-latitude" type="number" step="any" min="4.272162" max="13.880291" required></div><div><label for="location-longitude">Longitude</label><input id="location-longitude" type="number" step="any" min="2.671082" max="14.669936" required></div><div><label for="location-pin-name">Label (optional)</label><input id="location-pin-name" minlength="2" maxlength="160"></div></div><button type="submit" class="button button-outline button-small">Use these coordinates</button></fieldset></form></details>
-          <button id="location-preview" type="button" class="button button-primary">Preview route and suggested fare</button>
-          <section id="location-quote" class="location-quote" hidden aria-label="Route preview"><div class="route-metrics"><div><span>Road distance</span><strong id="location-distance"></strong></div><div><span>Estimated driving time</span><strong id="location-duration"></strong></div><div><span>Suggested test fare</span><strong id="location-price"></strong></div></div><p class="small-note">Travel time excludes live traffic and driver arrival. This is an illustrative fare, not an AI estimate or a verified market price. No vehicle is dispatched.</p><p id="location-formula" class="small-note"></p><p id="location-expiry" class="small-note" role="status"></p><button id="location-book" type="button" class="button button-primary">Request this test ride ↗</button></section>
+          <button id="location-preview" type="button" class="button button-outline" hidden>Update ride options</button>
+          <section id="location-quote" class="location-quote ride-options-panel" hidden aria-labelledby="ride-options-title">
+            <div class="card-topline"><div><p class="eyebrow">RIDE OPTIONS</p><h3 id="ride-options-title">Choose your ride.</h3></div><span id="location-option-status" class="status-badge">Suggested fares</span></div>
+            <div id="location-ride-options" class="ride-options" role="radiogroup" aria-label="Ride options"></div>
+            <div class="route-metrics"><div><span>Distance</span><strong id="location-distance"></strong></div><div><span>Estimated trip</span><strong id="location-duration"></strong></div><div><span>Suggested fare</span><strong id="location-price"></strong></div></div>
+            <p class="small-note">Suggested fares are an estimate for this route. You and the driver still agree the final fare before the ride is booked.</p>
+            <details class="ride-price-details"><summary>How this preview was estimated</summary><p id="location-formula" class="small-note"></p></details>
+            <p id="location-expiry" class="small-note" role="status"></p>
+            <button id="location-book" type="button" class="button button-primary">Request selected ride ↗</button>
+          </section>
         </div>
       </section>
       </div>
