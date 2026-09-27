@@ -119,7 +119,9 @@ $('page-notice').textContent = consumeGoogleOutcome(location, history);
 void google.load();
 const modeView = createAccountModeView({ onSwitch: (...args) => page.switchMode(...args), onCancel: () => page.cancelSwitch(),
   onEditVehicle: () => page.editVehicle(),
-  onAddDriver: (vehicle) => page.addDriver(vehicle), onOpenRide: (id) => page.openRide(id) });
+  onAddDriver: (vehicle) => page.addDriver(vehicle), onOpenRide: (id) => page.openRide(id),
+  onSeller: () => location.assign('/eats/sell'),
+  onCustomerStart: () => $('vehicle-categories-panel').scrollIntoView?.({ behavior: 'smooth', block: 'start' }) });
 let storage;
 try { storage = window.sessionStorage; } catch { /* Mode selection remains usable without storage. */ }
 let liveIdentity = null;
@@ -164,4 +166,9 @@ setInterval(() => { if (calls.hasMedia()) void calls.poll(); }, 2000);
 // Location publication remains on sharing.tick(); reception uses account invalidations.
 // Anonymous sessions use a slow check; authenticated sessions refresh on invalidation.
 setInterval(() => { if (!liveIdentity) poll(); else if (!document.hidden) void announcements.poll(); }, 30_000);
-poll();
+const initialStart = new URLSearchParams(location.search).get('start');
+if (initialStart) {
+  const clean = new URL(location.href); clean.searchParams.delete('start');
+  history.replaceState(null, '', clean.pathname + clean.search + clean.hash);
+}
+void page.poll().then(() => { if (initialStart) modeView.startExperience(initialStart); });
