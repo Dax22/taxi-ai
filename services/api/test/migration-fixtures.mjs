@@ -129,8 +129,19 @@ export function removeAdminWorkspaceFixtureTables(db) {
   }
 }
 
+/** Announcements are durable staff-authored content; older-schema fixtures may remove only an entirely empty announcement feature. */
+export function removeAnnouncementFixtureTables(db) {
+  const tables = ['announcement_push_jobs','admin_announcement_reads','admin_announcement_commands','admin_announcements'];
+  const present = tables.filter(table => db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(table));
+  for (const table of present) {
+    if (db.prepare(`SELECT count(*) AS count FROM ${table}`).get().count) throw new Error(`Cannot downgrade a populated ${table} fixture.`);
+  }
+  for (const table of present) db.exec(`DROP TABLE ${table}`);
+}
+
 /** Compliance tasks are durable operator work; an older-schema fixture may remove only empty tables. */
 export function removeAdminExpansionFixtureTables(db) {
+  removeAnnouncementFixtureTables(db);
   const tables = ['parcel_tracking_commands', 'parcel_tracking_links', 'driver_face_checks', 'admin_compliance_commands', 'admin_compliance_events', 'admin_compliance_followups'];
   const present = tables.filter(table => db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(table));
   for (const table of present) {
