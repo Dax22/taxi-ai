@@ -24,6 +24,7 @@ function BookingScreen() {
   const settings = s.settings, locked = !!s.busy || !!s.uncertain, disabled = locked || s.stale;
   const planningDisabled = disabled || s.locatingPickup;
   const wide = width >= 820 && fontScale <= 1.3;
+  const showDeveloperSample = __DEV__ && process.env.EXPO_PUBLIC_SHOW_SAMPLE_BOOKING === '1';
   const samplePickup = settings?.areas.find((area) => area.id === s.pickupId);
   const cancel = (ride: BookingRide) => Alert.alert('Cancel this journey?', `${ride.pickup} → ${ride.destination}. You will need to create a new request if your plans change.`, [
     { text: 'Keep journey', style: 'cancel' }, { text: 'Cancel journey', style: 'destructive', onPress: () => void c.cancel(ride) },
@@ -51,9 +52,9 @@ function BookingScreen() {
         {([['description', 'Parcel description and size'], ['weightKg', 'Total weight (kg)'], ['recipientName', 'Recipient name'], ['pickupInstructions', 'Pickup instructions (optional)'], ['dropoffInstructions', 'Drop-off instructions (optional)']] as [keyof DeliveryDraft, string][]).map(([field, label]) => <Field key={field} label={label} value={s.delivery[field]} editable={!disabled} keyboardType={field === 'weightKg' ? 'decimal-pad' : 'default'} maxLength={field === 'weightKg' ? 10 : field === 'recipientName' ? 100 : 240} onChangeText={(value) => c.editDelivery(field, value)}/>)}
         <Text style={styles.small}>{s.category === 'standard' ? 'Car' : vehicleCategory(s.category)?.name} parcel limit: {parcelLoadLimit(s.category)} kg. Matching also checks the driver’s approved load capacity. Confirm the load fits before collection.</Text><Text style={styles.small}>After requesting, share a private tracking invitation from your journey. Your recipient signs in and accepts it to follow the delivery. They give the drop-off code to the driver only after receiving the parcel.</Text>
       </Card>}
-      {!s.mode ? <Card><Text style={styles.h2}>Route planning is unavailable.</Text><Text style={styles.body}>Address search and sample routes are disabled in this environment. Please check again later.</Text></Card> : <>
+      {!s.mode || s.mode === 'sample' && !showDeveloperSample ? <Card><Text style={styles.h2}>Nationwide route planning is unavailable.</Text><Text style={styles.body}>Taxi Ai needs the configured nationwide address and routing service before a ride can be requested here.</Text></Card> : <>
         <View style={styles.row}>{settings.online.enabled && <Button title="Search addresses" secondary={s.mode !== 'route'} disabled={locked} onPress={() => c.chooseMode('route')}/>}
-          {settings.allowSample && <Button title="Sample journey" secondary={s.mode !== 'sample'} disabled={locked} onPress={() => c.chooseMode('sample')}/>}</View>
+          {showDeveloperSample && settings.allowSample && <Button title="Developer sample" secondary={s.mode !== 'sample'} disabled={locked} onPress={() => c.chooseMode('sample')}/>}</View>
         <View style={[look.columns, wide && look.wide]}><View style={[look.column, wide && look.wideColumn]}><Card><Text style={styles.h2}>{delivery ? 'Plan your delivery route' : 'Confirm your pickup and route'}</Text>
           {s.mode === 'route' ? <>
             {!s.consent ? delivery ? <><Text style={styles.body}>Search streets and landmarks across Nigeria. Include the town and state for more precise results. Search terms go to {settings.online.searchHost ?? 'the configured address provider'}; selected pickup and destination coordinates go to {settings.online.routeHost ?? 'the configured routing provider'} for a route preview.</Text>
