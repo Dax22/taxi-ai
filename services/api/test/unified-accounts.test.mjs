@@ -189,6 +189,12 @@ test('Kemmy setup is deterministic, authenticated and persists across web/native
   assert.equal(setup.autoOpen, true);
   assert.equal(setup.completedAt, null);
 
+  setup = (await customer.post('/api/account/kemmy-setup', { action: 'dismiss' })).body;
+  assert.equal(setup.autoOpen, false);
+  assert.equal(setup.nextStep, 'welcome');
+  setup = (await customer.post('/api/account/kemmy-setup', { action: 'resume' })).body;
+  assert.equal(setup.autoOpen, true);
+
   setup = (await customer.post('/api/account/kemmy-setup', { action: 'start' })).body;
   assert.equal(setup.nextStep, 'email');
   setup = (await customer.post('/api/account/kemmy-setup', { action: 'email-later' })).body;
