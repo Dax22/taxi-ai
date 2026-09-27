@@ -147,13 +147,12 @@ const page = createPageController({ client, activityClient, view, modeView, pref
         $('page-error').textContent = 'Unable to connect. Check that Taxi Ai is running, then refresh this page.';
       }
     },
-  } })
+  } });
 kemmySetup = createKemmySetup({ client,
   onCustomer: () => $('vehicle-categories-panel').scrollIntoView({ behavior: 'smooth', block: 'start' }),
   onDriver: () => void page.switchMode('work'),
   onSeller: () => location.assign('/eats/sell'),
 });
-;
 const poll = () => { if (!document.hidden) void page.poll(); };
 $('logout').addEventListener('click', () => page.logout());
 $('refresh').addEventListener('click', () => page.poll());
