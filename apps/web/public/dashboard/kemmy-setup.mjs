@@ -37,7 +37,7 @@ export function createKemmySetup({ client, onDriver = () => {}, onCustomer = () 
     if (!identity) { hide(); showLauncher(false); return; }
     root.hidden = false; showLauncher(false);
     if (next.nextStep === 'welcome') {
-      message("Hi, my name is Kemmy and I’m your Taxi Ai assistant. I can help you set up your account.", 'This guided setup uses fixed Taxi Ai rules. It does not use an AI language model.');
+      message("Hi, my name is Kemmy and I’m your Taxi Ai assistant. I can help you set up your account.", 'I’ll guide you through a few quick steps, and you can skip anything optional.');
       button('Set up my account', () => void update('start'));
       button('Maybe later', () => void dismiss(), true);
     } else if (next.nextStep === 'email') {
