@@ -109,6 +109,7 @@ const routes = new Map([
   ...[...VEHICLE_COLOURS.map((c) => c.id), 'neutral'].map((id) => [`/assets/vehicles/sedan-${id}.png`, [`public/assets/vehicles/sedan-${id}.png`, 'image/png']]),
   ['/dashboard.css', ['public/dashboard.css', 'text/css; charset=utf-8']],
   ['/dashboard/account-mode-view.mjs', ['public/dashboard/account-mode-view.mjs', 'text/javascript; charset=utf-8']],
+  ['/dashboard/announcements.mjs', ['public/dashboard/announcements.mjs', 'text/javascript; charset=utf-8']],
   ['/shared/account-modes.mjs', ['../../packages/shared/src/account-modes.mjs', 'text/javascript; charset=utf-8']],
   ['/dashboard.mjs', ['public/dashboard.mjs', 'text/javascript; charset=utf-8']],
   ['/dashboard/onboarding-controller.mjs', ['public/dashboard/onboarding-controller.mjs', 'text/javascript; charset=utf-8']],
