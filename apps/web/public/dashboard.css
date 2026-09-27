@@ -513,3 +513,26 @@
     .announcement-banner .button { width: 100%; justify-content: center; }
   }
 }
+
+
+/* Kemmy first-time setup */
+@layer components {
+  .kemmy-setup-card { z-index: 40; }
+  .kemmy-setup-actions { display: grid; gap: 9px; margin-top: 16px; }
+  .kemmy-setup-actions .button { width: 100%; justify-content: center; text-align: center; }
+  .kemmy-setup-launcher {
+    position: fixed; z-index: 39; right: max(20px, env(safe-area-inset-right)); bottom: max(20px, env(safe-area-inset-bottom));
+    display: inline-flex; align-items: center; gap: 8px; min-height: 50px; padding: 7px 14px 7px 7px;
+    border: 1px solid #efc84d; border-radius: 999px; background: #fff9e7; color: var(--ink); box-shadow: 0 12px 32px #20222526;
+    font-size: 13px; font-weight: 700;
+  }
+  .kemmy-setup-launcher img { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; background: #f3e8cd; }
+  .kemmy-setup-launcher:hover { background: var(--brand-soft); }
+  .kemmy-setup-card[aria-busy="true"] { opacity: .78; }
+}
+@layer responsive {
+  @media (max-width: 580px) {
+    .kemmy-setup-card { left: 12px; right: 12px; bottom: max(12px, env(safe-area-inset-bottom)); width: auto; max-height: min(72vh, 620px); }
+    .kemmy-setup-launcher { right: 12px; bottom: max(12px, env(safe-area-inset-bottom)); }
+  }
+}
