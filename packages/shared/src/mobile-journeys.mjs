@@ -71,7 +71,8 @@ function announcement(a) {
     && a.expiresAt > a.publishedAt && nullableTime(a.readAt));
 }
 export function parseNotifications(v) {
-  envelope(v); expect(Array.isArray(v.notifications) && v.notifications.length <= 50 && integer(v.unread)
+  envelope(v); if (v.announcements === undefined) v.announcements = [];
+  expect(Array.isArray(v.notifications) && v.notifications.length <= 50 && integer(v.unread)
     && (v.nextBefore === null || positive(v.nextBefore)) && object(v.push) && typeof v.push.enabled === 'boolean' && typeof v.push.registered === 'boolean'
     && (v.push.projectId === null || uuid(v.push.projectId)) && Array.isArray(v.announcements) && v.announcements.length <= 20);
   expect(v.notifications.every((n) => object(n) && positive(n.id) && uuid(n.rideId) && mode(n.mode) && Object.hasOwn(NOTIFICATION_LABELS,n.kind)
