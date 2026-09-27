@@ -117,7 +117,7 @@ export function createLocationPlanner({ client, view, onBook, onOnline, device =
   }
   return Object.freeze({ setCategory(id) { if (!booking && transportCategory(id) && id !== vehicleCategory) { vehicleCategory = id; revision++; quote = null; quoting = false; error = ''; render(); } }, setContext, reset, enable, clear, select, search, findRides, chooseRidePlace, useRidePickup, useCurrentPickup, preview, book,
     setTarget(value) { if (['pickup', 'destination'].includes(value)) { target = value; render(); } },
-    pick(value) { select(target, value); }, tick: render,
+    pick(value) { return rideDiscovery ? chooseRidePlace(target, value) : select(target, value); }, tick: render,
     snapshot: () => ({ pickup, destination, quote, online, results, error, vehicleCategory, rideDiscovery }),
   });
 }
