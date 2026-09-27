@@ -35,7 +35,10 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
     $('standard-ride-planner').hidden = !customer || !categories.selected().ridePreview;
     $('customer-panel').hidden = !customer || !showLocalSample;
     const category = categories.selected();
-    if (passengerCategory !== category.id) { clearPassenger(); passengerCategory = category.id; }
+    if (passengerCategory !== category.id) {
+      if (transportCategory(passengerCategory)?.service !== transportCategory(category.id)?.service) clearPassenger();
+      passengerCategory = category.id;
+    }
     $('passenger-panel').hidden = !customer || isDelivery();
     $('delivery-details-form').hidden = !customer || !isDelivery();
     const maxLoadKg = isDelivery() ? parcelLoadLimit(category.id) : null;
