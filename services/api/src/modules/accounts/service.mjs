@@ -51,8 +51,10 @@ export function createAccountsService({ repository, driverProfiles, passwords, t
     const role = data.role ?? 'customer';
     check(['customer', 'driver'].includes(role), 'INVALID_ROLE', 'Choose customer or driver.');
     let vehicle;
-    if (role === 'driver') vehicle = (await vehicleInput(data.vehicle));
-    else check(!Object.hasOwn(data, 'vehicle'), 'INVALID_FIELDS', 'Add a driver profile after creating your account.');
+    if (role === 'driver') {
+      check(data.intent === undefined || intent === 'driver', 'INVALID_FIELDS', 'Legacy driver registration cannot use a different starting experience.');
+      vehicle = (await vehicleInput(data.vehicle));
+    } else check(!Object.hasOwn(data, 'vehicle'), 'INVALID_FIELDS', 'Add a driver profile after creating your account.');
     // Hash outside the short synchronous database transaction.
     const passwordHash = await passwords.hash(password);
     const user = (await unitOfWork(async () => {
