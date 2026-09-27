@@ -94,8 +94,8 @@ export function createMobileRouter({ devices, accounts, drivers, rides, dispatch
     else if (auth && path === '/auth/google/challenge') body = (await googleAuth.nativeChallenge(data));
     else if (auth && path === '/auth/google') body = await googleAuth.nativeLogin(data);
     else if (auth && path === '/auth/register') {
-      fields(data, ['name', 'email', 'password', 'deviceName']);
-      const user = await accounts.register({ name: data.name, email: data.email, password: data.password });
+      fields(data, ['name', 'email', 'password', 'deviceName', 'intent'], ['name', 'email', 'password', 'deviceName']);
+      const user = await accounts.register({ name: data.name, email: data.email, password: data.password, intent: data.intent });
       body = (await devices.issue(user.id, data.deviceName));
     }
     else if (auth) body = path === '/auth/login' ? await devices.login(data) : path === '/auth/refresh' ? (await devices.refresh(data)) : (await devices.logout(data));
