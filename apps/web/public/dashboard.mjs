@@ -57,7 +57,7 @@ const planner = createLocationPlanner({ client, view: locationView,
   serverNow: () => serverTime.now + performance.now() - serverTime.received,
   onOnline: (enabled, settings) => locationView.setOnline(enabled, settings),
   onBook: (quoteId) => page.rideCommand('/api/rides', { quoteId, ...view.requestOptions() },
-    'Your route and suggested fare are saved. An approved driver can start negotiation.'),
+    'Looking for a driver. When one joins, use Taxi Ai chat or an in-app call to agree the fare before confirming the ride.'),
 });
 const sharing = createLocationSharing({ client: activityClient, device: createGeolocation(), view: locationView,
   serverNow: () => serverTime.now + performance.now() - serverTime.received });
