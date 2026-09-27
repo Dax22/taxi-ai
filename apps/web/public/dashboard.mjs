@@ -114,7 +114,7 @@ const google = createGoogleSignIn({ client, navigate: (url) => location.assign(u
   busy(value) { $('google-sign-in').disabled = value; $('google-sign-in').setAttribute('aria-busy', String(value)); $('google-progress').hidden = !value; },
   error(value) { $('page-error').textContent = value; },
 } });
-$('google-sign-in').addEventListener('click', () => void google.start());
+$('google-sign-in').addEventListener('click', () => void google.start(authForm.registrationIntent()));
 $('page-notice').textContent = consumeGoogleOutcome(location, history);
 void google.load();
 const modeView = createAccountModeView({ onSwitch: (...args) => page.switchMode(...args), onCancel: () => page.cancelSwitch(),
