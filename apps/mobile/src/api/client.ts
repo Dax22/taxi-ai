@@ -117,19 +117,19 @@ export class MobileClient {
     const result = parseSignIn(await this.send('/auth/login', { data: { email, password, deviceName }, preview }));
     await this.adopt(result, epoch, preview);
   }
-  async register(name: string, email: string, password: string, deviceName: string, preview = '') {
+  async register(name: string, email: string, password: string, deviceName: string, intent: 'customer' | 'driver' | 'eats_seller' = 'customer', preview = '') {
     const epoch = ++this.epoch;
     this.credentials = null; this.saved = null; this.publish(null);
     await this.store(() => this.vault.clear());
-    const result = parseSignIn(await this.send('/auth/register', { data: { name, email, password, deviceName }, preview }));
-    await this.adopt(result, epoch, preview);
+    const result = parseSignIn(await this.send('/auth/register', { data: { name, email, password, deviceName, intent }, preview }));
+    await this.adopt(result, epoch, preview); return result.user;
   }
-  async googleLogin(deviceName: string, chooseIdentity: (challenge: { nonce: string; webClientId: string }) => Promise<string | null>, preview = '') {
+  async googleLogin(deviceName: string, chooseIdentity: (challenge: { nonce: string; webClientId: string }) => Promise<string | null>, intent: 'customer' | 'driver' | 'eats_seller' | null = null, preview = '') {
     const epoch = ++this.epoch;
     this.credentials = null; this.saved = null; this.publish(null);
     await this.store(() => this.vault.clear());
     if (epoch !== this.epoch) throw changed();
-    const challenge = await this.send('/auth/google/challenge', { data: {}, preview });
+    const challenge = await this.send('/auth/google/challenge', { data: intent ? { intent } : {}, preview });
     if (epoch !== this.epoch) throw changed();
     if (typeof challenge.challenge !== 'string' || !/^[a-f0-9]{64}$/.test(challenge.challenge)
       || typeof challenge.nonce !== 'string' || !/^[a-f0-9]{64}$/.test(challenge.nonce)
@@ -141,7 +141,7 @@ export class MobileClient {
     if (idToken === null) return false;
     if (typeof idToken !== 'string' || idToken.length > 16_384) throw new ApiError('Google identity could not be read.', 'INVALID_RESPONSE');
     const result = parseSignIn(await this.send('/auth/google', { data: { challenge: challenge.challenge, idToken, deviceName }, preview }));
-    await this.adopt(result, epoch, preview); return true;
+    await this.adopt(result, epoch, preview); return result.user;
   }
   async restore() {
     const epoch = this.epoch, raw = await this.vault.read();
