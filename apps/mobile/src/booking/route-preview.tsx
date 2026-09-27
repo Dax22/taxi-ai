@@ -21,7 +21,8 @@ export function RoutePreview({ preview, now, disabled, busy, onRequest, onPrevie
   const baseFare = pricing ? Math.max(pricing.minimumKobo,
     Math.ceil((pricing.baseKobo + pricing.distanceKobo + pricing.timeKobo) / pricing.incrementKobo) * pricing.incrementKobo) : null;
   const rideOptions = transportCategory(selectedCategory)?.service === 'ride' ? (['standard','suv'] as VehicleCategoryId[]) : [selectedCategory];
-  return <Card><Pill>RIDE OPTIONS</Pill>
+  const isRide = transportCategory(selectedCategory)?.service === 'ride';
+  return <Card><Pill>{isRide ? 'RIDE OPTIONS' : 'ROUTE PREVIEW'}</Pill>
     {onChooseCategory && <View style={look.options}>{rideOptions.map((id) => {
       const category = vehicleCategory(id), selected = id === selectedCategory;
       const amount = selected ? preview.suggestedFareKobo : baseFare ? categoryFare(baseFare,id) : null;
@@ -50,7 +51,8 @@ export function RoutePreview({ preview, now, disabled, busy, onRequest, onPrevie
     <View style={look.fare}><Text style={styles.label}>SUGGESTED FARE</Text><Text style={styles.title}>{fare(preview.suggestedFareKobo)}</Text><Text style={styles.body}>You and the driver agree the final fare.</Text></View>
     <Text style={styles.small}>Illustrative pricing for this development preview. Requesting a driver does not accept a fare or confirm a booking. No live dispatch or payment.</Text>
     {preview.expiresAt !== null && <Text style={styles.small}>{expired ? 'This preview has expired.' : `Route preview valid for about ${Math.max(1, Math.ceil((preview.expiresAt - now) / 60_000))} more min.`}</Text>}
-    {expired ? <Button title="Refresh route preview" onPress={onPreview} disabled={disabled}/> : <Button title="Request a driver · preview" onPress={onRequest} busy={busy} disabled={disabled}/>}
+    {expired ? <Button title={isRide ? 'Refresh ride options' : 'Refresh route preview'} onPress={onPreview} disabled={disabled}/>
+      : <Button title={isRide ? `Request ${vehicleCategory(selectedCategory)?.name ?? 'selected'} ride` : 'Request delivery'} onPress={onRequest} busy={busy} disabled={disabled}/>
   </Card>;
 }
 const look = StyleSheet.create({ options: { gap: 8 }, map: { width: '100%', aspectRatio: 360 / 220, borderRadius: 18, overflow: 'hidden' },
