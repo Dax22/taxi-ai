@@ -13,6 +13,7 @@ import { parseBooking, parsePlaces, parsePreview, parseBookingRide } from '../..
 import { parseJourney, parseWork, parseAvailability, parseDeclinedOffer, parseThread, parseSentMessage, parseReadMessages, parseNotifications, parseNotificationTarget } from '../../../../packages/shared/src/mobile-journeys.mjs';
 import type { JourneyAction, JourneyData, OnlineData, Position } from '../../../../packages/shared/src/mobile-journeys.mjs';
 import type { Place, RequestData } from '../../../../packages/shared/src/mobile-booking.mjs';
+import { readKemmySetup } from '../kemmy/contracts';
 
 export interface Vault { read(): Promise<string | null>; write(value: string): Promise<void>; clear(): Promise<void> }
 export interface SavedSession { origin: string; refreshToken: string; sessionId: string; previewAccess: string }
@@ -290,6 +291,8 @@ export class MobileClient {
     if (!/^\/parcels\/(?:received(?:\/[a-f0-9-]{36})?|accept|[a-f0-9-]{36}\/(?:invitation|link|revoke))$/.test(path)) throw new Error('Invalid parcel API path.');
     return this.request(path, data, key, signal);
   }
+  async kemmySetup() { return readKemmySetup(await this.request('/account/kemmy-setup')); }
+  async updateKemmySetup(action: string, value?: string) { return readKemmySetup(await this.request('/account/kemmy-setup', { action, ...(value === undefined ? {} : { value }) })); }
   async emailStatus() { return parseEmailStatus(await this.request('/account/email')); }
   private accepted(body: Record<string, unknown>) {
     if (body.accepted !== true) throw new ApiError('Taxi Ai returned an incompatible response. Try again later.', 'INVALID_RESPONSE');
