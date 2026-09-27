@@ -55,12 +55,18 @@ export function parsePreview(value) {
   if (p.kind === 'sample') expect(p.expiresAt === null && p.route === null
     && text(p.request.pickupId, 50) && text(p.request.destinationId, 50) && p.request.pickupId !== p.request.destinationId
     && only(p.request, ['pickupId','destinationId','vehicleCategory']));
-  else expect(number(p.expiresAt) && uuid(p.request.quoteId) && only(p.request, ['quoteId','vehicleCategory']) && record(p.route)
-    && positive(p.route.distanceMeters) && p.route.distanceMeters <= 2_500_000 && (transportCategory(category).service === 'delivery'
-      ? p.route.distanceKind === 'straight_line' && p.route.durationSeconds === null
-      : (p.route.distanceKind === undefined || p.route.distanceKind === 'road') && positive(p.route.durationSeconds) && p.route.durationSeconds <= 172_800)
-    && Array.isArray(p.route.coordinates) && p.route.coordinates.length >= 2 && p.route.coordinates.length <= 1201
-    && p.route.coordinates.every((c) => Array.isArray(c) && c.length === 2 && insideNigeria({ lng: c[0], lat: c[1] })));
+  else {
+    const pricing = p.route?.pricing;
+    expect(number(p.expiresAt) && uuid(p.request.quoteId) && only(p.request, ['quoteId','vehicleCategory']) && record(p.route)
+      && positive(p.route.distanceMeters) && p.route.distanceMeters <= 2_500_000 && (transportCategory(category).service === 'delivery'
+        ? p.route.distanceKind === 'straight_line' && p.route.durationSeconds === null
+        : (p.route.distanceKind === undefined || p.route.distanceKind === 'road') && positive(p.route.durationSeconds) && p.route.durationSeconds <= 172_800)
+      && Array.isArray(p.route.coordinates) && p.route.coordinates.length >= 2 && p.route.coordinates.length <= 1201
+      && p.route.coordinates.every((c) => Array.isArray(c) && c.length === 2 && insideNigeria({ lng: c[0], lat: c[1] }))
+      && (pricing === undefined || (record(pricing)
+        && positive(pricing.baseKobo) && positive(pricing.distanceKobo) && number(pricing.timeKobo)
+        && positive(pricing.minimumKobo) && positive(pricing.incrementKobo))));
+  }
   return value;
 }
 export function parseBookingRide(value) { envelope(value); ride(value.ride); return value; }
