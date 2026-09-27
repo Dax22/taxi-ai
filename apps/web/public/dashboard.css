@@ -574,3 +574,23 @@
     .passenger-destination .location-input-row .button { width: 100%; }
   }
 }
+
+
+/* Registration starting experience */
+@layer components {
+  .registration-intent { border: 0; padding: 0; margin: 0 0 20px; }
+  .registration-intent legend { margin-bottom: 8px; font-size: 18px; font-weight: 800; color: var(--ink); }
+  .registration-intent > .small-note { margin: 0 0 12px; }
+  .registration-intent-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 10px; }
+  .registration-intent-card {
+    display: grid; gap: 6px; min-height: 118px; padding: 14px; text-align: left;
+    border: 1px solid var(--line); border-radius: 14px; background: var(--paper); color: var(--ink);
+  }
+  .registration-intent-card strong { font-size: 15px; }
+  .registration-intent-card span { color: var(--muted); font-size: 12px; line-height: 1.45; }
+  .registration-intent-card[aria-pressed="true"] { border-color: #dca900; background: var(--brand-soft); box-shadow: inset 0 0 0 1px #dca900; }
+  .registration-intent-card:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+}
+@layer responsive {
+  @media (max-width: 680px) { .registration-intent-grid { grid-template-columns: 1fr; } .registration-intent-card { min-height: 0; } }
+}
