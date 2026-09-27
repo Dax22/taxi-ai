@@ -292,12 +292,6 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
 
   const currentPickupId = 'wuse-ii';
   $('request-pickup').value = currentPickupId;
-  for (const area of DEMO_AREAS) {
-    if (area.id === currentPickupId) continue;
-    const option = element('option', area.name);
-    option.value = area.name;
-    $('request-destination-areas').append(option);
-  }
   $('request-destination').addEventListener('input', updateQuote);
   const selectedSampleDestination = () => {
     const area = matchSampleArea(DEMO_AREAS, $('request-destination').value);
