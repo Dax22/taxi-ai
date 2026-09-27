@@ -129,8 +129,17 @@ export function removeAdminWorkspaceFixtureTables(db) {
   }
 }
 
+
+/** Kemmy setup is account preference state; old-schema fixtures may remove it only while empty. */
+export function removeKemmyFixtureTables(db) {
+  if (!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='account_kemmy_setup'").get()) return;
+  if (db.prepare('SELECT count(*) AS count FROM account_kemmy_setup').get().count) throw new Error('Cannot downgrade a populated account_kemmy_setup fixture.');
+  db.exec('DROP TABLE account_kemmy_setup');
+}
+
 /** Announcements are durable staff-authored content; older-schema fixtures may remove only an entirely empty announcement feature. */
 export function removeAnnouncementFixtureTables(db) {
+  removeKemmyFixtureTables(db);
   const tables = ['announcement_push_jobs','admin_announcement_reads','admin_announcement_commands','admin_announcements'];
   const present = tables.filter(table => db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(table));
   for (const table of present) {
