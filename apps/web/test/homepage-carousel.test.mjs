@@ -65,7 +65,7 @@ test('overlay navigation wraps and announces only the manually selected slide', 
 
 test('automatic slides loop without interaction, continue on hover, and pause in a hidden document', () => {
   const f = setup();
-  assert.equal([...f.timers.values()][0].delay, 6500);
+  assert.equal([...f.timers.values()][0].delay, 7000);
   f.tick(); assert.equal(f.active(), 1);
   assert.equal(f.status.textContent, '');
   f.root.emit('pointerenter', { pointerType: 'mouse' });
