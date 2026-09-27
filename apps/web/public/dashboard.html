@@ -36,7 +36,17 @@
         <h2 id="auth-title">Welcome back.</h2><p class="supporting-copy" id="auth-description">Sign in to pick up where you left off.</p>
         <div id="google-auth" hidden><button id="google-sign-in" class="google-button" type="button" aria-label="Sign in with Google"><img src="/assets/google-sign-in.png" width="216" height="48" alt=""><span id="google-progress" hidden>Opening Google…</span></button><p class="small-note">New here? Google can create your Taxi Ai account too.</p><p class="auth-divider">or continue with email</p></div>
         <form id="auth-form" class="stack-form">
-          <div id="registration-fields" hidden><label for="account-name">Your name</label><input id="account-name" autocomplete="name" minlength="2" maxlength="80" disabled></div>
+          <div id="registration-fields" hidden>
+            <fieldset class="registration-intent"><legend>What would you like to do first?</legend>
+              <p class="small-note">You’ll have one Taxi Ai account. You can add another way to use Taxi Ai later.</p>
+              <div class="registration-intent-grid" role="group" aria-label="Choose how to start">
+                <button id="register-intent-customer" class="registration-intent-card" type="button" data-registration-intent="customer" aria-pressed="true"><strong>Book &amp; Order</strong><span>Book rides, send parcels and order food.</span></button>
+                <button id="register-intent-driver" class="registration-intent-card" type="button" data-registration-intent="driver" aria-pressed="false"><strong>Drive &amp; Deliver</strong><span>Apply to drive passengers or deliver food and parcels.</span></button>
+                <button id="register-intent-eats" class="registration-intent-card" type="button" data-registration-intent="eats_seller" aria-pressed="false"><strong>Sell Food</strong><span>Set up a restaurant, food business or private kitchen.</span></button>
+              </div>
+            </fieldset>
+            <label for="account-name">Your name</label><input id="account-name" autocomplete="name" minlength="2" maxlength="80" disabled>
+          </div>
           <label for="account-email">Email address</label><input id="account-email" type="email" autocomplete="username" maxlength="254" required>
           <label for="account-password">Password</label>
           <div class="password-field">
