@@ -22,7 +22,7 @@ export function RoutePreview({ preview, now, disabled, busy, onRequest, onPrevie
     Math.ceil((pricing.baseKobo + pricing.distanceKobo + pricing.timeKobo) / pricing.incrementKobo) * pricing.incrementKobo) : null;
   const rideOptions = transportCategory(selectedCategory)?.service === 'ride' ? (['standard','suv'] as VehicleCategoryId[]) : [selectedCategory];
   const isRide = transportCategory(selectedCategory)?.service === 'ride';
-  return <Card><Pill>{isRide ? 'RIDE OPTIONS' : 'ROUTE PREVIEW'}</Pill>
+  return <Card><Pill>{onChooseCategory ? 'RIDE OPTIONS' : isRide ? 'RIDE REVIEW' : 'ROUTE PREVIEW'}</Pill>
     {onChooseCategory && <View style={look.options}>{rideOptions.map((id) => {
       const category = vehicleCategory(id), selected = id === selectedCategory;
       const amount = selected ? preview.suggestedFareKobo : baseFare ? categoryFare(baseFare,id) : null;
