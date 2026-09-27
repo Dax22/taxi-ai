@@ -15,29 +15,35 @@ export function createLocationView({ onEnable, onUsePickup, onSearch, onClear, o
     planner = state;
     $('location-planner').hidden = state.user?.role !== 'customer';
     if (state.user?.role !== 'customer') { plannerMap.reset(); return; }
-    $('planner-online').textContent = state.online ? 'Turn off online maps' : 'Enable online maps';
+    $('planner-online').textContent = state.online ? 'Turn off address search' : 'Enable address search';
     locked('planner-online', !state.settings?.enabled || state.booking);
     $('planner-error').textContent = state.error;
     $('planner-blocked').hidden = !state.blocked;
     $('planner-content').hidden = !state.online;
     $('planner-provider-note').textContent = state.settings?.enabled
-      ? `Current pickup uses your browser location. Address searches use ${state.settings.searchHost}; route points go to ${state.settings.routeHost}. Map areas load via ${state.settings.tileHost}. Enable only if you want to use these services.`
-      : state.settings ? 'Online maps are disabled. You can use the sample-area demo below.' : 'Checking map availability…';
+      ? `Destination and pickup searches can cover addresses and landmarks across Nigeria. Searches use ${state.settings.searchHost}; selected route points go to ${state.settings.routeHost}. Map areas load via ${state.settings.tileHost}.`
+      : state.settings ? 'Nationwide address search is currently unavailable. Try again when online maps are configured.' : 'Checking nationwide address search…';
     $('location-pickup-fields').disabled = state.blocked || !state.online || state.booking;
     locked('location-pickup-current', state.locatingPickup || state.blocked || !state.online || state.booking || !state.supported);
     $('location-pickup-current').textContent = state.locatingPickup ? 'Reading your location…' : state.pickup ? 'Update current location' : 'Use current location';
     $('location-pickup-selected').textContent = state.locatingPickup ? 'Waiting for a fresh GPS fix…'
       : state.pickup ? `${state.pickup.name} · ${state.pickup.lat.toFixed(5)}, ${state.pickup.lng.toFixed(5)}` : 'Current location has not been set yet.';
     for (const side of ['pickup', 'destination']) {
-      $(`location-${side}-fields`).disabled = state.blocked || !state.online || state.booking;
-      locked(`location-${side}-search`, state.searching[side] || state.blocked || !state.online || state.booking);
-      $(`location-${side}-selected`).textContent = state[side] ? `${state[side].name} · ${state[side].lat.toFixed(5)}, ${state[side].lng.toFixed(5)}` : `Choose ${side}.`;
+      const destination = side === 'destination';
+      $(`location-${side}-fields`).disabled = state.blocked || state.booking || (!destination && !state.online);
+      locked(`location-${side}-search`, state.searching[side] || state.blocked || state.booking
+        || (destination ? !state.settings?.enabled : !state.online));
+      $(`location-${side}-selected`).textContent = state[side] ? `${state[side].name} · ${state[side].lat.toFixed(5)}, ${state[side].lng.toFixed(5)}` : destination ? 'Type and choose a destination anywhere in Nigeria.' : 'Choose pickup.';
       const key = JSON.stringify(state.results[side]);
       if (resultKeys[side] !== key) {
         resultKeys[side] = key; $(`location-${side}-results`).replaceChildren();
         for (const place of state.results[side]) {
           const row = element('li'), button = element('button', place.name, 'location-result'); button.type = 'button';
-          button.addEventListener('click', () => onSelect(side, place)); row.append(button); $(`location-${side}-results`).append(row);
+          button.addEventListener('click', () => {
+            onSelect(side, place);
+            if (side === 'destination') $('location-planner').scrollIntoView({ behavior: 'smooth', block: 'start' });
+          });
+          row.append(button); $(`location-${side}-results`).append(row);
         }
       }
     }
@@ -109,7 +115,11 @@ export function createLocationView({ onEnable, onUsePickup, onSearch, onClear, o
   $('location-pickup-form').addEventListener('submit', (event) => { event.preventDefault(); onSearch('pickup', $('location-pickup-query').value); });
   $('location-pickup-query').addEventListener('input', () => onClear('pickup'));
   for (const side of ['pickup', 'destination']) $(`location-target-${side}`).addEventListener('change', () => onTarget(side));
-  $('location-destination-form').addEventListener('submit', (event) => { event.preventDefault(); onSearch('destination', $('location-destination-query').value); });
+  $('location-destination-form').addEventListener('submit', (event) => {
+    event.preventDefault();
+    if (!online) onEnable();
+    onSearch('destination', $('location-destination-query').value);
+  });
   $('location-destination-query').addEventListener('input', () => onClear('destination'));
   $('location-coordinate-form').addEventListener('submit', (event) => {
     event.preventDefault();
