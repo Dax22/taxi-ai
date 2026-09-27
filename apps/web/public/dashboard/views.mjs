@@ -264,7 +264,7 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
     $('fare-open-chat').textContent = isDriver ? 'Chat with customer' : 'Chat with driver';
     $('fare-open-call').textContent = isDriver ? 'Call customer in app' : 'Call driver in app';
     $('accept-fare').hidden = ride.status !== 'negotiating' || !offer;
-    $('accept-fare').textContent = offer ? `Accept ${formatNaira(offer.amountKobo)}` : 'Accept offer';
+    $('accept-fare').textContent = offer ? `Accept exact fare · ${formatNaira(offer.amountKobo)}` : 'Accept exact fare';
     // Bind acceptance to the exact version and offer currently displayed. A failed
     // acceptance is never automatically resubmitted against a newer counteroffer.
     $('accept-fare').onclick = () => onCommand(`/api/rides/${ride.id}/accept`, {
