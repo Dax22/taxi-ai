@@ -135,15 +135,39 @@ export class BookingController {
     const area = matchSampleArea(this.state.settings?.areas ?? [], query);
     this.patch({ sampleDestinationQuery: query, destinationId: area?.id !== this.state.pickupId ? area?.id ?? '' : '', preview: null, error: '' });
   }
-  async search(endpoint: Endpoint) {
-    if (!this.canPlan() || this.locked() || this.state.mode !== 'route' || !this.state.consent) return;
+  async search(endpoint: Endpoint): Promise<Place[]> {
+    if (!this.canPlan() || this.locked() || this.state.mode !== 'route' || !this.state.consent) return [];
     const query = this.state[endpoint].query.trim();
-    if (query.length < 3 || query.length > 160) { this.patch({ error: 'Enter a Nigerian address or landmark, between 3 and 160 characters.' }); return; }
+    if (query.length < 3 || query.length > 160) { this.patch({ error: 'Enter a Nigerian address or landmark, between 3 and 160 characters.' }); return []; }
     const read = ++this.searches[endpoint]; this.patch({ ...(endpoint === 'pickup' ? { locatingPickup: false } : {}), [endpoint]: { ...this.state[endpoint], results: [], searching: true }, error: '' });
     try {
       const result = await this.api.searchPlaces(query);
-      if (this.active && read === this.searches[endpoint]) this.patch({ [endpoint]: { ...this.state[endpoint], results: result.places, searching: false, searched: true, attribution: result.attribution } });
-    } catch (e) { if (this.active && read === this.searches[endpoint]) this.patch({ error: message(e), [endpoint]: { ...this.state[endpoint], searching: false } }); }
+      if (this.active && read === this.searches[endpoint]) {
+        this.patch({ [endpoint]: { ...this.state[endpoint], results: result.places, searching: false, searched: true, attribution: result.attribution } });
+        return result.places;
+      }
+      return [];
+    } catch (e) {
+      if (this.active && read === this.searches[endpoint]) this.patch({ error: message(e), [endpoint]: { ...this.state[endpoint], searching: false } });
+      return [];
+    }
+  }
+  async findRides() {
+    const places = await this.search('destination');
+    if (places.length === 1) await this.chooseRideDestination(places[0]);
+  }
+  async chooseRideDestination(place: Place) {
+    this.select('destination', place);
+    if (!this.state.pickup.selected) await this.useCurrentPickup();
+    if (this.state.pickup.selected && this.state.destination.selected) await this.preview();
+  }
+  async chooseRidePickup(place: Place) {
+    this.select('pickup', place);
+    if (this.state.pickup.selected && this.state.destination.selected) await this.preview();
+  }
+  async useRidePickup() {
+    await this.useCurrentPickup();
+    if (this.state.pickup.selected && this.state.destination.selected) await this.preview();
   }
   async useCurrentPickup() {
     if (!this.canPlan() || this.locked() || this.state.mode !== 'route' || !this.state.consent || this.state.locatingPickup) return;
