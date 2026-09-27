@@ -37,15 +37,18 @@ export function createLocationView({ onEnable, onUsePickup, onSearch, onFindRide
   }
   function renderPlanner(state) {
     planner = state;
-    $('location-planner').hidden = state.user?.role !== 'customer';
+    const rideFlow = transportCategory(state.vehicleCategory)?.service === 'ride';
+    $('location-planner').hidden = state.user?.role !== 'customer' || (rideFlow && !state.rideDiscovery);
     if (state.user?.role !== 'customer') { plannerMap.reset(); return; }
+    $('planner-online').hidden = rideFlow;
     $('planner-online').textContent = state.online ? 'Turn off address search' : 'Enable address search';
     locked('planner-online', !state.settings?.enabled || state.booking);
     $('planner-error').textContent = state.error;
     $('planner-blocked').hidden = !state.blocked;
     $('planner-content').hidden = !state.online;
     $('planner-provider-note').textContent = state.settings?.enabled
-      ? `Destination and pickup searches can cover addresses and landmarks across Nigeria. Searches use ${state.settings.searchHost}; selected route points go to ${state.settings.routeHost}. Map areas load via ${state.settings.tileHost}.`
+      ? rideFlow ? 'Search starts only when you choose Find rides. Results and routes are limited to Nigeria.'
+        : `Destination and pickup searches can cover addresses and landmarks across Nigeria. Searches use ${state.settings.searchHost}; selected route points go to ${state.settings.routeHost}. Map areas load via ${state.settings.tileHost}.`
       : state.settings ? 'Nationwide address search is currently unavailable. Try again when online maps are configured.' : 'Checking nationwide address search…';
     $('location-pickup-fields').disabled = state.blocked || !state.online || state.booking;
     locked('location-pickup-current', state.locatingPickup || state.blocked || !state.online || state.booking || !state.supported);
@@ -74,7 +77,6 @@ export function createLocationView({ onEnable, onUsePickup, onSearch, onFindRide
     }
     for (const side of ['pickup', 'destination']) { $(`location-target-${side}`).checked = state.target === side; $(`location-target-${side}`).disabled = state.blocked || !state.online || state.booking; }
     $('location-coordinate-fields').disabled = !state.online || state.blocked || state.booking;
-    const rideFlow = transportCategory(state.vehicleCategory)?.service === 'ride';
     $('location-preview').hidden = rideFlow;
     locked('location-preview', !state.pickup || !state.destination || state.blocked || state.quoting || state.booking || !state.online);
     $('location-preview').textContent = state.quoting ? 'Updating ride options…' : 'Update ride options';
