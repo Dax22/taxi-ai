@@ -117,14 +117,21 @@ export class MobileClient {
     const result = parseSignIn(await this.send('/auth/login', { data: { email, password, deviceName }, preview }));
     await this.adopt(result, epoch, preview);
   }
-  async register(name: string, email: string, password: string, deviceName: string, intent: 'customer' | 'driver' | 'eats_seller' = 'customer', preview = '') {
+  async register(name: string, email: string, password: string, deviceName: string,
+    intentOrPreview: 'customer' | 'driver' | 'eats_seller' | string = 'customer', preview = '') {
+    const intent = ['customer','driver','eats_seller'].includes(intentOrPreview) ? intentOrPreview as 'customer' | 'driver' | 'eats_seller' : 'customer';
+    if (intentOrPreview !== intent) preview = intentOrPreview;
     const epoch = ++this.epoch;
     this.credentials = null; this.saved = null; this.publish(null);
     await this.store(() => this.vault.clear());
     const result = parseSignIn(await this.send('/auth/register', { data: { name, email, password, deviceName, intent }, preview }));
     await this.adopt(result, epoch, preview); return result.user;
   }
-  async googleLogin(deviceName: string, chooseIdentity: (challenge: { nonce: string; webClientId: string }) => Promise<string | null>, intent: 'customer' | 'driver' | 'eats_seller' | null = null, preview = '') {
+  async googleLogin(deviceName: string, chooseIdentity: (challenge: { nonce: string; webClientId: string }) => Promise<string | null>,
+    intentOrPreview: 'customer' | 'driver' | 'eats_seller' | string | null = null, preview = '') {
+    const intent = intentOrPreview !== null && ['customer','driver','eats_seller'].includes(intentOrPreview)
+      ? intentOrPreview as 'customer' | 'driver' | 'eats_seller' : null;
+    if (intentOrPreview && intentOrPreview !== intent) preview = intentOrPreview;
     const epoch = ++this.epoch;
     this.credentials = null; this.saved = null; this.publish(null);
     await this.store(() => this.vault.clear());
