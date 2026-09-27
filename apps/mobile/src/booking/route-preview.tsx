@@ -1,4 +1,6 @@
 import { vehicleCategory } from '../../../../packages/shared/src/vehicle-categories.mjs';
+import type { VehicleCategoryId } from '../../../../packages/shared/src/vehicle-categories.mjs';
+import { categoryFare, transportCategory } from '../../../../packages/shared/src/transport-categories.mjs';
 import { StyleSheet, View } from 'react-native';
 import { Text, fontFamilyBold } from '../ui/typography';
 import Svg, { Circle, Line, Polyline, Rect, Text as SvgText } from 'react-native-svg';
@@ -7,13 +9,26 @@ import { Button, Card, colors, fare, Pill, styles } from '../ui/components';
 import { routeDrawing } from './route-drawing';
 import { NativeMap } from '../maps/native-map';
 
-export function RoutePreview({ preview, now, disabled, busy, onRequest, onPreview, passengerName }: {
-  preview: BookingPreview; now: number; disabled: boolean; busy: boolean; onRequest(): void; onPreview(): void; passengerName?: string;
+export function RoutePreview({ preview, now, disabled, busy, onRequest, onPreview, onChooseCategory, passengerName }: {
+  preview: BookingPreview; now: number; disabled: boolean; busy: boolean; onRequest(): void; onPreview(): void;
+  onChooseCategory?: (id: VehicleCategoryId) => void; passengerName?: string;
 }) {
   const expired = preview.expiresAt !== null && now >= preview.expiresAt;
   const drawing = preview.route ? routeDrawing(preview.route.coordinates) : null;
   const points = preview.route?.coordinates.map(([lng, lat]) => ({ lat, lng })) ?? [];
-  return <Card><Pill>{`${vehicleCategory(preview.vehicleCategory ?? 'standard')?.name.toUpperCase()} · REVIEW YOUR JOURNEY`}</Pill>
+  const selectedCategory = preview.vehicleCategory ?? 'standard';
+  const pricing = preview.route?.pricing;
+  const baseFare = pricing ? Math.max(pricing.minimumKobo,
+    Math.ceil((pricing.baseKobo + pricing.distanceKobo + pricing.timeKobo) / pricing.incrementKobo) * pricing.incrementKobo) : null;
+  const rideOptions = transportCategory(selectedCategory)?.service === 'ride' ? (['standard','suv'] as VehicleCategoryId[]) : [selectedCategory];
+  return <Card><Pill>RIDE OPTIONS</Pill>
+    {onChooseCategory && <View style={look.options}>{rideOptions.map((id) => {
+      const category = vehicleCategory(id), selected = id === selectedCategory;
+      const amount = selected ? preview.suggestedFareKobo : baseFare ? categoryFare(baseFare,id) : null;
+      return <Button key={id} title={`${category?.name ?? id} · ${amount ? fare(amount) : '—'}`} secondary={!selected}
+        disabled={disabled || busy || selected} onPress={() => onChooseCategory(id)}/>;
+    })}</View>}
+    <Pill>{`${vehicleCategory(selectedCategory)?.name.toUpperCase()} · REVIEW YOUR JOURNEY`}</Pill>
     {drawing && <NativeMap route={points} direct={preview.route?.distanceKind === 'straight_line'} summary={`Planned route from ${preview.pickup} to ${preview.destination}. This is not live tracking.`}
       pins={[{ ...points[0], id: 'pickup', title: 'A · Pickup route point', description: preview.pickup }, { ...points[points.length - 1], id: 'destination', title: 'B · Destination route point', description: preview.destination }]}
       fallback={<><View style={look.map} accessible accessibilityLabel={`Route outline from ${preview.pickup} to ${preview.destination}. This is not a street map or live tracking.`}>
@@ -38,5 +53,5 @@ export function RoutePreview({ preview, now, disabled, busy, onRequest, onPrevie
     {expired ? <Button title="Refresh route preview" onPress={onPreview} disabled={disabled}/> : <Button title="Request a driver · preview" onPress={onRequest} busy={busy} disabled={disabled}/>}
   </Card>;
 }
-const look = StyleSheet.create({ map: { width: '100%', aspectRatio: 360 / 220, borderRadius: 18, overflow: 'hidden' },
+const look = StyleSheet.create({ options: { gap: 8 }, map: { width: '100%', aspectRatio: 360 / 220, borderRadius: 18, overflow: 'hidden' },
   fare: { padding: 18, borderRadius: 18, backgroundColor: '#fff3ce', gap: 8 } });
