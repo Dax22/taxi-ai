@@ -41,8 +41,14 @@ const callView = createCallView({ onStart: () => calls.start(), onAnswer: () => 
 });
 const calls = createCallController({ client: activityClient, media: createCallMedia(), view: callView });
 const routeDevice = createGeolocation();
-const locationView = createLocationView({ onEnable: () => planner.enable(), onUsePickup: () => planner.useCurrentPickup(), onSearch: (side, query) => planner.search(side, query),
-  onClear: (side) => planner.clear(side), onSelect: (side, value) => planner.select(side, value), onPick: (value) => planner.pick(value),
+const locationView = createLocationView({ onEnable: () => planner.enable(),
+  onUsePickup: () => planner.snapshot().rideDiscovery ? planner.useRidePickup() : planner.useCurrentPickup(),
+  onSearch: (side, query) => planner.search(side, query),
+  onFindRide: (_side, query) => planner.findRides(query),
+  onClear: (side) => planner.clear(side),
+  onSelect: (side, value) => planner.snapshot().rideDiscovery ? planner.chooseRidePlace(side, value) : planner.select(side, value),
+  onChooseOption: async (id) => { view.selectCategory(id); await planner.preview(); },
+  onPick: (value) => planner.pick(value),
   onTarget: (value) => planner.setTarget(value), onPreview: () => planner.preview(), onBook: () => planner.book(),
   onStart: () => sharing.start(), onStop: () => sharing.stop(),
   onRate: (id, stars) => page.rideCommand(`/api/rides/${id}/rating`, { stars }, 'Your driver rating was saved.') });
