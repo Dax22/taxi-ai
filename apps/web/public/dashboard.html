@@ -217,10 +217,10 @@
             <div class="card-topline"><div><p class="eyebrow">RIDE OPTIONS</p><h3 id="ride-options-title">Choose your ride.</h3></div><span id="location-option-status" class="status-badge">Suggested fares</span></div>
             <div id="location-ride-options" class="ride-options" role="radiogroup" aria-label="Ride options"></div>
             <div class="route-metrics"><div><span>Distance</span><strong id="location-distance"></strong></div><div><span>Estimated trip</span><strong id="location-duration"></strong></div><div><span>Suggested fare</span><strong id="location-price"></strong></div></div>
-            <p class="small-note">Suggested fares are an estimate for this route. You and the driver still agree the final fare before the ride is booked.</p>
+            <p class="small-note">This is a starting fare, not an accepted price. Find a driver first, then agree the final fare together in Taxi Ai chat or an in-app call.</p>
             <details class="ride-price-details"><summary>How this preview was estimated</summary><p id="location-formula" class="small-note"></p></details>
             <p id="location-expiry" class="small-note" role="status"></p>
-            <button id="location-book" type="button" class="button button-primary">Request selected ride ↗</button>
+            <button id="location-book" type="button" class="button button-primary">Find a driver ↗</button>
           </section>
         </div>
       </section>
@@ -277,6 +277,11 @@
             <div class="fare-display" aria-live="polite" aria-atomic="true"><p id="fare-label" class="eyebrow"></p><strong id="fare-value"></strong><p id="fare-guidance"></p></div>
             <p id="matching-status" class="small-note"></p>
             <p id="fare-expiry" class="small-note"></p>
+            <section id="fare-negotiation-guide" class="fare-negotiation-guide" hidden aria-labelledby="fare-negotiation-title">
+              <p class="eyebrow">AGREE YOUR FARE</p><h3 id="fare-negotiation-title">Talk with your driver before accepting.</h3>
+              <p id="fare-negotiation-copy" class="small-note">Use Taxi Ai chat or an in-app audio call to discuss the price. A conversation does not accept a fare—the exact current offer must still be accepted in Taxi Ai.</p>
+              <div class="review-actions"><button id="fare-open-chat" class="button button-primary button-small" type="button">Chat with driver</button><button id="fare-open-call" class="button button-outline button-small" type="button">Call driver in app</button></div>
+            </section>
             <button id="accept-fare" class="button button-primary button-full" type="button" hidden></button>
 
             <p id="agreed-note" class="agreement-note" hidden>Your fare is saved. The customer must confirm the booking to reserve this test trip.</p>
