@@ -114,7 +114,6 @@ export function KemmySetupAssistant() {
       <Text style={uiStyles.h2}>{title}</Text><Text style={uiStyles.body}>{body}</Text>
       {notice?<Text style={sheet.notice}>{notice}</Text>:null}
       <View style={sheet.actions}>{actions}</View>
-      <Text style={uiStyles.small}>Guided setup uses fixed Taxi Ai rules and does not use an AI language model.</Text>
     </View>
   </View>;
 }
