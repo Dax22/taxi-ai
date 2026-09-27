@@ -21,8 +21,10 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
   let offerCountdowns = [];
   let busy = false;
   let passengerCategory = 'standard', passengerAccount = null;
-  let courier = typeof location !== 'undefined' && new URLSearchParams(location.search).get('service') === 'courier';
-  let initialCategory = typeof location === 'undefined' ? null : new URLSearchParams(location.search).get('category');
+  const query = typeof location === 'undefined' ? new URLSearchParams() : new URLSearchParams(location.search);
+  let courier = query.get('service') === 'courier';
+  const showLocalSample = query.get('devSample') === '1';
+  let initialCategory = query.get('category');
   const tripView = createTripView({ onCommand, serverNow, onVehicleMismatch });
   const categories = createVehicleCategoryPicker($('account-vehicle-categories'), { onSelect() { updateCategoryVisibility(); updateButtons(); } });
   function isDelivery() { return courier || transportCategory(categories.selected().id).service === 'delivery'; }
@@ -31,7 +33,7 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
     const customer = state.user?.role === 'customer';
     $('vehicle-categories-panel').hidden = !customer;
     $('standard-ride-planner').hidden = !customer || !categories.selected().ridePreview;
-    $('customer-panel').hidden = !customer;
+    $('customer-panel').hidden = !customer || !showLocalSample;
     const category = categories.selected();
     if (passengerCategory !== category.id) { clearPassenger(); passengerCategory = category.id; }
     $('passenger-panel').hidden = !customer || isDelivery();
@@ -108,8 +110,8 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
       $('dashboard-description').textContent = admin ? 'Review driver applications for the development preview.'
         : 'Go online to find nearby requests and agree a fare with the customer.';
     }
-    $('request-form').hidden = !state.sampleMatchingEnabled;
-    $('sample-disabled-note').hidden = Boolean(state.sampleMatchingEnabled);
+    $('request-form').hidden = !showLocalSample || !state.sampleMatchingEnabled;
+    $('sample-disabled-note').hidden = !showLocalSample || Boolean(state.sampleMatchingEnabled);
     $('driver-panel').hidden = !driver;
     $('ride-dashboard').hidden = admin;
     $('admin-dashboard').hidden = !admin;
