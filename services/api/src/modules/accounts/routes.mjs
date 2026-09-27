@@ -2,6 +2,10 @@ import { sessionCookie } from '../../http/security.mjs';
 
 export function accountRoutes(accounts, cookie = sessionCookie) {
   return [
+    { method: 'GET', path: /^\/api\/account\/kemmy-setup$/,
+      handle: async ({ user }) => ({ body: (await accounts.kemmySetup(user.id)) }) },
+    { method: 'POST', path: /^\/api\/account\/kemmy-setup$/, access: 'write',
+      handle: async ({ user, data }) => ({ body: (await accounts.updateKemmySetup(user.id, data)) }) },
     { method: 'POST', path: /^\/api\/account\/driver-profile\/delete$/, access: 'write',
       handle: async ({ user, data, key }) => ({ body: (await accounts.deleteDriverProfile(user.id, data, key)) }) },
     { method: 'POST', path: /^\/api\/account\/driver-profile$/, access: 'write',
