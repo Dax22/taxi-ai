@@ -8,7 +8,7 @@ export function createLocationPlanner({ client, view, onBook, onOnline, device =
   let pickup = null, destination = null, quote = null, target = 'destination', error = '', quoting = false, booking = false, locatingPickup = false, rideDiscovery = false;
   let results = { pickup: [], destination: [] }, searching = { pickup: false, destination: false }, searches = { pickup: 0, destination: 0 };
   function render() { view.renderPlanner({ user, settings, online, blocked, pickup, destination, quote, target, error, results, searching, quoting, booking, vehicleCategory,
-    locatingPickup, supported: !device || device.supported(), expired: Boolean(quote && serverNow() >= quote.expiresAt) }); }
+    rideDiscovery, locatingPickup, supported: !device || device.supported(), expired: Boolean(quote && serverNow() >= quote.expiresAt) }); }
   function reset() {
     generation++; revision++; vehicleCategory = 'standard'; user = null; settings = null; online = false; blocked = false; pickup = destination = quote = null;
     target = 'destination'; error = ''; quoting = booking = locatingPickup = rideDiscovery = false; results = { pickup: [], destination: [] }; searching = { pickup: false, destination: false }; searches = { pickup: 0, destination: 0 };
