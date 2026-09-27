@@ -64,6 +64,7 @@ test('native quotes use server pricing and ownership, reject forged input and ex
     { ...points, destination: { ...points.destination, lng: 1 } }]) assert.equal((await mobile('/booking/quotes', data)).status, 400);
   const key = randomUUID(), preview = parsePreview((await mobile('/booking/quotes', points, key)).body).preview;
   assert.equal(preview.suggestedFareKobo, 250000); assert.equal(preview.route.coordinates.length, 3);
+  assert.deepEqual(preview.route.pricing, { baseKobo: 50000, distanceKobo: 140000, timeKobo: 60000, minimumKobo: 100000, incrementKobo: 5000 });
   assert.deepEqual((await mobile('/booking/quotes', points, key)).body.preview, preview);
   assert.equal((await mobile('/booking/quotes', { ...points, pickup: { ...points.pickup, name: 'Changed' } }, key)).body.error.code, 'KEY_REUSED');
   assert.equal((await mobile('/booking/requests', { ...preview.request, amountKobo: 1 })).status, 400);
