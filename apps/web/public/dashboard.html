@@ -384,6 +384,13 @@
       <section id="admin-dashboard" class="account-card" hidden aria-labelledby="applications-title"><div class="card-topline"><h2 id="applications-title">Driver applications</h2><a class="button button-primary button-small" href="/admin">Open operations dashboard ↗</a></div><p class="supporting-copy">Open an application to inspect its private documents, request corrections and record manual checks. New rides require an approved application with current documents.</p><div id="driver-applications" class="request-list"></div></section>
       <section id="chat-reports-panel" class="account-card chat-reports-panel" hidden aria-labelledby="chat-reports-title"><div class="card-topline"><h2 id="chat-reports-title">Reported messages</h2><span class="status-badge">LOCAL REVIEW</span></div><p class="supporting-copy">Review the reported message and reason. Marking a report reviewed does not block an account or resolve a safety incident.</p><div id="chat-reports-list" class="request-list"></div></section>
     </section>
+    <aside id="kemmy-setup-card" class="kemmy-card kemmy-setup-card" aria-label="Kemmy account setup assistant" hidden>
+      <div class="kemmy-top"><img src="/assets/kemmy-avatar.png" width="64" height="64" alt="Kemmy assistant avatar"><div><strong>Kemmy</strong><span>Your Taxi Ai assistant</span></div><button id="kemmy-setup-dismiss" type="button" aria-label="Close Kemmy">×</button></div>
+      <p id="kemmy-setup-message" role="status" aria-live="polite"></p>
+      <p id="kemmy-setup-note" class="small-note"></p>
+      <div id="kemmy-setup-actions" class="kemmy-setup-actions"></div>
+    </aside>
+    <button id="kemmy-setup-launcher" class="kemmy-setup-launcher" type="button" hidden><img src="/assets/kemmy-avatar.png" width="36" height="36" alt=""><span>Kemmy</span></button>
     <noscript><p class="account-card">Enable JavaScript to sign in and use Taxi Ai accounts.</p></noscript>
   </main>
   <footer class="shell account-footer"><p>Taxi Ai · Built for Nigeria.</p><p>Rides, Eats and courier previews. Autonomous taxis are coming later.</p></footer>
