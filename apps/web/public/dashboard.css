@@ -614,3 +614,11 @@
   .ride-price-details { margin: 12px 0; }
   .ride-price-details summary { cursor: pointer; font-weight: 700; }
 }
+
+
+/* Fare negotiation guidance */
+@layer components {
+  .fare-negotiation-guide { margin: 16px 0; padding: 16px; border: 1px solid var(--line); border-radius: 16px; background: var(--soft); }
+  .fare-negotiation-guide h3 { margin: 6px 0 8px; }
+  .fare-negotiation-guide .review-actions { margin-top: 12px; }
+}
