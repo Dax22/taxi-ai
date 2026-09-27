@@ -167,7 +167,11 @@ test('booking contracts reject malformed fares, foreign coordinates and unsafe c
   assert.equal(parsePreview({ ...envelope, preview }).preview.kind, 'sample');
   for (const invalid of [{ ...preview, suggestedFareKobo: 1.5 }, { ...preview, suggestedFareKobo: '450000' },
     { ...preview, request: { ...preview.request, amountKobo: 1 } }, { ...preview, kind: 'route', request: { quoteId: ride.id }, expiresAt: 1234,
-      route: { distanceMeters: 7000, durationSeconds: 1000, coordinates: [[7.4, 9.08], [0, 51]] } }]) assert.throws(() => parsePreview({ ...envelope, preview: invalid }));
+      route: { distanceMeters: 7000, durationSeconds: 1000, coordinates: [[7.4, 9.08], [0, 51]] } },
+    { ...preview, kind: 'route', request: { quoteId: ride.id }, expiresAt: 1234,
+      route: { distanceMeters: 7000, durationSeconds: 1000, coordinates: [[7.4,9.08],[7.45,9.1]],
+        pricing: { baseKobo: 50000, distanceKobo: -1, timeKobo: 60000, minimumKobo: 100000, incrementKobo: 5000 } } }])
+    assert.throws(() => parsePreview({ ...envelope, preview: invalid }));
   assert.throws(() => parseBookingRide({ ...envelope, ride: { ...ride, status: 'unknown' } }));
   assert.throws(() => parseBookingRide({ ...envelope, ride: { ...ride, status: 'in_progress', canCancel: true } }));
 });
