@@ -38,7 +38,7 @@ export function createLocationView({ onEnable, onUsePickup, onSearch, onFindRide
   function renderPlanner(state) {
     planner = state;
     const rideFlow = transportCategory(state.vehicleCategory)?.service === 'ride';
-    $('location-planner').hidden = state.user?.role !== 'customer' || (rideFlow && !state.rideDiscovery);
+    $('location-planner').hidden = state.user?.role !== 'customer' || (rideFlow && !state.destination);
     if (state.user?.role !== 'customer') { plannerMap.reset(); return; }
     $('planner-online').hidden = rideFlow;
     $('planner-online').textContent = state.online ? 'Turn off address search' : 'Enable address search';
