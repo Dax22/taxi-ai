@@ -19,7 +19,11 @@ test('customer ride flow is vehicle then passenger then nationwide typed destina
   assert.match(html, />Find rides<\/button>/);
   assert.match(html, /id="location-ride-options"/);
   assert.match(html, /id="location-price"/);
+  assert.match(html, /id="fare-open-chat"/);
+  assert.match(html, /id="fare-open-call"/);
+  assert.match(html, /Find a driver/);
   assert.doesNotMatch(html, />Find destination<\/button>/);
+  assert.doesNotMatch(html, /Request selected ride/);
   assert.doesNotMatch(html, /<datalist\b/i);
   assert.doesNotMatch(html, /list="request-destination-areas"/);
   assert.doesNotMatch(html, /id="request-destination-areas"/);
