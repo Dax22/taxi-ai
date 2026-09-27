@@ -210,6 +210,7 @@ export function createPageController({ client, activityClient = client, view, mo
     },
     authenticate: (path, data) => runAction(async () => {
       const result = await client.request(path, { method: 'POST', data }); session(result); authForm.reset();
+      if (path === '/api/auth/register') modeView?.startExperience?.(result.user?.startingExperience ?? data.intent ?? 'customer');
     }),
     logout: () => runAction(async () => {
       onboarding?.reset(); safety?.reset(); vehicleCheck?.reset(); calls.reset(); payments.reset(); void availability.stop(); availability.reset();
