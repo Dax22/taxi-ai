@@ -1,16 +1,40 @@
 import { canShareLocation } from '/shared/locations.mjs';
 import { formatNaira } from '/shared/demo-booking.mjs';
+import { categoryFare, transportCategory } from '/shared/transport-categories.mjs';
+import { vehicleCategory } from '/shared/vehicle-categories.mjs';
 import { $, element } from './dom.mjs';
 import { createMapView } from './map-view.mjs';
 import { kemmyUpdate } from '/shared/kemmy.mjs';
 
-export function createLocationView({ onEnable, onUsePickup, onSearch, onClear, onSelect, onPick, onTarget, onPreview, onBook, onStart, onStop, onRate = () => {} }) {
+export function createLocationView({ onEnable, onUsePickup, onSearch, onFindRide = onSearch, onClear, onSelect, onChooseOption = () => {}, onPick, onTarget, onPreview, onBook, onStart, onStop, onRate = () => {} }) {
   const plannerMap = createMapView($('planner-map'), { onPick });
   const trackingMap = createMapView($('tracking-map'));
   let online = false, settings = null, tracking = null, planner = null;
   let kemmyKey = '', kemmyDismissed = false, ratingChoice = 0;
   const resultKeys = { pickup: '', destination: '' };
   function locked(id, value) { $(id).disabled = value; $(id).dataset.locked = String(value); }
+  function baseFare(pricing) {
+    if (!pricing) return null;
+    const subtotal = pricing.baseKobo + pricing.distanceKobo + pricing.timeKobo;
+    return Math.max(pricing.minimumKobo, Math.ceil(subtotal / pricing.incrementKobo) * pricing.incrementKobo);
+  }
+  function renderRideOptions(state) {
+    const root = $('location-ride-options'); root.replaceChildren();
+    if (!state.quote) return;
+    const route = state.quote.route, isRide = transportCategory(state.vehicleCategory)?.service === 'ride';
+    const ids = isRide ? ['standard','suv'] : [state.vehicleCategory], base = baseFare(route.pricing);
+    for (const id of ids) {
+      const category = vehicleCategory(id); if (!category) continue;
+      const selected = id === state.vehicleCategory;
+      const amount = selected ? route.suggestedFareKobo : base ? categoryFare(base, id) : null;
+      const button = element('button', undefined, 'ride-option');
+      button.type = 'button'; button.dataset.category = id; button.setAttribute('role','radio'); button.setAttribute('aria-checked',String(selected));
+      button.append(element('strong', category.name), element('span', category.purpose), element('strong', amount ? formatNaira(amount) : '—', 'ride-option-fare'));
+      button.addEventListener('click', () => { if (!selected) onChooseOption(id); });
+      root.append(button);
+    }
+    $('location-option-status').textContent = isRide ? ids.length + ' ride options' : 'Selected option';
+  }
   function renderPlanner(state) {
     planner = state;
     $('location-planner').hidden = state.user?.role !== 'customer';
