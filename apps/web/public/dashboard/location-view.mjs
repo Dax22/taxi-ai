@@ -41,7 +41,7 @@ export function createLocationView({ onEnable, onUsePickup, onSearch, onClear, o
           const row = element('li'), button = element('button', place.name, 'location-result'); button.type = 'button';
           button.addEventListener('click', () => {
             onSelect(side, place);
-            if (side === 'destination') $('location-planner').scrollIntoView({ behavior: 'smooth', block: 'start' });
+            if (side === 'destination') $('location-planner').scrollIntoView?.({ behavior: 'smooth', block: 'start' });
           });
           row.append(button); $(`location-${side}-results`).append(row);
         }
