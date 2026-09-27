@@ -203,6 +203,13 @@ test('fare buttons retain the displayed offer version and never accept a newer p
   const negotiating = { ...ride, status: 'negotiating', trip: null,
     negotiation: { currentOffer: { id: 'offer-one', proposedBy: driver.id, amountKobo: 470001, expiresAt: 2000 } } };
   h.view.render(state(customer, [negotiating]));
+  assert.equal(h.node('fare-negotiation-guide').hidden, false);
+  assert.equal(h.node('fare-open-chat').textContent, 'Chat with driver');
+  assert.equal(h.node('fare-open-call').textContent, 'Call driver in app');
+  assert.match(h.node('accept-fare').textContent, /Accept exact fare/);
+  assert.match(h.node('fare-guidance').textContent, /Accept it only if you agree|exact offer/);
+  h.node('fare-open-chat').handlers.click(); assert.equal(h.node('chat-message').focused, true);
+  h.node('fare-open-call').handlers.click(); assert.equal(h.node('call-start').focused, true);
   const displayed = h.node('accept-fare').onclick;
   h.view.render(state(customer, [{ ...negotiating, version: 5, negotiation: { currentOffer: {
     id: 'offer-two', proposedBy: driver.id, amountKobo: 490000, expiresAt: 2000,
