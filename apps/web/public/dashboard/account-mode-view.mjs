@@ -4,7 +4,7 @@ import { createVehicleFields } from './vehicle-fields.mjs';
 import { renderVehicleCard } from './vehicle-card.mjs';
 
 /** Controls are local to this window; selecting a mode grants no permissions. */
-export function createAccountModeView({ onSwitch, onCancel, onAddDriver, onOpenRide, onEditVehicle = () => {} }) {
+export function createAccountModeView({ onSwitch, onCancel, onAddDriver, onOpenRide, onEditVehicle = () => {}, onSeller = () => {}, onCustomerStart = () => {} }) {
   let state = null, busy = false, activeKey = '';
   const vehicleFields = createVehicleFields({ prefix: 'driver-profile', onChange: preview });
   function preview() {
@@ -66,7 +66,17 @@ export function createAccountModeView({ onSwitch, onCancel, onAddDriver, onOpenR
       onAddDriver({ ...values, year: Number(values.year), plate: $('driver-profile-plate').value });
     }
   });
-  return Object.freeze({ render, focus() { $('dashboard-title').focus(); }, reset() {
+  return Object.freeze({ render,
+    startExperience(intent) {
+      if (!state?.account || state.account.role === 'admin') return;
+      if (intent === 'driver') {
+        if (state.account.capabilities.includes('driver')) { void onSwitch('work'); return; }
+        $('driver-enrollment').hidden = false; preview(); $('driver-profile-make').focus(); return;
+      }
+      if (intent === 'eats_seller') { onSeller(); return; }
+      onCustomerStart();
+    },
+    focus() { $('dashboard-title').focus(); }, reset() {
     state = null; activeKey = ''; $('account-modes').hidden = true; $('driver-enrollment').hidden = true;
     resetEnrollment(); $('mode-active-list').replaceChildren();
   } });
