@@ -27,16 +27,19 @@ function JourneyScreen({id}:{id:string}){
     {r&&<><Button title="Safety / SOS" secondary onPress={()=>router.push({pathname:'/safety',params:{id:r.id}})}/><Pill>{bookingStatusLabel(r.status).toUpperCase()}</Pill><Heading title={`${r.pickup} → ${r.destination}`} subtitle={`${vehicleCategory(r.vehicleCategory??'standard')?.name} · ${r.mode==='work'?'Driver':'Customer'}`}/>
       {r.mode==='customer'&&!r.delivery&&r.passenger?.kind!=='guest'&&<Button title="Family Safety · choose who can view this trip" secondary onPress={()=>router.push({pathname:'/family',params:{rideId:r.id}})}/>}
       {r.mode==='customer'&&<KemmyCard ride={r} now={s.now} ratingChoice={s.ratingChoice} busy={s.busy} onChoose={(stars)=>c.chooseRating(stars)} onRate={()=>void c.rate()}/>}
+      {r.status==='negotiating'&&r.driver&&<Card><Pill>AGREE YOUR FARE</Pill><Text style={styles.h2}>Talk with {r.mode==='customer'?r.driver.name:r.customerName} before accepting.</Text>
+        <Text style={styles.body}>Use Taxi Ai chat below to discuss the price. The suggested fare is only a starting point; only an exact offer accepted by the other person creates a fare agreement.</Text></Card>}
+      {r.status==='negotiating'&&<JourneyChat state={s} controller={c}/>}
       <Card><Text style={styles.h2}>{r.fareKobo===null?'Suggested fare':'Agreed fare'} · {fare(r.fareKobo??r.suggestedFareKobo)}</Text>
         <Text style={styles.body}>{r.mode==='work'?`${r.passenger?.kind==='guest'?'Booked by':'Customer'} · ${r.customerName}`:r.driver?`Driver · ${r.driver.name}`:'Waiting for a driver to take your request.'}</Text>
         <PassengerSummary passenger={r.passenger} bookedBy={r.mode==='customer'?'You':undefined} showPhone={r.mode==='customer'}/>
         {r.passenger?.kind==='guest'&&<Text style={styles.small}>{r.mode==='customer'?'You manage the fare, confirm the booking and remain responsible for payment. The passenger receives trip details through the private link you choose to share.':'Discuss the fare and booking with the person who booked. Meet the named passenger at pickup; their phone number is private.'}</Text>}
         {r.driver&&<VehicleCard vehicle={r.driver.vehicle} label="VEHICLE FOR THIS JOURNEY" compact/>}
         {r.offer&&r.status==='negotiating'&&<><Pill>{r.offer.fromYou?'YOUR OFFER':'NEW OFFER'}</Pill><Text style={styles.h2}>{fare(r.offer.amountKobo)}</Text><Text style={styles.small}>{s.now>=r.offer.expiresAt?'This offer has expired.':`Expires in ${Math.max(0,Math.ceil((r.offer.expiresAt-s.now)/1000))} seconds`}</Text></>}
-        {r.allowedActions.includes('accept')&&<Button title={`Accept ${fare(r.offer!.amountKobo)}`} disabled={locked||s.now>=r.offer!.expiresAt} onPress={()=>confirm('accept','Accept fare',`Accept this exact offer of ${fare(r.offer!.amountKobo)}?`)}/>}
-        {r.allowedActions.includes('propose')&&<><Field label="Your fare offer (₦)" value={s.amount} keyboardType="decimal-pad" maxLength={13} editable={!locked} onChangeText={(v)=>c.edit('amount',v)}/><Button title="Send fare offer" disabled={locked||!s.amount} onPress={()=>void c.act('propose')}/></>}
-        {r.allowedActions.includes('confirm')&&<Button title={`Confirm booking · ${fare(r.fareKobo!)}`} disabled={locked} onPress={()=>confirm('confirm','Confirm booking',`Book this journey for the agreed ${fare(r.fareKobo!)}?`)}/>}
-        {r.status==='agreed'&&r.mode==='work'&&<Text style={styles.body}>{r.passenger?.kind==='guest'?'The person who booked':'The customer'} must confirm the booking before you depart.</Text>}
+        {r.allowedActions.includes('accept')&&<Button title={`Accept exact fare · ${fare(r.offer!.amountKobo)}`} disabled={locked||s.now>=r.offer!.expiresAt} onPress={()=>confirm('accept','Accept exact fare',`Accept this exact offer of ${fare(r.offer!.amountKobo)}? This records your fare agreement.`)}/>} 
+        {r.allowedActions.includes('propose')&&<><Field label="Exact fare offer (₦)" value={s.amount} keyboardType="decimal-pad" maxLength={13} editable={!locked} onChangeText={(v)=>c.edit('amount',v)}/><Button title="Send exact fare offer" disabled={locked||!s.amount} onPress={()=>void c.act('propose')}/></>}
+        {r.allowedActions.includes('confirm')&&<Button title={`Confirm ride · ${fare(r.fareKobo!)}`} disabled={locked} onPress={()=>confirm('confirm','Confirm ride',`Confirm this ride for the agreed fare of ${fare(r.fareKobo!)}?`)}/>} 
+        {r.status==='agreed'&&r.mode==='work'&&<Text style={styles.body}>{r.passenger?.kind==='guest'?'The person who booked':'The customer'} accepted the fare and must now confirm the ride before you depart.</Text>}
       </Card>
       {r.mode==='customer'&&r.passenger?.kind==='guest'&&['booked','on_way','arrived','in_progress'].includes(r.status)&&<GuestRideLink rideId={r.id}/>}
       <PickupIdentity ride={r}/>
@@ -54,7 +57,7 @@ function JourneyScreen({id}:{id:string}){
       {r.status==='completed'&&<Card><Text style={styles.h2}>{r.delivery?'Delivery complete.':r.passenger?.kind==='guest'?'Passenger’s trip complete.':'You have arrived.'}</Text><Text style={styles.body}>Your journey is saved in Activity.</Text></Card>}
       {r.status==='completed'&&<PaymentCard rideId={r.id}/>}
       <TripLocationCard id={r.id} ride={r}/>
-      <JourneyChat state={s} controller={c}/>
+      {r.status!=='negotiating'&&<JourneyChat state={s} controller={c}/>} 
       {r.allowedActions.includes('cancel')&&<Button title="Cancel journey" secondary disabled={locked} onPress={()=>confirm('cancel','Cancel journey','Cancel this request or booking?')}/>}
       <Text style={styles.small}>Development preview · no live transport or real payment.</Text>
     </>}</Screen>;
