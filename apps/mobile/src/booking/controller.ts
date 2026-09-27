@@ -86,7 +86,9 @@ export class BookingController {
   private canPlan() { return this.active && !!this.state.settings && !this.state.stale && !this.state.settings.current.length && !this.state.settings.blockedBy; }
   chooseCategory(category: VehicleCategoryId) {
     if (this.locked() || !transportCategory(category) || category === this.state.category || this.state.service === 'courier' && !supportsParcelCategory(category)) return;
-    this.patch({ category, passenger: emptyPassenger(), delivery: emptyDelivery(), preview: null, error: '' });
+    const preservePassenger = this.state.service === 'ride'
+      && transportCategory(this.state.category)?.service === 'ride' && transportCategory(category)?.service === 'ride';
+    this.patch({ category, passenger: preservePassenger ? this.state.passenger : emptyPassenger(), delivery: emptyDelivery(), preview: null, error: '' });
   }
   chooseService(service: 'ride' | 'courier') {
     if (this.locked() || service === this.state.service) return;
