@@ -29,6 +29,7 @@ import { createGoogleSignIn, consumeGoogleOutcome } from './dashboard/google-aut
 import { createParcelLinksPanel } from './dashboard/parcel-links-panel.mjs';
 import { createGuestRidesPanel } from './dashboard/guest-rides-panel.mjs';
 import { createAnnouncementsPanel } from './dashboard/announcements.mjs';
+import { createKemmySetup } from './dashboard/kemmy-setup.mjs';
 
 let serverTime = { now: Date.now(), received: performance.now() };
 const client = createApiClient({ onServerTime(now) { serverTime = { now, received: performance.now() }; } });
@@ -122,6 +123,7 @@ const modeView = createAccountModeView({ onSwitch: (...args) => page.switchMode(
 let storage;
 try { storage = window.sessionStorage; } catch { /* Mode selection remains usable without storage. */ }
 let liveIdentity = null;
+let kemmySetup = { context() {}, reset() {}, refresh: async () => {} };
 const liveUpdates = createRealtimeClient({
   read: (cursor, signal) => activityClient.request(`/api/events?cursor=${cursor}&wait=25000`, { signal }),
   refresh: async () => { await page.poll(); await Promise.all([calls.poll(), sharing.poll(), announcements.poll()]); },
@@ -131,7 +133,7 @@ const page = createPageController({ client, activityClient, view, modeView, pref
   conversation, conversationView, calls, sharing, availability,
   planner, payments, onboarding, safety, vehicleCheck, guests, parcels, authForm,
   onAccount(identity) {
-    if (identity !== liveIdentity) { liveIdentity = identity; liveUpdates.reset(); announcements.context(identity); }
+    if (identity !== liveIdentity) { liveIdentity = identity; liveUpdates.reset(); announcements.context(identity); kemmySetup.context(identity); }
     if (identity && !document.hidden) liveUpdates.resume(); else liveUpdates.pause();
   }, feedback: {
     clear() { $('page-error').textContent = ''; $('page-notice').textContent = ''; },
@@ -145,12 +147,18 @@ const page = createPageController({ client, activityClient, view, modeView, pref
         $('page-error').textContent = 'Unable to connect. Check that Taxi Ai is running, then refresh this page.';
       }
     },
-  } });
+  } })
+kemmySetup = createKemmySetup({ client,
+  onCustomer: () => $('vehicle-categories-panel').scrollIntoView({ behavior: 'smooth', block: 'start' }),
+  onDriver: () => void page.switchMode('work'),
+  onSeller: () => location.assign('/eats/sell'),
+});
+;
 const poll = () => { if (!document.hidden) void page.poll(); };
 $('logout').addEventListener('click', () => page.logout());
 $('refresh').addEventListener('click', () => page.poll());
 document.addEventListener('visibilitychange', () => { if (document.hidden) { liveUpdates.pause(); availability.shutdown(); guests.pause(); parcels.pause(); } else { if (liveIdentity) liveUpdates.resume(); guests.resume(); parcels.resume(); poll(); void announcements.poll(); } });
-window.addEventListener('pagehide', () => { liveUpdates.reset(); calls.shutdown(); sharing.shutdown(); availability.shutdown(); safety.reset(); vehicleCheck.reset(); guests.reset(); parcels.reset(); announcements.reset(); });
+window.addEventListener('pagehide', () => { liveUpdates.reset(); calls.shutdown(); sharing.shutdown(); availability.shutdown(); safety.reset(); vehicleCheck.reset(); guests.reset(); parcels.reset(); announcements.reset(); kemmySetup.reset(); });
 window.addEventListener('afterprint', () => document.body.classList.remove('print-receipt'));
 setInterval(() => { view.tick(); conversationView.tick(); calls.tick(); planner.tick(); sharing.tick(); availability.tick(); guests.tick(); parcels.tick(); }, 1000);
 setInterval(() => { if (calls.hasMedia()) void calls.poll(); }, 2000);
