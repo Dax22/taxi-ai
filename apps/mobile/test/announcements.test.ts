@@ -24,5 +24,7 @@ test('mobile Updates contract accepts bounded announcements and rejects unsafe s
 test('announcement push payloads select only an opaque review target',()=>{
   assert.deepEqual(pushTarget({kind:'announcement',announcementId:id}),{kind:'announcement',announcementId:id});
   assert.equal(pushTarget({kind:'announcement',announcementId:'bad'}),null);
-  assert.equal(pushTarget({kind:'announcement',announcementId:id,title:'untrusted'} )?.announcementId,id);
+  const target=pushTarget({kind:'announcement',announcementId:id,title:'untrusted'});
+  assert.equal(target?.kind,'announcement');
+  if(target?.kind==='announcement')assert.equal(target.announcementId,id);
 });
