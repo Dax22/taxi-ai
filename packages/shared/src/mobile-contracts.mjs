@@ -20,6 +20,7 @@ export function envelope(value) {
 export function parseAccount(value) {
   expect(record(value) && text(value.id) && text(value.name) && text(value.email)
     && (value.emailVerified === undefined || typeof value.emailVerified === 'boolean')
+    && (value.startingExperience === undefined || value.startingExperience === null || ['customer','driver','eats_seller'].includes(value.startingExperience))
     && value.role !== 'admin' && texts(value.capabilities) && value.capabilities.includes('customer')
     && value.capabilities.every((c) => ['customer','driver'].includes(c))
     && (value.driver === null || (record(value.driver) && text(value.driver.status) && vehicle(value.driver.vehicle) && eligibility(value.driver.eligibility)))
