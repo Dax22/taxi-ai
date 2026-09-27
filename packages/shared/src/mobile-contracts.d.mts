@@ -4,7 +4,7 @@ export const MOBILE_API_VERSION: 1;
 export type Mode = 'customer' | 'work';
 export interface Eligibility { eligible: boolean; missing: string[]; expired: string[] }
 export interface Vehicle { model: string; plate: string; make?: string; modelName?: string; year?: number; colour?: string; category?: VehicleCategoryId; payloadKg?: number | null }
-export interface Account { id: string; name: string; email: string; emailVerified?: boolean; capabilities: ('customer' | 'driver')[];
+export interface Account { id: string; name: string; email: string; emailVerified?: boolean; startingExperience?: 'customer' | 'driver' | 'eats_seller' | null; capabilities: ('customer' | 'driver')[];
   driver: { status: string; vehicle: Vehicle; eligibility: Eligibility } | null }
 export interface Credentials { sessionId: string; accessToken: string; refreshToken: string; accessExpiresAt: number; refreshExpiresAt: number }
 export interface Envelope { apiVersion: 1; serverNow: number; [key: string]: unknown }
