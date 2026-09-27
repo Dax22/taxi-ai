@@ -536,3 +536,41 @@
     .kemmy-setup-launcher { right: 12px; bottom: max(12px, env(safe-area-inset-bottom)); }
   }
 }
+
+
+/* Passenger-first nationwide destination */
+@layer components {
+  .passenger-destination {
+    margin-top: 26px;
+    padding-top: 24px;
+    border-top: 1px solid var(--line);
+  }
+  .passenger-destination h3 {
+    margin: 7px 0 0;
+    font-size: clamp(24px, 3vw, 32px);
+    letter-spacing: -.04em;
+  }
+  .passenger-destination > .small-note {
+    max-width: 620px;
+    margin-top: 8px;
+  }
+  .passenger-destination .stack-form {
+    margin-top: 14px;
+  }
+  .passenger-destination #planner-online {
+    margin-top: 10px;
+  }
+  .passenger-destination #planner-provider-note {
+    margin-top: 10px;
+  }
+  .passenger-destination .location-results {
+    margin-top: 10px;
+  }
+}
+@layer responsive {
+  @media (max-width: 580px) {
+    .passenger-destination { margin-top: 22px; padding-top: 20px; }
+    .passenger-destination .location-input-row { display: grid; grid-template-columns: 1fr; }
+    .passenger-destination .location-input-row .button { width: 100%; }
+  }
+}
