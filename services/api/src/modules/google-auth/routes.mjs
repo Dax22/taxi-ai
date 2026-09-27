@@ -40,7 +40,7 @@ export function createGoogleCallback({ googleAuth, accounts, rateLimiter, clock 
       else {
         const session = await accounts.issueSession(result.user.id);
         cookies.push(sessionCookie(session.token, session.maxAgeSeconds, secure));
-        destination = '/app?google=success';
+        destination = `/app?google=success${result.signupIntent ? `&start=${result.signupIntent}` : ''}`;
       }
     } catch (error) { destination = `/app?google=${outcomes.get(error.code) ?? 'retry'}`; }
     response.writeHead(303, { Location: destination, 'Set-Cookie': cookies }); response.end();
