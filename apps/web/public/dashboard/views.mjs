@@ -353,7 +353,9 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
   $('history-refresh').addEventListener('click', () => onHistory(null));
   $('history-more').addEventListener('click', () => { if (state.historyCursor) onHistory(state.historyCursor); });
   return Object.freeze({
-    render, requestOptions, rideCreated() { clearPassenger(); clearDelivery(); },
+    render, requestOptions,
+    selectCategory(id) { categories.select(id); },
+    rideCreated() { clearPassenger(); clearDelivery(); },
     tick: updateButtons,
     setBusy(value) { busy = value; tripView.setBusy(value); updateButtons(); },
     select(id) { selectedId = id; },
