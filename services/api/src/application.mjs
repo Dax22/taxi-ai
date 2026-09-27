@@ -90,6 +90,8 @@ import { createAdminComplianceRepository } from './modules/admin-compliance/repo
 import { createAdminComplianceService } from './modules/admin-compliance/service.mjs';
 import { createAdminDemandRepository } from './modules/admin-demand/repository.mjs';
 import { createAdminDemandService } from './modules/admin-demand/service.mjs';
+import { createAnnouncementsRepository } from './modules/announcements/repository.mjs';
+import { createAnnouncementsService } from './modules/announcements/service.mjs';
 
 /** Composition root: the only place that wires business modules to adapters. */
 export function createApplication({ db, clock = Date.now, callConfig = createCallConfig(), mapProvider = createMapProvider(), allowSimulation = false,
@@ -191,6 +193,10 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
         if (!available) (await rides.conversationContext(user, notification.rideId));
       } else (await rides.conversationContext(user, notification.rideId));
     } });
+  const announcements = createAnnouncementsService({ repository: createAnnouncementsRepository(db),
+    requirePermission: staffAccess.requirePermission, provider: pushProvider,
+    validPushTarget: notifications.validFamilyTarget, disablePushTarget: notifications.disableFamilyTarget,
+    unitOfWork, tokens, audit, clock });
   const rateLimiter = createRateLimiter({ db, unitOfWork, digest: tokens.digest });
   accountEmail = createAccountEmailService({ repository: createAccountEmailRepository(db), accounts, mail: accountMail,
     passwords, tokens, unitOfWork, rateLimiter, audit, clock });
@@ -264,5 +270,5 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
     availabilityFor: availability.positionFor, onClaim: availability.onClaim, tokens, unitOfWork, audit, clock, normalisePhoto: normaliseFoodPhoto });
   const googleAuth = createGoogleAuthService({ repository: createGoogleAuthRepository(db), provider: googleProvider,
     accounts, devices, tokens, unitOfWork, clock });
-  return Object.freeze({ accounts, devices, drivers, rides, dispatch, eats, chat, calls, locations, availability, payments, safety, safetyMonitoring, guestRides, parcelTracking, family, familyDelivery, vehicleChecks, adminConsole, staffAccess, adminCases, adminOperations, adminFinance, adminCompliance, adminDemand, googleAuth, accountEmail, notifications, rateLimiter, realtime, workerCoordinator, clock });
+  return Object.freeze({ accounts, devices, drivers, rides, dispatch, eats, chat, calls, locations, availability, payments, safety, safetyMonitoring, guestRides, parcelTracking, family, familyDelivery, vehicleChecks, adminConsole, staffAccess, adminCases, adminOperations, adminFinance, adminCompliance, adminDemand, announcements, googleAuth, accountEmail, notifications, rateLimiter, realtime, workerCoordinator, clock });
 }

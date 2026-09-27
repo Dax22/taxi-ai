@@ -1,10 +1,10 @@
 import { check } from '../../shared/errors.mjs';
 import { fields, label, emailAddress } from '../../shared/validation.mjs';
 
-export const PERMISSIONS = Object.freeze(['staff.manage','audit.read','operations.read','accounts.read','trips.read','analytics.read','finance.read','compliance.read','compliance.manage','demand.read','cases.support','cases.safety','legacy.review']);
+export const PERMISSIONS = Object.freeze(['staff.manage','audit.read','operations.read','accounts.read','trips.read','analytics.read','finance.read','compliance.read','compliance.manage','demand.read','cases.support','cases.safety','announcements.manage','legacy.review']);
 export const ROLES = Object.freeze([
   { id: 'owner', label: 'Owner', permissions: PERMISSIONS },
-  { id: 'operations', label: 'Operations', permissions: ['operations.read','trips.read','compliance.read','compliance.manage','demand.read'] },
+  { id: 'operations', label: 'Operations', permissions: ['operations.read','trips.read','compliance.read','compliance.manage','demand.read','announcements.manage'] },
   { id: 'support', label: 'Support', permissions: ['cases.support','accounts.read','trips.read'] },
   { id: 'safety', label: 'Safety', permissions: ['cases.safety','accounts.read','trips.read'] },
   { id: 'finance', label: 'Finance', permissions: ['analytics.read','finance.read'] },
