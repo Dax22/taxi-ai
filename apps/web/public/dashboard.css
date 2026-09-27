@@ -594,3 +594,23 @@
 @layer responsive {
   @media (max-width: 680px) { .registration-intent-grid { grid-template-columns: 1fr; } .registration-intent-card { min-height: 0; } }
 }
+
+
+/* Professional ride options */
+@layer components {
+  .ride-options-panel { margin-top: 18px; }
+  .ride-options { display: grid; gap: 10px; margin: 14px 0 18px; }
+  .ride-option {
+    display: grid; grid-template-columns: minmax(0,1fr) auto; grid-template-areas: "name fare" "purpose fare";
+    align-items: center; gap: 4px 14px; width: 100%; padding: 16px 18px; text-align: left;
+    border: 1px solid var(--line); border-radius: 16px; background: var(--paper); color: var(--ink);
+  }
+  .ride-option > strong:first-child { grid-area: name; font-size: 16px; }
+  .ride-option > span { grid-area: purpose; color: var(--muted); font-size: 12px; }
+  .ride-option-fare { grid-area: fare; font-size: 18px; }
+  .ride-option[aria-checked="true"] { border-color: #dca900; background: var(--brand-soft); box-shadow: inset 0 0 0 1px #dca900; }
+  .ride-option[aria-checked="true"]::after { content: "Selected"; grid-column: 1 / -1; margin-top: 4px; font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+  .ride-option:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+  .ride-price-details { margin: 12px 0; }
+  .ride-price-details summary { cursor: pointer; font-weight: 700; }
+}
