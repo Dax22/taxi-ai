@@ -36,8 +36,16 @@ export function SessionProvider({ children }: PropsWithChildren) {
       setRole(null);
       if (!next) { setSetupLoading(false); return; }
       setSetupLoading(true);
-      void savedAppRole(next.id).then((saved) => { if (epoch === generation) setRole(saved); })
-        .catch(() => { if (epoch === generation) setNotice('Could not read this phone’s account setup. Choose your app role again.'); })
+      void savedAppRole(next.id).then(async (saved) => {
+        if (epoch !== generation) return;
+        const startingRole: AppRole | null = next.startingExperience === 'driver' ? 'driver'
+          : next.startingExperience === 'customer' || next.startingExperience === 'eats_seller' ? 'customer' : null;
+        if (!saved && startingRole) {
+          await saveAppRole(next.id, startingRole);
+          if (epoch === generation) setRole(startingRole);
+        } else if (epoch === generation) setRole(saved);
+      })
+        .catch(() => { if (epoch === generation) setNotice('Could not read this phone’s account setup. Choose your app experience again.'); })
         .finally(() => { if (epoch === generation) setSetupLoading(false); });
     });
   }, [client]);
