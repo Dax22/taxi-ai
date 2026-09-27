@@ -254,6 +254,15 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
     $('detail-passenger').textContent = guest ? `Passenger: ${ride.passenger.name} · Booked by: ${ride.customer.name}${ride.customer.id === state.user.id && ride.passenger.phone ? ` · Private contact: ${ride.passenger.phone}` : ''}. Fare, chat and payment are managed by the person booking.` : '';
     $('detail-reference').textContent = `Reference ${ride.id.slice(0, 8).toUpperCase()} · ${ride.route ? 'Route suggestion' : 'Sample suggestion'} ${formatNaira(ride.suggestedFareKobo)}`;
     $('live-offer-form').hidden = ride.status !== 'negotiating';
+    const negotiating = ride.status === 'negotiating' && Boolean(ride.driver);
+    $('fare-negotiation-guide').hidden = !negotiating;
+    const peerName = isDriver ? ride.customer.name : ride.driver?.name;
+    $('fare-negotiation-title').textContent = negotiating ? `Agree your fare with ${peerName}.` : 'Talk before accepting.';
+    $('fare-negotiation-copy').textContent = negotiating
+      ? `Use Taxi Ai chat or an in-app audio call to discuss the price with ${peerName}. The suggested fare is only a starting point; only an exact offer accepted by the other person creates a fare agreement.`
+      : '';
+    $('fare-open-chat').textContent = isDriver ? 'Chat with customer' : 'Chat with driver';
+    $('fare-open-call').textContent = isDriver ? 'Call customer in app' : 'Call driver in app';
     $('accept-fare').hidden = ride.status !== 'negotiating' || !offer;
     $('accept-fare').textContent = offer ? `Accept ${formatNaira(offer.amountKobo)}` : 'Accept offer';
     // Bind acceptance to the exact version and offer currently displayed. A failed
@@ -264,7 +273,7 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
     if (agreement) {
       $('fare-label').textContent = 'YOUR AGREED FARE';
       $('fare-value').textContent = formatNaira(agreement.amountKobo);
-      $('fare-guidance').textContent = 'The offer and acceptance record both participants’ agreement to this exact fare.';
+      $('fare-guidance').textContent = 'Both participants explicitly agreed to this exact fare. The customer can now confirm the ride.';
     } else if (['cancelled', 'expired'].includes(ride.status)) {
       $('fare-label').textContent = 'REQUEST CLOSED';
       $('fare-value').textContent = ride.status === 'expired' ? 'No driver found.' : 'Cancelled.';
@@ -273,11 +282,15 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
       const own = offer.proposedBy === state.user.id;
       $('fare-label').textContent = own ? 'YOUR CURRENT OFFER' : `${isDriver ? 'CUSTOMER' : 'DRIVER'}’S CURRENT OFFER`;
       $('fare-value').textContent = formatNaira(offer.amountKobo);
-      $('fare-guidance').textContent = own ? 'Waiting for the other person to respond. You can revise your offer.' : 'Accept this exact price or send a counteroffer below.';
+      $('fare-guidance').textContent = own
+        ? 'Your exact offer is waiting for the other person. Continue in chat or call if you need to discuss it.'
+        : 'Review this exact offer after your chat or call. Accept it only if you agree, or send a counteroffer.';
     } else {
-      $('fare-label').textContent = ride.status === 'requested' ? 'REQUEST SAVED' : 'YOUR FARE, YOUR SAY';
-      $('fare-value').textContent = ride.status === 'requested' ? 'Finding your connection.' : 'Make the first offer.';
-      $('fare-guidance').textContent = ride.status === 'requested' ? 'We are looking for an online driver. Unclaimed requests close after five minutes.' : 'Start with the suggestion or choose your price.';
+      $('fare-label').textContent = ride.status === 'requested' ? 'FINDING A DRIVER' : 'AGREE YOUR FARE';
+      $('fare-value').textContent = ride.status === 'requested' ? formatNaira(ride.suggestedFareKobo) + ' suggested' : 'Discuss, then make an offer.';
+      $('fare-guidance').textContent = ride.status === 'requested'
+        ? 'This suggested fare is only a starting point. When a driver joins, use chat or an in-app call to agree the price before booking.'
+        : 'Use chat or an in-app call first, then send the exact price you agree to. The other person must explicitly accept that offer.';
     }
     const history = ride.negotiation?.offers ?? [];
     $('live-history').hidden = !history.length;
@@ -347,6 +360,16 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
     catch (error) { $('page-error').textContent = error.message; return; }
     const data = { expectedVersion: ride.version, amountKobo };
     onCommand(`/api/rides/${ride.id}/offers`, data, 'Offer sent. The other person must accept it.');
+  });
+
+  $('fare-open-chat').addEventListener('click', () => {
+    const panel = $('chat-panel');
+    panel.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+    if (!$('chat-content').hidden) $('chat-message').focus?.();
+  });
+  $('fare-open-call').addEventListener('click', () => {
+    $('calls-panel').scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+    $('call-start').focus?.();
   });
 
   $('booking-service-ride').addEventListener('click', () => { if (busy) return; courier = false; clearPassenger(); clearDelivery(); categories.allow(null); categories.select('standard'); });
