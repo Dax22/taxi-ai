@@ -30,8 +30,10 @@ jobs:
           package-manager-cache: false
       - name: Install locked server dependencies
         run: npm ci --ignore-scripts --no-fund --no-audit
-      - name: Check architecture and behaviour
-        run: npm run verify
+      - name: Check architecture
+        run: npm run check
+      - name: Run server and web tests
+        run: npm test
   container:
     name: Staging container
     runs-on: ubuntu-latest
@@ -68,5 +70,11 @@ jobs:
           package-manager-cache: false
       - name: Install locked native dependencies
         run: npm ci --prefix apps/mobile --no-fund --no-audit
-      - name: Check native boundaries, types, session recovery and iOS/Android bundles
-        run: npm run mobile:verify
+      - name: Check native boundaries
+        run: npm --prefix apps/mobile run check
+      - name: Typecheck native app
+        run: npm --prefix apps/mobile run typecheck
+      - name: Run native tests
+        run: npm --prefix apps/mobile test
+      - name: Export iOS and Android bundles
+        run: npm --prefix apps/mobile run export
