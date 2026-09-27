@@ -4,6 +4,9 @@ import { readFile } from 'node:fs/promises';
 
 const html = await readFile(new URL('../public/dashboard.html', import.meta.url), 'utf8');
 const mobile = await readFile(new URL('../../mobile/app/book-ride.tsx', import.meta.url), 'utf8');
+const mobileJourney = await readFile(new URL('../../mobile/app/journey.tsx', import.meta.url), 'utf8');
+const mobileChat = await readFile(new URL('../../mobile/src/journeys/chat.tsx', import.meta.url), 'utf8');
+const mobilePreview = await readFile(new URL('../../mobile/src/booking/route-preview.tsx', import.meta.url), 'utf8');
 
 test('customer ride flow is vehicle then passenger then nationwide typed destination', () => {
   const vehicle = html.indexOf('id="vehicle-categories-panel"');
@@ -43,4 +46,21 @@ test('mobile ride flow places destination after passenger and before pickup conf
   assert.match(mobile, /onChooseCategory/);
   assert.match(mobile, /EXPO_PUBLIC_SHOW_SAMPLE_BOOKING/);
   assert.match(mobile, /Developer sample/);
+});
+
+
+test('fare negotiation is communication first, exact acceptance second, ride confirmation last', () => {
+  assert.match(html, /Talk with your driver before accepting/);
+  assert.match(html, /Chat with driver/);
+  assert.match(html, /Call driver in app/);
+  assert.match(html, /exact current offer must still be accepted|exact offer accepted/i);
+  assert.match(mobilePreview, /Find a .*driver/);
+  assert.match(mobilePreview, /starting fare, not an accepted price/);
+  const negotiationChat = mobileJourney.indexOf("r.status==='negotiating'&&<JourneyChat");
+  const acceptFare = mobileJourney.indexOf('Accept exact fare');
+  const confirmRide = mobileJourney.indexOf('Confirm ride');
+  assert.ok(negotiationChat >= 0 && negotiationChat < acceptFare);
+  assert.ok(acceptFare < confirmRide);
+  assert.match(mobileChat, /Discuss the fare here first/);
+  assert.match(mobileChat, /chat message by itself never confirms a fare/);
 });
