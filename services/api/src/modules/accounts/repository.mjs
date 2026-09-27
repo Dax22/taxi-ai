@@ -35,6 +35,29 @@ export function createAccountsRepository(db) {
     deleteExpiredSessions: async (now) => (await db.prepare('DELETE FROM sessions WHERE expires_at <= ?').run(now)),
     confirmEmail: async (id,email,now) => (await db.prepare(`INSERT INTO account_email_verifications(user_id,email,verified_at) VALUES (?,?,?)
       ON CONFLICT(user_id) DO UPDATE SET email=excluded.email,verified_at=excluded.verified_at`).run(id,email,now)),
+    kemmySetup: async (id) => (await db.prepare(`SELECT started_at AS startedAt,email_deferred_at AS emailDeferredAt,experience,
+      notifications_choice AS notificationsChoice,safety_choice AS safetyChoice,dismissed_at AS dismissedAt,completed_at AS completedAt,updated_at AS updatedAt
+      FROM account_kemmy_setup WHERE user_id=?`).get(id)) ?? null,
+    async kemmyPatch(id, patch, now) {
+      const current = (await this.kemmySetup?.(id)) ?? null;
+      const next = {
+        startedAt: patch.startedAt !== undefined ? patch.startedAt : current?.startedAt ?? null,
+        emailDeferredAt: patch.emailDeferredAt !== undefined ? patch.emailDeferredAt : current?.emailDeferredAt ?? null,
+        experience: patch.experience !== undefined ? patch.experience : current?.experience ?? null,
+        notificationsChoice: patch.notificationsChoice !== undefined ? patch.notificationsChoice : current?.notificationsChoice ?? null,
+        safetyChoice: patch.safetyChoice !== undefined ? patch.safetyChoice : current?.safetyChoice ?? null,
+        dismissedAt: patch.dismissedAt !== undefined ? patch.dismissedAt : current?.dismissedAt ?? null,
+        completedAt: patch.completedAt !== undefined ? patch.completedAt : current?.completedAt ?? null,
+      };
+      await db.prepare(`INSERT INTO account_kemmy_setup
+        (user_id,started_at,email_deferred_at,experience,notifications_choice,safety_choice,dismissed_at,completed_at,updated_at)
+        VALUES (?,?,?,?,?,?,?,?,?)
+        ON CONFLICT(user_id) DO UPDATE SET started_at=excluded.started_at,email_deferred_at=excluded.email_deferred_at,
+          experience=excluded.experience,notifications_choice=excluded.notifications_choice,safety_choice=excluded.safety_choice,
+          dismissed_at=excluded.dismissed_at,completed_at=excluded.completed_at,updated_at=excluded.updated_at`)
+        .run(id,next.startedAt,next.emailDeferredAt,next.experience,next.notificationsChoice,next.safetyChoice,next.dismissedAt,next.completedAt,now);
+      return next;
+    },
     replacePassword: async (id,hash) => (await db.prepare('UPDATE users SET password_hash=? WHERE id=?').run(hash,id)),
   });
 }
