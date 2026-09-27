@@ -11,12 +11,21 @@ export const SESSION_MS = 12 * 60 * 60 * 1000;
  */
 export function createAccountsService({ repository, driverProfiles, passwords, tokens, unitOfWork, audit, hasRideHistory, clock, revokeDevices = () => {}, onRegistered = () => {}, revokeRecoveryLinks = () => {} }) {
   const passwordProofs = new WeakMap();
+  const registrationIntents = ['customer','driver','eats_seller'];
+  function registrationIntent(value, fallback = 'customer') {
+    const intent = value ?? fallback;
+    check(registrationIntents.includes(intent), 'INVALID_ROLE', 'Choose Book & Order, Drive & Deliver or Sell Food.');
+    return intent;
+  }
   async function profile(id) {
     const user = (await repository.findById(id));
     if (!user) return null;
     const capabilities = (await repository.capabilities(id));
     const driver = capabilities.includes('driver') ? (await driverProfiles.find(id)) : null;
-    return { ...user, emailVerified: Boolean(user.emailVerified), capabilities, driver: driver ? { status: driver.status, vehicle: driver.vehicle, eligibility: driver.eligibility } : null };
+    const setup = await repository.kemmySetup(id);
+    return { ...user, emailVerified: Boolean(user.emailVerified), capabilities,
+      startingExperience: setup?.experience ?? null,
+      driver: driver ? { status: driver.status, vehicle: driver.vehicle, eligibility: driver.eligibility } : null };
   }
 
   async function vehicleInput(data) {
@@ -33,10 +42,11 @@ export function createAccountsService({ repository, driverProfiles, passwords, t
   }
 
   async function register(data) {
-    fields(data, ['name', 'email', 'password', 'role', 'vehicle'], ['name', 'email', 'password']);
+    fields(data, ['name', 'email', 'password', 'role', 'vehicle', 'intent'], ['name', 'email', 'password']);
     const name = label(data.name, 'Name');
     const email = emailAddress(data.email);
     const password = passwordInput(data.password);
+    const intent = registrationIntent(data.intent, data.role === 'driver' ? 'driver' : 'customer');
     // Keep older registration clients working. New clients start as customers.
     const role = data.role ?? 'customer';
     check(['customer', 'driver'].includes(role), 'INVALID_ROLE', 'Choose customer or driver.');
@@ -52,6 +62,7 @@ export function createAccountsService({ repository, driverProfiles, passwords, t
       (await repository.insert({ id, email, name, passwordHash, role, createdAt: now }));
       (await repository.grant(id, 'customer', now));
       if (vehicle) { (await driverProfiles.insert(id, vehicle, now)); (await repository.grant(id, 'driver', now)); }
+      await repository.kemmyPatch(id, { startedAt: now, experience: intent }, now);
       (await audit.record(id, 'account.created', id, now));
       return (await profile(id));
     }));
@@ -158,9 +169,10 @@ export function createAccountsService({ repository, driverProfiles, passwords, t
 
   // Only a verified provider adapter can reach this port; HTTP accepts no claims.
   // Google subject is the stable identifier. Email matches never link accounts.
-  async function resolveGoogle(identity, linkUserId = null) {
+  async function resolveGoogle(identity, linkUserId = null, intent = null) {
     fields(identity, ['subject', 'email', 'name']);
     const subject = label(identity.subject, 'Google identity', 1, 255), email = emailAddress(identity.email);
+    const startingIntent = intent === null ? null : registrationIntent(intent);
     const name = typeof identity.name === 'string' && identity.name.trim().length >= 2
       && !/[\u0000-\u001f\u007f]/.test(identity.name) ? identity.name.trim().slice(0, 80) : 'Taxi Ai member';
     return (await unitOfWork(async () => {
@@ -180,8 +192,11 @@ export function createAccountsService({ repository, driverProfiles, passwords, t
       } else {
         check(!collision, 'GOOGLE_ACCOUNT_EXISTS', 'Sign in with your Taxi Ai password first, then connect Google from Sign-in methods.');
         id = tokens.id();
-        (await repository.insert({ id, email, name, passwordHash: '', passwordEnabled: false, role: 'customer', createdAt: clock() }));
-        (await repository.grant(id, 'customer', clock())); (await audit.record(id, 'account.created', id, clock()));
+        const now = clock();
+        (await repository.insert({ id, email, name, passwordHash: '', passwordEnabled: false, role: 'customer', createdAt: now }));
+        (await repository.grant(id, 'customer', now));
+        await repository.kemmyPatch(id, { startedAt: now, experience: startingIntent ?? 'customer' }, now);
+        (await audit.record(id, 'account.created', id, now));
       }
       (await repository.linkGoogle(id, subject, clock())); (await audit.record(id, 'account.google_connected', id, clock()));
       return (await profile(id));
