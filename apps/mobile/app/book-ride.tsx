@@ -54,9 +54,11 @@ function BookingScreen() {
         <Text style={styles.small}>{s.category === 'standard' ? 'Car' : vehicleCategory(s.category)?.name} parcel limit: {parcelLoadLimit(s.category)} kg. Matching also checks the driver’s approved load capacity. Confirm the load fits before collection.</Text><Text style={styles.small}>After requesting, share a private tracking invitation from your journey. Your recipient signs in and accepts it to follow the delivery. They give the drop-off code to the driver only after receiving the parcel.</Text>
       </Card>}
       {!s.mode || s.mode === 'sample' && !showDeveloperSample ? <Card><Text style={styles.h2}>Nationwide route planning is unavailable.</Text><Text style={styles.body}>Taxi Ai needs the configured nationwide address and routing service before a ride can be requested here.</Text></Card> : <>
-        <View style={styles.row}>{settings.online.enabled && <Button title="Search addresses" secondary={s.mode !== 'route'} disabled={locked} onPress={() => c.chooseMode('route')}/>}
-          {showDeveloperSample && settings.allowSample && <Button title="Developer sample" secondary={s.mode !== 'sample'} disabled={locked} onPress={() => c.chooseMode('sample')}/>}</View>
-        <View style={[look.columns, wide && look.wide]}><View style={[look.column, wide && look.wideColumn]}><Card><Text style={styles.h2}>{delivery ? 'Plan your delivery route' : 'Confirm your pickup and route'}</Text>
+        {(delivery || showDeveloperSample) && <View style={styles.row}>
+          {delivery && settings.online.enabled && <Button title="Search addresses" secondary={s.mode !== 'route'} disabled={locked} onPress={() => c.chooseMode('route')}/>}
+          {showDeveloperSample && settings.allowSample && <Button title="Developer sample" secondary={s.mode !== 'sample'} disabled={locked} onPress={() => c.chooseMode('sample')}/>}
+        </View>}
+        {(delivery || s.destination.selected || s.mode === 'sample') && <View style={[look.columns, wide && look.wide]}><View style={[look.column, wide && look.wideColumn]}><Card><Text style={styles.h2}>{delivery ? 'Plan your delivery route' : 'Confirm your pickup'}</Text>
           {s.mode === 'route' ? <>
             {!s.consent ? delivery ? <><Text style={styles.body}>Search streets and landmarks across Nigeria. Include the town and state for more precise results. Search terms go to {settings.online.searchHost ?? 'the configured address provider'}; selected pickup and destination coordinates go to {settings.online.routeHost ?? 'the configured routing provider'} for a route preview.</Text>
               <Text style={styles.small}>Search happens when you tap Search. Current pickup requests a one-time phone location only when you choose it.</Text><Button title="Enable address search" disabled={disabled} onPress={() => c.consent()}/></> : <Text style={styles.body}>Enter your destination above, then confirm where you want to be picked up.</Text>
@@ -77,7 +79,7 @@ function BookingScreen() {
         </Card></View>
         {s.preview && <View style={[look.column, wide && look.wideColumn]}><RoutePreview preview={s.preview} now={s.now} disabled={disabled} busy={s.busy === 'request'} passengerName={!delivery && s.passenger.kind === 'guest' ? s.passenger.name.trim() : undefined}
           onRequest={() => void c.submit()} onPreview={() => void c.preview()} onChooseCategory={!delivery ? (id) => { c.chooseCategory(id); void c.preview(); } : undefined}/></View>}
-        </View>
+        </View>}
       </>}
     </>}
     <Text style={styles.small}>Request status refreshes every 10 seconds while this screen is open. You can also refresh above.</Text>
