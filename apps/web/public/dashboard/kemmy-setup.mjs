@@ -61,8 +61,10 @@ export function createKemmySetup({ client, onDriver = () => {}, onCustomer = () 
       message('You’re ready to use Taxi Ai.', 'Kemmy can still guide your journeys after setup.');
       button('Finish setup', () => void update('complete'));
     } else {
-      message('Your Taxi Ai account setup is complete.', 'Kemmy will still appear when there is useful journey guidance.');
-      button('Close', () => { hide(); showLauncher(false); });
+      message('How can I help?', 'Your account setup is complete. Choose where you want to go, or review setup again.');
+      button('Book a ride', () => { hide(); showLauncher(true); onCustomer(); });
+      button('Open Taxi Ai Eats', () => navigate('/eats'), true);
+      button('Send a parcel', () => navigate('/app?service=courier'), true);
       button('Review setup again', () => void update('restart'), true);
     }
   }
@@ -74,7 +76,7 @@ export function createKemmySetup({ client, onDriver = () => {}, onCustomer = () 
       const next = await client.request('/api/account/kemmy-setup');
       if (epoch !== generation) return;
       state = next;
-      if (auto && !next.autoOpen) { hide(); showLauncher(!next.completedAt); return; }
+      if (auto && !next.autoOpen) { hide(); showLauncher(true); return; }
       render(next);
     } catch { if (epoch === generation) { hide(); showLauncher(false); } }
     finally { if (epoch === generation) busy = false; }
