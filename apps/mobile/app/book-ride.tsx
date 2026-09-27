@@ -75,7 +75,7 @@ function BookingScreen() {
               <Pressable key={area.id} accessibilityRole="button" accessibilityLabel={`Use ${area.name} as destination`} disabled={disabled}
                 style={[styles.input, { paddingVertical: 16 }]} onPress={() => c.sample('destination', area.id)}><Text style={styles.body}>{area.name}</Text></Pressable>)}
             <Text style={styles.small}>{s.destinationId ? 'Destination matched to a sample area.' : `Sample areas: ${settings.areas.filter((area) => area.id !== s.pickupId).map((area) => area.name).join(', ')}.`}</Text></>}
-          {(s.mode === 'sample' || s.consent) && <Button title={s.preview ? 'Preview route again' : 'Preview route & fare'} secondary={!!s.preview} busy={s.busy === 'preview'} disabled={planningDisabled} onPress={() => void c.preview()}/>}
+          {(s.mode === 'sample' || delivery && s.consent) && <Button title={s.preview ? 'Preview route again' : 'Preview route & fare'} secondary={!!s.preview} busy={s.busy === 'preview'} disabled={planningDisabled} onPress={() => void c.preview()}/>}
         </Card></View>
         {s.preview && <View style={[look.column, wide && look.wideColumn]}><RoutePreview preview={s.preview} now={s.now} disabled={disabled} busy={s.busy === 'request'} passengerName={!delivery && s.passenger.kind === 'guest' ? s.passenger.name.trim() : undefined}
           onRequest={() => void c.submit()} onPreview={() => void c.preview()} onChooseCategory={!delivery ? (id) => { c.chooseCategory(id); void c.preview(); } : undefined}/></View>}
