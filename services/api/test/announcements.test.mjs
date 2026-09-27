@@ -55,7 +55,8 @@ test('announcement input is bounded and expired or stale broadcasts cannot be pu
     {title:'Valid title',body:'Valid body',audience:'all',priority:'emergency'},
   ]) assert.equal((await admin.post(base,data)).status,400);
   const {result}=await draft(admin,{expiresInHours:'1'});h.advance(60*60_000);
-  assert.equal((await admin.post(`${base}/${result.id}/publish`,{expectedVersion:1,reason:'This fixture is intentionally expired.'})).status,409);
+  const expired=await admin.post(`${base}/${result.id}/publish`,{expectedVersion:1,reason:'This fixture is intentionally expired.'});
+  assert.equal(expired.status,400);assert.equal(expired.body.error.code,'INVALID_STATE');
 });
 
 test('Expo broadcast payload contains only bounded announcement content and an opaque announcement ID',async()=>{
