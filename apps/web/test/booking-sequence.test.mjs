@@ -18,6 +18,7 @@ test('customer ride flow is vehicle then passenger then nationwide typed destina
   assert.match(html, /placeholder="e\.g\. Lekki Phase 1, Lagos"/);
   assert.doesNotMatch(html, /<datalist\b/i);
   assert.doesNotMatch(html, /list="request-destination-areas"/);
+  assert.doesNotMatch(html, /id="request-destination-areas"/);
 });
 
 test('mobile ride flow places destination after passenger and before pickup confirmation', () => {
@@ -29,4 +30,6 @@ test('mobile ride flow places destination after passenger and before pickup conf
   assert.ok(destination < destinationSearch);
   assert.ok(destinationSearch < pickup);
   assert.match(mobile, /Type an address, landmark, town or city anywhere in Nigeria/);
+  assert.match(mobile, /EXPO_PUBLIC_SHOW_SAMPLE_BOOKING/);
+  assert.match(mobile, /Developer sample/);
 });
