@@ -39,7 +39,9 @@ export function createAccountsRepository(db) {
       notifications_choice AS notificationsChoice,safety_choice AS safetyChoice,dismissed_at AS dismissedAt,completed_at AS completedAt,updated_at AS updatedAt
       FROM account_kemmy_setup WHERE user_id=?`).get(id)) ?? null,
     async kemmyPatch(id, patch, now) {
-      const current = (await this.kemmySetup?.(id)) ?? null;
+      const current = (await db.prepare(`SELECT started_at AS startedAt,email_deferred_at AS emailDeferredAt,experience,
+        notifications_choice AS notificationsChoice,safety_choice AS safetyChoice,dismissed_at AS dismissedAt,completed_at AS completedAt
+        FROM account_kemmy_setup WHERE user_id=?`).get(id)) ?? null;
       const next = {
         startedAt: patch.startedAt !== undefined ? patch.startedAt : current?.startedAt ?? null,
         emailDeferredAt: patch.emailDeferredAt !== undefined ? patch.emailDeferredAt : current?.emailDeferredAt ?? null,
