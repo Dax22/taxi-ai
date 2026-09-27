@@ -173,3 +173,29 @@ test('schema 13 upgrades preserve existing records and all Google pages are expl
     assert.match(r.headers.get('content-security-policy'), /script-src 'self'/);
   }
 });
+
+
+test('Google signup preserves selected starting experience without granting Driver or Seller permissions', async (t) => {
+  const webFixture = await fixture(t), web = browser(webFixture.h);
+  const state = await web.start('/api/auth/google/start', { intent: 'eats_seller' });
+  assert.equal(webFixture.h.db.prepare('SELECT signup_intent AS intent FROM google_auth_attempts').get().intent, 'eats_seller');
+  const finished = await web.finish(state);
+  assert.equal(finished.headers.get('location'), '/app?google=success&start=eats_seller');
+  const user = (await web.send('/api/session')).body.user;
+  assert.equal(user.startingExperience, 'eats_seller');
+  assert.deepEqual(user.capabilities, ['customer']);
+  assert.equal(user.driver, null);
+  assert.equal(webFixture.h.db.prepare('SELECT count(*) AS n FROM eats_memberships').get().n, 0);
+
+  const nativeFixture = await fixture(t);
+  nativeFixture.state.identity = { subject: 'google-driver-start', email: 'google-driver-start@example.test', name: 'Google Driver Start' };
+  const challenge = (await native(nativeFixture.h, '/auth/google/challenge', { intent: 'driver' })).body;
+  const signedIn = await native(nativeFixture.h, '/auth/google', {
+    challenge: challenge.challenge, idToken: `fixture.${challenge.nonce}`, deviceName: 'Intent phone',
+  });
+  assert.equal(signedIn.status, 200, JSON.stringify(signedIn.body));
+  assert.equal(signedIn.body.user.startingExperience, 'driver');
+  assert.deepEqual(signedIn.body.user.capabilities, ['customer']);
+  assert.equal(signedIn.body.user.driver, null);
+  assert.equal(nativeFixture.h.db.prepare('SELECT count(*) AS n FROM drivers').get().n, 0);
+});
