@@ -25,6 +25,7 @@ migrations.push('036_admin_compliance.sql');
 migrations.push('037_driver_face_checks.sql');
 migrations.push('038_parcel_tracking.sql');
 migrations.push('039_admin_announcements.sql');
+migrations.push('040_kemmy_setup.sql');
 export const SCHEMA_VERSION = migrations.length;
 
 export function transaction(db, run) {
