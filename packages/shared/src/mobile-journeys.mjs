@@ -63,14 +63,22 @@ export function parseThread(v) {
   v.messages.forEach(message); expect(v.messages.every((m,i) => m.sequence <= v.nextAfter && (i === 0 || m.sequence > v.messages[i-1].sequence))); return v;
 }
 export function parseSentMessage(v) { envelope(v); message(v.message); return v; }
+function announcement(a) {
+  expect(object(a) && uuid(a.id) && text(a.title,80) && text(a.body,500)
+    && ['all','customers','drivers','eats_sellers'].includes(a.audience)
+    && ['normal','important','critical'].includes(a.priority) && a.status === 'published'
+    && positive(a.version) && integer(a.createdAt) && integer(a.publishedAt) && integer(a.expiresAt)
+    && a.expiresAt > a.publishedAt && nullableTime(a.readAt));
+}
 export function parseNotifications(v) {
   envelope(v); expect(Array.isArray(v.notifications) && v.notifications.length <= 50 && integer(v.unread)
     && (v.nextBefore === null || positive(v.nextBefore)) && object(v.push) && typeof v.push.enabled === 'boolean' && typeof v.push.registered === 'boolean'
-    && (v.push.projectId === null || uuid(v.push.projectId)));
+    && (v.push.projectId === null || uuid(v.push.projectId)) && Array.isArray(v.announcements) && v.announcements.length <= 20);
   expect(v.notifications.every((n) => object(n) && positive(n.id) && uuid(n.rideId) && mode(n.mode) && Object.hasOwn(NOTIFICATION_LABELS,n.kind)
     && n.title === NOTIFICATION_LABELS[n.kind] && integer(n.createdAt) && nullableTime(n.readAt)
     && (n.body === undefined && n.arrivalActive === undefined
-      || n.kind === 'arrive' && n.mode === 'customer' && text(n.body,500) && typeof n.arrivalActive === 'boolean'))); return v;
+      || n.kind === 'arrive' && n.mode === 'customer' && text(n.body,500) && typeof n.arrivalActive === 'boolean')));
+  v.announcements.forEach(announcement); return v;
 }
 export function parseNotificationTarget(v) { envelope(v); expect(object(v.target) && uuid(v.target.rideId) && mode(v.target.mode) && ['work','journey'].includes(v.target.screen)); return v; }
 

@@ -259,6 +259,7 @@ export class MobileClient {
   async notifications(before?: number | null) { return parseNotifications(await this.request(`/notifications${before ? `?before=${before}` : ''}`)); }
   async openNotification(id: number) { return parseNotificationTarget(await this.request(`/notifications/${id}/open`,{})); }
   async readNotification(id: number) { return this.request(`/notifications/${id}/read`,{}); }
+  async readAnnouncement(id: string) { return this.request(`/announcements/${id}/read`,{}); }
   async registerPush(token: string, projectId: string) { return this.request('/notifications/push',{ token,projectId }); }
   async disablePush() { return this.request('/notifications/push/disable',{}); }
   private ownApplication(body: unknown) {

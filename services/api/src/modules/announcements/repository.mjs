@@ -34,7 +34,7 @@ export function createAnnouncementsRepository(db) {
       await db.prepare(`INSERT INTO announcement_push_jobs(announcement_id,session_id,user_id,token,next_at)
         SELECT ?,p.session_id,p.user_id,p.token,? FROM push_registrations p JOIN users u ON u.id=p.user_id
         WHERE u.role<>'admin' AND ${targetCondition('?')}
-        ON CONFLICT(announcement_id,session_id) DO NOTHING`).run(announcementId,now,audience);
+        ON CONFLICT(announcement_id,session_id) DO NOTHING`).run(announcementId,now,audience,audience,audience,audience);
     },
     async visible(userId, now) {
       return db.prepare(`SELECT ${columns},r.read_at AS readAt FROM admin_announcements a
