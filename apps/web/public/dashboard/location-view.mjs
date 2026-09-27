@@ -57,6 +57,7 @@ export function createLocationView({ onEnable, onUsePickup, onSearch, onFindRide
       $(`location-${side}-fields`).disabled = state.blocked || state.booking || (!destination && !state.online);
       locked(`location-${side}-search`, state.searching[side] || state.blocked || state.booking
         || (destination ? !state.settings?.enabled : !state.online));
+      if (destination) $('location-destination-search').textContent = state.searching.destination ? 'Finding rides…' : 'Find rides';
       $(`location-${side}-selected`).textContent = state[side] ? `${state[side].name} · ${state[side].lat.toFixed(5)}, ${state[side].lng.toFixed(5)}` : destination ? 'Type and choose a destination anywhere in Nigeria.' : 'Choose pickup.';
       const key = JSON.stringify(state.results[side]);
       if (resultKeys[side] !== key) {
@@ -73,17 +74,23 @@ export function createLocationView({ onEnable, onUsePickup, onSearch, onFindRide
     }
     for (const side of ['pickup', 'destination']) { $(`location-target-${side}`).checked = state.target === side; $(`location-target-${side}`).disabled = state.blocked || !state.online || state.booking; }
     $('location-coordinate-fields').disabled = !state.online || state.blocked || state.booking;
+    const rideFlow = transportCategory(state.vehicleCategory)?.service === 'ride';
+    $('location-preview').hidden = rideFlow;
     locked('location-preview', !state.pickup || !state.destination || state.blocked || state.quoting || state.booking || !state.online);
-    $('location-preview').textContent = state.quoting ? 'Preparing your preview…' : 'Preview route and suggested fare';
+    $('location-preview').textContent = state.quoting ? 'Updating ride options…' : 'Update ride options';
     locked('location-book', !state.quote || state.expired || state.blocked || state.quoting || state.booking);
     $('location-quote').hidden = !state.quote;
+    renderRideOptions(state);
     if (state.quote) {
       const route = state.quote.route, pricing = route.pricing;
       $('location-distance').textContent = `${(route.distanceMeters / 1000).toFixed(1)} km${route.distanceKind === 'straight_line' ? ' direct' : ''}`;
       $('location-duration').textContent = route.durationSeconds === null ? 'No driving ETA' : `${Math.ceil(route.durationSeconds / 60)} min`;
       $('location-price').textContent = formatNaira(route.suggestedFareKobo);
       $('location-formula').textContent = `${route.distanceKind === 'straight_line' ? 'Direct-distance delivery estimate, not a road route. Confirm access and timing with the driver. ' : ''}Illustrative formula (${pricing.categoryMultiplier ?? 1}× category factor): ${formatNaira(pricing.baseKobo)} base + ${formatNaira(pricing.perKmKobo)}/km + ${formatNaira(pricing.perMinuteKobo)}/min. Minimum ${formatNaira(pricing.minimumKobo)}, rounded up to ${formatNaira(pricing.incrementKobo)}.`;
-      $('location-expiry').textContent = state.expired ? 'This route quote expired. Preview the route again.' : 'Quote valid for 15 minutes after preview. Both people can negotiate the fare.';
+      const category = vehicleCategory(state.vehicleCategory);
+      $('location-book').textContent = transportCategory(state.vehicleCategory)?.service === 'ride'
+        ? 'Request ' + (category?.name ?? 'selected') + ' ride ↗' : 'Request selected delivery ↗';
+      $('location-expiry').textContent = state.expired ? 'These ride options expired. Find rides again.' : 'Fare preview valid for 15 minutes. The final fare still requires agreement.';
     }
     plannerMap.render({ enabled: state.online && Boolean(state.settings?.tiles), tiles: state.settings?.tiles,
       pickup: state.pickup, destination: state.destination, route: state.quote?.route.coordinates,
@@ -141,8 +148,7 @@ export function createLocationView({ onEnable, onUsePickup, onSearch, onFindRide
   for (const side of ['pickup', 'destination']) $(`location-target-${side}`).addEventListener('change', () => onTarget(side));
   $('location-destination-form').addEventListener('submit', (event) => {
     event.preventDefault();
-    if (!online) onEnable();
-    onSearch('destination', $('location-destination-query').value);
+    onFindRide('destination', $('location-destination-query').value);
   });
   $('location-destination-query').addEventListener('input', () => onClear('destination'));
   $('location-coordinate-form').addEventListener('submit', (event) => {
