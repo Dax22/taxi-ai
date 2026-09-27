@@ -274,7 +274,75 @@ export function createAccountsService({ repository, driverProfiles, passwords, t
     });
   }
 
-  return Object.freeze({ profile, register, login, resolveGoogle, signInMethods, unlinkGoogle, addDriverProfile, deleteDriverProfile, issueSession, sessionFor, revokeSession, bootstrapAdmin, resetAdminPasswordLocally,
+
+  function kemmyProjection(user, state = null) {
+    const value = state ?? {};
+    const nextStep = value.completedAt ? 'complete'
+      : !value.startedAt ? 'welcome'
+        : !user.emailVerified && !value.emailDeferredAt ? 'email'
+          : !value.experience ? 'experience'
+            : !value.notificationsChoice ? 'notifications'
+              : !value.safetyChoice ? 'safety' : 'finish';
+    return {
+      version: 1,
+      assistant: 'Kemmy',
+      deterministic: true,
+      nextStep,
+      autoOpen: !value.completedAt && !value.dismissedAt,
+      startedAt: value.startedAt ?? null,
+      emailDeferredAt: value.emailDeferredAt ?? null,
+      experience: value.experience ?? null,
+      notificationsChoice: value.notificationsChoice ?? null,
+      safetyChoice: value.safetyChoice ?? null,
+      dismissedAt: value.dismissedAt ?? null,
+      completedAt: value.completedAt ?? null,
+      emailVerified: Boolean(user.emailVerified),
+    };
+  }
+
+  async function kemmySetup(userId) {
+    const user = await profile(userId); requireRole(user, 'customer');
+    return kemmyProjection(user, await repository.kemmySetup(userId));
+  }
+
+  async function updateKemmySetup(userId, data) {
+    fields(data, ['action','value'], ['action']);
+    const user = await profile(userId); requireRole(user, 'customer');
+    check(typeof data.action === 'string' && ['start','email-later','experience','notifications','safety','dismiss','resume','complete','restart'].includes(data.action),
+      'INVALID_INPUT', 'Choose a valid Kemmy setup action.');
+    const now = clock(), patch = {};
+    if (data.action === 'start') patch.startedAt = now;
+    if (data.action === 'email-later') patch.emailDeferredAt = now;
+    if (data.action === 'experience') {
+      check(['customer','driver','eats_seller'].includes(data.value), 'INVALID_INPUT', 'Choose Customer, Driver or Eats seller.');
+      patch.experience = data.value;
+    }
+    if (data.action === 'notifications') {
+      check(['enabled','in_app','later'].includes(data.value), 'INVALID_INPUT', 'Choose a valid notification preference.');
+      patch.notificationsChoice = data.value;
+    }
+    if (data.action === 'safety') {
+      check(['review','later'].includes(data.value), 'INVALID_INPUT', 'Choose a valid Family Safety preference.');
+      patch.safetyChoice = data.value;
+    }
+    if (data.action === 'dismiss') patch.dismissedAt = now;
+    if (data.action === 'resume') patch.dismissedAt = null;
+    if (data.action === 'complete') {
+      const current = kemmyProjection(user, await repository.kemmySetup(userId));
+      check(current.nextStep === 'finish' || current.nextStep === 'complete', 'SETUP_INCOMPLETE', 'Finish the remaining setup steps first.');
+      patch.completedAt = current.completedAt ?? now; patch.dismissedAt = null;
+    }
+    if (data.action === 'restart') Object.assign(patch, { startedAt: now, emailDeferredAt: null, experience: null,
+      notificationsChoice: null, safetyChoice: null, dismissedAt: null, completedAt: null });
+    const state = await unitOfWork(async () => {
+      const saved = await repository.kemmyPatch(userId, patch, now);
+      if (data.action === 'complete') await audit.record(userId, 'account.kemmy_setup_completed', userId, now);
+      return saved;
+    });
+    return kemmyProjection(await profile(userId), state);
+  }
+
+  return Object.freeze({ profile, register, login, resolveGoogle, signInMethods, unlinkGoogle, addDriverProfile, deleteDriverProfile, issueSession, sessionFor, revokeSession, bootstrapAdmin, resetAdminPasswordLocally, kemmySetup, updateKemmySetup,
     emailState, emailStateForAddress, confirmEmail, replacePassword, validatePasswordLogin, consumePasswordLogin,
     sessionOwner: async (hash) => (await repository.findSession(hash, clock()))?.userId ?? null });
 }
