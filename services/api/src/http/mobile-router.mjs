@@ -101,6 +101,8 @@ export function createMobileRouter({ devices, accounts, drivers, rides, dispatch
     else if (auth) body = path === '/auth/login' ? await devices.login(data) : path === '/auth/refresh' ? (await devices.refresh(data)) : (await devices.logout(data));
     else if (!write && path === '/session') body = { user: session.user, sessionId: session.id };
     else if (!write && path === '/account/email') body = (await accountEmail.status(session.user.id));
+    else if (!write && path === '/account/kemmy-setup') body = (await accounts.kemmySetup(session.user.id));
+    else if (write && path === '/account/kemmy-setup') body = (await accounts.updateKemmySetup(session.user.id,data));
     else if (path.startsWith('/eats/')) {
       const route = foodRoutes.find((entry) => entry.method === request.method && entry.path.test('/api' + path));
       check(route, 'NOT_FOUND', 'Eats endpoint not found.');
