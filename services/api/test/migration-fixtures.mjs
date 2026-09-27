@@ -132,6 +132,13 @@ export function removeAdminWorkspaceFixtureTables(db) {
 
 /** Kemmy setup is account preference state; old-schema fixtures may remove it only while empty. */
 export function removeKemmyFixtureTables(db) {
+  const googleColumns = db.prepare("PRAGMA table_info(google_auth_attempts)").all().map(row => row.name);
+  if (googleColumns.includes('signup_intent')) {
+    if (db.prepare('SELECT count(*) AS count FROM google_auth_attempts WHERE signup_intent IS NOT NULL').get().count) {
+      throw new Error('Cannot downgrade a populated Google signup-intent fixture.');
+    }
+    db.exec('ALTER TABLE google_auth_attempts DROP COLUMN signup_intent');
+  }
   if (!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='account_kemmy_setup'").get()) return;
   if (db.prepare('SELECT count(*) AS count FROM account_kemmy_setup').get().count) throw new Error('Cannot downgrade a populated account_kemmy_setup fixture.');
   db.exec('DROP TABLE account_kemmy_setup');
