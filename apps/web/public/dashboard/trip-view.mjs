@@ -81,8 +81,9 @@ export function createTripView({ onCommand, serverNow, onVehicleMismatch = () =>
     if (!ride.delivery || controls.next?.action !== 'complete') $('driver-delivery-pin').value = '';
     $('trip-confirm').hidden = !controls.confirm;
     $('trip-confirm').textContent = ride.negotiation?.agreement
-      ? `Confirm test booking · ${formatNaira(ride.negotiation.agreement.amountKobo)}` : 'Confirm booking';
-    $('trip-confirm').onclick = () => onCommand(`/api/rides/${ride.id}/confirm`, { expectedVersion: ride.version }, 'Your test booking is confirmed.');
+      ? `Confirm ride · ${formatNaira(ride.negotiation.agreement.amountKobo)}` : 'Confirm ride';
+    $('trip-confirm').onclick = () => onCommand(`/api/rides/${ride.id}/confirm`, { expectedVersion: ride.version },
+      'Ride confirmed at the agreed fare. Your driver can now begin the pickup journey.');
     $('trip-action').hidden = !controls.next || controls.next.action === 'start' || (ride.delivery && controls.next.action === 'complete');
     $('trip-action').textContent = controls.next?.label ?? '';
     $('trip-action').onclick = controls.next ? () => onCommand(`/api/rides/${ride.id}/${controls.next.action}`,
