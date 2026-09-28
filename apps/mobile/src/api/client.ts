@@ -280,6 +280,12 @@ export class MobileClient {
     return this.ownApplication(await this.request(`/driver/application/${action}`, data, key));
   }
   async devices() { return parseDevices(await this.request('/devices')); }
+  async reverseLocation(lat: number, lng: number) {
+    const body = await this.request('/locations/reverse', { lat, lng });
+    const place = body.place;
+    if (!place || typeof place.line !== 'string' || typeof place.areaId !== 'string') throw new ApiError('Taxi Ai returned an invalid current location.', 'INVALID_RESPONSE');
+    return { line: place.line, areaId: place.areaId };
+  }
   async eats(path: string, data?: unknown, key?: string) {
     if (!path.startsWith('/eats/')) throw new Error('Use an Eats API path.');
     return this.request(path, data, key);
