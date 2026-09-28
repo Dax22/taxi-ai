@@ -1,8 +1,11 @@
 name: Verify
 
 on:
-  push:
   pull_request:
+  push:
+    branches:
+      - main
+      - integration/resolved-vscode-slider
 
 permissions:
   contents: read
