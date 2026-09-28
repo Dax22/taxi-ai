@@ -15,7 +15,7 @@ const quote = { id: uuid(4), restaurant: { id: store.id, name: store.name, addre
 const order = { ...quote, id: uuid(5), status: 'placed', version: 0, role: 'customer', actions: ['cancel'], customerName: 'Customer', courier: null, events: [{ status: 'placed', at: 1000 }], createdAt: 1000, updatedAt: 1000 };
 const deferred = () => { let resolve; const promise = new Promise((done) => { resolve = done; }); return { promise, resolve }; };
 const flush = () => new Promise((resolve) => setImmediate(resolve));
-function fixture() {
+function fixture(options = {}) {
   let now = 1000, key = 0, restaurant = structuredClone(store);
   const writes = [], api = { async request(path) {
     if (path === '/eats/restaurants' || path.startsWith('/eats/restaurants?')) return { restaurants: [restaurant], areas: [{ id: 'wuse-ii', name: 'Wuse II' }] };
@@ -25,7 +25,7 @@ function fixture() {
     if (path === '/eats/store') return { store: null, menu: [], areas: [{ id: 'wuse-ii', name: 'Wuse II' }] };
     throw new Error('Unexpected read ' + path);
   }, async command(path, data, key) { writes.push({ path, data, key }); return path === '/eats/quotes' ? { quote } : { order }; } };
-  const c = createEatsController({ api, makeKey: () => 'test-command-key-' + ++key, now: () => now });
+  const c = createEatsController({ api, makeKey: () => 'test-command-key-' + ++key, now: () => now, ...options });
   c.context(user);
   return { c, api, writes, advance(ms) { now += ms; }, changeStore(value) { restaurant = { ...restaurant, ...value }; } };
 }
@@ -259,6 +259,28 @@ test('shipped meal builder asks for location first, searches menu dishes, combin
   node('meal-place').handlers.click(); await flush();
   assert.equal(f.c.snapshot().screen, 'orders'); assert.equal(f.c.snapshot().orders.length, 2); assert.equal(f.c.snapshot().mealBasket.length, 0);
   f.c.reset(); assert.equal(node('meal-address').value, ''); assert.equal(node('meal-results').children.length, 0);
+});
+
+test('Eats delivery can use the customer current location or capture a separate recipient', async (t) => {
+  const current = { line: '17 Test Road, Ikeja, Lagos', areaId: foodAreaId('lagos', 'Ikeja') };
+  const node = dom(t), f = mealFixture();
+  const original = f.c;
+  const currentFixture = fixture({ locateDelivery: async () => current });
+  const view = createEatsView(currentFixture.c); currentFixture.c.subscribe(() => view.render(currentFixture.c.snapshot()));
+  await currentFixture.c.navigate('browse');
+  node('meal-current').handlers.click(); await flush();
+  assert.deepEqual(currentFixture.c.snapshot().address, current);
+  assert.deepEqual(currentFixture.c.snapshot().recipient, { kind: 'self' });
+  assert.equal(currentFixture.c.snapshot().deliveryConfirmed, true);
+
+  currentFixture.c.editDelivery();
+  node('meal-recipient-kind').value = 'other'; node('meal-recipient-kind').handlers.change();
+  node('meal-recipient-name').value = 'Ada Test'; node('meal-recipient-phone').value = '08012345678';
+  node('meal-address').value = quote.address.line; node('meal-state').value = 'fct'; node('meal-town').value = 'Wuse II';
+  node('meal-location-form').handlers.submit({ preventDefault() {} }); await flush();
+  assert.deepEqual(currentFixture.c.snapshot().recipient, { kind: 'other', name: 'Ada Test', phone: '08012345678' });
+  assert.match(node('meal-destination-text').textContent, /For Ada Test/);
+  assert.equal(f.c, original);
 });
 
 test('combined checkout retries the identical request after a lost reply and blocks basket or location changes', async () => {

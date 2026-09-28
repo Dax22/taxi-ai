@@ -35,6 +35,19 @@ test('Nigeria search keeps nationwide results and rejects foreign country metada
   assert.equal(searched.searchParams.get('countrycode'), 'NG');
   assert.equal(searched.searchParams.get('bbox'), `${bounds.west},${bounds.south},${bounds.east},${bounds.north}`);
 });
+test('Photon reverse geocoding turns an explicit GPS fix into a bounded Nigerian delivery address', async () => {
+  let requested;
+  const provider = createMapProvider({ env: {}, fetchImpl: async (url) => {
+    requested = url;
+    return Response.json({ type: 'FeatureCollection', features: [{ geometry: { type: 'Point', coordinates: [3.3515, 6.6018] },
+      properties: { housenumber: '17', street: 'Test Road', district: 'Ikeja', city: 'Ikeja', state: 'Lagos State' } }] });
+  } });
+  const place = await provider.reverse({ lat: 6.6018, lng: 3.3515 });
+  assert.equal(requested.pathname, '/reverse/');
+  assert.equal(requested.searchParams.get('lat'), '6.6018'); assert.equal(requested.searchParams.get('lon'), '3.3515');
+  assert.equal(place.state, 'Lagos State'); assert.equal(place.town, 'Ikeja'); assert.match(place.line, /17 Test Road/);
+});
+
 test('OSRM uses car routes, bounded snapping and GeoJSON; upstream failures never become fictional road routes', async () => {
   let url;
   const provider = createMapProvider({ env: {}, fetchImpl: async (value) => { url = value; return Response.json({ code: 'Ok', routes: [{ distance: 5000, duration: 600,

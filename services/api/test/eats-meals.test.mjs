@@ -26,7 +26,7 @@ async function fixture(t, options = {}) {
     ({ store } = await ok(seller, `/stores/${store.id}/open`, { expectedVersion: store.version, isOpen: true }));
     kitchens.push({ seller, store, menu, item, details });
   }
-  const basket = (selected = kitchens) => ({ groups: selected.map((k) => ({ storeId: k.store.id, expectedVersion: k.store.version, items: [{ itemId: k.menu[0].id, quantity: 1 }] })), address, instructions: 'Test handover only.' });
+  const basket = (selected = kitchens, recipient = { kind: 'self' }) => ({ groups: selected.map((k) => ({ storeId: k.store.id, expectedVersion: k.store.version, items: [{ itemId: k.menu[0].id, quantity: 1 }] })), address, recipient, instructions: 'Test handover only.' });
   const quote = async (selected = kitchens) => (await ok(people.customer, '/checkouts', basket(selected))).checkout;
   return { h, ...people, kitchens, basket, quote };
 }
@@ -71,6 +71,23 @@ test('mixed-kitchen checkout itemizes fees and places all orders exactly once ac
   assert.equal((await f.customer.post('/api/eats/checkouts/place', data)).body.error.code, 'QUOTE_USED');
   assert.equal(f.h.db.prepare('SELECT count(*) AS n FROM eats_orders').get().n, 3);
   assert.equal((await f.kitchens[0].seller.post('/api/eats/checkouts/place', data)).status, 404);
+});
+
+test('an Eats customer can send a mixed-kitchen meal to someone else without exposing the recipient before courier assignment', async (t) => {
+  const f = await fixture(t), recipient = { kind: 'other', name: 'Ada Test', phone: '08012345678' };
+  const checkout = (await ok(f.customer, '/checkouts', f.basket(f.kitchens, recipient))).checkout;
+  for (const quote of checkout.quotes) assert.deepEqual(quote.recipient, { kind: 'other', name: 'Ada Test', phone: '+2348012345678' });
+
+  const placed = (await ok(f.customer, '/checkouts/place', { checkoutId: checkout.id })).orders;
+  for (const order of placed) assert.deepEqual(order.recipient, { kind: 'other', name: 'Ada Test', phone: '+2348012345678' });
+
+  const firstKitchen = f.kitchens[0], first = placed.find((order) => order.restaurant.id === firstKitchen.store.id);
+  assert.equal((await ok(firstKitchen.seller, `/orders/${first.id}`)).order.recipient, undefined);
+  let order = first;
+  for (const action of ['accept', 'prepare', 'ready']) ({ order } = await ok(firstKitchen.seller, `/orders/${order.id}/${action}`, { expectedVersion: order.version }));
+  assert.equal(JSON.stringify((await ok(f.driver, '/work')).available[0]).includes('08012345678'), false);
+  ({ order } = await ok(f.driver, `/orders/${order.id}/claim`, { expectedVersion: order.version }));
+  assert.deepEqual(order.recipient, { kind: 'other', name: 'Ada Test', phone: '+2348012345678' });
 });
 
 test('an unavailable second kitchen rolls back the first order, portions, quote binding and retry record', async (t) => {

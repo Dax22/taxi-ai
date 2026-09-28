@@ -68,9 +68,10 @@ export function createEatsService({ repository, getAccount, hasOtherWork, availa
     const active = !EATS_TERMINAL.includes(order.status), pickup = order.snapshot.fulfillment === 'pickup';
     const reveal = role === 'store' || role === 'admin' || active && (role === 'courier' || role === 'customer' && pickup && order.status === 'ready');
     const source = order.collectionPoint ? { ...order.snapshot, restaurant: { ...order.snapshot.restaurant, address: order.collectionPoint } } : order.snapshot;
-    const { address, ...snapshot } = (await snapshotView(source, reveal));
+    const { address, recipient, ...snapshot } = (await snapshotView(source, reveal));
     return { id: order.id, status: order.status, version: order.version, ...snapshot, role, actions: eatsActions(order, role),
       address: role === 'store' ? { areaId: address.areaId } : address,
+      ...(['customer', 'courier', 'admin'].includes(role) && recipient ? { recipient } : {}),
       needsCollectionPoint: role === 'store' && order.status === 'preparing' && (await privateKitchen(order.snapshot.restaurant)) && !order.snapshot.restaurant.address && !order.collectionPoint,
       customerName: (await getAccount(order.customerId)).name, courier: order.courier,
       ...(active && !pickup && role === 'store' && ['ready', 'assigned'].includes(order.status) ? { pickupPin: order.pickupPin } : {}),
@@ -211,7 +212,7 @@ export function createEatsService({ repository, getAccount, hasOtherWork, availa
       } else if (action === 'place') {
         fields(data, ['quoteId']); result = { orderId: (await placeQuote(user, data.quoteId, now)) };
       } else if (action === 'meal-quote') {
-        requireRole(user, 'customer'); fields(data, ['groups', 'address', 'instructions']);
+        requireRole(user, 'customer'); fields(data, ['groups', 'address', 'recipient', 'instructions']);
         check(Array.isArray(data.groups) && data.groups.length > 0 && data.groups.length <= MEAL_LIMITS.kitchens, 'INVALID_CART', 'Choose dishes from 1–5 kitchens.');
         const ids = new Set(); let lines = 0;
         for (const group of data.groups) {
@@ -220,7 +221,7 @@ export function createEatsService({ repository, getAccount, hasOtherWork, availa
           ids.add(group.storeId); lines += group.items.length;
         }
         check(lines > 0 && lines <= MEAL_LIMITS.lines, 'INVALID_CART', 'Choose up to 20 different dishes.');
-        const quoteIds = (await asyncMap(data.groups, async (group) => (await makeQuote(user, { ...group, address: data.address, instructions: data.instructions, fulfillment: 'delivery' }, now))));
+        const quoteIds = (await asyncMap(data.groups, async (group) => (await makeQuote(user, { ...group, address: data.address, recipient: data.recipient, instructions: data.instructions, fulfillment: 'delivery' }, now))));
         checkedTotal((await asyncMap(quoteIds, async (quoteId) => (await repository.quote(quoteId)).snapshot)));
         const checkoutId = tokens.id(); (await repository.createCheckout(checkoutId, user.id, quoteIds, now)); result = { checkoutId };
       } else if (action === 'meal-place') {
