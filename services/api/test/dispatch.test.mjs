@@ -63,7 +63,10 @@ async function phone(h, actor) {
 
 test('road pickup time can select a farther driver and exposes only that driver\'s timed offer', async (t) => {
   const nearLat = 9.082234, fartherLat = 9.091234;
-  const mapProvider = provider((a, b) => b.lat === pickup.lat ? (a.lat === nearLat ? 600 : 120) : 300);
+  // GPS and route points pass through JSON/SQLite boundaries in this integration
+  // test, so compare by proximity instead of relying on exact float identity.
+  const mapProvider = provider((a, b) => Math.abs(b.lat - pickup.lat) < 0.000001
+    ? (Math.abs(a.lat - nearLat) < Math.abs(a.lat - fartherLat) ? 600 : 120) : 300);
   const { h, customer, drivers } = await setup(t, { mapProvider });
   // Make both candidates available before the request exists. Otherwise the
   // first online transition may legitimately dispatch before the second driver
