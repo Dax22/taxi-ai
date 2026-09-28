@@ -129,8 +129,35 @@ export function removeAdminWorkspaceFixtureTables(db) {
   }
 }
 
+
+/** Kemmy setup is account preference state; old-schema fixtures may remove it only while empty. */
+export function removeKemmyFixtureTables(db) {
+  const googleColumns = db.prepare("PRAGMA table_info(google_auth_attempts)").all().map(row => row.name);
+  if (googleColumns.includes('signup_intent')) {
+    if (db.prepare('SELECT count(*) AS count FROM google_auth_attempts WHERE signup_intent IS NOT NULL').get().count) {
+      throw new Error('Cannot downgrade a populated Google signup-intent fixture.');
+    }
+    db.exec('ALTER TABLE google_auth_attempts DROP COLUMN signup_intent');
+  }
+  if (!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='account_kemmy_setup'").get()) return;
+  if (db.prepare('SELECT count(*) AS count FROM account_kemmy_setup').get().count) throw new Error('Cannot downgrade a populated account_kemmy_setup fixture.');
+  db.exec('DROP TABLE account_kemmy_setup');
+}
+
+/** Announcements are durable staff-authored content; older-schema fixtures may remove only an entirely empty announcement feature. */
+export function removeAnnouncementFixtureTables(db) {
+  removeKemmyFixtureTables(db);
+  const tables = ['announcement_push_jobs','admin_announcement_reads','admin_announcement_commands','admin_announcements'];
+  const present = tables.filter(table => db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(table));
+  for (const table of present) {
+    if (db.prepare(`SELECT count(*) AS count FROM ${table}`).get().count) throw new Error(`Cannot downgrade a populated ${table} fixture.`);
+  }
+  for (const table of present) db.exec(`DROP TABLE ${table}`);
+}
+
 /** Compliance tasks are durable operator work; an older-schema fixture may remove only empty tables. */
 export function removeAdminExpansionFixtureTables(db) {
+  removeAnnouncementFixtureTables(db);
   const tables = ['parcel_tracking_commands', 'parcel_tracking_links', 'driver_face_checks', 'admin_compliance_commands', 'admin_compliance_events', 'admin_compliance_followups'];
   const present = tables.filter(table => db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(table));
   for (const table of present) {

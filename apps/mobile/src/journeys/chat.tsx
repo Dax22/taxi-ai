@@ -8,7 +8,7 @@ export function JourneyChat({state:s,controller:c}:{state:JourneyState;controlle
   const [reported,setReported]=useState<string|null>(null),[reason,setReason]=useState('');
   const locked=s.busy||s.uncertain||s.stale;
   if(!s.ride?.chatReady)return null;
-  return <Card><Text accessibilityRole="header" style={styles.h2}>{s.ride.passenger?.kind==='guest'?'Booking conversation':'Conversation'}</Text><Text style={styles.small}>Agree fares using the fare controls above. A chat message does not confirm a fare.</Text>
+  return <Card><Text accessibilityRole="header" style={styles.h2}>{s.ride.passenger?.kind==='guest'?'Booking conversation':'Conversation'}</Text><Text style={styles.small}>Discuss the fare here first. Then use the exact fare offer controls to record the price you both agree to. A chat message by itself never confirms a fare.</Text>
     {s.ride.passenger?.kind==='guest'&&<Text style={styles.small}>This chat connects the person who booked and the driver. The passenger’s trip link does not include chat.</Text>}
     <Text style={styles.small}>{CHAT_SAFETY_NOTICE}</Text>
     {s.messages.map((m)=><Card key={m.id}><Text style={styles.label}>{m.fromYou?'YOU':s.ride?.mode==='customer'?'DRIVER':s.ride?.passenger?.kind==='guest'?'BOOKED BY':'CUSTOMER'}</Text><Text selectable style={styles.body}>{m.body}</Text><Text style={styles.small}>{new Date(m.createdAt).toLocaleTimeString()}</Text>

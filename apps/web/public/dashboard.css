@@ -360,3 +360,265 @@
 #guest-link-panel .review-actions { flex-wrap: wrap; }
 #guest-details dd { overflow-wrap: anywhere; }
 #guest-pin { font-size: clamp(2rem, 8vw, 3.4rem); letter-spacing: .2em; font-weight: 800; }
+
+
+/* Password recovery UX */
+@layer components {
+  .password-field {
+    position: relative;
+  }
+
+  .password-field input {
+    padding-right: 72px;
+  }
+
+  .password-toggle {
+    position: absolute;
+    top: 50%;
+    right: 8px;
+    transform: translateY(-50%);
+    min-width: 54px;
+    min-height: 36px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    background: var(--soft);
+    color: var(--ink);
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .password-toggle:hover {
+    background: var(--brand-soft);
+  }
+
+  .password-toggle:disabled {
+    opacity: .55;
+    cursor: not-allowed;
+  }
+
+  .forgot-password-row {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 10px;
+  }
+
+  .forgot-password-row .text-link {
+    font-size: 12px;
+  }
+
+  .recovery-card {
+    max-width: 680px;
+    border-radius: 18px;
+    padding: clamp(24px, 4vw, 40px);
+    box-shadow: 0 14px 42px #2022250a;
+  }
+
+  .recovery-card h1 {
+    max-width: 560px;
+  }
+
+  .recovery-success-icon {
+    width: 48px;
+    height: 48px;
+    display: grid;
+    place-items: center;
+    margin-bottom: 18px;
+    border-radius: 50%;
+    background: var(--brand);
+    color: var(--ink);
+    font-size: 24px;
+    font-weight: 800;
+  }
+
+  .recovery-next-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px 18px;
+    margin-top: 22px;
+  }
+
+  .recovery-next-actions .button {
+    min-height: 44px;
+  }
+
+  .recovery-return {
+    margin-top: 22px;
+  }
+
+  #recovery-google {
+    margin-top: 18px;
+    padding-top: 16px;
+    border-top: 1px solid var(--line);
+  }
+
+  #recovery-status:not(:empty) {
+    border-left: 4px solid var(--brand);
+  }
+}
+
+@layer responsive {
+  @media (max-width: 580px) {
+    .password-toggle {
+      min-width: 52px;
+      right: 6px;
+    }
+
+    .recovery-card {
+      margin-top: 16px;
+      padding: 22px 18px;
+    }
+
+    .recovery-next-actions {
+      display: grid;
+      grid-template-columns: 1fr;
+    }
+
+    .recovery-next-actions .button,
+    .recovery-next-actions .text-link {
+      width: 100%;
+      justify-content: center;
+    }
+  }
+}
+
+
+@layer components {
+  .announcement-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    margin-top: 18px;
+    padding: 18px 20px;
+    border: 1px solid #e6d58a;
+    border-left: 5px solid var(--brand);
+    border-radius: 12px;
+    background: #fff9df;
+    box-shadow: 0 8px 24px #2022250a;
+  }
+  .announcement-banner[hidden] { display: none; }
+  .announcement-banner[data-priority="important"] { background: #fff5cf; border-color: #dec66a; }
+  .announcement-banner[data-priority="critical"] { background: #fff0ec; border-color: #d88774; border-left-color: #b83f28; }
+  .announcement-copy { min-width: 0; }
+  .announcement-copy .eyebrow { margin-bottom: 6px; color: #705b0a; }
+  .announcement-banner[data-priority="critical"] .eyebrow { color: #8e2e1d; }
+  .announcement-copy h2 { margin: 0; font-size: 20px; letter-spacing: -.025em; }
+  .announcement-copy > p:last-child { margin-top: 6px; color: var(--muted); font-size: 13px; line-height: 1.55; }
+  .announcement-banner .button { flex: 0 0 auto; background: #fff; }
+}
+@layer responsive {
+  @media (max-width: 580px) {
+    .announcement-banner { align-items: stretch; flex-direction: column; gap: 14px; padding: 16px; }
+    .announcement-banner .button { width: 100%; justify-content: center; }
+  }
+}
+
+
+/* Kemmy first-time setup */
+@layer components {
+  .kemmy-setup-card { z-index: 40; }
+  .kemmy-setup-actions { display: grid; gap: 9px; margin-top: 16px; }
+  .kemmy-setup-actions .button { width: 100%; justify-content: center; text-align: center; }
+  .kemmy-setup-launcher {
+    position: fixed; z-index: 39; right: max(20px, env(safe-area-inset-right)); bottom: max(20px, env(safe-area-inset-bottom));
+    display: inline-flex; align-items: center; gap: 8px; min-height: 50px; padding: 7px 14px 7px 7px;
+    border: 1px solid #efc84d; border-radius: 999px; background: #fff9e7; color: var(--ink); box-shadow: 0 12px 32px #20222526;
+    font-size: 13px; font-weight: 700;
+  }
+  .kemmy-setup-launcher img { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; background: #f3e8cd; }
+  .kemmy-setup-launcher:hover { background: var(--brand-soft); }
+  .kemmy-setup-card[aria-busy="true"] { opacity: .78; }
+}
+@layer responsive {
+  @media (max-width: 580px) {
+    .kemmy-setup-card { left: 12px; right: 12px; bottom: max(12px, env(safe-area-inset-bottom)); width: auto; max-height: min(72vh, 620px); }
+    .kemmy-setup-launcher { right: 12px; bottom: max(12px, env(safe-area-inset-bottom)); }
+  }
+}
+
+
+/* Passenger-first nationwide destination */
+@layer components {
+  .passenger-destination {
+    margin-top: 26px;
+    padding-top: 24px;
+    border-top: 1px solid var(--line);
+  }
+  .passenger-destination h3 {
+    margin: 7px 0 0;
+    font-size: clamp(24px, 3vw, 32px);
+    letter-spacing: -.04em;
+  }
+  .passenger-destination > .small-note {
+    max-width: 620px;
+    margin-top: 8px;
+  }
+  .passenger-destination .stack-form {
+    margin-top: 14px;
+  }
+  .passenger-destination #planner-online {
+    margin-top: 10px;
+  }
+  .passenger-destination #planner-provider-note {
+    margin-top: 10px;
+  }
+  .passenger-destination .location-results {
+    margin-top: 10px;
+  }
+}
+@layer responsive {
+  @media (max-width: 580px) {
+    .passenger-destination { margin-top: 22px; padding-top: 20px; }
+    .passenger-destination .location-input-row { display: grid; grid-template-columns: 1fr; }
+    .passenger-destination .location-input-row .button { width: 100%; }
+  }
+}
+
+
+/* Registration starting experience */
+@layer components {
+  .registration-intent { border: 0; padding: 0; margin: 0 0 20px; }
+  .registration-intent legend { margin-bottom: 8px; font-size: 18px; font-weight: 800; color: var(--ink); }
+  .registration-intent > .small-note { margin: 0 0 12px; }
+  .registration-intent-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 10px; }
+  .registration-intent-card {
+    display: grid; gap: 6px; min-height: 118px; padding: 14px; text-align: left;
+    border: 1px solid var(--line); border-radius: 14px; background: var(--paper); color: var(--ink);
+  }
+  .registration-intent-card strong { font-size: 15px; }
+  .registration-intent-card span { color: var(--muted); font-size: 12px; line-height: 1.45; }
+  .registration-intent-card[aria-pressed="true"] { border-color: #dca900; background: var(--brand-soft); box-shadow: inset 0 0 0 1px #dca900; }
+  .registration-intent-card:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+}
+@layer responsive {
+  @media (max-width: 680px) { .registration-intent-grid { grid-template-columns: 1fr; } .registration-intent-card { min-height: 0; } }
+}
+
+
+/* Professional ride options */
+@layer components {
+  .ride-options-panel { margin-top: 18px; }
+  .ride-options { display: grid; gap: 10px; margin: 14px 0 18px; }
+  .ride-option {
+    display: grid; grid-template-columns: minmax(0,1fr) auto; grid-template-areas: "name fare" "purpose fare";
+    align-items: center; gap: 4px 14px; width: 100%; padding: 16px 18px; text-align: left;
+    border: 1px solid var(--line); border-radius: 16px; background: var(--paper); color: var(--ink);
+  }
+  .ride-option > strong:first-child { grid-area: name; font-size: 16px; }
+  .ride-option > span { grid-area: purpose; color: var(--muted); font-size: 12px; }
+  .ride-option-fare { grid-area: fare; font-size: 18px; }
+  .ride-option[aria-checked="true"] { border-color: #dca900; background: var(--brand-soft); box-shadow: inset 0 0 0 1px #dca900; }
+  .ride-option[aria-checked="true"]::after { content: "Selected"; grid-column: 1 / -1; margin-top: 4px; font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+  .ride-option:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+  .ride-price-details { margin: 12px 0; }
+  .ride-price-details summary { cursor: pointer; font-weight: 700; }
+}
+
+
+/* Fare negotiation guidance */
+@layer components {
+  .fare-negotiation-guide { margin: 16px 0; padding: 16px; border: 1px solid var(--line); border-radius: 16px; background: var(--soft); }
+  .fare-negotiation-guide h3 { margin: 6px 0 8px; }
+  .fare-negotiation-guide .review-actions { margin-top: 12px; }
+}

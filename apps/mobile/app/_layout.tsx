@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { OperationsProvider, useOperations } from '../src/journeys/provider';
 import { TripLocationProvider } from '../src/tracking/provider';
 import { TripLocationStatus } from '../src/tracking/view';
@@ -15,9 +16,16 @@ import { SessionProvider, useSession } from '../src/session/provider';
 import { EatsProvider } from '../src/eats/provider';
 import { fontFamily, fontFamilySemiBold } from '../src/ui/typography';
 import { Button, Heading, Loading, Logo, Notice, Screen } from '../src/ui/components';
+import { KemmySetupAssistant } from '../src/kemmy/setup-assistant';
 function Navigation() {
-  const { user, role, ready, setupLoading, blocked, startupError, restore, logout } = useSession();
+  const { user, role, ready, setupLoading, blocked, startupError, restore, logout, startingExperience, consumeStartingExperience } = useSession();
   const {pushId,familyPushId,dismissFamilyPush}=useOperations();
+  useEffect(() => {
+    if (!user || !role || blocked || !startingExperience) return;
+    consumeStartingExperience();
+    if (startingExperience === 'driver') router.replace('/driver-application');
+    else if (startingExperience === 'eats_seller') router.replace('/my-store');
+  }, [user?.id, role, blocked, startingExperience, consumeStartingExperience]);
   if (!ready || setupLoading) return <Screen><Logo/><Loading/></Screen>;
   if (startupError) return <Screen><Logo/><Heading title="Let’s reconnect."/><Notice message={startupError}/><Button title="Try again" onPress={() => void restore()}/><Button title="Sign out on this phone" secondary onPress={() => void logout()}/></Screen>;
   return <View style={{ flex: 1 }}><StatusBar style="dark"/><View style={{ flex: 1, opacity: blocked ? 0 : 1 }} pointerEvents={blocked ? 'none' : 'auto'} accessibilityElementsHidden={blocked} importantForAccessibility={blocked ? 'no-hide-descendants' : 'auto'}>{user && role && !blocked && <><TripLocationStatus/><ArrivalBanner/></>}{user && role && pushId && !blocked && <Button title="Review journey update" secondary onPress={() => router.push('/updates')}/>}{user && role && familyPushId && !blocked && <Button title="Review Family Safety update" secondary onPress={() => { dismissFamilyPush(); router.push('/family'); }}/>}<Stack screenOptions={{ headerShown: false, headerTitleStyle: { fontFamily: fontFamilySemiBold, fontWeight: 'normal' }, headerBackTitleStyle: { fontFamily } }}>
@@ -26,7 +34,7 @@ function Navigation() {
     <Stack.Protected guard={!!user && role === 'driver'}><Stack.Screen name="food-work" options={{ headerShown: true, title: 'Food deliveries', headerBackTitle: 'Back' }}/><Stack.Screen name="earnings" options={{ headerShown: true, title: 'Earnings', headerBackTitle: 'Back' }}/><Stack.Screen name="delete-work-profile" options={{ headerShown: true, title: 'Delete Driver profile', headerBackTitle: 'Back' }}/><Stack.Screen name="driver-application" options={{ headerShown: true, title: 'Driver application', headerBackTitle: 'Back' }}/></Stack.Protected>
     <Stack.Protected guard={!!user && !role}><Stack.Screen name="setup-role"/></Stack.Protected>
     <Stack.Protected guard={!user}><Stack.Screen name="sign-in"/></Stack.Protected>
-  </Stack></View>{blocked && <View style={StyleSheet.absoluteFill}><Screen><Logo/><Loading/></Screen></View>}</View>;
+  </Stack></View>{user && !blocked && <KemmySetupAssistant/>}{blocked && <View style={StyleSheet.absoluteFill}><Screen><Logo/><Loading/></Screen></View>}</View>;
 }
 function AccountNavigation(){const {user}=useSession();return <TripLocationProvider key={user?.id ?? 'signed-out'}><EatsProvider><OperationsProvider><Navigation/></OperationsProvider></EatsProvider></TripLocationProvider>;}
 export default function RootLayout() {

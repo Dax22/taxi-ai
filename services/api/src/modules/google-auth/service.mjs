@@ -4,6 +4,11 @@ import { requireRole } from '../../shared/policies.mjs';
 
 export const GOOGLE_ATTEMPT_MS = 10 * 60_000;
 const validToken = (value) => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
+const registrationIntent = (value) => {
+  if (value === undefined || value === null) return null;
+  check(['customer','driver','eats_seller'].includes(value), 'INVALID_ROLE', 'Choose Book & Order, Drive & Deliver or Sell Food.');
+  return value;
+};
 
 /** Provider-independent account ports; no HTTP, SDK, DB or frontend dependencies. */
 export function createGoogleAuthService({ repository, provider, accounts, devices, tokens, unitOfWork, clock }) {
@@ -31,9 +36,10 @@ export function createGoogleAuthService({ repository, provider, accounts, device
     return attempt;
   }
   async function startWeb({ data, token, origin, previousBinding, link = false }) {
-    enabled(); fields(data, link ? ['password'] : []);
+    enabled(); fields(data, link ? ['password'] : ['intent'], link ? ['password'] : []);
     check(origin === provider.config.origin, 'INVALID_ORIGIN', 'Use the configured Taxi Ai address for Google sign-in.');
     const session = (await accounts.sessionFor(token));
+    const signupIntent = link ? null : registrationIntent(data.intent);
     let actorId = null, sessionHash = null;
     if (link) {
       requireRole(session?.user, 'customer');
@@ -45,7 +51,7 @@ export function createGoogleAuthService({ repository, provider, accounts, device
     const state = tokens.generate(), binding = tokens.generate(), nonce = tokens.generate(), verifier = tokens.generate();
     const redirectUrl = provider.authorization({ state, nonce, verifier });
     (await save({ stateHash: tokens.digest(state), bindingHash: tokens.digest(binding), nonce, verifier,
-      channel: 'web', intent: link ? 'link' : 'login', origin, actorId, sessionHash, expiresAt: clock() + GOOGLE_ATTEMPT_MS }, previousBinding));
+      channel: 'web', intent: link ? 'link' : 'login', origin, actorId, sessionHash, signupIntent, expiresAt: clock() + GOOGLE_ATTEMPT_MS }, previousBinding));
     return { binding, redirectUrl };
   }
   async function finishWeb({ state, binding, code, error, origin }) {
@@ -57,15 +63,15 @@ export function createGoogleAuthService({ repository, provider, accounts, device
     return unitOfWork(async () => {
       check(a.expiresAt > clock(), 'INVALID_GOOGLE_ATTEMPT', 'This Google sign-in expired. Start again.');
       if (a.intent === 'link') check((await accounts.sessionOwner(a.sessionHash)) === a.actorId, 'UNAUTHENTICATED', 'Your session ended. Sign in and connect Google again.');
-      const user = (await accounts.resolveGoogle(identity, a.actorId));
-      return { user, linked: a.intent === 'link' };
+      const user = (await accounts.resolveGoogle(identity, a.actorId, a.signupIntent));
+      return { user, linked: a.intent === 'link', signupIntent: a.signupIntent ?? null };
     });
   }
   async function nativeChallenge(data) {
-    enabled(true); fields(data, []);
-    const challenge = tokens.generate(), nonce = tokens.generate();
+    enabled(true); fields(data, ['intent'], []);
+    const challenge = tokens.generate(), nonce = tokens.generate(), signupIntent = registrationIntent(data.intent);
     (await save({ stateHash: tokens.digest(challenge), bindingHash: tokens.digest(challenge), nonce,
-      channel: 'native', intent: 'login', expiresAt: clock() + GOOGLE_ATTEMPT_MS }));
+      channel: 'native', intent: 'login', signupIntent, expiresAt: clock() + GOOGLE_ATTEMPT_MS }));
     return { challenge, nonce, webClientId: provider.config.clientId };
   }
   async function nativeLogin(data) {
@@ -74,7 +80,7 @@ export function createGoogleAuthService({ repository, provider, accounts, device
     const a = (await take(data.challenge, data.challenge, 'native'));
     const identity = await provider.verifyNative(data.idToken, a.nonce);
     check(a.expiresAt > clock(), 'INVALID_GOOGLE_ATTEMPT', 'This Google sign-in expired. Start again.');
-    const user = (await accounts.resolveGoogle(identity));
+    const user = (await accounts.resolveGoogle(identity, null, a.signupIntent));
     return (await devices.issue(user.id, deviceName));
   }
   return Object.freeze({ settings, startWeb, finishWeb, nativeChallenge, nativeLogin,

@@ -35,9 +35,9 @@ import { createStaffMfaConfig } from '../../services/api/src/infrastructure/staf
 // Explicit allowlist: never serve the repository root or arbitrary disk paths.
 const routes = new Map([
   ['/shared/realtime-client.mjs', ['../../packages/shared/src/realtime-client.mjs', 'text/javascript; charset=utf-8']],
-  ...['/admin', '/admin/', '/admin/accounts', '/admin/trips', '/admin/analytics', '/admin/operations', '/admin/staff', '/admin/audit', '/admin/cases', '/admin/finance', '/admin/compliance', '/admin/demand', '/admin/coverage'].map((path) => [path, ['../admin/public/index.html', 'text/html; charset=utf-8']]),
+  ...['/admin', '/admin/', '/admin/accounts', '/admin/trips', '/admin/analytics', '/admin/operations', '/admin/announcements', '/admin/staff', '/admin/audit', '/admin/cases', '/admin/finance', '/admin/compliance', '/admin/demand', '/admin/coverage'].map((path) => [path, ['../admin/public/index.html', 'text/html; charset=utf-8']]),
   ['/admin/styles.css', ['../admin/public/styles.css', 'text/css; charset=utf-8']],
-  ...['app', 'api-client', 'controller', 'view', 'navigation', 'pages', 'charts', 'ui', 'forms', 'operations-page', 'staff-pages', 'case-pages', 'finance-pages', 'compliance-pages', 'demand-page', 'coverage-page', 'coverage-map', 'coverage-map-model'].map((name) => [`/admin/${name}.mjs`, [`../admin/public/${name}.mjs`, 'text/javascript; charset=utf-8']]),
+  ...['app', 'api-client', 'controller', 'view', 'navigation', 'pages', 'charts', 'ui', 'forms', 'operations-page', 'staff-pages', 'case-pages', 'finance-pages', 'compliance-pages', 'demand-page', 'coverage-page', 'coverage-map', 'coverage-map-model', 'announcements-page'].map((name) => [`/admin/${name}.mjs`, [`../admin/public/${name}.mjs`, 'text/javascript; charset=utf-8']]),
   ['/', ['public/index.html', 'text/html; charset=utf-8']],
   ['/devices', ['public/devices.html', 'text/html; charset=utf-8']],
   ['/devices.mjs', ['public/devices.mjs', 'text/javascript; charset=utf-8']],
@@ -109,6 +109,8 @@ const routes = new Map([
   ...[...VEHICLE_COLOURS.map((c) => c.id), 'neutral'].map((id) => [`/assets/vehicles/sedan-${id}.png`, [`public/assets/vehicles/sedan-${id}.png`, 'image/png']]),
   ['/dashboard.css', ['public/dashboard.css', 'text/css; charset=utf-8']],
   ['/dashboard/account-mode-view.mjs', ['public/dashboard/account-mode-view.mjs', 'text/javascript; charset=utf-8']],
+  ['/dashboard/announcements.mjs', ['public/dashboard/announcements.mjs', 'text/javascript; charset=utf-8']],
+  ['/dashboard/kemmy-setup.mjs', ['public/dashboard/kemmy-setup.mjs', 'text/javascript; charset=utf-8']],
   ['/shared/account-modes.mjs', ['../../packages/shared/src/account-modes.mjs', 'text/javascript; charset=utf-8']],
   ['/dashboard.mjs', ['public/dashboard.mjs', 'text/javascript; charset=utf-8']],
   ['/dashboard/onboarding-controller.mjs', ['public/dashboard/onboarding-controller.mjs', 'text/javascript; charset=utf-8']],
@@ -216,7 +218,7 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
       });
       // Provider I/O stays outside transactions. Each outbox separately claims
       // jobs; the coordinator only permits starting the next bounded drain.
-      for (const service of [application.safetyMonitoring, application.accountEmail, application.notifications, application.familyDelivery]) {
+      for (const service of [application.safetyMonitoring, application.accountEmail, application.notifications, application.announcements, application.familyDelivery]) {
         if (!active() || !await application.workerCoordinator.guard(lease)) return;
         await service.deliverPending();
       }
@@ -294,7 +296,7 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
       // Signal every producer immediately before waiting, so an in-flight route
       // cannot publish another offer while the worker runtime is draining.
       const tasks = [workers.stop(), application.dispatch.stop(), application.safetyMonitoring.stop(),
-        application.accountEmail.stop(), application.notifications.stop(), application.familyDelivery.stop(), application.realtime.close()];
+        application.accountEmail.stop(), application.notifications.stop(), application.announcements.stop(), application.familyDelivery.stop(), application.realtime.close()];
       let deadline;
       const completed = Promise.allSettled(tasks).then((results) => {
         if (results.some((result) => result.status === 'rejected')) throw new Error('A background service could not finish shutting down.');

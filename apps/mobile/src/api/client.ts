@@ -13,6 +13,7 @@ import { parseBooking, parsePlaces, parsePreview, parseBookingRide } from '../..
 import { parseJourney, parseWork, parseAvailability, parseDeclinedOffer, parseThread, parseSentMessage, parseReadMessages, parseNotifications, parseNotificationTarget } from '../../../../packages/shared/src/mobile-journeys.mjs';
 import type { JourneyAction, JourneyData, OnlineData, Position } from '../../../../packages/shared/src/mobile-journeys.mjs';
 import type { Place, RequestData } from '../../../../packages/shared/src/mobile-booking.mjs';
+import { readKemmySetup } from '../kemmy/contracts.ts';
 
 export interface Vault { read(): Promise<string | null>; write(value: string): Promise<void>; clear(): Promise<void> }
 export interface SavedSession { origin: string; refreshToken: string; sessionId: string; previewAccess: string }
@@ -116,19 +117,26 @@ export class MobileClient {
     const result = parseSignIn(await this.send('/auth/login', { data: { email, password, deviceName }, preview }));
     await this.adopt(result, epoch, preview);
   }
-  async register(name: string, email: string, password: string, deviceName: string, preview = '') {
+  async register(name: string, email: string, password: string, deviceName: string,
+    intentOrPreview: 'customer' | 'driver' | 'eats_seller' | string = 'customer', preview = '') {
+    const intent = ['customer','driver','eats_seller'].includes(intentOrPreview) ? intentOrPreview as 'customer' | 'driver' | 'eats_seller' : 'customer';
+    if (intentOrPreview !== intent) preview = intentOrPreview;
     const epoch = ++this.epoch;
     this.credentials = null; this.saved = null; this.publish(null);
     await this.store(() => this.vault.clear());
-    const result = parseSignIn(await this.send('/auth/register', { data: { name, email, password, deviceName }, preview }));
-    await this.adopt(result, epoch, preview);
+    const result = parseSignIn(await this.send('/auth/register', { data: { name, email, password, deviceName, intent }, preview }));
+    await this.adopt(result, epoch, preview); return result.user;
   }
-  async googleLogin(deviceName: string, chooseIdentity: (challenge: { nonce: string; webClientId: string }) => Promise<string | null>, preview = '') {
+  async googleLogin(deviceName: string, chooseIdentity: (challenge: { nonce: string; webClientId: string }) => Promise<string | null>,
+    intentOrPreview: 'customer' | 'driver' | 'eats_seller' | string | null = null, preview = '') {
+    const intent = intentOrPreview !== null && ['customer','driver','eats_seller'].includes(intentOrPreview)
+      ? intentOrPreview as 'customer' | 'driver' | 'eats_seller' : null;
+    if (intentOrPreview && intentOrPreview !== intent) preview = intentOrPreview;
     const epoch = ++this.epoch;
     this.credentials = null; this.saved = null; this.publish(null);
     await this.store(() => this.vault.clear());
     if (epoch !== this.epoch) throw changed();
-    const challenge = await this.send('/auth/google/challenge', { data: {}, preview });
+    const challenge = await this.send('/auth/google/challenge', { data: intent ? { intent } : {}, preview });
     if (epoch !== this.epoch) throw changed();
     if (typeof challenge.challenge !== 'string' || !/^[a-f0-9]{64}$/.test(challenge.challenge)
       || typeof challenge.nonce !== 'string' || !/^[a-f0-9]{64}$/.test(challenge.nonce)
@@ -259,6 +267,7 @@ export class MobileClient {
   async notifications(before?: number | null) { return parseNotifications(await this.request(`/notifications${before ? `?before=${before}` : ''}`)); }
   async openNotification(id: number) { return parseNotificationTarget(await this.request(`/notifications/${id}/open`,{})); }
   async readNotification(id: number) { return this.request(`/notifications/${id}/read`,{}); }
+  async readAnnouncement(id: string) { return this.request(`/announcements/${id}/read`,{}); }
   async registerPush(token: string, projectId: string) { return this.request('/notifications/push',{ token,projectId }); }
   async disablePush() { return this.request('/notifications/push/disable',{}); }
   private ownApplication(body: unknown) {
@@ -289,6 +298,8 @@ export class MobileClient {
     if (!/^\/parcels\/(?:received(?:\/[a-f0-9-]{36})?|accept|[a-f0-9-]{36}\/(?:invitation|link|revoke))$/.test(path)) throw new Error('Invalid parcel API path.');
     return this.request(path, data, key, signal);
   }
+  async kemmySetup() { return readKemmySetup(await this.request('/account/kemmy-setup')); }
+  async updateKemmySetup(action: string, value?: string) { return readKemmySetup(await this.request('/account/kemmy-setup', { action, ...(value === undefined ? {} : { value }) })); }
   async emailStatus() { return parseEmailStatus(await this.request('/account/email')); }
   private accepted(body: Record<string, unknown>) {
     if (body.accepted !== true) throw new ApiError('Taxi Ai returned an incompatible response. Try again later.', 'INVALID_RESPONSE');

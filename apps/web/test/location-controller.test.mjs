@@ -203,3 +203,36 @@ test('an address selection cancels a pending GPS pickup and a newer GPS request 
   second.resolve({ coords: { latitude: 6.45, longitude: 3.4, accuracy: 10 } }); await current;
   assert.equal(f.c.snapshot().pickup.lat, 6.45); assert.equal(f.states.at(-1).locatingPickup, false);
 });
+
+
+test('Find rides searches nationwide, uses current pickup and prepares a fare without a second preview click', async () => {
+  const f = plannerSetup();
+  await f.c.setContext(customer, false);
+  f.requestHook = async (path) => path === '/api/locations/search'
+    ? { places: [destination] }
+    : { settings: { enabled: true, mode: 'community' } };
+  await f.c.findRides('Maitama');
+  assert.equal(f.online, true);
+  assert.equal(f.locates, 1);
+  assert.deepEqual(f.c.snapshot().destination, destination);
+  assert.deepEqual(f.c.snapshot().pickup, currentPickup);
+  assert.equal(f.commands.length, 1);
+  assert.deepEqual(f.commands[0].data, { pickup: currentPickup, destination, vehicleCategory: 'standard' });
+  assert.equal(f.c.snapshot().quote?.id, 'quote-one');
+});
+
+test('Find rides keeps ambiguous destination matches visible until the customer selects one', async () => {
+  const f = plannerSetup(), second = { ...destination, name: 'Maitama District', lng: 7.451 };
+  await f.c.setContext(customer, false);
+  f.requestHook = async (path) => path === '/api/locations/search'
+    ? { places: [destination, second] }
+    : { settings: { enabled: true, mode: 'community' } };
+  await f.c.findRides('Maitama');
+  assert.equal(f.commands.length, 0);
+  assert.equal(f.locates, 0);
+  assert.equal(f.c.snapshot().results.destination.length, 2);
+  await f.c.chooseRidePlace('destination', second);
+  assert.equal(f.locates, 1);
+  assert.equal(f.commands.length, 1);
+  assert.equal(f.c.snapshot().destination?.name, 'Maitama District');
+});

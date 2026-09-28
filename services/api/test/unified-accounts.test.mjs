@@ -175,3 +175,52 @@ test('schema nine gains capabilities without changing any existing records, revi
   assert.equal(h.db.prepare('SELECT count(*) AS n FROM account_capabilities').get().n, 5);
   assert.deepEqual(h.db.prepare('PRAGMA foreign_key_check').all(), []);
 });
+
+
+test('Kemmy setup is deterministic, authenticated and persists across web/native sessions and restart', async (t) => {
+  const h = await harness(t, { persistent: true }), customer = h.client(), outsider = h.client();
+  await customer.register('kemmy-owner');
+  await outsider.register('kemmy-outsider');
+
+  let setup = (await customer.send('/api/account/kemmy-setup')).body;
+  assert.equal(setup.assistant, 'Kemmy');
+  assert.equal(setup.deterministic, true);
+  assert.equal(setup.nextStep, 'welcome');
+  assert.equal(setup.autoOpen, true);
+  assert.equal(setup.completedAt, null);
+
+  setup = (await customer.post('/api/account/kemmy-setup', { action: 'dismiss' })).body;
+  assert.equal(setup.autoOpen, false);
+  assert.equal(setup.nextStep, 'welcome');
+  setup = (await customer.post('/api/account/kemmy-setup', { action: 'resume' })).body;
+  assert.equal(setup.autoOpen, true);
+
+  setup = (await customer.post('/api/account/kemmy-setup', { action: 'start' })).body;
+  assert.equal(setup.nextStep, 'email');
+  setup = (await customer.post('/api/account/kemmy-setup', { action: 'email-later' })).body;
+  assert.equal(setup.nextStep, 'experience');
+  setup = (await customer.post('/api/account/kemmy-setup', { action: 'experience', value: 'customer' })).body;
+  assert.equal(setup.nextStep, 'notifications');
+  setup = (await customer.post('/api/account/kemmy-setup', { action: 'notifications', value: 'in_app' })).body;
+  assert.equal(setup.nextStep, 'safety');
+  setup = (await customer.post('/api/account/kemmy-setup', { action: 'safety', value: 'later' })).body;
+  assert.equal(setup.nextStep, 'finish');
+  setup = (await customer.post('/api/account/kemmy-setup', { action: 'complete' })).body;
+  assert.equal(setup.nextStep, 'complete');
+  assert.equal(setup.autoOpen, false);
+  assert.ok(Number.isSafeInteger(setup.completedAt));
+
+  assert.equal((await outsider.send('/api/account/kemmy-setup')).body.nextStep, 'welcome');
+  assert.equal(h.db.prepare('SELECT count(*) AS n FROM account_kemmy_setup').get().n, 1);
+
+  await h.restart();
+  setup = (await customer.send('/api/account/kemmy-setup')).body;
+  assert.equal(setup.nextStep, 'complete');
+  assert.equal(setup.experience, 'customer');
+
+  setup = (await customer.post('/api/account/kemmy-setup', { action: 'restart' })).body;
+  assert.equal(setup.nextStep, 'email');
+  assert.equal(setup.completedAt, null);
+  assert.equal(setup.experience, null);
+  assert.equal((await customer.post('/api/account/kemmy-setup', { action: 'experience', value: 'admin' })).body.error.code, 'INVALID_INPUT');
+});

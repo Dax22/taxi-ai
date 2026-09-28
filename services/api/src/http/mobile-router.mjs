@@ -17,7 +17,7 @@ import { eatsRoutes } from '../modules/eats/routes.mjs';
 import { realtimeResponse, requestAbortSignal } from '../modules/realtime/routes.mjs';
 
 /** Versioned native surface. Cookie identity and browser CSRF are never reused. */
-export function createMobileRouter({ devices, accounts, drivers, rides, dispatch, eats, locations, availability, chat, notifications, safety, safetyMonitoring, guestRides, parcelTracking, family, vehicleChecks, payments, clock, rateLimiter, googleAuth, accountEmail, realtime }) {
+export function createMobileRouter({ devices, accounts, drivers, rides, dispatch, eats, locations, availability, chat, notifications, announcements, safety, safetyMonitoring, guestRides, parcelTracking, family, vehicleChecks, payments, clock, rateLimiter, googleAuth, accountEmail, realtime }) {
   const monitorRoutes = safetyMonitoringRoutes(safetyMonitoring).filter(r=>!r.role);
   const foodRoutes = eatsRoutes(eats);
   const relativesRoutes = familyRoutes(family);
@@ -94,13 +94,15 @@ export function createMobileRouter({ devices, accounts, drivers, rides, dispatch
     else if (auth && path === '/auth/google/challenge') body = (await googleAuth.nativeChallenge(data));
     else if (auth && path === '/auth/google') body = await googleAuth.nativeLogin(data);
     else if (auth && path === '/auth/register') {
-      fields(data, ['name', 'email', 'password', 'deviceName']);
-      const user = await accounts.register({ name: data.name, email: data.email, password: data.password });
+      fields(data, ['name', 'email', 'password', 'deviceName', 'intent'], ['name', 'email', 'password', 'deviceName']);
+      const user = await accounts.register({ name: data.name, email: data.email, password: data.password, intent: data.intent });
       body = (await devices.issue(user.id, data.deviceName));
     }
     else if (auth) body = path === '/auth/login' ? await devices.login(data) : path === '/auth/refresh' ? (await devices.refresh(data)) : (await devices.logout(data));
     else if (!write && path === '/session') body = { user: session.user, sessionId: session.id };
     else if (!write && path === '/account/email') body = (await accountEmail.status(session.user.id));
+    else if (!write && path === '/account/kemmy-setup') body = (await accounts.kemmySetup(session.user.id));
+    else if (write && path === '/account/kemmy-setup') body = (await accounts.updateKemmySetup(session.user.id,data));
     else if (path.startsWith('/eats/')) {
       const route = foodRoutes.find((entry) => entry.method === request.method && entry.path.test('/api' + path));
       check(route, 'NOT_FOUND', 'Eats endpoint not found.');
@@ -130,7 +132,17 @@ export function createMobileRouter({ devices, accounts, drivers, rides, dispatch
     else if (path.startsWith('/safety/')) body = (await mobileSafety({ safety, session, path, write, data, key: request.headers['idempotency-key'] }));
     else if (path.startsWith('/guest-rides/')) body = (await mobileGuestRides({ guestRides, session, path, write, data, key: request.headers['idempotency-key'] }));
     else if (path.startsWith('/tracking/')) body = (await mobileTracking({ locations, session, path, write, query, data, key: request.headers['idempotency-key'] }));
-    else if (path === '/notifications' || path.startsWith('/notifications/')) body = (await mobileNotifications({ notifications, user: session.user, sessionId: session.id, path, write, query, data }));
+    else if (path === '/notifications' || path.startsWith('/notifications/')) {
+      body = (await mobileNotifications({ notifications, user: session.user, sessionId: session.id, path, write, query, data }));
+      if (!write && path === '/notifications') {
+        const news = await announcements.forUser(session.user.id);
+        body = { ...body, announcements: news.items, unread: body.unread + news.unread };
+      }
+    }
+    else if (write && /^\/announcements\/[a-f0-9-]{36}\/read$/.test(path)) {
+      fields(data,[]);
+      body = await announcements.read(session.user.id,path.split('/')[2]);
+    }
     else if (!write && path === '/activity') {
       const mode = query.get('mode'); check(['customer','work'].includes(mode), 'INVALID_MODE', 'Choose Customer or Work.');
       const current = (await rides.list(session.user, mode)), history = (await rides.history(session.user, query.get('before'), mode));

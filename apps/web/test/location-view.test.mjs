@@ -8,6 +8,8 @@ function imports(source) {
   return source.replaceAll("'/shared/locations.mjs'", `'${new URL('../../../packages/shared/src/locations.mjs', import.meta.url)}'`)
     .replaceAll("'/shared/vehicle-profile.mjs'", `'${new URL('../../../packages/shared/src/vehicle-profile.mjs', import.meta.url)}'`)
     .replaceAll("'/shared/demo-booking.mjs'", `'${new URL('../../../packages/shared/src/demo-booking.mjs', import.meta.url)}'`)
+    .replaceAll("'/shared/transport-categories.mjs'", `'${new URL('../../../packages/shared/src/transport-categories.mjs', import.meta.url)}'`)
+    .replaceAll("'/shared/vehicle-categories.mjs'", `'${new URL('../../../packages/shared/src/vehicle-categories.mjs', import.meta.url)}'`)
     .replaceAll("'/shared/kemmy.mjs'", `'${new URL('../../../packages/shared/src/kemmy.mjs', import.meta.url)}'`)
     .replaceAll("'./dom.mjs'", `'${new URL('../public/dashboard/dom.mjs', import.meta.url)}'`);
 }
@@ -68,7 +70,7 @@ test('map opt-in gates all external tiles; re-renders preserve caching and late 
 
 function locationSetup(t) {
   const { node, stars } = setup(t), actions = [];
-  const view = createLocationView(Object.fromEntries(['Enable', 'UsePickup', 'Search', 'Clear', 'Select', 'Pick', 'Target', 'Preview', 'Book', 'Start', 'Stop', 'Rate']
+  const view = createLocationView(Object.fromEntries(['Enable', 'UsePickup', 'Search', 'FindRide', 'Clear', 'Select', 'ChooseOption', 'Pick', 'Target', 'Preview', 'Book', 'Start', 'Stop', 'Rate']
     .map((name) => [`on${name}`, (...args) => actions.push([name, ...args])])));
   return { node, stars, actions, view };
 }
@@ -79,19 +81,21 @@ test('planner binds actual HTML controls, renders plain-text places and prevents
   const { node, actions, view } = locationSetup(t);
   const state = { user: { role: 'customer' }, online: true, settings, searching: { pickup: false, destination: false },
     results: { pickup: [], destination: [destination] }, pickup, destination, target: 'destination', error: '',
-    blocked: false, booking: false, locatingPickup: false, supported: true, quoting: false, expired: false, quote: { id: 'quote', route: {
+    blocked: false, booking: false, locatingPickup: false, supported: true, quoting: false, expired: false, rideDiscovery: true, vehicleCategory: 'standard', quote: { id: 'quote', route: {
       distanceMeters: 7000, durationSeconds: 1200, suggestedFareKobo: 250000, coordinates: [[7.4, 9.08], [7.45, 9.1]],
       pricing: { baseKobo: 50000, perKmKobo: 20000, perMinuteKobo: 3000, minimumKobo: 100000, incrementKobo: 5000 },
     } } };
   view.renderPlanner(state);
   assert.equal(node('location-distance').textContent, '7.0 km'); assert.equal(node('location-duration').textContent, '20 min');
   assert.equal(node('location-book').disabled, false);
+  assert.equal(node('location-ride-options').children.length, 2);
+  assert.equal(node('location-ride-options').children[0].attributes['aria-checked'], 'true');
   assert.match(node('location-pickup-selected').textContent, /<img src=x/);
   node('location-pickup-current').fire('click'); assert.equal(actions.pop()[0], 'UsePickup');
   const result = node('location-destination-results').children[0].children[0];
   assert.equal(result.textContent, destination.name); result.fire('click'); assert.deepEqual(actions.pop(), ['Select', 'destination', destination]);
   node('location-destination-query').value = 'Maitama'; node('location-destination-form').fire('submit');
-  assert.deepEqual(actions.pop(), ['Search', 'destination', 'Maitama']);
+  assert.deepEqual(actions.pop(), ['FindRide', 'destination', 'Maitama']);
   node('location-latitude').value = '9.08'; node('location-longitude').value = '7.4'; node('location-pin-name').value = ' Test pin ';
   node('location-coordinate-form').fire('submit'); assert.deepEqual(actions.pop(), ['Pick', { lat: 9.08, lng: 7.4, name: 'Test pin' }]);
   // The shipped numeric inputs must allow nationwide points before browser validation lets the submit handler run.

@@ -28,6 +28,8 @@ import { createAccountModeView, modePreferences } from './dashboard/account-mode
 import { createGoogleSignIn, consumeGoogleOutcome } from './dashboard/google-auth.mjs';
 import { createParcelLinksPanel } from './dashboard/parcel-links-panel.mjs';
 import { createGuestRidesPanel } from './dashboard/guest-rides-panel.mjs';
+import { createAnnouncementsPanel } from './dashboard/announcements.mjs';
+import { createKemmySetup } from './dashboard/kemmy-setup.mjs';
 
 let serverTime = { now: Date.now(), received: performance.now() };
 const client = createApiClient({ onServerTime(now) { serverTime = { now, received: performance.now() }; } });
@@ -39,8 +41,14 @@ const callView = createCallView({ onStart: () => calls.start(), onAnswer: () => 
 });
 const calls = createCallController({ client: activityClient, media: createCallMedia(), view: callView });
 const routeDevice = createGeolocation();
-const locationView = createLocationView({ onEnable: () => planner.enable(), onUsePickup: () => planner.useCurrentPickup(), onSearch: (side, query) => planner.search(side, query),
-  onClear: (side) => planner.clear(side), onSelect: (side, value) => planner.select(side, value), onPick: (value) => planner.pick(value),
+const locationView = createLocationView({ onEnable: () => planner.enable(),
+  onUsePickup: () => planner.snapshot().rideDiscovery ? planner.useRidePickup() : planner.useCurrentPickup(),
+  onSearch: (side, query) => planner.search(side, query),
+  onFindRide: (_side, query) => planner.findRides(query),
+  onClear: (side) => planner.clear(side),
+  onSelect: (side, value) => planner.snapshot().rideDiscovery ? planner.chooseRidePlace(side, value) : planner.select(side, value),
+  onChooseOption: async (id) => { view.selectCategory(id); await planner.preview(); },
+  onPick: (value) => planner.pick(value),
   onTarget: (value) => planner.setTarget(value), onPreview: () => planner.preview(), onBook: () => planner.book(),
   onStart: () => sharing.start(), onStop: () => sharing.stop(),
   onRate: (id, stars) => page.rideCommand(`/api/rides/${id}/rating`, { stars }, 'Your driver rating was saved.') });
@@ -49,7 +57,7 @@ const planner = createLocationPlanner({ client, view: locationView,
   serverNow: () => serverTime.now + performance.now() - serverTime.received,
   onOnline: (enabled, settings) => locationView.setOnline(enabled, settings),
   onBook: (quoteId) => page.rideCommand('/api/rides', { quoteId, ...view.requestOptions() },
-    'Your route and suggested fare are saved. An approved driver can start negotiation.'),
+    'Looking for a driver. When one joins, use Taxi Ai chat or an in-app call to agree the fare before confirming the ride.'),
 });
 const sharing = createLocationSharing({ client: activityClient, device: createGeolocation(), view: locationView,
   serverNow: () => serverTime.now + performance.now() - serverTime.received });
@@ -89,6 +97,8 @@ const guests = createGuestRidesPanel({ client, origin: location.origin,
   now: () => serverTime.now + performance.now() - serverTime.received,
   onSessionChanged: () => void page.poll() });
 const parcels = createParcelLinksPanel({ client, origin: location.origin, now: () => serverTime.now + performance.now() - serverTime.received });
+const announcements = createAnnouncementsPanel({ client, root: $('announcement-banner'), title: $('announcement-title'),
+  body: $('announcement-body'), meta: $('announcement-meta'), dismiss: $('announcement-dismiss') });
 if (document.hidden) { guests.pause(); parcels.pause(); }
 const vehicleCheck = createVehiclePhotoCheck({client,onReport:(id,checkId)=>safetyView.vehicleMismatch(id,checkId)});
 const view = createDashboardView({
@@ -110,25 +120,28 @@ const google = createGoogleSignIn({ client, navigate: (url) => location.assign(u
   busy(value) { $('google-sign-in').disabled = value; $('google-sign-in').setAttribute('aria-busy', String(value)); $('google-progress').hidden = !value; },
   error(value) { $('page-error').textContent = value; },
 } });
-$('google-sign-in').addEventListener('click', () => void google.start());
+$('google-sign-in').addEventListener('click', () => void google.start(authForm.registrationIntent()));
 $('page-notice').textContent = consumeGoogleOutcome(location, history);
 void google.load();
 const modeView = createAccountModeView({ onSwitch: (...args) => page.switchMode(...args), onCancel: () => page.cancelSwitch(),
   onEditVehicle: () => page.editVehicle(),
-  onAddDriver: (vehicle) => page.addDriver(vehicle), onOpenRide: (id) => page.openRide(id) });
+  onAddDriver: (vehicle) => page.addDriver(vehicle), onOpenRide: (id) => page.openRide(id),
+  onSeller: () => location.assign('/eats/sell'),
+  onCustomerStart: () => $('vehicle-categories-panel').scrollIntoView?.({ behavior: 'smooth', block: 'start' }) });
 let storage;
 try { storage = window.sessionStorage; } catch { /* Mode selection remains usable without storage. */ }
 let liveIdentity = null;
+let kemmySetup = { context() {}, reset() {}, refresh: async () => {} };
 const liveUpdates = createRealtimeClient({
   read: (cursor, signal) => activityClient.request(`/api/events?cursor=${cursor}&wait=25000`, { signal }),
-  refresh: async () => { await page.poll(); await Promise.all([calls.poll(), sharing.poll()]); },
+  refresh: async () => { await page.poll(); await Promise.all([calls.poll(), sharing.poll(), announcements.poll()]); },
 });
 const page = createPageController({ client, activityClient, view, modeView, preferences: modePreferences(storage),
   initialMode: new URLSearchParams(location.search).get('service') === 'courier' ? 'customer' : null,
   conversation, conversationView, calls, sharing, availability,
   planner, payments, onboarding, safety, vehicleCheck, guests, parcels, authForm,
   onAccount(identity) {
-    if (identity !== liveIdentity) { liveIdentity = identity; liveUpdates.reset(); }
+    if (identity !== liveIdentity) { liveIdentity = identity; liveUpdates.reset(); announcements.context(identity); kemmySetup.context(identity); }
     if (identity && !document.hidden) liveUpdates.resume(); else liveUpdates.pause();
   }, feedback: {
     clear() { $('page-error').textContent = ''; $('page-notice').textContent = ''; },
@@ -143,15 +156,25 @@ const page = createPageController({ client, activityClient, view, modeView, pref
       }
     },
   } });
+kemmySetup = createKemmySetup({ client,
+  onCustomer: () => $('vehicle-categories-panel').scrollIntoView({ behavior: 'smooth', block: 'start' }),
+  onDriver: () => void page.switchMode('work'),
+  onSeller: () => location.assign('/eats/sell'),
+});
 const poll = () => { if (!document.hidden) void page.poll(); };
 $('logout').addEventListener('click', () => page.logout());
 $('refresh').addEventListener('click', () => page.poll());
-document.addEventListener('visibilitychange', () => { if (document.hidden) { liveUpdates.pause(); availability.shutdown(); guests.pause(); parcels.pause(); } else { if (liveIdentity) liveUpdates.resume(); guests.resume(); parcels.resume(); poll(); } });
-window.addEventListener('pagehide', () => { liveUpdates.reset(); calls.shutdown(); sharing.shutdown(); availability.shutdown(); safety.reset(); vehicleCheck.reset(); guests.reset(); parcels.reset(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden) { liveUpdates.pause(); availability.shutdown(); guests.pause(); parcels.pause(); } else { if (liveIdentity) liveUpdates.resume(); guests.resume(); parcels.resume(); poll(); void announcements.poll(); } });
+window.addEventListener('pagehide', () => { liveUpdates.reset(); calls.shutdown(); sharing.shutdown(); availability.shutdown(); safety.reset(); vehicleCheck.reset(); guests.reset(); parcels.reset(); announcements.reset(); kemmySetup.reset(); });
 window.addEventListener('afterprint', () => document.body.classList.remove('print-receipt'));
 setInterval(() => { view.tick(); conversationView.tick(); calls.tick(); planner.tick(); sharing.tick(); availability.tick(); guests.tick(); parcels.tick(); }, 1000);
 setInterval(() => { if (calls.hasMedia()) void calls.poll(); }, 2000);
 // Location publication remains on sharing.tick(); reception uses account invalidations.
 // Anonymous sessions use a slow check; authenticated sessions refresh on invalidation.
-setInterval(() => { if (!liveIdentity) poll(); }, 30_000);
-poll();
+setInterval(() => { if (!liveIdentity) poll(); else if (!document.hidden) void announcements.poll(); }, 30_000);
+const initialStart = new URLSearchParams(location.search).get('start');
+if (initialStart) {
+  const clean = new URL(location.href); clean.searchParams.delete('start');
+  history.replaceState(null, '', clean.pathname + clean.search + clean.hash);
+}
+void page.poll().then(() => { if (initialStart) modeView.startExperience(initialStart); });

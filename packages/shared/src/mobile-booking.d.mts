@@ -3,7 +3,8 @@ import type { DeliveryDetails } from './transport-categories.mjs';
 import type { Envelope, Vehicle } from './mobile-contracts.mjs';
 import type { PassengerDetails, PassengerView } from './guest-rides.mjs';
 export interface Place { name: string; lat: number; lng: number }
-export interface RouteGeometry { distanceMeters: number; durationSeconds: number | null; distanceKind?: 'road' | 'straight_line'; coordinates: [number, number][] }
+export interface RouteGeometry { distanceMeters: number; durationSeconds: number | null; distanceKind?: 'road' | 'straight_line'; coordinates: [number, number][];
+  pricing?: { baseKobo: number; distanceKobo: number; timeKobo: number; minimumKobo: number; incrementKobo: number } }
 export type RequestData = ({ quoteId: string } | { pickupId: string; destinationId: string }) & { vehicleCategory?: VehicleCategoryId; delivery?: DeliveryDetails; passenger?: PassengerDetails };
 export interface DeliveryView extends DeliveryDetails { verifiedAt: number | null; pinBlockedUntil: number | null; dropoffPin?: string }
 export interface BookingPreview { vehicleCategory?: VehicleCategoryId; kind: 'route' | 'sample'; pickup: string; destination: string; suggestedFareKobo: number;

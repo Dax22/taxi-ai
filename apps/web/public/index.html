@@ -19,10 +19,10 @@
   <header class="site-header shell">
     <a class="brand" href="#top" aria-label="Taxi Ai home"><img class="brand-mark" src="/assets/taxi-ai-mark.svg" width="48" height="36" alt=""><span>Taxi Ai</span></a>
     <nav class="desktop-nav" aria-label="Main navigation">
-      <a href="#book" data-service="ride">Ride</a>
-      <a href="#book" data-service="eats">Taxi Ai Eats</a>
-      <a href="/app?service=courier">Courier</a>
-      <a href="#future">The future <span class="tiny-dot" aria-hidden="true"></span></a>
+      <a class="nav-service" href="#book" data-service="ride"><img class="nav-service-vehicle" src="/assets/vehicles/sedan-white.png" width="32" height="24" alt=""><span>Rides</span></a>
+      <a class="nav-service" href="#book" data-service="eats"><svg class="nav-service-icon" viewBox="0 0 48 48" aria-hidden="true"><path d="M9 7v13c0 5 10 5 10 0V7m-5 0v34M35 7c-7 3-10 10-10 18h10m0-18v34"/></svg><span>Eats</span></a>
+      <a class="nav-service" href="/app?service=courier"><svg class="nav-service-icon" viewBox="0 0 48 48" aria-hidden="true"><path d="M8 14 24 7l16 7v20L24 41 8 34Z"/><path d="M8 14 24 22l16-8M24 22v19"/></svg><span>Courier</span></a>
+      <a href="#future">Future <span class="tiny-dot" aria-hidden="true"></span></a>
     </nav>
     <div class="header-end"><a class="text-link download-nav" href="#download-app">Download app ↓</a><span class="location"><span aria-hidden="true">◎</span> Nigeria, NG</span><a class="button button-primary button-small" href="/app">Your account <span aria-hidden="true">↗</span></a></div>
   </header>
@@ -32,34 +32,60 @@
       <div class="hero-stage">
         <section class="hero-visual" data-homepage-carousel aria-roledescription="carousel" aria-label="Explore Taxi Ai services">
           <div class="hero-slide-viewport" id="hero-service-scenes">
-            <div class="hero-intro shell">
-              <div class="hero-copy">
-                <p class="eyebrow"><span class="tiny-dot" aria-hidden="true"></span> YOUR JOURNEY. YOUR CHOICE.</p>
-                <div class="hero-actions"><a class="button button-primary" href="/app">Book a ride <span aria-hidden="true">↗</span></a></div>
-              </div>
-            </div>
             <figure class="hero-service-slide" id="hero-scene-ride" data-carousel-slide data-slide-name="City rides" role="group" aria-roledescription="slide" aria-label="1 of 4: City rides">
               <picture><source media="(max-width: 800px)" srcset="/assets/city-route-hero-small.webp"><img class="hero-image" src="/assets/city-route-hero.webp" width="1774" height="887" alt="A miniature white city with green parks, a small yellow taxi and a dark route connecting two yellow location pins" fetchpriority="high" decoding="async"></picture>
+              <div class="hero-slide-copy shell hero-slide-copy-left">
+                <p class="hero-slide-kicker">YOUR JOURNEY. YOUR CHOICE.</p>
+                <h1>Your ride.<br>Your terms.</h1>
+                <p class="hero-slide-text">Choose your ride. Agree the fare. Move your way.</p>
+                <a class="button button-primary hero-slide-cta" href="/app">Book a ride <span aria-hidden="true">↗</span></a>
+              </div>
               <img class="hero-phone-preview" src="/assets/taxi-ai-phone-preview.svg" width="700" height="720" alt="Taxi AI app design previews on iPhone Pro Max style and Android phones, showing Nigerian routes, vehicle choices and fare offers" decoding="async">
               <figcaption class="hero-slide-caption">Your city. Your agreed fare. Illustrative mobile app screens.</figcaption>
             </figure>
             <figure class="hero-service-slide" id="hero-scene-airport" data-carousel-slide data-slide-name="Airport drop-off" role="group" aria-roledescription="slide" aria-label="2 of 4: Airport drop-off" hidden>
               <picture><source media="(max-width: 800px)" srcset="/assets/airport-dropoff-hero-small.webp?v=2"><img class="hero-image" src="/assets/airport-dropoff-hero.webp?v=2" width="1774" height="887" alt="A realistic chauffeur and traveller beside a yellow sedan aligned with the airport curb and road" loading="lazy" fetchpriority="low" decoding="async"></picture>
+              <div class="hero-slide-copy shell hero-slide-copy-right">
+                <p class="hero-slide-kicker">AIRPORT RIDES</p>
+                <h2>Less rush.<br>More ready.</h2>
+                <p class="hero-slide-text">Plan your airport pickup or drop-off before you travel.</p>
+                <a class="button button-primary hero-slide-cta" href="/app">Book airport ride <span aria-hidden="true">↗</span></a>
+              </div>
               <figcaption class="hero-slide-caption">A smoother start to your next chapter.</figcaption>
             </figure>
             <figure class="hero-service-slide" id="hero-scene-food" data-carousel-slide data-slide-name="Food delivery" role="group" aria-roledescription="slide" aria-label="3 of 4: Food delivery" hidden>
               <picture><source media="(max-width: 800px)" srcset="/assets/food-delivery-hero-small.webp?v=2"><img class="hero-image" src="/assets/food-delivery-hero.webp?v=2" width="1774" height="887" alt="A realistic food courier in yellow handing a takeaway bag to a customer at her doorway, beside a bicycle" loading="lazy" fetchpriority="low" decoding="async"></picture>
+              <div class="hero-slide-copy shell hero-slide-copy-left">
+                <p class="hero-slide-kicker">TAXI AI EATS</p>
+                <h2>What are you<br>craving?</h2>
+                <p class="hero-slide-text">Restaurants and local kitchens, delivered to your door.</p>
+                <a class="button button-primary hero-slide-cta" href="/eats">Order food <span aria-hidden="true">↗</span></a>
+              </div>
               <figcaption class="hero-slide-caption">Local favourites. A friendly handover.</figcaption>
             </figure>
             <figure class="hero-service-slide" id="hero-scene-courier" data-carousel-slide data-slide-name="Courier delivery" role="group" aria-roledescription="slide" aria-label="4 of 4: Courier delivery" hidden>
               <picture><source media="(max-width: 800px)" srcset="/assets/courier-delivery-hero-small.webp?v=2"><img class="hero-image" src="/assets/courier-delivery-hero.webp?v=2" width="1774" height="887" alt="A graphite sedan positioned left of centre against an illustrated Abuja city-map background" loading="lazy" fetchpriority="low" decoding="async"></picture>
+              <div class="hero-slide-copy shell hero-slide-copy-right">
+                <p class="hero-slide-kicker">COURIER</p>
+                <h2>Send it.<br>Your way.</h2>
+                <p class="hero-slide-text">Motorcycle, car, van or truck—choose what fits the delivery.</p>
+                <a class="button button-primary hero-slide-cta" href="/app?service=courier">Send a parcel <span aria-hidden="true">↗</span></a>
+              </div>
               <figcaption class="hero-slide-caption">From your hands to theirs.</figcaption>
             </figure>
             <div class="hero-carousel-controls" data-carousel-controls hidden>
-              <button class="hero-carousel-rotation" type="button" data-carousel-rotation aria-label="Pause slides" aria-controls="hero-service-scenes">Ⅱ</button>
-              <div class="hero-carousel-arrows">
-                <button type="button" data-carousel-previous aria-label="Previous service scene" aria-controls="hero-service-scenes"><span aria-hidden="true">←</span></button>
-                <button type="button" data-carousel-next aria-label="Next service scene" aria-controls="hero-service-scenes"><span aria-hidden="true">→</span></button>
+              <div class="hero-carousel-progress" data-carousel-progress aria-label="Choose a service scene">
+                <button type="button" data-carousel-dot="0" aria-label="Show City rides" aria-current="true"><span>01</span></button>
+                <button type="button" data-carousel-dot="1" aria-label="Show Airport drop-off"><span>02</span></button>
+                <button type="button" data-carousel-dot="2" aria-label="Show Food delivery"><span>03</span></button>
+                <button type="button" data-carousel-dot="3" aria-label="Show Courier delivery"><span>04</span></button>
+              </div>
+              <div class="hero-carousel-actions">
+                <button class="hero-carousel-rotation" type="button" data-carousel-rotation aria-label="Pause slides" aria-controls="hero-service-scenes">Ⅱ</button>
+                <div class="hero-carousel-arrows">
+                  <button type="button" data-carousel-previous aria-label="Previous service scene" aria-controls="hero-service-scenes"><span aria-hidden="true">←</span></button>
+                  <button type="button" data-carousel-next aria-label="Next service scene" aria-controls="hero-service-scenes"><span aria-hidden="true">→</span></button>
+                </div>
               </div>
             </div>
           </div>
@@ -70,10 +96,10 @@
         <div class="booking-card" id="book">
           <div class="service-tabs">
             <div class="service-tab-options" role="tablist" aria-label="Explore rides and food">
-            <button id="tab-ride" type="button" role="tab" aria-selected="true" aria-controls="panel-ride" data-tab="ride"><img class="service-vehicle-icon" src="/assets/vehicles/sedan-white.png" width="42" height="32" alt="">Ride</button>
-            <button id="tab-eats" type="button" role="tab" aria-selected="false" aria-controls="panel-eats" tabindex="-1" data-tab="eats">Eats</button>
+            <button id="tab-ride" type="button" role="tab" aria-selected="true" aria-controls="panel-ride" data-tab="ride"><img class="service-vehicle-icon" src="/assets/vehicles/sedan-white.png" width="42" height="32" alt=""><span class="service-tab-label">Ride</span></button>
+            <button id="tab-eats" type="button" role="tab" aria-selected="false" aria-controls="panel-eats" tabindex="-1" data-tab="eats"><svg class="service-tab-icon" viewBox="0 0 48 48" aria-hidden="true"><path d="M9 7v13c0 5 10 5 10 0V7m-5 0v34M35 7c-7 3-10 10-10 18h10m0-18v34"/></svg><span class="service-tab-label">Eats</span></button>
             </div>
-            <a id="courier-booking-link" href="/app?service=courier">Courier <span aria-hidden="true">↗</span></a>
+            <a id="courier-booking-link" href="/app?service=courier"><svg class="service-tab-icon" viewBox="0 0 48 48" aria-hidden="true"><path d="M8 14 24 7l16 7v20L24 41 8 34Z"/><path d="M8 14 24 22l16-8M24 22v19"/></svg><span class="service-tab-label">Courier</span><span class="service-tab-arrow" aria-hidden="true">↗</span></a>
           </div>
           <div id="panel-ride" role="tabpanel" aria-labelledby="tab-ride">
             <div class="card-heading"><h2>Choose your next journey.</h2><p>Explore an illustrative fare, then book in your account.</p></div>

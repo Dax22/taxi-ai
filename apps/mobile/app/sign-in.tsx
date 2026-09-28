@@ -11,12 +11,13 @@ export default function SignIn() {
   const { client, notice } = useSession();
   const [email, setEmail] = useState(''), [password, setPassword] = useState(''), [name, setName] = useState(Platform.OS === 'ios' ? 'My iPhone / iPad' : 'My Android device');
   const [creating, setCreating] = useState(false), [fullName, setFullName] = useState('');
+  const [intent, setIntent] = useState<'customer' | 'driver' | 'eats_seller'>('customer');
   const [showPreview, setShowPreview] = useState(false), [tester, setTester] = useState(''), [key, setKey] = useState(''), [error, setError] = useState(''), [busy, setBusy] = useState(false);
   const [recovering, setRecovering] = useState(false);
   async function submit() {
     setError(''); setBusy(true);
     try {
-      if (creating) await client.register(fullName.trim(), email.trim(), password, name.trim(), previewHeader(tester.trim(), key.trim()));
+      if (creating) await client.register(fullName.trim(), email.trim(), password, name.trim(), intent, previewHeader(tester.trim(), key.trim()));
       else await client.login(email.trim(), password, name.trim(), previewHeader(tester.trim(), key.trim()));
       setPassword(''); setKey('');
     }
@@ -26,22 +27,27 @@ export default function SignIn() {
   async function continueWithGoogle() {
     if (busy) return;
     setError(''); setBusy(true);
-    try { await client.googleLogin(name, chooseGoogleIdentity, previewHeader(tester.trim(), key.trim())); setPassword(''); setKey(''); }
+    try { await client.googleLogin(name, chooseGoogleIdentity, creating ? intent : null, previewHeader(tester.trim(), key.trim())); setPassword(''); setKey(''); }
     catch (e) { setError(e instanceof Error ? e.message : 'Google sign-in failed.'); }
     finally { setBusy(false); }
   }
-  return <Screen><Logo/><Pill>NIGERIA · APP PREVIEW</Pill><Heading title={'Your journey starts here.'} subtitle="Sign in, then set up your Customer or Driver experience."/>
+  return <Screen><Logo/><Pill>NIGERIA · APP PREVIEW</Pill><Heading title={'Your journey starts here.'} subtitle={creating ? 'One account. Choose how you want to start.' : 'Sign in to your Taxi Ai account.'}/>
     <Notice message={error || notice}/><Card>{recovering ? <PasswordRecovery client={client} initialEmail={email} preview={() => previewHeader(tester.trim(), key.trim())} back={() => setRecovering(false)}/> : <><Text style={styles.h2}>{creating ? 'Create your account.' : 'Welcome back.'}</Text><Text style={styles.body}>One account on the website and your phone.</Text>
-      {googleAvailable() && <><GoogleButton onPress={() => void continueWithGoogle()} busy={busy} disabled={name.trim().length < 2}/><Text style={styles.small}>Creates your Taxi Ai account if you’re new. Or sign in with email below.</Text></>}
+      {creating && <><Text style={styles.h2}>What would you like to do first?</Text><Text style={styles.small}>This only chooses where you start. You can add another Taxi Ai service later with the same account.</Text>
+        <Card><Text style={styles.h2}>Book & Order</Text><Text style={styles.body}>Book rides, send parcels and order food.</Text><Button title={intent === 'customer' ? 'Selected' : 'Choose Book & Order'} secondary={intent !== 'customer'} disabled={busy} onPress={() => setIntent('customer')}/></Card>
+        <Card><Text style={styles.h2}>Drive & Deliver</Text><Text style={styles.body}>Apply to drive passengers or deliver food and parcels.</Text><Button title={intent === 'driver' ? 'Selected' : 'Choose Drive & Deliver'} secondary={intent !== 'driver'} disabled={busy} onPress={() => setIntent('driver')}/></Card>
+        <Card><Text style={styles.h2}>Sell Food</Text><Text style={styles.body}>Set up a restaurant, food business or private kitchen.</Text><Button title={intent === 'eats_seller' ? 'Selected' : 'Choose Sell Food'} secondary={intent !== 'eats_seller'} disabled={busy} onPress={() => setIntent('eats_seller')}/></Card>
+      </>}
+      {googleAvailable() && <><GoogleButton onPress={() => void continueWithGoogle()} busy={busy} disabled={name.trim().length < 2}/><Text style={styles.small}>{creating ? 'Continue with Google using the selected starting experience.' : 'Sign in with Google, or use email below.'}</Text></>}
       {creating && <Field label="Your name" value={fullName} onChangeText={setFullName} autoComplete="name" maxLength={80} editable={!busy}/>}
       <Field label="Email address" value={email} onChangeText={setEmail} autoCapitalize="none" autoCorrect={false} keyboardType="email-address" autoComplete="email" editable={!busy}/>
       <Field label="Password" value={password} onChangeText={setPassword} secureTextEntry autoCapitalize="none" autoCorrect={false} autoComplete={creating ? 'new-password' : 'current-password'} editable={!busy}/>
       <Field label="Name this device" value={name} onChangeText={setName} maxLength={60} editable={!busy}/>
       <Button title={creating ? 'Create account' : 'Sign in'} onPress={() => void submit()} busy={busy} disabled={!email.trim() || password.length < 12 || name.trim().length < 2 || creating && fullName.trim().length < 2}/>
-      <Button title={creating ? 'Already have an account? Sign in' : 'New here? Create account'} secondary disabled={busy} onPress={() => { setCreating(!creating); setError(''); setPassword(''); }}/>
+      <Button title={creating ? 'Already have an account? Sign in' : 'New here? Create account'} secondary disabled={busy} onPress={() => { setCreating(!creating); setIntent('customer'); setError(''); setPassword(''); }}/>
       {!creating && <Button title="Forgot password?" secondary disabled={busy} onPress={() => { setPassword(''); setError(''); setRecovering(true); }}/>}</>}
       <Button title={showPreview ? 'Hide preview access' : 'Invited tester? Add preview access'} secondary disabled={busy} onPress={() => setShowPreview(!showPreview)}/>
       {showPreview && <View style={styles.stack}><Field label="Preview name" value={tester} onChangeText={setTester} autoCapitalize="none" autoCorrect={false} editable={!busy}/><Field label="Preview access key" value={key} onChangeText={setKey} secureTextEntry autoCapitalize="none" autoCorrect={false} maxLength={64} editable={!busy}/><Text style={styles.small}>Provided for the private website preview. This is separate from your account password.</Text></View>}
-    </Card><Text style={styles.small}>Choose Customer or Driver after creating your account. This preview uses test journeys and orders.</Text>
+    </Card><Text style={styles.small}>One login can later add Driver and Eats seller setup without creating another account. This preview uses test journeys and orders.</Text>
   </Screen>;
 }

@@ -21,8 +21,10 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
   let offerCountdowns = [];
   let busy = false;
   let passengerCategory = 'standard', passengerAccount = null;
-  let courier = typeof location !== 'undefined' && new URLSearchParams(location.search).get('service') === 'courier';
-  let initialCategory = typeof location === 'undefined' ? null : new URLSearchParams(location.search).get('category');
+  const query = typeof location === 'undefined' ? new URLSearchParams() : new URLSearchParams(location.search);
+  let courier = query.get('service') === 'courier';
+  const showLocalSample = query.get('devSample') === '1';
+  let initialCategory = query.get('category');
   const tripView = createTripView({ onCommand, serverNow, onVehicleMismatch });
   const categories = createVehicleCategoryPicker($('account-vehicle-categories'), { onSelect() { updateCategoryVisibility(); updateButtons(); } });
   function isDelivery() { return courier || transportCategory(categories.selected().id).service === 'delivery'; }
@@ -31,9 +33,12 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
     const customer = state.user?.role === 'customer';
     $('vehicle-categories-panel').hidden = !customer;
     $('standard-ride-planner').hidden = !customer || !categories.selected().ridePreview;
-    $('customer-panel').hidden = !customer;
+    $('customer-panel').hidden = !customer || !showLocalSample;
     const category = categories.selected();
-    if (passengerCategory !== category.id) { clearPassenger(); passengerCategory = category.id; }
+    if (passengerCategory !== category.id) {
+      if (transportCategory(passengerCategory)?.service !== transportCategory(category.id)?.service) clearPassenger();
+      passengerCategory = category.id;
+    }
     $('passenger-panel').hidden = !customer || isDelivery();
     $('delivery-details-form').hidden = !customer || !isDelivery();
     const maxLoadKg = isDelivery() ? parcelLoadLimit(category.id) : null;
@@ -108,8 +113,8 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
       $('dashboard-description').textContent = admin ? 'Review driver applications for the development preview.'
         : 'Go online to find nearby requests and agree a fare with the customer.';
     }
-    $('request-form').hidden = !state.sampleMatchingEnabled;
-    $('sample-disabled-note').hidden = Boolean(state.sampleMatchingEnabled);
+    $('request-form').hidden = !showLocalSample || !state.sampleMatchingEnabled;
+    $('sample-disabled-note').hidden = !showLocalSample || Boolean(state.sampleMatchingEnabled);
     $('driver-panel').hidden = !driver;
     $('ride-dashboard').hidden = admin;
     $('admin-dashboard').hidden = !admin;
@@ -249,8 +254,17 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
     $('detail-passenger').textContent = guest ? `Passenger: ${ride.passenger.name} · Booked by: ${ride.customer.name}${ride.customer.id === state.user.id && ride.passenger.phone ? ` · Private contact: ${ride.passenger.phone}` : ''}. Fare, chat and payment are managed by the person booking.` : '';
     $('detail-reference').textContent = `Reference ${ride.id.slice(0, 8).toUpperCase()} · ${ride.route ? 'Route suggestion' : 'Sample suggestion'} ${formatNaira(ride.suggestedFareKobo)}`;
     $('live-offer-form').hidden = ride.status !== 'negotiating';
+    const negotiating = ride.status === 'negotiating' && Boolean(ride.driver);
+    $('fare-negotiation-guide').hidden = !negotiating;
+    const peerName = isDriver ? ride.customer.name : ride.driver?.name;
+    $('fare-negotiation-title').textContent = negotiating ? `Agree your fare with ${peerName}.` : 'Talk before accepting.';
+    $('fare-negotiation-copy').textContent = negotiating
+      ? `Use Taxi Ai chat or an in-app audio call to discuss the price with ${peerName}. The suggested fare is only a starting point; only an exact offer accepted by the other person creates a fare agreement.`
+      : '';
+    $('fare-open-chat').textContent = isDriver ? 'Chat with customer' : 'Chat with driver';
+    $('fare-open-call').textContent = isDriver ? 'Call customer in app' : 'Call driver in app';
     $('accept-fare').hidden = ride.status !== 'negotiating' || !offer;
-    $('accept-fare').textContent = offer ? `Accept ${formatNaira(offer.amountKobo)}` : 'Accept offer';
+    $('accept-fare').textContent = offer ? `Accept exact fare · ${formatNaira(offer.amountKobo)}` : 'Accept exact fare';
     // Bind acceptance to the exact version and offer currently displayed. A failed
     // acceptance is never automatically resubmitted against a newer counteroffer.
     $('accept-fare').onclick = () => onCommand(`/api/rides/${ride.id}/accept`, {
@@ -259,7 +273,7 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
     if (agreement) {
       $('fare-label').textContent = 'YOUR AGREED FARE';
       $('fare-value').textContent = formatNaira(agreement.amountKobo);
-      $('fare-guidance').textContent = 'The offer and acceptance record both participants’ agreement to this exact fare.';
+      $('fare-guidance').textContent = 'Both participants explicitly agreed to this exact fare. The customer can now confirm the ride.';
     } else if (['cancelled', 'expired'].includes(ride.status)) {
       $('fare-label').textContent = 'REQUEST CLOSED';
       $('fare-value').textContent = ride.status === 'expired' ? 'No driver found.' : 'Cancelled.';
@@ -268,11 +282,15 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
       const own = offer.proposedBy === state.user.id;
       $('fare-label').textContent = own ? 'YOUR CURRENT OFFER' : `${isDriver ? 'CUSTOMER' : 'DRIVER'}’S CURRENT OFFER`;
       $('fare-value').textContent = formatNaira(offer.amountKobo);
-      $('fare-guidance').textContent = own ? 'Waiting for the other person to respond. You can revise your offer.' : 'Accept this exact price or send a counteroffer below.';
+      $('fare-guidance').textContent = own
+        ? 'Your exact offer is waiting for the other person. Continue in chat or call if you need to discuss it.'
+        : 'Review this exact offer after your chat or call. Accept it only if you agree, or send a counteroffer.';
     } else {
-      $('fare-label').textContent = ride.status === 'requested' ? 'REQUEST SAVED' : 'YOUR FARE, YOUR SAY';
-      $('fare-value').textContent = ride.status === 'requested' ? 'Finding your connection.' : 'Make the first offer.';
-      $('fare-guidance').textContent = ride.status === 'requested' ? 'We are looking for an online driver. Unclaimed requests close after five minutes.' : 'Start with the suggestion or choose your price.';
+      $('fare-label').textContent = ride.status === 'requested' ? 'FINDING A DRIVER' : 'AGREE YOUR FARE';
+      $('fare-value').textContent = ride.status === 'requested' ? formatNaira(ride.suggestedFareKobo) + ' suggested' : 'Discuss, then make an offer.';
+      $('fare-guidance').textContent = ride.status === 'requested'
+        ? 'This suggested fare is only a starting point. When a driver joins, use chat or an in-app call to agree the price before booking.'
+        : 'Use chat or an in-app call first, then send the exact price you agree to. The other person must explicitly accept that offer.';
     }
     const history = ride.negotiation?.offers ?? [];
     $('live-history').hidden = !history.length;
@@ -290,12 +308,6 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
 
   const currentPickupId = 'wuse-ii';
   $('request-pickup').value = currentPickupId;
-  for (const area of DEMO_AREAS) {
-    if (area.id === currentPickupId) continue;
-    const option = element('option', area.name);
-    option.value = area.name;
-    $('request-destination-areas').append(option);
-  }
   $('request-destination').addEventListener('input', updateQuote);
   const selectedSampleDestination = () => {
     const area = matchSampleArea(DEMO_AREAS, $('request-destination').value);
@@ -350,6 +362,16 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
     onCommand(`/api/rides/${ride.id}/offers`, data, 'Offer sent. The other person must accept it.');
   });
 
+  $('fare-open-chat').addEventListener('click', () => {
+    const panel = $('chat-panel');
+    panel.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+    if (!$('chat-content').hidden) $('chat-message').focus?.();
+  });
+  $('fare-open-call').addEventListener('click', () => {
+    $('calls-panel').scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+    $('call-start').focus?.();
+  });
+
   $('booking-service-ride').addEventListener('click', () => { if (busy) return; courier = false; clearPassenger(); clearDelivery(); categories.allow(null); categories.select('standard'); });
   $('booking-service-courier').addEventListener('click', () => { if (busy) return; courier = true; clearPassenger(); categories.allow(['standard', 'motorcycle', 'van', 'truck']); if (!supportsParcelCategory(categories.selected().id)) categories.select('standard'); updateCategoryVisibility(); updateButtons(); });
   updateQuote();
@@ -357,7 +379,9 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
   $('history-refresh').addEventListener('click', () => onHistory(null));
   $('history-more').addEventListener('click', () => { if (state.historyCursor) onHistory(state.historyCursor); });
   return Object.freeze({
-    render, requestOptions, rideCreated() { clearPassenger(); clearDelivery(); },
+    render, requestOptions,
+    selectCategory(id) { categories.select(id); },
+    rideCreated() { clearPassenger(); clearDelivery(); },
     tick: updateButtons,
     setBusy(value) { busy = value; tripView.setBusy(value); updateButtons(); },
     select(id) { selectedId = id; },

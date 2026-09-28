@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { consumeEmailAction, createAccountRecovery } from '../public/dashboard/account-recovery-controller.mjs';
 
 function fixture(initial, request) {
@@ -44,4 +45,22 @@ test('disabled delivery blocks requests and an enabled request confirms acceptan
   assert.equal(f.calls.length,1); assert.equal(f.seen.busy,true); assert.match(f.seen.error,/not available/);
   const g=fixture({mode:'request',token:null}); await g.controller.load(); await g.controller.submit({email:'missing@example.test'});
   assert.equal(g.calls[1].path,'/api/auth/password/request'); assert.deepEqual(g.calls[1].options.data,{email:'missing@example.test'}); assert.equal(g.seen.success,'request');
+});
+
+
+test('account screens keep recovery entry points, password visibility controls and privacy-preserving reset copy', () => {
+  const dashboard = readFileSync(new URL('../public/dashboard.html', import.meta.url), 'utf8');
+  const recovery = readFileSync(new URL('../public/account-recovery.html', import.meta.url), 'utf8');
+  const recoveryScript = readFileSync(new URL('../public/account-recovery.mjs', import.meta.url), 'utf8');
+  const authForm = readFileSync(new URL('../public/dashboard/auth-form.mjs', import.meta.url), 'utf8');
+
+  assert.match(dashboard, /href="\/account-recovery">Forgot password\?/);
+  assert.match(dashboard, /id="account-password-toggle"/);
+  assert.match(authForm, /setPasswordVisible\(false\)/);
+  assert.match(recovery, /id="recovery-password-toggle"/);
+  assert.match(recovery, /id="recovery-confirm-toggle"/);
+  assert.match(recovery, /Send another reset email/);
+  assert.match(recovery, /Back to sign in/);
+  assert.match(recoveryScript, /same message whether or not an account exists/);
+  assert.match(recoveryScript, /existing web and mobile sessions have ended/);
 });

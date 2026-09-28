@@ -3,6 +3,7 @@ const metadata = {
   account: ['Account details', 'One profile. A complete view of their Taxi Ai activity.', 'accounts.read'], trips: ['Trips', 'Follow each request from its first offer to its final status.', 'trips.read'],
   trip: ['Trip details', 'The people, vehicle and fare behind this journey.', 'trips.read'], analytics: ['Analytics', 'Understand demand, journey outcomes and completed fares.', 'analytics.read'],
   operations: ['Live operations', 'Waiting requests, active journeys and service delays.', 'operations.read'],
+  announcements: ['Announcements', 'Broadcast operational updates to Taxi Ai users.', 'announcements.manage'],
   finance: ['Finance centre', 'Completed fares, simulated payments and records to review.', 'finance.read'],
   financeDetail: ['Payment details', 'Payment attempts, receipt metadata and record checks.', 'finance.read'],
   compliance: ['Driver compliance', 'Document expiry, eligibility and internal follow-up tasks.', 'compliance.read'],
@@ -20,7 +21,7 @@ export function canAccess(staff, permission) {
 }
 export const defaultPage = (staff) => staff?.role === 'finance' && canAccess(staff, 'finance.read') ? '/admin/finance' : [['analytics.read', '/admin'], ['operations.read', '/admin/operations'], ['cases', '/admin/cases'], ['finance.read', '/admin/finance'], ['trips.read', '/admin/trips'], ['staff.manage', '/admin/staff']].find(([permission]) => canAccess(staff, permission))?.[1] ?? null;
 export function routeFor(location) {
-  const path = location.pathname.replace(/\/$/, ''), match = path.match(/^\/admin(?:\/(accounts|trips|analytics|operations|staff|audit|cases|finance|compliance|demand|coverage)(?:\/([a-f0-9-]{36}))?)?$/);
+  const path = location.pathname.replace(/\/$/, ''), match = path.match(/^\/admin(?:\/(accounts|trips|analytics|operations|announcements|staff|audit|cases|finance|compliance|demand|coverage)(?:\/([a-f0-9-]{36}))?)?$/);
   if (!match || (match[2] && !['accounts', 'trips', 'cases', 'finance', 'compliance'].includes(match[1]))) throw new Error('This dashboard page does not exist.');
   const section = match[1] ?? 'overview', name = match[2] ? { accounts: 'account', trips: 'trip', cases: 'case', finance: 'financeDetail', compliance: 'complianceDetail' }[section] : section;
   const query = new URLSearchParams(location.search), endpoint = section === 'overview' ? 'analytics' : section === 'audit' ? 'staff/audit' : section === 'coverage' ? 'demand/coverage' : section;

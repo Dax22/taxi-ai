@@ -1,59 +1,98 @@
 import { canShareLocation } from '/shared/locations.mjs';
 import { formatNaira } from '/shared/demo-booking.mjs';
+import { categoryFare, transportCategory } from '/shared/transport-categories.mjs';
+import { vehicleCategory } from '/shared/vehicle-categories.mjs';
 import { $, element } from './dom.mjs';
 import { createMapView } from './map-view.mjs';
 import { kemmyUpdate } from '/shared/kemmy.mjs';
 
-export function createLocationView({ onEnable, onUsePickup, onSearch, onClear, onSelect, onPick, onTarget, onPreview, onBook, onStart, onStop, onRate = () => {} }) {
+export function createLocationView({ onEnable, onUsePickup, onSearch, onFindRide = onSearch, onClear, onSelect, onChooseOption = () => {}, onPick, onTarget, onPreview, onBook, onStart, onStop, onRate = () => {} }) {
   const plannerMap = createMapView($('planner-map'), { onPick });
   const trackingMap = createMapView($('tracking-map'));
   let online = false, settings = null, tracking = null, planner = null;
   let kemmyKey = '', kemmyDismissed = false, ratingChoice = 0;
   const resultKeys = { pickup: '', destination: '' };
   function locked(id, value) { $(id).disabled = value; $(id).dataset.locked = String(value); }
+  function baseFare(pricing) {
+    if (!pricing) return null;
+    const subtotal = pricing.baseKobo + pricing.distanceKobo + pricing.timeKobo;
+    return Math.max(pricing.minimumKobo, Math.ceil(subtotal / pricing.incrementKobo) * pricing.incrementKobo);
+  }
+  function renderRideOptions(state) {
+    const root = $('location-ride-options'); root.replaceChildren();
+    if (!state.quote) return;
+    const route = state.quote.route, isRide = transportCategory(state.vehicleCategory)?.service === 'ride';
+    const ids = isRide ? ['standard','suv'] : [state.vehicleCategory], base = baseFare(route.pricing);
+    for (const id of ids) {
+      const category = vehicleCategory(id); if (!category) continue;
+      const selected = id === state.vehicleCategory;
+      const amount = selected ? route.suggestedFareKobo : base ? categoryFare(base, id) : null;
+      const button = element('button', undefined, 'ride-option');
+      button.type = 'button'; button.dataset.category = id; button.setAttribute('role','radio'); button.setAttribute('aria-checked',String(selected));
+      button.append(element('strong', category.name), element('span', category.purpose), element('strong', amount ? formatNaira(amount) : '—', 'ride-option-fare'));
+      button.addEventListener('click', () => { if (!selected) onChooseOption(id); });
+      root.append(button);
+    }
+    $('location-option-status').textContent = isRide ? ids.length + ' ride options' : 'Selected option';
+  }
   function renderPlanner(state) {
     planner = state;
-    $('location-planner').hidden = state.user?.role !== 'customer';
+    const rideFlow = transportCategory(state.vehicleCategory)?.service === 'ride';
+    $('location-planner').hidden = state.user?.role !== 'customer' || (rideFlow && !state.destination);
     if (state.user?.role !== 'customer') { plannerMap.reset(); return; }
-    $('planner-online').textContent = state.online ? 'Turn off online maps' : 'Enable online maps';
+    $('planner-online').hidden = rideFlow;
+    $('planner-online').textContent = state.online ? 'Turn off address search' : 'Enable address search';
     locked('planner-online', !state.settings?.enabled || state.booking);
     $('planner-error').textContent = state.error;
     $('planner-blocked').hidden = !state.blocked;
     $('planner-content').hidden = !state.online;
     $('planner-provider-note').textContent = state.settings?.enabled
-      ? `Current pickup uses your browser location. Address searches use ${state.settings.searchHost}; route points go to ${state.settings.routeHost}. Map areas load via ${state.settings.tileHost}. Enable only if you want to use these services.`
-      : state.settings ? 'Online maps are disabled. You can use the sample-area demo below.' : 'Checking map availability…';
+      ? rideFlow ? 'Search starts only when you choose Find rides. Results and routes are limited to Nigeria.'
+        : `Destination and pickup searches can cover addresses and landmarks across Nigeria. Searches use ${state.settings.searchHost}; selected route points go to ${state.settings.routeHost}. Map areas load via ${state.settings.tileHost}.`
+      : state.settings ? 'Nationwide address search is currently unavailable. Try again when online maps are configured.' : 'Checking nationwide address search…';
     $('location-pickup-fields').disabled = state.blocked || !state.online || state.booking;
     locked('location-pickup-current', state.locatingPickup || state.blocked || !state.online || state.booking || !state.supported);
     $('location-pickup-current').textContent = state.locatingPickup ? 'Reading your location…' : state.pickup ? 'Update current location' : 'Use current location';
     $('location-pickup-selected').textContent = state.locatingPickup ? 'Waiting for a fresh GPS fix…'
       : state.pickup ? `${state.pickup.name} · ${state.pickup.lat.toFixed(5)}, ${state.pickup.lng.toFixed(5)}` : 'Current location has not been set yet.';
     for (const side of ['pickup', 'destination']) {
-      $(`location-${side}-fields`).disabled = state.blocked || !state.online || state.booking;
-      locked(`location-${side}-search`, state.searching[side] || state.blocked || !state.online || state.booking);
-      $(`location-${side}-selected`).textContent = state[side] ? `${state[side].name} · ${state[side].lat.toFixed(5)}, ${state[side].lng.toFixed(5)}` : `Choose ${side}.`;
+      const destination = side === 'destination';
+      $(`location-${side}-fields`).disabled = state.blocked || state.booking || (!destination && !state.online);
+      locked(`location-${side}-search`, state.searching[side] || state.blocked || state.booking
+        || (destination ? !state.settings?.enabled : !state.online));
+      if (destination) $('location-destination-search').textContent = state.searching.destination ? 'Finding rides…' : 'Find rides';
+      $(`location-${side}-selected`).textContent = state[side] ? `${state[side].name} · ${state[side].lat.toFixed(5)}, ${state[side].lng.toFixed(5)}` : destination ? 'Type and choose a destination anywhere in Nigeria.' : 'Choose pickup.';
       const key = JSON.stringify(state.results[side]);
       if (resultKeys[side] !== key) {
         resultKeys[side] = key; $(`location-${side}-results`).replaceChildren();
         for (const place of state.results[side]) {
           const row = element('li'), button = element('button', place.name, 'location-result'); button.type = 'button';
-          button.addEventListener('click', () => onSelect(side, place)); row.append(button); $(`location-${side}-results`).append(row);
+          button.addEventListener('click', () => {
+            onSelect(side, place);
+            if (side === 'destination') $('location-planner').scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+          });
+          row.append(button); $(`location-${side}-results`).append(row);
         }
       }
     }
     for (const side of ['pickup', 'destination']) { $(`location-target-${side}`).checked = state.target === side; $(`location-target-${side}`).disabled = state.blocked || !state.online || state.booking; }
     $('location-coordinate-fields').disabled = !state.online || state.blocked || state.booking;
+    $('location-preview').hidden = rideFlow;
     locked('location-preview', !state.pickup || !state.destination || state.blocked || state.quoting || state.booking || !state.online);
-    $('location-preview').textContent = state.quoting ? 'Preparing your preview…' : 'Preview route and suggested fare';
+    $('location-preview').textContent = state.quoting ? 'Updating ride options…' : 'Update ride options';
     locked('location-book', !state.quote || state.expired || state.blocked || state.quoting || state.booking);
     $('location-quote').hidden = !state.quote;
+    renderRideOptions(state);
     if (state.quote) {
       const route = state.quote.route, pricing = route.pricing;
       $('location-distance').textContent = `${(route.distanceMeters / 1000).toFixed(1)} km${route.distanceKind === 'straight_line' ? ' direct' : ''}`;
       $('location-duration').textContent = route.durationSeconds === null ? 'No driving ETA' : `${Math.ceil(route.durationSeconds / 60)} min`;
       $('location-price').textContent = formatNaira(route.suggestedFareKobo);
       $('location-formula').textContent = `${route.distanceKind === 'straight_line' ? 'Direct-distance delivery estimate, not a road route. Confirm access and timing with the driver. ' : ''}Illustrative formula (${pricing.categoryMultiplier ?? 1}× category factor): ${formatNaira(pricing.baseKobo)} base + ${formatNaira(pricing.perKmKobo)}/km + ${formatNaira(pricing.perMinuteKobo)}/min. Minimum ${formatNaira(pricing.minimumKobo)}, rounded up to ${formatNaira(pricing.incrementKobo)}.`;
-      $('location-expiry').textContent = state.expired ? 'This route quote expired. Preview the route again.' : 'Quote valid for 15 minutes after preview. Both people can negotiate the fare.';
+      const category = vehicleCategory(state.vehicleCategory);
+      $('location-book').textContent = transportCategory(state.vehicleCategory)?.service === 'ride'
+        ? 'Find a ' + (category?.name ?? 'selected') + ' driver ↗' : 'Find a delivery driver ↗';
+      $('location-expiry').textContent = state.expired ? 'These ride options expired. Find rides again.' : 'Fare preview valid for 15 minutes. The final fare still requires agreement.';
     }
     plannerMap.render({ enabled: state.online && Boolean(state.settings?.tiles), tiles: state.settings?.tiles,
       pickup: state.pickup, destination: state.destination, route: state.quote?.route.coordinates,
@@ -109,7 +148,10 @@ export function createLocationView({ onEnable, onUsePickup, onSearch, onClear, o
   $('location-pickup-form').addEventListener('submit', (event) => { event.preventDefault(); onSearch('pickup', $('location-pickup-query').value); });
   $('location-pickup-query').addEventListener('input', () => onClear('pickup'));
   for (const side of ['pickup', 'destination']) $(`location-target-${side}`).addEventListener('change', () => onTarget(side));
-  $('location-destination-form').addEventListener('submit', (event) => { event.preventDefault(); onSearch('destination', $('location-destination-query').value); });
+  $('location-destination-form').addEventListener('submit', (event) => {
+    event.preventDefault();
+    onFindRide('destination', $('location-destination-query').value);
+  });
   $('location-destination-query').addEventListener('input', () => onClear('destination'));
   $('location-coordinate-form').addEventListener('submit', (event) => {
     event.preventDefault();

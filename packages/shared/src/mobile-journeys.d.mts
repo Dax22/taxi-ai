@@ -22,7 +22,9 @@ export interface Message { id: string; sequence: number; body: string; createdAt
 export interface Thread extends Envelope { rideId: string; messages: Message[]; hasMore: boolean; nextAfter: number; lastSequence: number; readThrough: number; unread: number; reportedMessageIds: string[]; canSend: boolean }
 export interface SentMessage extends Envelope { message: Message }
 export interface Notification { id: number; rideId: string; mode: Mode; kind: string; title: string; body?: string; arrivalActive?: boolean; createdAt: number; readAt: number | null }
-export interface Notifications extends Envelope { notifications: Notification[]; unread: number; nextBefore: number | null; push: { enabled: boolean; projectId: string | null; registered: boolean } }
+export interface Announcement { id: string; title: string; body: string; audience: 'all' | 'customers' | 'drivers' | 'eats_sellers';
+ priority: 'normal' | 'important' | 'critical'; status: 'published'; version: number; createdAt: number; publishedAt: number; expiresAt: number; readAt: number | null }
+export interface Notifications extends Envelope { notifications: Notification[]; announcements: Announcement[]; unread: number; nextBefore: number | null; push: { enabled: boolean; projectId: string | null; registered: boolean } }
 export interface NotificationTarget extends Envelope { target: { rideId: string; mode: Mode; screen: 'work' | 'journey' } }
 export function parseJourney(value: unknown): JourneyResult;
 export function parseAvailability(value: unknown): AvailabilityResult;

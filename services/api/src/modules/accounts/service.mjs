@@ -11,12 +11,21 @@ export const SESSION_MS = 12 * 60 * 60 * 1000;
  */
 export function createAccountsService({ repository, driverProfiles, passwords, tokens, unitOfWork, audit, hasRideHistory, clock, revokeDevices = () => {}, onRegistered = () => {}, revokeRecoveryLinks = () => {} }) {
   const passwordProofs = new WeakMap();
+  const registrationIntents = ['customer','driver','eats_seller'];
+  function registrationIntent(value, fallback = 'customer') {
+    const intent = value ?? fallback;
+    check(registrationIntents.includes(intent), 'INVALID_ROLE', 'Choose Book & Order, Drive & Deliver or Sell Food.');
+    return intent;
+  }
   async function profile(id) {
     const user = (await repository.findById(id));
     if (!user) return null;
     const capabilities = (await repository.capabilities(id));
     const driver = capabilities.includes('driver') ? (await driverProfiles.find(id)) : null;
-    return { ...user, emailVerified: Boolean(user.emailVerified), capabilities, driver: driver ? { status: driver.status, vehicle: driver.vehicle, eligibility: driver.eligibility } : null };
+    const setup = await repository.kemmySetup(id);
+    return { ...user, emailVerified: Boolean(user.emailVerified), capabilities,
+      startingExperience: setup?.experience ?? null,
+      driver: driver ? { status: driver.status, vehicle: driver.vehicle, eligibility: driver.eligibility } : null };
   }
 
   async function vehicleInput(data) {
@@ -33,16 +42,19 @@ export function createAccountsService({ repository, driverProfiles, passwords, t
   }
 
   async function register(data) {
-    fields(data, ['name', 'email', 'password', 'role', 'vehicle'], ['name', 'email', 'password']);
+    fields(data, ['name', 'email', 'password', 'role', 'vehicle', 'intent'], ['name', 'email', 'password']);
     const name = label(data.name, 'Name');
     const email = emailAddress(data.email);
     const password = passwordInput(data.password);
+    const intent = Object.hasOwn(data, 'intent') ? registrationIntent(data.intent) : null;
     // Keep older registration clients working. New clients start as customers.
     const role = data.role ?? 'customer';
     check(['customer', 'driver'].includes(role), 'INVALID_ROLE', 'Choose customer or driver.');
     let vehicle;
-    if (role === 'driver') vehicle = (await vehicleInput(data.vehicle));
-    else check(!Object.hasOwn(data, 'vehicle'), 'INVALID_FIELDS', 'Add a driver profile after creating your account.');
+    if (role === 'driver') {
+      check(data.intent === undefined || intent === 'driver', 'INVALID_FIELDS', 'Legacy driver registration cannot use a different starting experience.');
+      vehicle = (await vehicleInput(data.vehicle));
+    } else check(!Object.hasOwn(data, 'vehicle'), 'INVALID_FIELDS', 'Add a driver profile after creating your account.');
     // Hash outside the short synchronous database transaction.
     const passwordHash = await passwords.hash(password);
     const user = (await unitOfWork(async () => {
@@ -52,6 +64,7 @@ export function createAccountsService({ repository, driverProfiles, passwords, t
       (await repository.insert({ id, email, name, passwordHash, role, createdAt: now }));
       (await repository.grant(id, 'customer', now));
       if (vehicle) { (await driverProfiles.insert(id, vehicle, now)); (await repository.grant(id, 'driver', now)); }
+      if (intent) await repository.kemmyPatch(id, { experience: intent }, now);
       (await audit.record(id, 'account.created', id, now));
       return (await profile(id));
     }));
@@ -158,9 +171,10 @@ export function createAccountsService({ repository, driverProfiles, passwords, t
 
   // Only a verified provider adapter can reach this port; HTTP accepts no claims.
   // Google subject is the stable identifier. Email matches never link accounts.
-  async function resolveGoogle(identity, linkUserId = null) {
+  async function resolveGoogle(identity, linkUserId = null, intent = null) {
     fields(identity, ['subject', 'email', 'name']);
     const subject = label(identity.subject, 'Google identity', 1, 255), email = emailAddress(identity.email);
+    const startingIntent = intent === null ? null : registrationIntent(intent);
     const name = typeof identity.name === 'string' && identity.name.trim().length >= 2
       && !/[\u0000-\u001f\u007f]/.test(identity.name) ? identity.name.trim().slice(0, 80) : 'Taxi Ai member';
     return (await unitOfWork(async () => {
@@ -180,8 +194,11 @@ export function createAccountsService({ repository, driverProfiles, passwords, t
       } else {
         check(!collision, 'GOOGLE_ACCOUNT_EXISTS', 'Sign in with your Taxi Ai password first, then connect Google from Sign-in methods.');
         id = tokens.id();
-        (await repository.insert({ id, email, name, passwordHash: '', passwordEnabled: false, role: 'customer', createdAt: clock() }));
-        (await repository.grant(id, 'customer', clock())); (await audit.record(id, 'account.created', id, clock()));
+        const now = clock();
+        (await repository.insert({ id, email, name, passwordHash: '', passwordEnabled: false, role: 'customer', createdAt: now }));
+        (await repository.grant(id, 'customer', now));
+        if (startingIntent) await repository.kemmyPatch(id, { experience: startingIntent }, now);
+        (await audit.record(id, 'account.created', id, now));
       }
       (await repository.linkGoogle(id, subject, clock())); (await audit.record(id, 'account.google_connected', id, clock()));
       return (await profile(id));
@@ -274,7 +291,75 @@ export function createAccountsService({ repository, driverProfiles, passwords, t
     });
   }
 
-  return Object.freeze({ profile, register, login, resolveGoogle, signInMethods, unlinkGoogle, addDriverProfile, deleteDriverProfile, issueSession, sessionFor, revokeSession, bootstrapAdmin, resetAdminPasswordLocally,
+
+  function kemmyProjection(user, state = null) {
+    const value = state ?? {};
+    const nextStep = value.completedAt ? 'complete'
+      : !value.startedAt ? 'welcome'
+        : !user.emailVerified && !value.emailDeferredAt ? 'email'
+          : !value.experience ? 'experience'
+            : !value.notificationsChoice ? 'notifications'
+              : !value.safetyChoice ? 'safety' : 'finish';
+    return {
+      version: 1,
+      assistant: 'Kemmy',
+      deterministic: true,
+      nextStep,
+      autoOpen: !value.completedAt && !value.dismissedAt,
+      startedAt: value.startedAt ?? null,
+      emailDeferredAt: value.emailDeferredAt ?? null,
+      experience: value.experience ?? null,
+      notificationsChoice: value.notificationsChoice ?? null,
+      safetyChoice: value.safetyChoice ?? null,
+      dismissedAt: value.dismissedAt ?? null,
+      completedAt: value.completedAt ?? null,
+      emailVerified: Boolean(user.emailVerified),
+    };
+  }
+
+  async function kemmySetup(userId) {
+    const user = await profile(userId); requireRole(user, 'customer');
+    return kemmyProjection(user, await repository.kemmySetup(userId));
+  }
+
+  async function updateKemmySetup(userId, data) {
+    fields(data, ['action','value'], ['action']);
+    const user = await profile(userId); requireRole(user, 'customer');
+    check(typeof data.action === 'string' && ['start','email-later','experience','notifications','safety','dismiss','resume','complete','restart'].includes(data.action),
+      'INVALID_INPUT', 'Choose a valid Kemmy setup action.');
+    const now = clock(), patch = {};
+    if (data.action === 'start') patch.startedAt = now;
+    if (data.action === 'email-later') patch.emailDeferredAt = now;
+    if (data.action === 'experience') {
+      check(['customer','driver','eats_seller'].includes(data.value), 'INVALID_INPUT', 'Choose Customer, Driver or Eats seller.');
+      patch.experience = data.value;
+    }
+    if (data.action === 'notifications') {
+      check(['enabled','in_app','later'].includes(data.value), 'INVALID_INPUT', 'Choose a valid notification preference.');
+      patch.notificationsChoice = data.value;
+    }
+    if (data.action === 'safety') {
+      check(['review','later'].includes(data.value), 'INVALID_INPUT', 'Choose a valid Family Safety preference.');
+      patch.safetyChoice = data.value;
+    }
+    if (data.action === 'dismiss') patch.dismissedAt = now;
+    if (data.action === 'resume') patch.dismissedAt = null;
+    if (data.action === 'complete') {
+      const current = kemmyProjection(user, await repository.kemmySetup(userId));
+      check(current.nextStep === 'finish' || current.nextStep === 'complete', 'SETUP_INCOMPLETE', 'Finish the remaining setup steps first.');
+      patch.completedAt = current.completedAt ?? now; patch.dismissedAt = null;
+    }
+    if (data.action === 'restart') Object.assign(patch, { startedAt: now, emailDeferredAt: null, experience: null,
+      notificationsChoice: null, safetyChoice: null, dismissedAt: null, completedAt: null });
+    const state = await unitOfWork(async () => {
+      const saved = await repository.kemmyPatch(userId, patch, now);
+      if (data.action === 'complete') await audit.record(userId, 'account.kemmy_setup_completed', userId, now);
+      return saved;
+    });
+    return kemmyProjection(await profile(userId), state);
+  }
+
+  return Object.freeze({ profile, register, login, resolveGoogle, signInMethods, unlinkGoogle, addDriverProfile, deleteDriverProfile, issueSession, sessionFor, revokeSession, bootstrapAdmin, resetAdminPasswordLocally, kemmySetup, updateKemmySetup,
     emailState, emailStateForAddress, confirmEmail, replacePassword, validatePasswordLogin, consumePasswordLogin,
     sessionOwner: async (hash) => (await repository.findSession(hash, clock()))?.userId ?? null });
 }

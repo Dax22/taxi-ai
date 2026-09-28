@@ -71,6 +71,34 @@ test('route pickup comes from the current location action before previewing', as
   await c.preview(); assert.equal(c.snapshot().preview?.kind, 'route');
 });
 
+
+
+test('Find rides searches destination, uses current pickup and prepares the route fare automatically', async () => {
+  const f = fixture(); await start(f); const c = f.controller;
+  f.api.searchPlaces = async () => ({ ...envelope, places: [destination], attribution: 'Test source' });
+  c.edit('destination', 'Maitama, Abuja');
+  await c.findRides();
+  assert.equal(f.locates(), 1);
+  assert.equal(c.snapshot().destination.selected?.name, destination.name);
+  assert.equal(c.snapshot().pickup.selected?.name, 'Current location');
+  assert.equal(c.snapshot().preview?.kind, 'route');
+});
+
+test('Find rides leaves ambiguous destinations for customer selection before pricing', async () => {
+  const f = fixture(); await start(f); const c = f.controller;
+  const second = { ...destination, name: 'Maitama District', lng: destination.lng + 0.001 };
+  f.api.searchPlaces = async () => ({ ...envelope, places: [destination, second], attribution: 'Test source' });
+  c.edit('destination', 'Maitama');
+  await c.findRides();
+  assert.equal(f.locates(), 0);
+  assert.equal(c.snapshot().preview, null);
+  assert.equal(c.snapshot().destination.results.length, 2);
+  await c.chooseRideDestination(second);
+  assert.equal(f.locates(), 1);
+  assert.equal(c.snapshot().destination.selected?.name, second.name);
+  assert.equal(c.snapshot().preview?.kind, 'route');
+});
+
 test('typed sample destination must match an available area and editing removes an old preview', async () => {
   const f = fixture(); await start(f); const c = f.controller;
   c.chooseMode('sample');
@@ -139,7 +167,11 @@ test('booking contracts reject malformed fares, foreign coordinates and unsafe c
   assert.equal(parsePreview({ ...envelope, preview }).preview.kind, 'sample');
   for (const invalid of [{ ...preview, suggestedFareKobo: 1.5 }, { ...preview, suggestedFareKobo: '450000' },
     { ...preview, request: { ...preview.request, amountKobo: 1 } }, { ...preview, kind: 'route', request: { quoteId: ride.id }, expiresAt: 1234,
-      route: { distanceMeters: 7000, durationSeconds: 1000, coordinates: [[7.4, 9.08], [0, 51]] } }]) assert.throws(() => parsePreview({ ...envelope, preview: invalid }));
+      route: { distanceMeters: 7000, durationSeconds: 1000, coordinates: [[7.4, 9.08], [0, 51]] } },
+    { ...preview, kind: 'route', request: { quoteId: ride.id }, expiresAt: 1234,
+      route: { distanceMeters: 7000, durationSeconds: 1000, coordinates: [[7.4,9.08],[7.45,9.1]],
+        pricing: { baseKobo: 50000, distanceKobo: -1, timeKobo: 60000, minimumKobo: 100000, incrementKobo: 5000 } } }])
+    assert.throws(() => parsePreview({ ...envelope, preview: invalid }));
   assert.throws(() => parseBookingRide({ ...envelope, ride: { ...ride, status: 'unknown' } }));
   assert.throws(() => parseBookingRide({ ...envelope, ride: { ...ride, status: 'in_progress', canCancel: true } }));
 });
@@ -211,15 +243,15 @@ test('guest requests require consent, normalize contact details and keep one imm
   c.dispose();
 });
 
-test('changing a guest identity resets consent; self and category changes erase all guest details', async () => {
+test('changing a guest identity resets consent; ride option changes preserve the passenger while delivery changes clear it', async () => {
   const f = fixture(); await start(f); const c = f.controller;
   c.choosePassenger('guest'); c.editPassenger('name', 'Demo Passenger'); c.editPassenger('phone', '08012345678'); c.consentPassenger(true);
   c.editPassenger('phone', '08022345678'); assert.equal(c.snapshot().passenger.consent, false);
   c.consentPassenger(true); c.choosePassenger('self');
   assert.deepEqual(c.snapshot().passenger, { kind: 'self', name: '', phone: '', consent: false });
-  c.choosePassenger('guest'); c.editPassenger('name', 'Another Guest'); c.chooseCategory('suv');
-  assert.deepEqual(c.snapshot().passenger, { kind: 'self', name: '', phone: '', consent: false });
-  c.choosePassenger('guest'); c.editPassenger('name', 'Delivery must not see me'); c.chooseCategory('van');
+  c.choosePassenger('guest'); c.editPassenger('name', 'Another Guest'); c.editPassenger('phone', '08012345678'); c.consentPassenger(true); c.chooseCategory('suv');
+  assert.equal(c.snapshot().passenger.kind, 'guest'); assert.equal(c.snapshot().passenger.name, 'Another Guest'); assert.equal(c.snapshot().passenger.consent, true);
+  c.editPassenger('name', 'Delivery must not see me'); c.chooseCategory('van');
   c.choosePassenger('guest'); c.editPassenger('name', 'Blocked in delivery');
   assert.deepEqual(c.snapshot().passenger, { kind: 'self', name: '', phone: '', consent: false });
   c.chooseCategory('standard'); await sample(f);
