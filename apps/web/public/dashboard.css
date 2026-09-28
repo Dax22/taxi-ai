@@ -538,40 +538,50 @@
 }
 
 
-/* Passenger-first nationwide destination */
+/* Destination-first nationwide ride booking */
 @layer components {
-  .passenger-destination {
+  .ride-destination-panel {
     margin-top: 26px;
     padding-top: 24px;
     border-top: 1px solid var(--line);
   }
-  .passenger-destination h3 {
+  .ride-destination-panel h3 {
     margin: 7px 0 0;
     font-size: clamp(24px, 3vw, 32px);
     letter-spacing: -.04em;
   }
-  .passenger-destination > .small-note {
+  .ride-destination-panel > .small-note {
     max-width: 620px;
     margin-top: 8px;
   }
-  .passenger-destination .stack-form {
+  .ride-destination-panel .stack-form {
     margin-top: 14px;
   }
-  .passenger-destination #planner-online {
+  .ride-destination-panel #planner-online {
     margin-top: 10px;
   }
-  .passenger-destination #planner-provider-note {
+  .ride-destination-panel #planner-provider-note {
     margin-top: 10px;
   }
-  .passenger-destination .location-results {
+  .ride-destination-panel .location-results {
     margin-top: 10px;
+  }
+  .ride-destination-panel .current-pickup-note {
+    display: inline-flex;
+    gap: 6px;
+    margin: 14px 0 2px;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--brand-soft);
+    font-size: 13px;
   }
 }
 @layer responsive {
   @media (max-width: 580px) {
-    .passenger-destination { margin-top: 22px; padding-top: 20px; }
-    .passenger-destination .location-input-row { display: grid; grid-template-columns: 1fr; }
-    .passenger-destination .location-input-row .button { width: 100%; }
+    .ride-destination-panel { margin-top: 22px; padding-top: 20px; }
+    .ride-destination-panel .location-input-row { display: grid; grid-template-columns: 1fr; }
+    .ride-destination-panel .location-input-row .button { width: 100%; }
   }
 }
 
