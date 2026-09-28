@@ -1,0 +1,16 @@
+{
+  admin off
+}
+
+{$TAXI_AI_DOMAIN} {
+  # Keep public health routes private; Docker probes the app over loopback.
+  @health path /health/*
+  respond @health 404
+  reverse_proxy app:3000 {
+    header_up Host {$TAXI_AI_DOMAIN}
+    header_up X-Taxi-Ai-Proxy-Token {$TAXI_AI_PROXY_TOKEN}
+    header_up X-Forwarded-Proto https
+    header_up X-Forwarded-For {remote_host}
+    header_up -Forwarded
+  }
+}

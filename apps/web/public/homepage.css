@@ -1,0 +1,202 @@
+/* Homepage presentation is separate from the account and trip-share screens. */
+@layer base {
+  .landing-page { --paper: #f8f9f7; --soft: #eef0ed; --line: #e0e4de; background: var(--paper); }
+}
+
+@layer components {
+  .landing-page .site-header { border-bottom: 0; height: 86px; }
+  .landing-page .header-end .button { border-radius: 999px; }
+  .landing-page .desktop-nav .tiny-dot { background: var(--brand); }
+  /* CSS inch equivalents: tagline 48px from the top, button 96px from the bottom. */
+  .hero-intro { grid-area: 1 / 1; align-self: stretch; display: flex; padding-block: 48px 96px; text-align: center; position: relative; z-index: 2; pointer-events: none; }
+  .hero-copy { width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: space-between; gap: 32px; min-width: 0; }
+  .hero-intro .eyebrow { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 0; color: #454b43; }
+  .hero-intro .tiny-dot { background: var(--brand); }
+  /* Protect the letter edges without washing out any part of the artwork. */
+  .hero-intro .eyebrow { text-shadow: 0 1px 2px #fff, 0 0 4px #fff; }
+  .hero-actions { display: flex; align-items: center; justify-content: center; width: 100%; margin: 0; }
+  .hero-actions .button-primary { pointer-events: auto; border-radius: 999px; padding: 17px 26px; min-height: 54px; font-size: 15px; }
+  .hero-stage { position: relative; }
+  /* Artwork starts directly at the header and reaches both page edges.
+     The in-flow overlay lets the hero grow when text wraps or is enlarged. */
+  .hero-visual { position: relative; width: 100%; margin: 0; }
+  .hero-slide-viewport { position: relative; isolation: isolate; display: grid; width: 100%; min-height: clamp(480px, 40vw, 640px); background: #f8f9f7; touch-action: pan-y; }
+  .hero-service-slide { position: absolute; inset: 0; margin: 0; overflow: hidden; animation: hero-scene-appear .55s cubic-bezier(.2,.7,.2,1) both; }
+  .hero-service-slide::after { content: ''; position: absolute; inset: 0; z-index: 1; pointer-events: none; background: linear-gradient(90deg, rgba(248,249,247,.84) 0%, rgba(248,249,247,.58) 28%, rgba(248,249,247,.08) 52%, rgba(248,249,247,.04) 100%); }
+  .hero-service-slide:has(.hero-slide-copy-right)::after { background: linear-gradient(270deg, rgba(248,249,247,.86) 0%, rgba(248,249,247,.60) 28%, rgba(248,249,247,.08) 52%, rgba(248,249,247,.04) 100%); }
+  .hero-visual picture { display: block; height: 100%; }
+  .hero-image { width: 100%; height: 100%; object-fit: cover; animation: hero-image-arrive .7s cubic-bezier(.2,.7,.2,1) both; }
+  #hero-scene-ride .hero-image { object-position: center center; }
+  #hero-scene-airport .hero-image { object-position: center 56%; }
+  #hero-scene-food .hero-image { object-position: 54% center; }
+  #hero-scene-courier .hero-image { object-position: center center; }
+  .hero-phone-preview { position: absolute; z-index: 2; top: 80px; right: max(24px, calc((100% - 1280px) / 2)); width: 40%; max-width: 480px; height: calc(100% - 120px); object-fit: contain; pointer-events: none; }
+  .hero-slide-copy { position: absolute; z-index: 2; inset-block: 0; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; justify-content: center; gap: 14px; pointer-events: none; }
+  .hero-slide-copy-left { align-items: flex-start; text-align: left; padding-right: min(54%, 720px); }
+  .hero-slide-copy-right { align-items: flex-end; text-align: right; padding-left: min(54%, 720px); }
+  .hero-slide-kicker { font-size: 10px; line-height: 1.4; letter-spacing: .16em; font-weight: 800; color: #5d625b; text-shadow: 0 1px 2px #fff; }
+  .hero-slide-copy h1, .hero-slide-copy h2 { max-width: 470px; margin: 0; color: #1f231f; font-size: clamp(42px, 5vw, 72px); line-height: .97; letter-spacing: -.06em; text-shadow: 0 2px 16px rgba(255,255,255,.65); }
+  .hero-slide-copy h2 { font-weight: 500; }
+  .hero-slide-text { max-width: 410px; color: #444b44; font-size: clamp(14px, 1.15vw, 17px); line-height: 1.55; text-shadow: 0 1px 8px rgba(255,255,255,.8); }
+  .hero-slide-copy-right .hero-slide-text { margin-left: auto; }
+  .hero-slide-cta { pointer-events: auto; min-height: 52px; margin-top: 5px; border-radius: 999px; padding-inline: 24px; box-shadow: 0 8px 24px rgba(39,43,39,.13); }
+  .hero-slide-caption { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .hero-carousel-controls { position: absolute; z-index: 4; left: 24px; right: 24px; bottom: 18px; display: flex; align-items: center; justify-content: space-between; gap: 18px; pointer-events: none; }
+  .hero-carousel-actions { display: flex; align-items: center; gap: 6px; pointer-events: auto; }
+  .hero-carousel-controls > .hero-carousel-progress { pointer-events: auto; }
+  .hero-carousel-controls button { display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 1px solid #d8dcd6; border-radius: 50%; background: #fffffff0; color: #30352e; font-size: 20px; box-shadow: 0 2px 8px #2022250c; }
+  .hero-carousel-controls button:hover { background: var(--brand-soft); }
+  .hero-carousel-controls .hero-carousel-rotation:disabled { background: #eef0ed; color: #545952; cursor: default; }
+  .hero-carousel-arrows { display: flex; gap: 6px; }
+  .hero-carousel-progress { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 999px; background: rgba(255,255,255,.88); border: 1px solid rgba(216,220,214,.92); box-shadow: 0 4px 16px rgba(32,34,37,.08); backdrop-filter: blur(8px); }
+  .hero-carousel-progress button { position: relative; width: 48px; height: 32px; border: 0; border-radius: 999px; background: transparent; box-shadow: none; color: #697068; font-size: 10px; font-weight: 700; overflow: hidden; }
+  .hero-carousel-progress button::after { content: ''; position: absolute; left: 7px; right: 7px; bottom: 5px; height: 2px; border-radius: 2px; background: #d9ddd7; }
+  .hero-carousel-progress button[aria-current="true"] { color: #222722; background: #fff8dd; }
+  .hero-carousel-progress button[aria-current="true"]::after { background: var(--brand); }
+  [data-homepage-carousel][data-carousel-playing="true"] .hero-carousel-progress button[aria-current="true"]::after { transform-origin: left center; animation: hero-progress-fill 7s linear both; }
+  .hero-carousel-progress button:hover { background: var(--brand-soft); }
+  .hero-art-note { margin: 13px 24px 0; text-align: center; color: #656b63; font-size: 8px; letter-spacing: .05em; }
+  .hero-carousel-announcement { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+  .booking-card { position: relative; width: min(100%, 1100px); margin: 24px auto 0; background: #fff; border: 1px solid var(--line); border-radius: 20px; padding: 25px 28px 0; box-shadow: 0 18px 55px #2433210a; scroll-margin-top: 28px; }
+  .booking-card .service-tabs { max-width: 350px; margin-bottom: 22px; }
+  .booking-card .service-tabs button, .booking-card .service-tabs > a { padding-top: 10px; border-radius: 8px 8px 0 0; }
+  .booking-card .card-heading { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 8px 20px; }
+  .booking-card .card-heading h2 { font-size: 27px; }
+  .booking-card .card-heading p { margin-top: 0; }
+  #trip-form { display: grid; grid-template-columns: minmax(0, 1fr) 210px; gap: 12px 18px; align-items: stretch; margin-top: 20px; }
+  #trip-form .location-fields { grid-column: 1; grid-row: 1; display: grid; grid-template-columns: minmax(0, 1fr); margin: 0; }
+  #trip-form .field { min-width: 0; padding: 12px 34px; border: 1px solid #e7eae4; background: #f7f8f5; border-radius: 9px; }
+  #trip-form .field:focus-within { border-color: var(--brand-strong); }
+  #trip-form .field:last-child { margin-top: 0; }
+  #trip-form .field select { min-width: 0; height: 24px; font-size: 14px; }
+  #trip-form .field input[type="text"] { min-height: 30px; font-size: 16px; font-weight: 600; letter-spacing: -.015em; }
+  #trip-form .field input[type="text"]::placeholder { font-weight: 500; }
+  #trip-form .route-dot, #trip-form .route-square { top: 29px; }
+  #trip-form .swap-button { top: 50%; left: 50%; right: auto; transform: translate(-50%, -50%); width: 34px; height: 34px; }
+  #trip-form > .button { grid-column: 2; grid-row: 1; border-radius: 10px; }
+  #trip-error { grid-column: 1 / -1; grid-row: 2; margin: 0; }
+  .booking-card .booking-footnote { font-size: 10px; margin: 12px 0 20px; text-align: left; }
+  .booking-card .preview-label { margin-inline: -28px; padding-block: 14px; border-radius: 0 0 19px 19px; background: #fafbf8; font-size: 9px; }
+  .booking-card .planned-panel { min-height: 240px; max-width: 650px; padding-bottom: 12px; }
+  .hero-bottom { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px 24px; font-size: 11px; color: var(--muted); padding: 28px 0 25px; border-bottom: 1px solid var(--line); margin-top: 12px; }
+  .hero-bottom span { margin-inline: 16px; color: #a2aa9f; }
+  .landing-page .service-card { border-radius: 16px; background: #fff; }
+  .landing-page .service-card:hover { background: #fffdf4; }
+  .future-section { background: var(--paper); color: var(--ink); border-block: 1px solid var(--line); }
+  .future-inner { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); gap: 40px; align-items: center; padding-block: 72px; }
+  .future-status { color: var(--brand-strong); background: var(--brand-soft); border-color: #e7c263; font-size: 9px; margin-bottom: 32px; }
+  .future-copy .eyebrow { color: #62685f; margin-bottom: 18px; }
+  .future-copy h2 { font-size: clamp(36px, 4vw, 58px); }
+  .future-copy > p:not(.eyebrow) { color: #5c625b; font-size: 14px; max-width: 355px; margin-top: 22px; line-height: 1.8; }
+  .future-copy > p.future-note { font-size: 12px; }
+  .future-image-wrap { min-width: 0; margin: 0; }
+  /* Preserve the whole 3:2 scene: never stretch or crop the vehicle or passenger. */
+  .future-image-wrap img { display: block; width: 100%; height: auto; aspect-ratio: 3 / 2; object-fit: contain; border-radius: 24px; }
+  .future-image-wrap figcaption { margin-top: 14px; text-align: center; color: #62685f; font-size: 10px; letter-spacing: .08em; }
+}
+
+@layer responsive {
+  @media (max-width: 1100px) {
+    #trip-form { grid-template-columns: minmax(0, 1fr) 190px; gap: 12px; }
+    #trip-form > .button { padding-inline: 14px; font-size: 12px; }
+  }
+  @media (max-width: 800px) {
+    .landing-page .site-header { height: 80px; }
+    .hero-slide-viewport { min-height: 560px; }
+    .hero-phone-preview { top: 230px; right: auto; left: 50%; transform: translateX(-50%); width: min(76%, 350px); height: calc(100% - 330px); }
+    .hero-image { object-fit: cover; }
+    .hero-slide-copy { justify-content: flex-start; padding: 42px 28px 150px; align-items: flex-start; text-align: left; }
+    .hero-slide-copy-left, .hero-slide-copy-right { padding-right: 28px; padding-left: 28px; }
+    .hero-slide-copy h1, .hero-slide-copy h2 { max-width: 430px; font-size: clamp(40px, 7vw, 58px); }
+    .hero-slide-copy-right .hero-slide-text { margin-left: 0; }
+    .hero-service-slide::after, .hero-service-slide:has(.hero-slide-copy-right)::after { background: linear-gradient(180deg, rgba(248,249,247,.90) 0%, rgba(248,249,247,.65) 34%, rgba(248,249,247,.08) 64%, rgba(248,249,247,.14) 100%); }
+    #hero-scene-ride .hero-image { object-position: center bottom; }
+    #hero-scene-airport .hero-image { object-position: center center; }
+    #hero-scene-food .hero-image { object-position: center center; }
+    #hero-scene-courier .hero-image { object-position: center center; }
+    .booking-card { margin-top: 24px; padding: 22px 22px 0; }
+    .booking-card .preview-label { margin-inline: -22px; }
+    #trip-form { grid-template-columns: minmax(0, 1fr); }
+    #trip-form > .button { grid-column: 1; grid-row: 3; min-height: 52px; }
+    #trip-form .field select { font-size: 16px; }
+    #trip-form .field label { font-size: 10px; }
+    .booking-card .card-heading p { font-size: 11px; }
+    .future-inner { grid-template-columns: minmax(0, 1fr); gap: 30px; padding-block: 56px; }
+    .future-copy h2 { font-size: 46px; }
+    .future-copy > p:not(.eyebrow) { max-width: 460px; }
+    .future-status { margin-bottom: 24px; }
+  }
+  @media (max-width: 580px) {
+    .landing-page .site-header { height: 73px; }
+    .hero-actions .button-primary { padding: 15px 24px; min-height: 52px; }
+    .hero-slide-viewport { min-height: 500px; }
+    .hero-carousel-controls { left: 12px; right: 12px; bottom: 12px; gap: 10px; }
+    .hero-carousel-progress { gap: 3px; padding: 5px; }
+    .hero-carousel-progress button { width: 34px; height: 30px; }
+    .hero-carousel-controls button { width: 40px; height: 40px; }
+    .hero-slide-copy { padding: 34px 18px 138px; gap: 10px; }
+    .hero-slide-copy-left, .hero-slide-copy-right { padding-right: 18px; padding-left: 18px; }
+    .hero-slide-copy h1, .hero-slide-copy h2 { font-size: clamp(36px, 10.5vw, 48px); line-height: .98; }
+    .hero-slide-text { max-width: 340px; font-size: 13px; }
+    .hero-slide-kicker { font-size: 8px; }
+    .hero-slide-cta { min-height: 48px; padding: 13px 20px; }
+    .hero-art-note { font-size: 7px; margin-inline: 16px; }
+    .booking-card { margin-top: 22px; padding: 20px 18px 0; border-radius: 16px; }
+    .booking-card .card-heading { display: block; }
+    .booking-card .card-heading h2 { font-size: 25px; }
+    .booking-card .card-heading p { margin-top: 8px; }
+    .booking-card .service-tabs { margin-bottom: 20px; }
+    #trip-form .swap-button { left: auto; right: 10px; transform: translateY(-50%); }
+    #trip-form .field { padding-right: 45px; }
+    .booking-card .preview-label { margin-inline: -18px; font-size: 7px; border-radius: 0 0 15px 15px; }
+    .booking-card .booking-footnote { font-size: 9px; text-align: center; }
+    .hero-bottom { padding-top: 20px; font-size: 9px; }
+    .hero-bottom span { margin-inline: 5px; }
+    .future-inner { padding-block: 42px; gap: 26px; }
+    .future-copy h2 { font-size: clamp(32px, 10vw, 43px); }
+    .future-copy > p:not(.eyebrow) { font-size: 13px; margin-top: 18px; }
+    .future-copy > p.future-note { font-size: 12px; }
+    .future-status { font-size: 8px; }
+    .future-image-wrap img { border-radius: 16px; }
+    .future-image-wrap figcaption { font-size: 9px; margin-top: 12px; }
+  }
+}
+
+@keyframes hero-scene-appear { from { opacity: 0; } to { opacity: 1; } }
+@keyframes hero-image-arrive { from { transform: scale(1.012); } to { transform: scale(1); } }
+@keyframes hero-progress-fill { from { transform: scaleX(.05); } to { transform: scaleX(1); } }
+@media (prefers-reduced-motion: reduce) { .hero-service-slide, .hero-image, .hero-carousel-progress button::after { animation: none !important; } }
+
+/* Native releases have a permanent home; links activate only for real listings. */
+.download-section { display: grid; grid-template-columns: 1.1fr 1fr; gap: clamp(28px, 6vw, 88px); align-items: center; padding-block: 88px; scroll-margin-top: 32px; }
+.download-section h2 { font-size: clamp(36px, 4.5vw, 60px); letter-spacing: -.055em; line-height: 1.04; margin: 16px 0 24px; }
+.download-section p { max-width: 510px; line-height: 1.65; }
+.download-card { background: #fff3c8; border: 1px solid #e6d99d; border-radius: 26px; padding: clamp(24px, 4vw, 48px); }
+.download-card h3 { font-size: 28px; letter-spacing: -.035em; margin-block: 24px; }
+.download-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+.download-actions .button { white-space: normal; min-height: 48px; }
+.download-actions button:disabled { cursor: default; opacity: 1; color: #5b5b4d; background: #fff8e2; border-color: #cfc5a1; }
+@media (max-width: 1150px) { .download-nav { font-size: 13px; } .header-end .location { display: none; } }
+@media (max-width: 800px) { .download-section { grid-template-columns: 1fr; padding-block: 56px; } }
+@media (max-width: 440px) { .header-end { gap: 10px; } .download-nav { max-width: 74px; line-height: 1.2; } }
+
+@media (max-width: 580px) { .landing-page .site-header { height: auto; min-height: 73px; padding-block: 14px; flex-wrap: wrap; gap: 14px; } .landing-page .header-end { flex: 1; justify-content: flex-end; } }
+
+/* AI feature overview follows the mobile-app section. */
+.ai-features-section { display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(0, 1fr); gap: clamp(28px, 5vw, 76px); align-items: center; padding-block: 48px 80px; }
+.ai-features-visual { margin: 0; overflow: hidden; border-radius: 28px; background: #f7f8f4; }
+.ai-features-visual picture, .ai-features-visual img { display: block; width: 100%; }
+.ai-features-visual img { height: auto; }
+.ai-features-copy { min-width: 0; }
+.ai-features-copy .eyebrow { color: #79600a; }
+.ai-features-copy h2 { font-size: clamp(32px, 3.3vw, 48px); letter-spacing: -.045em; line-height: 1.08; margin: 16px 0 20px; }
+.ai-features-intro { max-width: 520px; color: var(--muted); font-size: 15px; line-height: 1.7; }
+.ai-feature-list { display: grid; gap: 24px; list-style: none; padding: 0; margin: 30px 0 0; }
+.ai-feature-list li { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 16px; align-items: start; }
+.ai-feature-icon { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 14px; color: #5b4805; background: #fff0ba; }
+.ai-feature-icon svg { width: 24px; height: 24px; }
+.ai-feature-list h3 { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 16px; line-height: 1.4; letter-spacing: -.015em; margin: 0 0 7px; }
+.ai-feature-list p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.7; }
+.ai-feature-planned { display: inline-block; border: 1px solid #dce2d7; border-radius: 999px; padding: 3px 8px; font-size: 10px; font-weight: 600; color: #626c5d; background: #f3f5ef; letter-spacing: 0; }
+@media (max-width: 900px) { .ai-features-section { grid-template-columns: minmax(0, 1fr); gap: 32px; padding-block: 24px 56px; }.ai-features-visual { max-width: 680px; width: 100%; margin-inline: auto; }.ai-features-copy { max-width: 680px; margin-inline: auto; width: 100%; } }
+@media (max-width: 580px) { .ai-features-visual { border-radius: 20px; }.ai-feature-list { gap: 22px; }.ai-feature-list li { gap: 12px; }.ai-feature-list h3 { font-size: 15px; } }

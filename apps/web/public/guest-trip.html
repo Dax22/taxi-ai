@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><meta name="referrer" content="no-referrer"><meta name="theme-color" content="#F4B400">
+  <title>Taxi Ai — Your guest ride</title>
+  <link rel="icon" href="/favicon.svg?v=amber" type="image/svg+xml"><link rel="stylesheet" href="/styles.css"><link rel="stylesheet" href="/dashboard.css">
+  <script type="module" src="/guest-trip.mjs"></script>
+</head>
+<body class="account-page">
+  <a class="skip-link" href="#guest-main">Skip to your trip</a>
+  <header class="site-header shell"><a class="brand" href="/" aria-label="Taxi Ai home"><img class="brand-mark" src="/assets/taxi-ai-mark.svg" width="48" height="36" alt=""><span>Taxi Ai</span></a><span class="status-badge">PRIVATE GUEST LINK</span></header>
+  <main id="guest-main" class="shell account-shell trip-share-shell">
+    <p class="eyebrow">TAXI AI / NIGERIA</p><h1>A ride booked for you.</h1>
+    <p class="safety-preview-note"><strong>Development preview.</strong> This is a test trip. No real vehicle or payment is arranged, and no SMS is sent automatically.</p>
+    <p class="supporting-copy">Keep this link private. The person who booked manages the fare, payment and messages with the driver. Contact them directly if your plans change.</p>
+    <p id="guest-message" class="supporting-copy" role="status">Checking your private trip…</p>
+    <section id="guest-card" class="account-card" aria-label="Your guest ride details" hidden>
+      <dl id="guest-details" class="safety-details"></dl>
+      <div id="guest-pin-panel" class="pickup-pin-panel" hidden><p class="eyebrow">YOUR PICKUP PIN</p><output id="guest-pin" aria-label="Your six-digit pickup PIN"></output><p>At pickup, check the driver, number plate, make/model and colour before boarding. Give the driver your PIN only when you are at the correct vehicle. Do not share it remotely.</p></div>
+    </section>
+    <button id="guest-refresh" type="button" class="button button-primary">Refresh trip</button>
+    <p class="small-note">Updates refresh every 10 seconds while this page is visible. This link stops working after expiry, revocation, the booker’s sign-out or the end of the trip. Reopen the original link after reloading this page.</p>
+    <noscript><p>Enable JavaScript to open a private guest ride link.</p></noscript>
+  </main>
+  <footer class="shell account-footer"><p>Taxi Ai · Built for Nigeria.</p></footer>
+</body>
+</html>

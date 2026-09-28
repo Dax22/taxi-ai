@@ -1,0 +1,41 @@
+{
+  "name": "taxi-ai",
+  "version": "0.25.0",
+  "private": true,
+  "description": "Taxi Ai project foundation for Nigeria-wide rides, food and courier delivery",
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "node --env-file-if-exists=.env --experimental-sqlite apps/web/server.mjs",
+    "start": "node --env-file-if-exists=.env --experimental-sqlite apps/web/server.mjs",
+    "config:check": "node --env-file-if-exists=.env --experimental-sqlite scripts/config-check.mjs",
+    "staging:access": "node --experimental-sqlite scripts/staging-access.mjs",
+    "backup": "node --env-file-if-exists=.env --experimental-sqlite scripts/database-snapshot.mjs backup",
+    "restore": "node --env-file-if-exists=.env --experimental-sqlite scripts/database-snapshot.mjs restore",
+    "check": "node scripts/check.mjs",
+    "test": "node --experimental-sqlite --test packages/shared/test/*.test.mjs apps/web/test/*.test.mjs apps/admin/test/*.test.mjs services/api/test/*.test.mjs scripts/test/*.test.mjs",
+    "test:journey": "node --experimental-sqlite --test services/api/test/journey.test.mjs apps/web/test/page-controller.test.mjs apps/web/test/dashboard-view.test.mjs apps/web/test/api-client.test.mjs",
+    "test:safety": "node --experimental-sqlite --test services/api/test/safety.test.mjs services/api/test/safety-migration.test.mjs apps/web/test/safety.test.mjs",
+    "verify": "npm run check && npm test",
+    "admin": "node --env-file-if-exists=.env --experimental-sqlite scripts/create-admin.mjs",
+    "admin:reset-password": "node --env-file-if-exists=.env --experimental-sqlite scripts/reset-admin-password.mjs",
+    "demo": "node scripts/fare-demo.mjs",
+    "mobile:start": "npm --prefix apps/mobile start",
+    "mobile:verify": "npm --prefix apps/mobile run verify",
+    "load:test": "node --experimental-sqlite scripts/load-test.mjs",
+    "db:postgres:migrate": "node --env-file-if-exists=.env --experimental-sqlite scripts/postgres-migrate.mjs",
+    "db:postgres:import": "node --env-file-if-exists=.env --experimental-sqlite scripts/postgres-import.mjs"
+  },
+  "dependencies": {
+    "@aws-sdk/client-rekognition": "3.1141.0",
+    "google-auth-library": "11.1.0",
+    "nodemailer": "10.0.10",
+    "pg": "8.16.3",
+    "sharp": "0.35.4"
+  },
+  "devDependencies": {
+    "@fontsource-variable/manrope": "^5.3.0"
+  }
+}

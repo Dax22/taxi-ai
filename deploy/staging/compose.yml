@@ -1,0 +1,87 @@
+name: taxi-ai-staging
+services:
+  app:
+    build:
+      context: ../..
+    image: taxi-ai-staging:local
+    init: true
+    restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    stop_grace_period: 25s
+    environment:
+      TAXI_AI_STAFF_MFA_KEY: ${TAXI_AI_STAFF_MFA_KEY:-}
+      TAXI_AI_STAFF_MFA_REQUIRED: ${TAXI_AI_STAFF_MFA_REQUIRED:-false}
+      TAXI_AI_MODE: staging
+      TAXI_AI_PUBLIC_ORIGIN: https://${TAXI_AI_DOMAIN:?Set the staging DNS name}
+      TAXI_AI_PROXY_TOKEN: ${TAXI_AI_PROXY_TOKEN:?Generate a private proxy token}
+      TAXI_AI_STAGING_ACCESS_FILE: /run/secrets/testers
+      TAXI_AI_DB: ${TAXI_AI_DB_PATH:-/data/taxi-ai.sqlite}
+      TAXI_AI_MAPS_MODE: ${TAXI_AI_MAPS_MODE:-off}
+      TAXI_AI_CALLS_MODE: ${TAXI_AI_CALLS_MODE:-off}
+      TAXI_AI_TURN_URLS: ${TAXI_AI_TURN_URLS:-}
+      TAXI_AI_TURN_SECRET: ${TAXI_AI_TURN_SECRET:-}
+      TAXI_AI_GOOGLE_CLIENT_ID: ${TAXI_AI_GOOGLE_CLIENT_ID:-}
+      TAXI_AI_GOOGLE_CLIENT_SECRET: ${TAXI_AI_GOOGLE_CLIENT_SECRET:-}
+      TAXI_AI_GOOGLE_REDIRECT_URI: ${TAXI_AI_GOOGLE_REDIRECT_URI:-}
+      TAXI_AI_GOOGLE_NATIVE_CLIENT_IDS: ${TAXI_AI_GOOGLE_NATIVE_CLIENT_IDS:-}
+      TAXI_AI_EMAIL_MODE: ${TAXI_AI_EMAIL_MODE:-off}
+      TAXI_AI_SMTP_HOST: ${TAXI_AI_SMTP_HOST:-}
+      TAXI_AI_SMTP_PORT: ${TAXI_AI_SMTP_PORT:-}
+      TAXI_AI_SMTP_USER: ${TAXI_AI_SMTP_USER:-}
+      TAXI_AI_SMTP_PASSWORD: ${TAXI_AI_SMTP_PASSWORD:-}
+      TAXI_AI_SMTP_FROM: ${TAXI_AI_SMTP_FROM:-}
+      TAXI_AI_PUSH_ENABLED: ${TAXI_AI_PUSH_ENABLED:-false}
+      TAXI_AI_EXPO_PROJECT_ID: ${TAXI_AI_EXPO_PROJECT_ID:-}
+      TAXI_AI_EXPO_ACCESS_TOKEN: ${TAXI_AI_EXPO_ACCESS_TOKEN:-}
+      TAXI_AI_VEHICLE_VISION_MODE: ${TAXI_AI_VEHICLE_VISION_MODE:-off}
+      TAXI_AI_VEHICLE_VISION_API_KEY: ${TAXI_AI_VEHICLE_VISION_API_KEY:-}
+      TAXI_AI_VEHICLE_VISION_MODEL: ${TAXI_AI_VEHICLE_VISION_MODEL:-gpt-4.1-mini-2025-04-14}
+    secrets:
+      - testers
+    volumes:
+      - app_data:/data
+      - backups:/backups
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    mem_limit: 1g
+    cpus: 1.0
+    pids_limit: 128
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'
+    # No host port: all browser traffic must pass through the HTTPS gateway.
+  gateway:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    ports:
+      - '80:80'
+      - '443:443'
+    environment:
+      TAXI_AI_DOMAIN: ${TAXI_AI_DOMAIN:?Set the staging DNS name}
+      TAXI_AI_PROXY_TOKEN: ${TAXI_AI_PROXY_TOKEN:?Generate a private proxy token}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'
+secrets:
+  testers:
+    file: ./secrets/staging-testers.json
+volumes:
+  app_data:
+  backups:
+  caddy_data:
+  caddy_config:

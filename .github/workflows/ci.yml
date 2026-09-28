@@ -1,0 +1,83 @@
+name: Verify
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - integration/resolved-vscode-slider
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Node ${{ matrix.node }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['22.12.0', '24']
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ matrix.node }}
+          package-manager-cache: false
+      - name: Install locked server dependencies
+        run: npm ci --ignore-scripts --no-fund --no-audit
+      - name: Check architecture
+        run: npm run check
+      - name: Run server and web tests
+        run: npm test
+  container:
+    name: Staging container
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Build staging image
+        run: docker build --tag taxi-ai-staging:test .
+      - name: Check gateway and isolated container
+        run: node scripts/container-smoke.mjs taxi-ai-staging:test
+
+  mobile:
+    name: Native contracts and bundles
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CI: '1'
+      EXPO_OFFLINE: '1'
+      # Compilation fixture only. No connection, deployment or public app release.
+      EXPO_PUBLIC_API_ORIGIN: https://taxi.example.test
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Install locked native dependencies
+        run: npm ci --prefix apps/mobile --no-fund --no-audit
+      - name: Check native boundaries
+        run: npm --prefix apps/mobile run check
+      - name: Typecheck native app
+        run: npm --prefix apps/mobile run typecheck
+      - name: Run native tests
+        run: npm --prefix apps/mobile test
+      - name: Export iOS and Android bundles
+        run: npm --prefix apps/mobile run export

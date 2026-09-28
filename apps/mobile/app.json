@@ -1,0 +1,65 @@
+{
+  "expo": {
+    "name": "Taxi Ai",
+    "slug": "taxi-ai",
+    "version": "0.8.0",
+    "scheme": "taxiai",
+    "orientation": "default",
+    "userInterfaceStyle": "light",
+    "icon": "./assets/icon.png",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.taxiai.app"
+    },
+    "android": {
+      "package": "com.taxiai.app",
+      "blockedPermissions": [
+        "android.permission.ACCESS_BACKGROUND_LOCATION"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-secure-store",
+        {
+          "configureAndroidBackup": true
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Allow Taxi Ai to find nearby jobs and, when you choose to share, show your trip location while the app is open.",
+          "isIosBackgroundLocationEnabled": false,
+          "isAndroidBackgroundLocationEnabled": false,
+          "isAndroidForegroundServiceEnabled": false
+        }
+      ],
+      "expo-notifications",
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Allow Taxi Ai to take your driver selfie, licence, food or vehicle photo when you choose to add one.",
+          "photosPermission": "Allow Taxi Ai to use the driver document, food or vehicle photo you select.",
+          "microphonePermission": false
+        }
+      ],
+      [
+        "expo-sensors",
+        {
+          "motionPermission": "Allow Taxi Ai to check for possible impacts while you enable foreground safety monitoring."
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Allow Taxi Ai to check sound levels for possible distress only while you enable foreground monitoring. Audio is not saved or uploaded.",
+          "enableBackgroundRecording": false,
+          "enableBackgroundPlayback": false
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
