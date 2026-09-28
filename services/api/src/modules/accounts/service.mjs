@@ -46,7 +46,7 @@ export function createAccountsService({ repository, driverProfiles, passwords, t
     const name = label(data.name, 'Name');
     const email = emailAddress(data.email);
     const password = passwordInput(data.password);
-    const intent = registrationIntent(data.intent, data.role === 'driver' ? 'driver' : 'customer');
+    const intent = Object.hasOwn(data, 'intent') ? registrationIntent(data.intent) : null;
     // Keep older registration clients working. New clients start as customers.
     const role = data.role ?? 'customer';
     check(['customer', 'driver'].includes(role), 'INVALID_ROLE', 'Choose customer or driver.');
@@ -64,7 +64,7 @@ export function createAccountsService({ repository, driverProfiles, passwords, t
       (await repository.insert({ id, email, name, passwordHash, role, createdAt: now }));
       (await repository.grant(id, 'customer', now));
       if (vehicle) { (await driverProfiles.insert(id, vehicle, now)); (await repository.grant(id, 'driver', now)); }
-      await repository.kemmyPatch(id, { startedAt: now, experience: intent }, now);
+      if (intent) await repository.kemmyPatch(id, { experience: intent }, now);
       (await audit.record(id, 'account.created', id, now));
       return (await profile(id));
     }));
@@ -197,7 +197,7 @@ export function createAccountsService({ repository, driverProfiles, passwords, t
         const now = clock();
         (await repository.insert({ id, email, name, passwordHash: '', passwordEnabled: false, role: 'customer', createdAt: now }));
         (await repository.grant(id, 'customer', now));
-        await repository.kemmyPatch(id, { startedAt: now, experience: startingIntent ?? 'customer' }, now);
+        if (startingIntent) await repository.kemmyPatch(id, { experience: startingIntent }, now);
         (await audit.record(id, 'account.created', id, now));
       }
       (await repository.linkGoogle(id, subject, clock())); (await audit.record(id, 'account.google_connected', id, clock()));
