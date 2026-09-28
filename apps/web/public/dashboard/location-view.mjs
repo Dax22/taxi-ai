@@ -51,10 +51,16 @@ export function createLocationView({ onEnable, onUsePickup, onSearch, onFindRide
         : `Destination and pickup searches can cover addresses and landmarks across Nigeria. Searches use ${state.settings.searchHost}; selected route points go to ${state.settings.routeHost}. Map areas load via ${state.settings.tileHost}.`
       : state.settings ? 'Nationwide address search is currently unavailable. Try again when online maps are configured.' : 'Checking nationwide address search…';
     $('location-pickup-fields').disabled = state.blocked || !state.online || state.booking;
+    $('location-pickup-manual').hidden = rideFlow;
+    $('location-pickup-mode-note').textContent = rideFlow
+      ? 'Taxi Ai uses a fresh device location as your passenger pickup when you tap Find rides.'
+      : 'Choose the pickup address or use the device current location.';
     locked('location-pickup-current', state.locatingPickup || state.blocked || !state.online || state.booking || !state.supported);
-    $('location-pickup-current').textContent = state.locatingPickup ? 'Reading your location…' : state.pickup ? 'Update current location' : 'Use current location';
+    $('location-pickup-current').textContent = state.locatingPickup ? 'Reading your location…'
+      : rideFlow ? 'Refresh current pickup' : state.pickup ? 'Update current location' : 'Use current location';
     $('location-pickup-selected').textContent = state.locatingPickup ? 'Waiting for a fresh GPS fix…'
-      : state.pickup ? `${state.pickup.name} · ${state.pickup.lat.toFixed(5)}, ${state.pickup.lng.toFixed(5)}` : 'Current location has not been set yet.';
+      : state.pickup ? `${state.pickup.name} · ${state.pickup.lat.toFixed(5)}, ${state.pickup.lng.toFixed(5)}`
+        : rideFlow ? 'Current pickup will be read from this device when you tap Find rides.' : 'Current location has not been set yet.';
     for (const side of ['pickup', 'destination']) {
       const destination = side === 'destination';
       $(`location-${side}-fields`).disabled = state.blocked || state.booking || (!destination && !state.online);
@@ -75,7 +81,10 @@ export function createLocationView({ onEnable, onUsePickup, onSearch, onFindRide
         }
       }
     }
-    for (const side of ['pickup', 'destination']) { $(`location-target-${side}`).checked = state.target === side; $(`location-target-${side}`).disabled = state.blocked || !state.online || state.booking; }
+    for (const side of ['pickup', 'destination']) {
+      $(`location-target-${side}`).checked = state.target === side;
+      $(`location-target-${side}`).disabled = state.blocked || !state.online || state.booking || (rideFlow && side === 'pickup');
+    }
     $('location-coordinate-fields').disabled = !state.online || state.blocked || state.booking;
     $('location-preview').hidden = rideFlow;
     locked('location-preview', !state.pickup || !state.destination || state.blocked || state.quoting || state.booking || !state.online);
@@ -91,7 +100,7 @@ export function createLocationView({ onEnable, onUsePickup, onSearch, onFindRide
       $('location-formula').textContent = `${route.distanceKind === 'straight_line' ? 'Direct-distance delivery estimate, not a road route. Confirm access and timing with the driver. ' : ''}Illustrative formula (${pricing.categoryMultiplier ?? 1}× category factor): ${formatNaira(pricing.baseKobo)} base + ${formatNaira(pricing.perKmKobo)}/km + ${formatNaira(pricing.perMinuteKobo)}/min. Minimum ${formatNaira(pricing.minimumKobo)}, rounded up to ${formatNaira(pricing.incrementKobo)}.`;
       const category = vehicleCategory(state.vehicleCategory);
       $('location-book').textContent = transportCategory(state.vehicleCategory)?.service === 'ride'
-        ? 'Find a ' + (category?.name ?? 'selected') + ' driver ↗' : 'Find a delivery driver ↗';
+        ? 'Find a ' + (category?.name ?? 'selected') + ' driver & negotiate ↗' : 'Find a delivery driver ↗';
       $('location-expiry').textContent = state.expired ? 'These ride options expired. Find rides again.' : 'Fare preview valid for 15 minutes. The final fare still requires agreement.';
     }
     plannerMap.render({ enabled: state.online && Boolean(state.settings?.tiles), tiles: state.settings?.tiles,
