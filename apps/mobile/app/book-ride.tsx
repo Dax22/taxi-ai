@@ -58,15 +58,19 @@ function BookingScreen() {
           {delivery && settings.online.enabled && <Button title="Search addresses" secondary={s.mode !== 'route'} disabled={locked} onPress={() => c.chooseMode('route')}/>}
           {showDeveloperSample && settings.allowSample && <Button title="Developer sample" secondary={s.mode !== 'sample'} disabled={locked} onPress={() => c.chooseMode('sample')}/>}
         </View>}
-        {(delivery || s.destination.selected || s.mode === 'sample') && <View style={[look.columns, wide && look.wide]}><View style={[look.column, wide && look.wideColumn]}><Card><Text style={styles.h2}>{delivery ? 'Plan your delivery route' : 'Confirm your pickup'}</Text>
+        {(delivery || s.destination.selected || s.mode === 'sample') && <View style={[look.columns, wide && look.wide]}><View style={[look.column, wide && look.wideColumn]}><Card><Text style={styles.h2}>{delivery ? 'Plan your delivery route' : 'Pickup from your current location'}</Text>
           {s.mode === 'route' ? <>
             {!s.consent ? delivery ? <><Text style={styles.body}>Search streets and landmarks across Nigeria. Include the town and state for more precise results. Search terms go to {settings.online.searchHost ?? 'the configured address provider'}; selected pickup and destination coordinates go to {settings.online.routeHost ?? 'the configured routing provider'} for a route preview.</Text>
-              <Text style={styles.small}>Search happens when you tap Search. Current pickup requests a one-time phone location only when you choose it.</Text><Button title="Enable address search" disabled={disabled} onPress={() => c.consent()}/></> : <Text style={styles.body}>Enter your destination above, then confirm where you want to be picked up.</Text>
-              : <><Button title="Use current location for pickup" busy={s.locatingPickup} disabled={planningDisabled}
-                onPress={() => void (delivery ? c.useCurrentPickup() : c.useRidePickup())}/>
-                <PlaceSearch endpoint="pickup" state={s} controller={c} disabled={disabled}
-                  onSelect={delivery ? undefined : (place) => void c.chooseRidePickup(place)}/>
-                {delivery && <PlaceSearch endpoint="destination" state={s} controller={c} disabled={planningDisabled}/>}</>}
+              <Text style={styles.small}>Search happens when you tap Search. Current pickup requests a one-time phone location only when you choose it.</Text><Button title="Enable address search" disabled={disabled} onPress={() => c.consent()}/></> : <Text style={styles.body}>Enter your destination above. Taxi Ai will use this phone’s current location as your pickup when you tap Find rides.</Text>
+              : delivery ? <><Button title="Use current location for pickup" busy={s.locatingPickup} disabled={planningDisabled}
+                onPress={() => void c.useCurrentPickup()}/>
+                <PlaceSearch endpoint="pickup" state={s} controller={c} disabled={disabled}/>
+                <PlaceSearch endpoint="destination" state={s} controller={c} disabled={planningDisabled}/></>
+              : <><Pill>CURRENT PICKUP</Pill>
+                <Text style={styles.body}>{s.pickup.selected?.name ?? 'Waiting for your current location'}</Text>
+                <Text style={styles.small}>Taxi Ai uses a fresh phone location as your passenger pickup when you tap Find rides. Refresh it here if you move before requesting the driver.</Text>
+                <Button title="Refresh current pickup" busy={s.locatingPickup} disabled={planningDisabled}
+                  onPress={() => void c.useRidePickup()}/></>}
           </> : <><Text style={styles.body}>Try the request flow with sample Abuja areas and fictional fares.</Text>
             <Text style={styles.small}>This local demo uses a fixed pickup area: {samplePickup?.name ?? 'the first available sample area'}.</Text>
             <Field label="Destination" placeholder="Type an Abuja area, e.g. Maitama" value={s.sampleDestinationQuery} editable={!disabled} maxLength={160}
