@@ -1,0 +1,4 @@
+services:
+  app:
+    image: ${TAXI_AI_IMAGE:-ghcr.io/dax22/taxi-ai:integration}
+    pull_policy: always
