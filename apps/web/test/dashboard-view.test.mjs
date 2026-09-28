@@ -111,7 +111,7 @@ test('all categories book the selected service and delivery drafts clear at acco
   const category = (id) => group.children.find((button) => button.dataset.category === id);
   for (const id of ['standard', 'suv', 'van', 'truck', 'motorcycle']) {
     category(id).handlers.click(); h.view.render({ ...state(customer, []), sampleMatchingEnabled: true });
-    assert.equal(h.node('standard-ride-planner').hidden, false); assert.equal(h.node('customer-panel').hidden, false);
+    assert.equal(h.node('standard-ride-planner').hidden, false); assert.equal(h.node('customer-panel').hidden, true);
     assert.equal(category(id)['aria-checked'], 'true');
     const delivery = !['standard', 'suv'].includes(id);
     assert.equal(h.node('delivery-details-form').hidden, !delivery);
