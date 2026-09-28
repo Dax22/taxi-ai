@@ -3,12 +3,12 @@ import { readEatsResponse } from './eats-contracts.mjs';
 import { mealGroups, mealQuantity } from './eats-meals.mjs';
 import { resolveFoodArea } from './nigeria-areas.mjs';
 const empty = () => ({ user: null, screen: 'browse', restaurants: [], catalogAreaId: '', areas: [], restaurant: null, restaurantId: null, menu: [], cart: [],
-  address: { line: '', areaId: '' }, instructions: '', fulfillment: 'delivery', quote: null, order: null, orderId: null,
-  deliveryConfirmed: false, foodQuery: '', foods: [], foodCount: 0, foodNextOffset: null, foodLoading: false, mealBasket: [], mealCheckout: null,
+  address: { line: '', areaId: '' }, recipient: { kind: 'self' }, instructions: '', fulfillment: 'delivery', quote: null, order: null, orderId: null,
+  deliveryConfirmed: false, deliveryLocating: false, foodQuery: '', foods: [], foodCount: 0, foodNextOffset: null, foodLoading: false, mealBasket: [], mealCheckout: null,
   orders: [], nextBefore: null, store: null, storeMenu: [], storeOrders: [], storeNextBefore: null, work: null, reviewStores: [], review: null,
   loading: false, busy: false, uncertain: false, stale: true, error: '', notice: '', replaceRestaurantId: null, now: 0 });
 /** Shared screen state. Requests and credentials stay in each platform's transport. */
-export function createEatsController({ api, makeKey, now = Date.now }) {
+export function createEatsController({ api, makeKey, now = Date.now, locateDelivery = null }) {
   let state = empty(), generation = 0, pending = null, polling = null;
   const listeners = new Set(), photos = new Map(); let identity = 0;
   const emit = () => { state = { ...state, now: now() }; for (const listener of listeners) listener(); };
@@ -138,29 +138,57 @@ export function createEatsController({ api, makeKey, now = Date.now }) {
     } catch (error) { if (fresh(epoch)) { state.error = error.message; state.foods = []; state.foodCount = 0; state.foodNextOffset = null; } return false; }
     finally { if (fresh(epoch)) { state.foodLoading = false; emit(); } }
   }
+  function checkedRecipient(value) {
+    if (!value || value.kind === 'self') return { kind: 'self' };
+    if (value.kind !== 'other') throw new Error('Choose whether this order is for you or someone else.');
+    const name = String(value.name ?? '').trim(), phone = String(value.phone ?? '').trim();
+    if (name.length < 2 || name.length > 80) throw new Error('Enter the recipient’s name.');
+    if (phone.replace(/\D/g, '').length < 11) throw new Error('Enter the recipient’s Nigerian phone number.');
+    return { kind: 'other', name, phone };
+  }
+  async function confirmDelivery(address, recipient = state.recipient) {
+    if (locked()) return false;
+    let nextRecipient;
+    try { nextRecipient = checkedRecipient(recipient); }
+    catch (error) { state.error = error.message; emit(); return false; }
+    if (typeof address.line !== 'string' || address.line.trim().length < 8 || address.line.trim().length > 240 || !resolveFoodArea(address.areaId)) {
+      state.error = 'Enter a delivery address and landmark, then choose the state and town or area.'; emit(); return false;
+    }
+    if (state.address.areaId !== address.areaId) { state.mealBasket = []; state.cart = []; state.restaurant = null; state.restaurantId = null; state.menu = []; state.catalogAreaId = ''; state.restaurants = []; state.foods = []; state.foodCount = 0; state.foodNextOffset = null; }
+    state.address = { line: address.line.trim(), areaId: address.areaId }; state.recipient = nextRecipient; state.deliveryConfirmed = true; state.fulfillment = 'delivery'; state.mealCheckout = state.quote = null; state.error = ''; emit();
+    return navigate('browse');
+  }
+  async function useCurrentDelivery() {
+    if (locked() || state.deliveryLocating || typeof locateDelivery !== 'function') {
+      if (!locateDelivery) { state.error = 'Current location is unavailable here. Enter the delivery address manually.'; emit(); }
+      return false;
+    }
+    const epoch = generation, owner = identity; state.deliveryLocating = true; state.error = ''; emit();
+    try {
+      const address = await locateDelivery();
+      if (generation !== epoch || identity !== owner || !state.user) return false;
+      state.deliveryLocating = false; emit();
+      return await confirmDelivery(address, { kind: 'self' });
+    } catch (error) {
+      if (generation === epoch && identity === owner && state.user) { state.deliveryLocating = false; state.error = error instanceof Error ? error.message : 'Could not read your current delivery location.'; emit(); }
+      return false;
+    }
+  }
   return Object.freeze({ context, navigate, refresh, selectRestaurant,
-    findMeals,
+    findMeals, confirmDelivery, useCurrentDelivery,
     browseLocation(areaId) {
       if (locked()) return Promise.resolve(false);
       if (areaId !== '' && !resolveFoodArea(areaId)) { state.error = 'Choose a Nigerian state and enter the kitchen town or area.'; emit(); return Promise.resolve(false); }
       state.catalogAreaId = areaId; state.restaurants = []; return navigate('browse');
     },
-    confirmDelivery(address) {
-      if (locked()) return Promise.resolve(false);
-      if (typeof address.line !== 'string' || address.line.trim().length < 8 || address.line.trim().length > 240 || !resolveFoodArea(address.areaId)) {
-        state.error = 'Enter a delivery address and landmark, then choose the state and town or area.'; emit(); return Promise.resolve(false);
-      }
-      if (state.address.areaId !== address.areaId) { state.mealBasket = []; state.cart = []; state.restaurant = null; state.restaurantId = null; state.menu = []; state.catalogAreaId = ''; state.restaurants = []; state.foods = []; state.foodCount = 0; state.foodNextOffset = null; }
-      state.address = { line: address.line.trim(), areaId: address.areaId }; state.deliveryConfirmed = true; state.fulfillment = 'delivery'; state.mealCheckout = state.quote = null; state.error = ''; emit();
-      return navigate('browse');
-    },
+    setRecipient(value) { if (locked()) return; try { state.recipient = checkedRecipient(value); state.mealCheckout = state.quote = null; state.error = ''; } catch (error) { state.error = error.message; } emit(); },
     editDelivery() { if (locked()) return; generation++; polling = null; state.deliveryConfirmed = false; state.foods = []; state.foodLoading = state.loading = false; state.mealCheckout = state.quote = null; emit(); },
     mealQuantity(food, quantity) { if (locked()) return; try { state.mealBasket = mealQuantity(state.mealBasket, food, quantity); state.mealCheckout = null; state.error = ''; } catch (error) { state.error = error.message; } emit(); },
     async reviewMeal() {
       if (locked() || state.foodLoading || !state.deliveryConfirmed || !state.mealBasket.length) return false;
       const owner = identity, epoch = generation; await refresh({ quiet: true });
       if (owner !== identity || epoch !== generation || state.screen !== 'browse' || !state.deliveryConfirmed) return false;
-      return run('/checkouts', { groups: mealGroups(state.mealBasket), address: state.address, instructions: state.instructions });
+      return run('/checkouts', { groups: mealGroups(state.mealBasket), address: state.address, recipient: state.recipient, instructions: state.instructions });
     },
     placeMeal() { return state.mealCheckout && now() < state.mealCheckout.expiresAt ? run('/checkouts/place', { checkoutId: state.mealCheckout.id }) : Promise.resolve(false); },
     async photo(id) {
@@ -192,7 +220,7 @@ export function createEatsController({ api, makeKey, now = Date.now }) {
       }
       state.address = { ...address }; state.instructions = instructions; state.quote = state.mealCheckout = null; emit();
     },
-    checkout() { if (!state.restaurant) return Promise.resolve(false); return run('/quotes', { storeId: state.restaurant.id, expectedVersion: state.restaurant.version, items: state.cart, fulfillment: state.fulfillment, address: state.address, instructions: state.instructions }); },
+    checkout() { if (!state.restaurant) return Promise.resolve(false); return run('/quotes', { storeId: state.restaurant.id, expectedVersion: state.restaurant.version, items: state.cart, fulfillment: state.fulfillment, address: state.address, recipient: state.recipient, instructions: state.instructions }); },
     place() { return state.quote && now() < state.quote.expiresAt ? run('/orders', { quoteId: state.quote.id }, true) : Promise.resolve(false); },
     orderAction(order, action, extras = {}) { return run(`/orders/${order.id}/${action}`, { expectedVersion: order.version, ...extras }, action === 'claim'); },
     createStore(details) { return run('/stores', { details }); },

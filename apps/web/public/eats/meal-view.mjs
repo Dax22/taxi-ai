@@ -13,9 +13,18 @@ export function createMealView(controller, { button, mealPhoto, totals }) {
     keys.set(id, key); const root = field(id); root.replaceChildren(); build(root);
   };
   const location = createFoodLocationFields({ state: field('state'), town: field('town') });
+  const recipient = () => field('recipient-kind').value === 'other'
+    ? { kind: 'other', name: field('recipient-name').value, phone: field('recipient-phone').value } : { kind: 'self' };
+  const recipientFields = () => {
+    const other = field('recipient-kind').value === 'other';
+    field('recipient-fields').hidden = !other; field('current-row').hidden = other;
+    field('recipient-name').required = field('recipient-phone').required = other;
+  };
+  field('recipient-kind').addEventListener('change', recipientFields);
+  field('current').addEventListener('click', () => { field('recipient-kind').value = 'self'; recipientFields(); void controller.useCurrentDelivery(); });
   field('location-form').addEventListener('submit', (event) => {
     event.preventDefault();
-    void controller.confirmDelivery({ line: field('address').value, areaId: location.value() }).then((ok) => { if (ok) field('query').focus(); });
+    void controller.confirmDelivery({ line: field('address').value, areaId: location.value() }, recipient()).then((ok) => { if (ok) field('query').focus(); });
   });
   field('change').addEventListener('click', () => { controller.editDelivery(); field('address').focus(); });
   field('search-form').addEventListener('submit', (event) => { event.preventDefault(); void controller.findMeals(field('query').value); });
@@ -27,19 +36,28 @@ export function createMealView(controller, { button, mealPhoto, totals }) {
     state = next;
     if (owner !== state.user?.id) {
       owner = state.user?.id; keys.clear(); location.set('');
-      for (const id of ['query', 'address', 'instructions']) field(id).value = '';
+      for (const id of ['query', 'address', 'instructions', 'recipient-name', 'recipient-phone']) field(id).value = '';
+      field('recipient-kind').value = 'self'; recipientFields();
       for (const id of ['results', 'lines', 'quotes']) field(id).replaceChildren();
     }
     if (!state.user) return;
     const admin = state.user.role === 'admin';
     field('location-form').hidden = state.deliveryConfirmed;
-    field('location-fields').disabled = locked() || state.foodLoading;
+    field('location-fields').disabled = locked() || state.foodLoading || state.deliveryLocating;
+    field('current').disabled = locked() || state.foodLoading || state.deliveryLocating;
+    field('current-status').textContent = state.deliveryLocating ? 'Getting your current delivery location…' : '';
     field('builder').hidden = field('destination').hidden = !state.deliveryConfirmed;
     $('food-kitchen-browser').hidden = !state.deliveryConfirmed;
-    field('destination-text').textContent = `${state.address.line} · ${foodAreaLabel(state.address.areaId)}`;
+    field('destination-text').textContent = `${state.address.line} · ${foodAreaLabel(state.address.areaId)}${state.recipient?.kind === 'other' ? ` · For ${state.recipient.name}` : ''}`;
     field('change').disabled = state.busy || state.uncertain;
     const addressKey = JSON.stringify(state.address);
     if (keys.get('address-value') !== addressKey) { keys.set('address-value', addressKey); field('address').value = state.address.line; location.set(state.address.areaId); }
+    const recipientKey = JSON.stringify(state.recipient);
+    if (keys.get('recipient-value') !== recipientKey) {
+      keys.set('recipient-value', recipientKey); field('recipient-kind').value = state.recipient?.kind ?? 'self';
+      field('recipient-name').value = state.recipient?.kind === 'other' ? state.recipient.name : '';
+      field('recipient-phone').value = state.recipient?.kind === 'other' ? state.recipient.phone : ''; recipientFields();
+    }
     field('query').disabled = field('find').disabled = locked() || state.foodLoading;
     field('instructions').disabled = locked();
     if (document.activeElement !== field('instructions')) field('instructions').value = state.instructions;
