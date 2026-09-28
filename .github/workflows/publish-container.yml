@@ -1,0 +1,67 @@
+name: Publish deployable container
+
+on:
+  push:
+    branches:
+      - integration/resolved-vscode-slider
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: publish-container-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  IMAGE_NAME: ghcr.io/dax22/taxi-ai
+
+jobs:
+  publish:
+    name: Build, smoke test and publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+
+      - name: Build immutable deployment image
+        run: |
+          docker build \
+            --pull \
+            --label "org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}" \
+            --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
+            --tag "${IMAGE_NAME}:${GITHUB_SHA}" \
+            --tag "${IMAGE_NAME}:integration" \
+            .
+
+      - name: Smoke test deployment image
+        run: node scripts/container-smoke.mjs "${IMAGE_NAME}:${GITHUB_SHA}"
+
+      - name: Log in to GitHub Container Registry
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "${GHCR_TOKEN}" | docker login ghcr.io --username "${{ github.actor }}" --password-stdin
+
+      - name: Publish immutable and integration tags
+        run: |
+          docker push "${IMAGE_NAME}:${GITHUB_SHA}"
+          docker push "${IMAGE_NAME}:integration"
+
+      - name: Deployment artifact summary
+        run: |
+          {
+            echo "### Taxi AI deployment image"
+            echo
+            echo "\\`ghcr.io/dax22/taxi-ai:${GITHUB_SHA}\\`"
+            echo
+            echo "The same verified image is also tagged as \`ghcr.io/dax22/taxi-ai:integration\`."
+            echo "Deploy by immutable SHA tag when promoting a release."
+          } >> "${GITHUB_STEP_SUMMARY}"
