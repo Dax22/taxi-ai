@@ -91,6 +91,9 @@ test('planner binds actual HTML controls, renders plain-text places and prevents
   assert.equal(node('location-ride-options').children.length, 2);
   assert.equal(node('location-ride-options').children[0].attributes['aria-checked'], 'true');
   assert.match(node('location-pickup-selected').textContent, /<img src=x/);
+  assert.equal(node('location-pickup-manual').hidden, true);
+  assert.equal(node('location-target-pickup').disabled, true);
+  assert.equal(node('location-pickup-current').textContent, 'Refresh current pickup');
   node('location-pickup-current').fire('click'); assert.equal(actions.pop()[0], 'UsePickup');
   const result = node('location-destination-results').children[0].children[0];
   assert.equal(result.textContent, destination.name); result.fire('click'); assert.deepEqual(actions.pop(), ['Select', 'destination', destination]);
