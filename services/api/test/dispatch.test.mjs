@@ -65,9 +65,13 @@ test('road pickup time can select a farther driver and exposes only that driver\
   const nearLat = 9.082234, fartherLat = 9.091234;
   const mapProvider = provider((a, b) => b.lat === pickup.lat ? (a.lat === nearLat ? 600 : 120) : 300);
   const { h, customer, drivers } = await setup(t, { mapProvider });
-  const ride = await routed(customer);
+  // Make both candidates available before the request exists. Otherwise the
+  // first online transition may legitimately dispatch before the second driver
+  // joins, making this road-ETA comparison a scheduler race rather than a test
+  // of the allocation policy.
   await drivers[0].online({ mode: 'gps', lat: nearLat, lng: pickup.lng });
   await drivers[1].online({ mode: 'gps', lat: fartherLat, lng: pickup.lng });
+  const ride = await routed(customer);
   assert.deepEqual(await available(drivers[0]), []);
   const requests = await available(drivers[1]);
   assert.equal(requests.length, 1);
