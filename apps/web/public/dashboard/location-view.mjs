@@ -100,7 +100,7 @@ export function createLocationView({ onEnable, onUsePickup, onSearch, onFindRide
       $('location-formula').textContent = `${route.distanceKind === 'straight_line' ? 'Direct-distance delivery estimate, not a road route. Confirm access and timing with the driver. ' : ''}Illustrative formula (${pricing.categoryMultiplier ?? 1}× category factor): ${formatNaira(pricing.baseKobo)} base + ${formatNaira(pricing.perKmKobo)}/km + ${formatNaira(pricing.perMinuteKobo)}/min. Minimum ${formatNaira(pricing.minimumKobo)}, rounded up to ${formatNaira(pricing.incrementKobo)}.`;
       const category = vehicleCategory(state.vehicleCategory);
       $('location-book').textContent = transportCategory(state.vehicleCategory)?.service === 'ride'
-        ? 'Find a ' + (category?.name ?? 'selected') + ' driver ↗' : 'Find a delivery driver ↗';
+        ? 'Find a ' + (category?.name ?? 'selected') + ' driver & negotiate ↗' : 'Find a delivery driver ↗';
       $('location-expiry').textContent = state.expired ? 'These ride options expired. Find rides again.' : 'Fare preview valid for 15 minutes. The final fare still requires agreement.';
     }
     plannerMap.render({ enabled: state.online && Boolean(state.settings?.tiles), tiles: state.settings?.tiles,
