@@ -156,6 +156,10 @@ export class BookingController {
   }
   async findRides() {
     if (!this.state.consent) this.patch({ consent: true });
+    // Passenger rides always start from a fresh device location. The Find rides
+    // tap is the explicit user action that triggers this one-time foreground fix.
+    await this.useCurrentPickup();
+    if (!this.state.pickup.selected) return;
     const places = await this.search('destination');
     if (places.length === 1) await this.chooseRideDestination(places[0]);
   }

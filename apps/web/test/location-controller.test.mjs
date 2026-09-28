@@ -205,9 +205,11 @@ test('an address selection cancels a pending GPS pickup and a newer GPS request 
 });
 
 
-test('Find rides searches nationwide, uses current pickup and prepares a fare without a second preview click', async () => {
+test('Find rides refreshes current pickup, searches nationwide and prepares a fare without a second preview click', async () => {
   const f = plannerSetup();
   await f.c.setContext(customer, false);
+  f.c.enable();
+  f.c.select('pickup', { ...pickup, name: 'Old manual pickup' });
   f.requestHook = async (path) => path === '/api/locations/search'
     ? { places: [destination] }
     : { settings: { enabled: true, mode: 'community' } };
@@ -229,7 +231,8 @@ test('Find rides keeps ambiguous destination matches visible until the customer 
     : { settings: { enabled: true, mode: 'community' } };
   await f.c.findRides('Maitama');
   assert.equal(f.commands.length, 0);
-  assert.equal(f.locates, 0);
+  assert.equal(f.locates, 1);
+  assert.deepEqual(f.c.snapshot().pickup, currentPickup);
   assert.equal(f.c.snapshot().results.destination.length, 2);
   await f.c.chooseRidePlace('destination', second);
   assert.equal(f.locates, 1);

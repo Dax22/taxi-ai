@@ -73,8 +73,9 @@ test('route pickup comes from the current location action before previewing', as
 
 
 
-test('Find rides searches destination, uses current pickup and prepares the route fare automatically', async () => {
+test('Find rides refreshes current pickup, searches destination and prepares the route fare automatically', async () => {
   const f = fixture(); await start(f); const c = f.controller;
+  c.consent(); c.select('pickup', { ...pickup, name: 'Old manual pickup' });
   f.api.searchPlaces = async () => ({ ...envelope, places: [destination], attribution: 'Test source' });
   c.edit('destination', 'Maitama, Abuja');
   await c.findRides();
@@ -90,7 +91,8 @@ test('Find rides leaves ambiguous destinations for customer selection before pri
   f.api.searchPlaces = async () => ({ ...envelope, places: [destination, second], attribution: 'Test source' });
   c.edit('destination', 'Maitama');
   await c.findRides();
-  assert.equal(f.locates(), 0);
+  assert.equal(f.locates(), 1);
+  assert.equal(c.snapshot().pickup.selected?.name, 'Current location');
   assert.equal(c.snapshot().preview, null);
   assert.equal(c.snapshot().destination.results.length, 2);
   await c.chooseRideDestination(second);

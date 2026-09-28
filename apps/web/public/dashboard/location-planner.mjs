@@ -73,7 +73,16 @@ export function createLocationPlanner({ client, view, onBook, onOnline, device =
       error = settings ? 'Nationwide ride search is unavailable right now.' : 'Checking nationwide ride search…'; render(); return;
     }
     rideDiscovery = true;
+    target = 'destination';
     if (!online) { online = true; onOnline(true, settings); render(); }
+    // A passenger ride always starts from a fresh device location. Find rides is the
+    // explicit user action that permits this one-time GPS read; typed pickup remains
+    // available to delivery flows, not as the default passenger pickup.
+    await useCurrentPickup();
+    if (!pickup) {
+      error = error || 'Allow current-location access to find rides from where you are.';
+      render(); return;
+    }
     const places = await search('destination', query);
     if (places.length === 1) await chooseRidePlace('destination', places[0]);
   }
@@ -116,7 +125,11 @@ export function createLocationPlanner({ client, view, onBook, onOnline, device =
     finally { if (generation === epoch) { booking = false; render(); } }
   }
   return Object.freeze({ setCategory(id) { if (!booking && transportCategory(id) && id !== vehicleCategory) { vehicleCategory = id; revision++; quote = null; quoting = false; error = ''; render(); } }, setContext, reset, enable, clear, select, search, findRides, chooseRidePlace, useRidePickup, useCurrentPickup, preview, book,
-    setTarget(value) { if (['pickup', 'destination'].includes(value)) { target = value; render(); } },
+    setTarget(value) {
+      if (!['pickup', 'destination'].includes(value)) return;
+      if (rideDiscovery && value === 'pickup') { error = 'Ride pickup uses your current device location. Refresh it with Current location.'; render(); return; }
+      target = value; render();
+    },
     pick(value) { return rideDiscovery ? chooseRidePlace(target, value) : select(target, value); }, tick: render,
     snapshot: () => ({ pickup, destination, quote, online, results, error, vehicleCategory, rideDiscovery }),
   });
