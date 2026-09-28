@@ -74,8 +74,14 @@ test('road pickup time can select a farther driver and exposes only that driver\
   // of the allocation policy.
   await drivers[0].online({ mode: 'gps', lat: nearLat, lng: pickup.lng });
   await drivers[1].online({ mode: 'gps', lat: fartherLat, lng: pickup.lng });
+  const active = h.db.prepare("SELECT driver_id AS driverId,latitude,longitude,active,expires_at AS expiresAt FROM driver_availability WHERE active=1 ORDER BY driver_id").all();
+  console.log('dispatch-road-eta active', JSON.stringify(active));
+  assert.equal(active.length, 2);
   const ride = await routed(customer);
-  assert.deepEqual(await available(drivers[0]), []);
+  const firstAvailable = await available(drivers[0]);
+  console.log('dispatch-road-eta offers', JSON.stringify(h.db.prepare("SELECT driver_id AS driverId,eta_source AS etaSource,pickup_eta_seconds AS pickupEtaSeconds,status FROM dispatch_offers ORDER BY created_at,id").all()));
+  console.log('dispatch-road-eta driver0', drivers[0].user.id, JSON.stringify(firstAvailable), 'driver1', drivers[1].user.id);
+  assert.deepEqual(firstAvailable, []);
   const requests = await available(drivers[1]);
   assert.equal(requests.length, 1);
   assert.equal(requests[0].id, ride.id);
