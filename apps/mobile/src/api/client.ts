@@ -148,7 +148,7 @@ export class MobileClient {
     if (idToken === null) return false;
     if (typeof idToken !== 'string' || idToken.length > 16_384) throw new ApiError('Google identity could not be read.', 'INVALID_RESPONSE');
     const result = parseSignIn(await this.send('/auth/google', { data: { challenge: challenge.challenge, idToken, deviceName }, preview }));
-    await this.adopt(result, epoch, preview); return result.user;
+    await this.adopt(result, epoch, preview); return true;
   }
   async restore() {
     const epoch = this.epoch, raw = await this.vault.read();
