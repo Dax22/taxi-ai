@@ -23,7 +23,7 @@ test('customer ride flow is destination-first with current-location pickup and f
   assert.match(html, /Pickup from your current location/);
   assert.match(html, /Taxi Ai will use your current device location as the pickup/);
   assert.match(html, /Taxi Ai uses your current device location as the pickup for passenger rides/);
-  assert.match(html, /Type an address, landmark, town or city anywhere in Nigeria/);
+  assert.match(html, /Type your destination anywhere in Nigeria/);
   assert.match(html, /placeholder="e\.g\. Lekki Phase 1, Lagos"/);
   assert.match(html, />Find rides<\/button>/);
   assert.match(html, /id="location-ride-options"/);
