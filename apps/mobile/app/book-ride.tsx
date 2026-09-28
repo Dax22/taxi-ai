@@ -42,13 +42,14 @@ function BookingScreen() {
       <Text style={styles.body}>{settings.blockedBy === 'online' ? 'Go offline from your driver account on the website before requesting a ride.' : 'Finish or cancel your driver journey before requesting a ride.'}</Text></Card>}
     {settings && !settings.current.length && !settings.blockedBy && <VehicleCategories value={s.category} onChange={(id) => c.chooseCategory(id)} disabled={locked} courier={s.service === 'courier'}/>}
     {settings && !settings.current.length && !settings.blockedBy && <>
-      {!delivery && <PassengerForm passenger={s.passenger} controller={c} disabled={disabled}/>}
       {!delivery && s.mode === 'route' && settings.online.enabled && <Card><Pill>YOUR DESTINATION</Pill><Text style={styles.h2}>Where are you going?</Text>
         <Text style={styles.body}>Type an address, landmark, town or city anywhere in Nigeria.</Text>
-        <Text style={styles.small}>Search starts when you tap Find rides. If more than one place matches, choose the correct destination before fares are shown.</Text>
+        <Text style={styles.small}>Pickup is your current phone location. Find rides reads a fresh location, searches your destination and then shows the suggested fare.</Text>
+        <Text style={styles.small}>If more than one place matches, choose the correct destination before fares are shown.</Text>
         <PlaceSearch endpoint="destination" state={s} controller={c} disabled={planningDisabled} actionTitle={s.destination.searching ? 'Finding rides…' : 'Find rides'}
           onSearch={() => void c.findRides()} onSelect={(place) => void c.chooseRideDestination(place)}/>
       </Card>}
+      {!delivery && <PassengerForm passenger={s.passenger} controller={c} disabled={disabled}/>} 
       {delivery && <Card><Text style={styles.h2}>What are you sending?</Text>
         {([['description', 'Parcel description and size'], ['weightKg', 'Total weight (kg)'], ['recipientName', 'Recipient name'], ['pickupInstructions', 'Pickup instructions (optional)'], ['dropoffInstructions', 'Drop-off instructions (optional)']] as [keyof DeliveryDraft, string][]).map(([field, label]) => <Field key={field} label={label} value={s.delivery[field]} editable={!disabled} keyboardType={field === 'weightKg' ? 'decimal-pad' : 'default'} maxLength={field === 'weightKg' ? 10 : field === 'recipientName' ? 100 : 240} onChangeText={(value) => c.editDelivery(field, value)}/>)}
         <Text style={styles.small}>{s.category === 'standard' ? 'Car' : vehicleCategory(s.category)?.name} parcel limit: {parcelLoadLimit(s.category)} kg. Matching also checks the driver’s approved load capacity. Confirm the load fits before collection.</Text><Text style={styles.small}>After requesting, share a private tracking invitation from your journey. Your recipient signs in and accepts it to follow the delivery. They give the drop-off code to the driver only after receiving the parcel.</Text>
