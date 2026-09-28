@@ -181,6 +181,14 @@
           </div><p id="delivery-load-hint" class="small-note"></p><p class="small-note">Confirm the load fits with the driver before collection. After creating your parcel request, share a private tracking invitation with your recipient. They sign in to accept it and receive the handover code after collection.</p>
         </fieldset></form>
       </section>
+      <section id="ride-destination-panel" class="account-card ride-destination-panel" hidden aria-labelledby="ride-destination-title">
+        <p class="eyebrow">YOUR DESTINATION</p><h2 id="ride-destination-title">Where are you going?</h2>
+        <p class="supporting-copy">Type your destination anywhere in Nigeria. Taxi Ai will use your current device location as the pickup when you choose Find rides.</p>
+        <p class="current-pickup-note"><strong>Pickup:</strong> Your current location</p>
+        <form id="location-destination-form" class="stack-form"><fieldset id="location-destination-fields"><legend class="visually-hidden">Destination</legend><label for="location-destination-query">Destination</label><div class="location-input-row"><input id="location-destination-query" type="search" minlength="3" maxlength="160" required autocomplete="off" placeholder="e.g. Lekki Phase 1, Lagos"><button id="location-destination-search" type="submit" class="button button-primary button-small">Find rides</button></div><ul id="location-destination-results" class="location-results" aria-label="Destination search results"></ul><p id="location-destination-selected" class="small-note"></p></fieldset></form>
+        <button id="planner-online" class="button button-outline button-small" type="button">Enable address search</button>
+        <p id="planner-provider-note" class="small-note"></p>
+      </section>
       <section id="passenger-panel" class="account-card" hidden aria-labelledby="passenger-title">
         <p class="eyebrow">YOUR PASSENGER</p><h2 id="passenger-title">Who is riding?</h2>
         <form id="passenger-form" class="stack-form" autocomplete="off"><fieldset id="passenger-fields"><legend class="visually-hidden">Choose the passenger</legend>
@@ -192,13 +200,6 @@
             <p id="passenger-note" class="small-note">You agree the fare, manage the booking and pay. The phone number stays private to your booking; this preview sends no SMS. After confirming, send your friend a private trip link yourself.</p>
           </div>
         </fieldset></form>
-        <div class="passenger-destination">
-          <p class="eyebrow">YOUR DESTINATION</p><h3>Where are you going?</h3>
-          <p class="small-note">Type an address, landmark, town or city anywhere in Nigeria. This is a nationwide address search, not an Abuja-area list.</p>
-          <form id="location-destination-form" class="stack-form"><fieldset id="location-destination-fields"><legend class="visually-hidden">Destination</legend><label for="location-destination-query">Destination</label><div class="location-input-row"><input id="location-destination-query" type="search" minlength="3" maxlength="160" required autocomplete="off" placeholder="e.g. Lekki Phase 1, Lagos"><button id="location-destination-search" type="submit" class="button button-primary button-small">Find rides</button></div><ul id="location-destination-results" class="location-results" aria-label="Destination search results"></ul><p id="location-destination-selected" class="small-note"></p></fieldset></form>
-          <button id="planner-online" class="button button-outline button-small" type="button">Enable address search</button>
-          <p id="planner-provider-note" class="small-note"></p>
-        </div>
       </section>
       <div id="standard-ride-planner" hidden>
       <section id="location-planner" class="account-card location-panel" hidden aria-labelledby="location-planner-title">
@@ -217,10 +218,10 @@
             <div class="card-topline"><div><p class="eyebrow">RIDE OPTIONS</p><h3 id="ride-options-title">Choose your ride.</h3></div><span id="location-option-status" class="status-badge">Suggested fares</span></div>
             <div id="location-ride-options" class="ride-options" role="radiogroup" aria-label="Ride options"></div>
             <div class="route-metrics"><div><span>Distance</span><strong id="location-distance"></strong></div><div><span>Estimated trip</span><strong id="location-duration"></strong></div><div><span>Suggested fare</span><strong id="location-price"></strong></div></div>
-            <p class="small-note">This is a starting fare, not an accepted price. Find a driver first, then agree the final fare together in Taxi Ai chat or an in-app call.</p>
+            <p class="small-note">This is a suggested starting fare, not an accepted price. Find a driver, discuss the price in Taxi Ai chat or an in-app call, then accept the exact fare you both agree.</p>
             <details class="ride-price-details"><summary>How this preview was estimated</summary><p id="location-formula" class="small-note"></p></details>
             <p id="location-expiry" class="small-note" role="status"></p>
-            <button id="location-book" type="button" class="button button-primary">Find a driver ↗</button>
+            <button id="location-book" type="button" class="button button-primary">Find a driver &amp; negotiate ↗</button>
           </section>
         </div>
       </section>
