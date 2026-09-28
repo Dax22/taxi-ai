@@ -13,7 +13,7 @@ import { parseBooking, parsePlaces, parsePreview, parseBookingRide } from '../..
 import { parseJourney, parseWork, parseAvailability, parseDeclinedOffer, parseThread, parseSentMessage, parseReadMessages, parseNotifications, parseNotificationTarget } from '../../../../packages/shared/src/mobile-journeys.mjs';
 import type { JourneyAction, JourneyData, OnlineData, Position } from '../../../../packages/shared/src/mobile-journeys.mjs';
 import type { Place, RequestData } from '../../../../packages/shared/src/mobile-booking.mjs';
-import { readKemmySetup } from '../kemmy/contracts';
+import { readKemmySetup } from '../kemmy/contracts.ts';
 
 export interface Vault { read(): Promise<string | null>; write(value: string): Promise<void>; clear(): Promise<void> }
 export interface SavedSession { origin: string; refreshToken: string; sessionId: string; previewAccess: string }
