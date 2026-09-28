@@ -52,7 +52,7 @@ export function RoutePreview({ preview, now, disabled, busy, onRequest, onPrevie
     <Text style={styles.small}>This is a starting fare, not an accepted price. After a driver joins, agree the final amount in Taxi Ai chat before confirming the ride. No live dispatch or payment.</Text>
     {preview.expiresAt !== null && <Text style={styles.small}>{expired ? 'This preview has expired.' : `Route preview valid for about ${Math.max(1, Math.ceil((preview.expiresAt - now) / 60_000))} more min.`}</Text>}
     {expired ? <Button title={isRide ? 'Refresh ride options' : 'Refresh route preview'} onPress={onPreview} disabled={disabled}/>
-      : <Button title={isRide ? `Find a ${vehicleCategory(selectedCategory)?.name ?? 'selected'} driver` : 'Find a delivery driver'} onPress={onRequest} busy={busy} disabled={disabled}/>
+      : <Button title={isRide ? `Find a ${vehicleCategory(selectedCategory)?.name ?? 'selected'} driver` : 'Find a delivery driver'} onPress={onRequest} busy={busy} disabled={disabled}/>}
   </Card>;
 }
 const look = StyleSheet.create({ options: { gap: 8 }, map: { width: '100%', aspectRatio: 360 / 220, borderRadius: 18, overflow: 'hidden' },
