@@ -79,7 +79,7 @@ test('automatic slides loop without interaction, continue on hover, and pause in
   f.documentRef.hidden = true; f.documentRef.emit('visibilitychange');
   assert.equal(f.timers.size, 0);
   f.documentRef.hidden = false; f.documentRef.emit('visibilitychange');
-  assert.equal([...f.timers.values()][0].delay, 6500);
+  assert.equal([...f.timers.values()][0].delay, 7000);
   assert.equal(f.active(), 1);
   f.tick(); assert.equal(f.active(), 2);
 });
