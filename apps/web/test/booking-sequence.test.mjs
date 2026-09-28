@@ -17,6 +17,8 @@ test('customer ride flow is vehicle then passenger then nationwide typed destina
   assert.ok(passenger < destination);
   assert.ok(destination < pickupPlanner);
   assert.match(html, /Where are you going\?/);
+  assert.match(html, /Pickup from your current location/);
+  assert.match(html, /Taxi Ai uses your current device location as the pickup for passenger rides/);
   assert.match(html, /Type an address, landmark, town or city anywhere in Nigeria/);
   assert.match(html, /placeholder="e\.g\. Lekki Phase 1, Lagos"/);
   assert.match(html, />Find rides<\/button>/);
@@ -32,7 +34,7 @@ test('customer ride flow is vehicle then passenger then nationwide typed destina
   assert.doesNotMatch(html, /id="request-destination-areas"/);
 });
 
-test('mobile ride flow places destination after passenger and before pickup confirmation', () => {
+test('mobile ride flow places destination after passenger and uses current GPS pickup', () => {
   const passenger = mobile.indexOf('<PassengerForm');
   const destination = mobile.indexOf('<Pill>YOUR DESTINATION</Pill>');
   const destinationSearch = mobile.indexOf('<PlaceSearch endpoint="destination"');
@@ -42,6 +44,9 @@ test('mobile ride flow places destination after passenger and before pickup conf
   assert.ok(destinationSearch < pickup);
   assert.match(mobile, /Type an address, landmark, town or city anywhere in Nigeria/);
   assert.match(mobile, /Find rides/);
+  assert.match(mobile, /Pickup from your current location/);
+  assert.match(mobile, /Taxi Ai uses a fresh phone location as your passenger pickup/);
+  assert.match(mobile, /Refresh current pickup/);
   assert.match(mobile, /chooseRideDestination/);
   assert.match(mobile, /onChooseCategory/);
   assert.match(mobile, /EXPO_PUBLIC_SHOW_SAMPLE_BOOKING/);
