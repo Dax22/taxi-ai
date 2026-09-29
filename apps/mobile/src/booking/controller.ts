@@ -1,5 +1,6 @@
 import { transportCategory, deliveryDetails, supportsParcelCategory } from '../../../../packages/shared/src/transport-categories.mjs';
 import { matchSampleArea } from '../../../../packages/shared/src/demo-booking.mjs';
+import { insideNigeria, OUTSIDE_NIGERIA_PICKUP_MESSAGE } from '../../../../packages/shared/src/locations.mjs';
 import { passengerDetails } from '../../../../packages/shared/src/guest-rides.mjs';
 import type { VehicleCategoryId } from '../../../../packages/shared/src/vehicle-categories.mjs';
 import { isRequestOpen } from '../../../../packages/shared/src/mobile-booking.mjs';
@@ -182,6 +183,7 @@ export class BookingController {
     this.patch({ locatingPickup: true, error: '', preview: null, pickup: emptySearch() });
     try {
       const place = await this.locatePickup();
+      if (!insideNigeria(place)) throw new Error(OUTSIDE_NIGERIA_PICKUP_MESSAGE);
       if (this.active && read === this.searches.pickup) this.patch({ pickup: { ...emptySearch(), query: place.name, selected: place }, preview: null });
     } catch (e) { if (this.active && read === this.searches.pickup) this.patch({ error: message(e) }); }
     finally { if (read === this.searches.pickup) this.patch({ locatingPickup: false }); }

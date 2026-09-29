@@ -1,5 +1,5 @@
 import { transportCategory } from '/shared/transport-categories.mjs';
-import { insideNigeria } from '/shared/locations.mjs';
+import { insideNigeria, OUTSIDE_NIGERIA_PICKUP_MESSAGE } from '/shared/locations.mjs';
 
 /** Draft coordinates and quotes are isolated by account and selection revision. */
 export function createLocationPlanner({ client, view, onBook, onOnline, device = null, serverNow = Date.now }) {
@@ -63,7 +63,7 @@ export function createLocationPlanner({ client, view, onBook, onOnline, device =
       const coords = fix.coords ?? {};
       const value = { lat: Number(coords.latitude), lng: Number(coords.longitude), name: 'Current location' };
       if (!Number.isFinite(coords.accuracy) || coords.accuracy <= 0 || coords.accuracy > 200) throw new Error('Your pickup location is not accurate enough yet. Try again in an open area.');
-      if (!insideNigeria(value)) throw new Error('Your current pickup must be inside Nigeria.');
+      if (!insideNigeria(value)) throw new Error(OUTSIDE_NIGERIA_PICKUP_MESSAGE);
       if (generation !== epoch || searches.pickup !== request) return false;
       pickup = { lat: Number(value.lat.toFixed(6)), lng: Number(value.lng.toFixed(6)), name: value.name };
       results.pickup = []; searching.pickup = false; revision++; quote = null; error = ''; view.selected('pickup', pickup);
