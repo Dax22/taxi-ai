@@ -9,6 +9,7 @@ import { createPushProvider } from '../services/api/src/infrastructure/push-prov
 import { createVehicleVisionProvider } from '../services/api/src/infrastructure/vehicle-vision-provider.mjs';
 import { createStaffMfaConfig } from '../services/api/src/infrastructure/staff-config.mjs';
 import { readDriverFaceConfig } from '../services/api/src/infrastructure/driver-face-config.mjs';
+import { createEatsConfig } from '../services/api/src/modules/eats/config.mjs';
 
 try {
   const runtime = createRuntimeConfig();
@@ -24,6 +25,7 @@ try {
   const vision = createVehicleVisionProvider({ env:process.env });
   const staffMfa = createStaffMfaConfig(process.env);
   const driverFace = readDriverFaceConfig(process.env);
+  const eats = createEatsConfig(process.env);
   const calls = createCallConfig({ ...process.env, TAXI_AI_CALLS_MODE: process.env.TAXI_AI_CALLS_MODE ?? (runtime.mode === 'staging' ? 'off' : 'local') });
   const maps = createMapProvider({ env: { ...process.env, TAXI_AI_MAPS_MODE: process.env.TAXI_AI_MAPS_MODE ?? (runtime.mode === 'staging' ? 'off' : 'community') } });
   const dispatch = createDispatchConfig(process.env);
@@ -35,5 +37,6 @@ try {
   console.log(`Vehicle photo checks: ${vision.enabled ? 'configured' : 'off'}.`);
   console.log(`Driver face comparison: ${driverFace.provider}; this does not validate credentials, licence records or liveness.`);
   console.log(`Ride matching: ${dispatch.mode}; pickup road estimates ${maps.mode === 'off' ? 'unavailable (distance fallback)' : 'use the configured router'}.`);
+  console.log(`Eats new orders: ${eats.paused ? 'paused' : 'test-only preview'}.`);
   console.log('This checks configuration only, not TLS, network providers, disk persistence or a deployed server.');
 } catch (error) { console.error(error.message); process.exitCode = 1; }

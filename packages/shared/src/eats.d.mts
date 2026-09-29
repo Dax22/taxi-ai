@@ -1,6 +1,6 @@
 import type { Vehicle } from './mobile-contracts.mjs';
 export type FoodStatus = 'placed' | 'accepted' | 'preparing' | 'ready' | 'assigned' | 'picked_up' | 'arrived' | 'delivered' | 'cancelled' | 'rejected';
-export type FoodAction = 'accept' | 'reject' | 'prepare' | 'ready' | 'claim' | 'pickup' | 'arrive' | 'deliver' | 'complete_pickup' | 'cancel';
+export type FoodAction = 'accept' | 'reject' | 'prepare' | 'ready' | 'claim' | 'pickup' | 'arrive' | 'deliver' | 'complete_pickup' | 'cancel' | 'unassign';
 export interface FoodArea { id: string; name: string; town?: string; stateId?: string; stateName?: string }
 export type FoodFulfillment = 'delivery' | 'pickup';
 export type FoodSellerType = 'restaurant' | 'food_vendor' | 'home_kitchen';

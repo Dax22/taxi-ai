@@ -6,7 +6,7 @@ import { createMealView } from './meal-view.mjs';
 import { $, element } from '../dashboard/dom.mjs';
 import { EATS_CUISINES, EATS_SYMBOLS, EATS_STATUS, EATS_SELLERS, foodAvailable, foodStock, discoverKitchens, isPrivateKitchen } from '/shared/eats.mjs';
 import { formatNaira } from '/shared/demo-booking.mjs';
-const actionLabels = { accept: 'Accept order', reject: 'Decline order', prepare: 'Start preparing', ready: 'Ready for pickup', claim: 'Accept delivery', pickup: 'Confirm food collected', arrive: 'I’m at the delivery address', deliver: 'Confirm delivered', complete_pickup: 'Confirm customer collected', cancel: 'Cancel order' };
+const actionLabels = { accept: 'Accept order', reject: 'Decline order', prepare: 'Start preparing', ready: 'Ready for pickup', claim: 'Accept delivery', pickup: 'Confirm food collected', arrive: 'I’m at the delivery address', deliver: 'Confirm delivered', complete_pickup: 'Confirm customer collected', cancel: 'Cancel order', unassign: 'Return to courier queue' };
 const field = (id) => $('food-' + id);
 const text = (tag, value, className) => element(tag, value, className);
 const money = (value) => { const n = Number(value); if (!Number.isFinite(n) || n < 0 || !/^\d+(\.\d{1,2})?$/.test(value)) throw new Error('Enter an amount with up to two decimal places.'); return Math.round(n * 100); };
@@ -68,10 +68,15 @@ export function createEatsView(controller, { geolocation = createGeolocation(), 
   field('checkout-form').addEventListener('submit', (event) => { event.preventDefault(); delivery(); void controller.checkout(); });
   field('place').addEventListener('click', () => void controller.place());
   field('order-back').addEventListener('click', () => void controller.navigate(({ store: 'store', courier: 'work', admin: 'review' })[state.order?.role] ?? 'orders'));
+  field('support-form').addEventListener('submit', (event) => {
+    event.preventDefault();
+    if (state.user?.role !== 'admin' || locked()) return;
+    void controller.navigate('order', field('support-order').value.trim().toLowerCase());
+  });
   field('order-action-form').addEventListener('submit', (event) => {
     event.preventDefault(); const action = event.submitter?.value;
     if (!state.order || !state.order.actions.includes(action) || locked()) return;
-    const pin = ['pickup','deliver','complete_pickup'].includes(action), reason = ['reject','cancel'].includes(action);
+    const pin = ['pickup','deliver','complete_pickup'].includes(action), reason = ['reject','cancel','unassign'].includes(action);
     field('pin').required = pin; field('reason').required = reason;
     const collection = action === 'ready' && state.order.needsCollectionPoint; field('collection').required = Boolean(collection);
     if (!field('order-action-form').reportValidity()) return;
@@ -281,8 +286,8 @@ export function createEatsView(controller, { geolocation = createGeolocation(), 
     });
     field('collection-row').hidden = !state.order?.needsCollectionPoint;
     field('order-action-form').hidden = !state.order?.actions.length;
-    field('pin-row').hidden = !state.order?.actions.some((a) => ['pickup','deliver','complete_pickup'].includes(a)); field('reason-row').hidden = !state.order?.actions.some((a) => ['cancel','reject'].includes(a));
-    update('order-buttons', [state.order?.actions, locked()], (root) => { for (const action of state.order?.actions ?? []) { const b = button(actionLabels[action], () => {}, ['cancel','reject'].includes(action)); b.type = 'submit'; b.value = action; b.formNoValidate = true; root.append(b); } });
+    field('pin-row').hidden = !state.order?.actions.some((a) => ['pickup','deliver','complete_pickup'].includes(a)); field('reason-row').hidden = !state.order?.actions.some((a) => ['cancel','reject','unassign'].includes(a));
+    update('order-buttons', [state.order?.actions, locked()], (root) => { for (const action of state.order?.actions ?? []) { const b = button(actionLabels[action], () => {}, ['cancel','reject','unassign'].includes(action)); b.type = 'submit'; b.value = action; b.formNoValidate = true; root.append(b); } });
     update('review-list', [state.reviewStores, locked()], (root) => { for (const s of state.reviewStores) { const card = text('article', undefined, 'food-card'); card.append(text('h3', s.name), text('p', `${EATS_SELLERS[s.sellerType ?? 'restaurant']} · ${s.status} · ${s.cuisine} · ${pickupAddress(s) || s.areaId}`), button('Review store and menu', () => void controller.reviewStore(s.id), true)); root.append(card); } });
     field('review-detail').hidden = !state.review;
     update('review-profile', state.review, (root) => { field('review-reference').value = field('review-reason').value = ''; const s = state.review; if (!s) return; root.append(text('h2', s.store.name), text('p', EATS_SELLERS[s.store.sellerType ?? 'restaurant']), text('p', s.store.description), text('p', pickupAddress(s.store) || s.store.areaId), text('p', `Delivery: ${s.store.deliveryEnabled !== false ? 'yes' : 'no'} · Customer pickup: ${s.store.pickupEnabled ? 'yes' : 'no'}`), text('p', `${s.store.prepMinutes} min preparation · ${formatNaira(s.store.deliveryFeeKobo)} delivery`)); for (const i of s.menu) { root.append(text('p', `${i.name} · ${formatNaira(i.priceKobo)} · ${i.description}`)); if (i.photoId) root.append(mealPhoto(i.photoId, i.name)); } });

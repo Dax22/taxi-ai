@@ -10,7 +10,7 @@ import { asyncMap, asyncFlatMap, asyncSome, asyncFilter } from '../../shared/asy
 
 
 /** Stores and food orders own their state; other work is checked through injected ports. */
-export function createEatsService({ repository, getAccount, hasOtherWork, availabilityFor, onClaim, photoCodec, tokens, unitOfWork, audit, clock, normalisePhoto }) {
+export function createEatsService({ repository, getAccount, hasOtherWork, availabilityFor, onClaim, photoCodec, tokens, unitOfWork, audit, clock, normalisePhoto, paused = false }) {
   const actor = async (user) => { const fresh = (await getAccount(user?.id)); check(fresh, 'UNAUTHENTICATED', 'Sign in to continue.'); return fresh; };
   const identifier = (id) => { check(typeof id === 'string' && /^[a-f0-9-]{36}$/.test(id), 'INVALID_ID', 'Choose a valid record.'); return id; };
   const storeRecord = async (id) => { const value = (await repository.store(identifier(id))); check(value, 'NOT_FOUND', 'Restaurant not found.'); return value; };
@@ -128,6 +128,7 @@ export function createEatsService({ repository, getAccount, hasOtherWork, availa
     return { id, quotes, totals: checkedTotal(quotes), expiresAt: Math.min(...quotes.map((q) => q.expiresAt)) };
   }
   async function makeQuote(user, data, now) {
+    check(!paused, 'EATS_PAUSED', 'Food ordering is temporarily paused. Existing orders remain available.');
     requireRole(user, 'customer'); const store = (await storeRecord(data?.storeId));
     check(store.status === 'approved' && store.isOpen, 'STORE_UNAVAILABLE', 'This kitchen is not accepting orders.');
     check(data.fulfillment === 'pickup' || dispatchReady(store), 'STORE_UNAVAILABLE', 'This kitchen needs a saved pickup location before it can offer courier delivery.');
@@ -137,6 +138,7 @@ export function createEatsService({ repository, getAccount, hasOtherWork, availa
     return quoteId;
   }
   async function placeQuote(user, quoteId, now) {
+    check(!paused, 'EATS_PAUSED', 'Food ordering is temporarily paused. Existing orders remain available.');
     requireRole(user, 'customer'); const q = (await repository.quote(identifier(quoteId)));
     check(q?.customerId === user.id, 'NOT_FOUND', 'Checkout quote not found.');
     check(!q.orderId, 'QUOTE_USED', 'This checkout already created an order. Open My orders.');
@@ -174,7 +176,10 @@ export function createEatsService({ repository, getAccount, hasOtherWork, availa
           const next = storeDetails(data.details, store);
           check(next.sellerType !== 'home_kitchen' || (await repository.menu(store.id)).every((i) => !i.available || i.portionsRemaining != null), 'INVALID_MENU', 'Set batch quantities for available menu items before switching to a home kitchen.');
           if (['name', 'address', 'areaId', 'cuisine', 'sellerType', 'pickupEnabled', 'deliveryEnabled'].some((field) => next[field] !== store[field])
-            || canonical(next.dispatchPoint) !== canonical(store.dispatchPoint)) { store.status = 'pending'; store.isOpen = false; store.reviewNote = 'Store details changed. A new review is required.'; }
+            || canonical(next.dispatchPoint) !== canonical(store.dispatchPoint)
+            || canonical([...next.deliveryAreaIds].sort()) !== canonical([...store.deliveryAreaIds].sort())) {
+            store.status = 'pending'; store.isOpen = false; store.reviewNote = 'Store details or delivery coverage changed. A new review is required.';
+          }
           Object.assign(store, next);
         } else if (action === 'menu-save') {
           const old = data.itemId !== null ? (await repository.menuItem(identifier(data.itemId))) : null;
@@ -231,7 +236,7 @@ export function createEatsService({ repository, getAccount, hasOtherWork, availa
         const order = (await repository.order(id)); check(order, 'NOT_FOUND', 'Order not found.');
         const role = action === 'claim' ? 'courier' : (await roleFor(user, order));
         check(role, 'NOT_FOUND', 'Order not found.');
-        const required = ['expectedVersion', ...(['pickup', 'deliver', 'complete_pickup'].includes(action) ? ['pin'] : ['cancel', 'reject'].includes(action) ? ['reason'] : [])];
+        const required = ['expectedVersion', ...(['pickup', 'deliver', 'complete_pickup'].includes(action) ? ['pin'] : ['cancel', 'reject', 'unassign'].includes(action) ? ['reason'] : [])];
         fields(data, [...required, ...(action === 'ready' ? ['collectionPoint'] : [])], required);
         version(order, data.expectedVersion);
         check(eatsActions(order, role).includes(action), 'ORDER_CLOSED', 'This action is no longer available. Refresh your order.');
@@ -251,6 +256,14 @@ export function createEatsService({ repository, getAccount, hasOtherWork, availa
           'OUTSIDE_MATCH_AREA', 'Go online within 10 km of this kitchen’s saved pickup location.');
           order.courierId = user.id; order.courier = { id: user.id, name: user.name, vehicle: user.driver.vehicle }; (await onClaim(user.id, now));
         }
+        if (action === 'unassign') {
+          // The courier has not collected food. Revoke their access and rotate the
+          // kitchen's handover code before making the order available again.
+          const oldPin = order.pickupPin;
+          do { order.pickupPin = tokens.pickupPin(); } while (order.pickupPin === oldPin);
+          order.courierId = null; order.courier = null;
+          order.pinFailures = 0; order.pinBlockedUntil = null;
+        }
         if (['pickup', 'deliver', 'complete_pickup'].includes(action)) {
           if (action === 'pickup') courierEligible(user);
           check(typeof data.pin === 'string' && /^\d{6}$/.test(data.pin), 'INVALID_PIN_FORMAT', 'Enter the six-digit handover code.');
@@ -264,9 +277,9 @@ export function createEatsService({ repository, getAccount, hasOtherWork, availa
         }
         if (!result) {
           if (['cancel', 'reject'].includes(action)) (await release(order, now));
-          order.status = ({ accept: 'accepted', prepare: 'preparing', ready: 'ready', claim: 'assigned', pickup: 'picked_up', arrive: 'arrived', deliver: 'delivered', complete_pickup: 'delivered', cancel: 'cancelled', reject: 'rejected' })[action];
+          order.status = ({ accept: 'accepted', prepare: 'preparing', ready: 'ready', claim: 'assigned', unassign: 'ready', pickup: 'picked_up', arrive: 'arrived', deliver: 'delivered', complete_pickup: 'delivered', cancel: 'cancelled', reject: 'rejected' })[action];
           const event = { status: order.status, at: now };
-          if (['cancel', 'reject'].includes(action)) event.reason = label(data.reason, 'Reason', 5, 240);
+          if (['cancel', 'reject', 'unassign'].includes(action)) event.reason = label(data.reason, 'Reason', 5, 240);
           order.events.push(event); order.updatedAt = now; order.version++;
           if (EATS_TERMINAL.includes(order.status)) { order.pickupPin = order.deliveryPin = null; order.pinBlockedUntil = null; }
           (await repository.saveOrder(order)); result = { orderId: order.id };

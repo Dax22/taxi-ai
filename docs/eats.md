@@ -1,5 +1,8 @@
 # Taxi Ai Eats
 
+For live launch requirements and current blockers, see the
+[Eats production launch gate](eats-production.md).
+
 The meal-builder update adds location-first dish search, combined delivery orders and town-only vendor/home-kitchen profiles to the same Taxi Ai accounts,
 website and iOS/Android app. This is a development preview with fictional stores
 and test orders. Checkout never collects money and does not dispatch a real delivery.
@@ -165,10 +168,16 @@ follow the root README's `npm run admin -- your-admin-email@example.com` setup.
    enter it only when handing over the order, then confirm delivery. Refresh or
    restart the backend and check the saved history.
 
-The customer can cancel before restaurant acceptance; a restaurant can decline
-an unaccepted order. An administrator can cancel before collection with a reason.
-After collection, this preview requires normal delivery completion; lost food,
-reassignment and exceptional recovery still need an operational support workflow.
+The customer can cancel before kitchen acceptance; a kitchen can decline an
+unaccepted order. Staff can look up a food order by its full ID in **Kitchen review**.
+Before collection, staff can remove an assigned courier with a required reason,
+rotate the kitchen handover code and return the order to the ready queue. The
+former courier loses access to the order and does not go online automatically.
+If prepared food is lost after collection, staff can cancel the order with a
+required reason; the courier is released, both handover codes are cleared and
+the food is not put back into stock. This records a test incident only: no
+refund, replacement order or seller payout is created. Staff must contact the
+customer and kitchen through a separate support process.
 
 ## Behaviour and ownership
 
@@ -184,8 +193,9 @@ reassignment and exceptional recovery still need an operational support workflow
   Payment remains explicitly `test / not_charged`; food orders do not create ride
   receipts, earnings or settlement records.
 - Sold-out items cannot be added to new quotes. Store owners can pause ordering;
-  accepted orders remain actionable. Identity/location changes put the store back
-  into review. Opening requires current approval and an available menu item.
+  accepted orders remain actionable. Identity, pickup location and delivery coverage
+  changes put the store back into review. Opening requires current approval and an
+  available menu item.
 - Menu photos are optional JPEG/PNG uploads. The server strips metadata, converts
   each image to a bounded JPEG and stores it separately from searchable menu data.
   Owners and staff can preview photos before approval; customers see only photos
@@ -257,7 +267,7 @@ remains outstanding.
 Further product work includes a real payment provider, refunds/payouts, verified
 merchant onboarding, item modifiers and scheduled opening hours,
 tax policy, food chat and push notifications, live delivery routing/ETA/tracking,
-customer support and reassignment. The initial order timeline polls while open;
+staffed customer support and automatic reassignment. The initial order timeline polls while open;
 it is not a live courier map or a phone alert. No food recommendation or autonomous
 dispatch agent is claimed in this release.
 

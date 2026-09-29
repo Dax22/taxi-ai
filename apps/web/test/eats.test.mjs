@@ -152,6 +152,19 @@ test('shipped Eats page connects menu buttons, delivery form and checkout to the
   f.c.reset(); assert.equal(node('app').hidden, true); assert.equal(node('order-detail').children.length, 0);
 });
 
+test('staff order recovery lookup opens the full order ID and is not available to customers', async (t) => {
+  const node = dom(t), f = fixture(), view = createEatsView(f.c);
+  f.c.subscribe(() => view.render(f.c.snapshot()));
+  await f.c.refresh(); node('support-order').value = order.id.toUpperCase();
+  node('support-form').handlers.submit({ preventDefault() {} }); await flush();
+  assert.notEqual(f.c.snapshot().screen, 'order');
+  const read = f.api.request;
+  f.api.request = (path) => path === '/eats/admin/stores' ? { stores: [] } : read(path);
+  f.c.context({ ...user, role: 'admin' }); await f.c.navigate('review');
+  node('support-form').handlers.submit({ preventDefault() {} }); await flush();
+  assert.equal(f.c.snapshot().screen, 'order'); assert.equal(f.c.snapshot().orderId, order.id);
+});
+
 test('the seller page introduces onboarding before sign-in and opens the store workspace after sign-in', async (t) => {
   const node = dom(t), f = fixture(), view = createEatsView(f.c, { sellerPage: () => true });
   f.c.subscribe(() => view.render(f.c.snapshot()));

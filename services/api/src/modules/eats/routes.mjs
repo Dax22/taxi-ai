@@ -19,7 +19,7 @@ export function eatsRoutes(eats) {
       handle: async ({ user, match, data, key }) => ({ body: (await eats.command(user, action, match[1], data, key)) }) })),
     { method: 'POST', path: new RegExp(`^${root}/stores/${uuid}/photo$`), maxBodyBytes: 2_800_000,
       handle: async ({ user, match, data, key, reauthenticate }) => ({ body: await eats.photoCommand(user, match[1], data, key, reauthenticate) }) },
-    { method: 'POST', path: new RegExp(`^${root}/orders/${uuid}/(accept|reject|prepare|ready|claim|pickup|arrive|deliver|complete_pickup|cancel)$`),
+    { method: 'POST', path: new RegExp(`^${root}/orders/${uuid}/(accept|reject|prepare|ready|claim|pickup|arrive|deliver|complete_pickup|cancel|unassign)$`),
       handle: async ({ user, match, data, key }) => ({ body: (await eats.command(user, match[2], match[1], data, key)) }) },
   ];
 }

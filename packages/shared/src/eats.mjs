@@ -54,6 +54,7 @@ export function eatsActions(order, role) {
   if (role === 'customer') return order.status === 'placed' ? ['cancel'] : [];
   if (role === 'store') return ({ placed: ['accept', 'reject'], accepted: ['prepare'], preparing: ['ready'], ...(pickup ? { ready: ['complete_pickup'] } : {}) })[order.status] ?? [];
   if (role === 'courier') return pickup ? [] : ({ ready: ['claim'], assigned: ['pickup'], picked_up: ['arrive'], arrived: ['deliver'] })[order.status] ?? [];
-  if (role === 'admin') return ['placed', 'accepted', 'preparing', 'ready', 'assigned'].includes(order.status) ? ['cancel'] : [];
+  if (role === 'admin') return ['placed', 'accepted', 'preparing', 'ready', 'assigned', 'picked_up', 'arrived'].includes(order.status)
+    ? order.status === 'assigned' ? ['unassign', 'cancel'] : ['cancel'] : [];
   return [];
 }

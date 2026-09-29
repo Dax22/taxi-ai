@@ -7,9 +7,16 @@ import { harness, participants, PASSWORD, requestRide } from './helpers.mjs';
 import { removeEatsFixtureTables, removeGuestFixtureTables } from './migration-fixtures.mjs';
 import { SCHEMA_VERSION } from '../src/infrastructure/database.mjs';
 import { readEatsResponse } from '../../../packages/shared/src/eats-contracts.mjs';
+import { createEatsConfig } from '../src/modules/eats/config.mjs';
 
 const details = { name: 'Test Abuja Kitchen', cuisine: 'Nigerian', description: 'Fictional kitchen for ordering tests.', address: '10 Fictional Road, Wuse II', areaId: 'wuse-ii', deliveryAreaIds: ['wuse-ii', 'maitama'], prepMinutes: 25, minimumKobo: 100_000, deliveryFeeKobo: 150_000 };
 const item = { name: 'Jollof rice and chicken', description: 'Rice, tomato, peppers and grilled chicken. Test menu.', category: 'Meals', priceKobo: 250_000, available: true };
+
+test('Eats emergency pause configuration accepts explicit booleans only', () => {
+  assert.equal(createEatsConfig({}).paused, false);
+  assert.equal(createEatsConfig({ TAXI_AI_EATS_PAUSED: 'true' }).paused, true);
+  assert.throws(() => createEatsConfig({ TAXI_AI_EATS_PAUSED: 'yes' }), /must be true or false/);
+});
 
 test('schema 18 upgrades add empty Eats storage while preserving existing accounts, documents and journeys', async (t) => {
   const h = await harness(t, { persistent: true }), { customer, driver } = await participants(h);
@@ -63,6 +70,34 @@ test('restaurant membership, manual approval and open state control menu publish
   await ok(f.seller, `/api/eats/stores/${f.store.id}/save`, { expectedVersion: f.store.version, details: { ...details, address: '20 Fictional Road, Wuse II' } });
   assert.equal((await ok(f.seller, '/api/eats/store')).store.status, 'pending');
   assert.deepEqual((await ok(f.customer, '/api/eats/restaurants')).restaurants, []);
+});
+
+test('expanding kitchen delivery coverage closes ordering until staff reviews the new area', async (t) => {
+  const f = await fixture(t); await f.open();
+  const quote = await f.quote();
+  ({ store: f.store } = await ok(f.seller, `/api/eats/stores/${f.store.id}/save`, { expectedVersion: f.store.version,
+    details: { ...details, deliveryAreaIds: [...details.deliveryAreaIds, 'garki'] } }));
+  assert.equal(f.store.status, 'pending'); assert.equal(f.store.isOpen, false);
+  assert.equal((await f.customer.post('/api/eats/orders', { quoteId: quote.id })).body.error.code, 'STORE_UNAVAILABLE');
+  assert.equal((await ok(f.customer, '/api/eats/restaurants?deliveryAreaId=garki')).restaurants.length, 0);
+  ({ store: f.store } = await ok(f.admin, `/api/eats/stores/${f.store.id}/review`, { expectedVersion: f.store.version,
+    decision: 'approved', reason: 'Fictional extended coverage checked for tests.', reference: 'TEST-AREA-REVIEW' }));
+  ({ store: f.store } = await ok(f.seller, `/api/eats/stores/${f.store.id}/open`, { expectedVersion: f.store.version, isOpen: true }));
+  assert.equal((await ok(f.customer, '/api/eats/restaurants?deliveryAreaId=garki')).restaurants.length, 1);
+});
+
+test('Eats emergency pause blocks new quotes and old placements while existing orders and rides continue', async (t) => {
+  const eatsConfig = { paused: false }, f = await fixture(t, { persistent: true, eatsConfig });
+  await f.open();
+  const pending = await f.quote(), existing = await f.place();
+  eatsConfig.paused = true; await f.h.restart();
+  assert.equal((await f.customer.post('/api/eats/quotes', f.basket())).body.error.code, 'EATS_PAUSED');
+  assert.equal((await f.customer.post('/api/eats/orders', { quoteId: pending.id })).body.error.code, 'EATS_PAUSED');
+  assert.equal((await f.customer.post('/api/eats/checkouts', { groups: [{ storeId: f.store.id, expectedVersion: f.store.version,
+    items: [{ itemId: f.menu[0].id, quantity: 1 }] }], address: f.basket().address, instructions: '' })).body.error.code, 'EATS_PAUSED');
+  assert.equal(f.h.db.prepare('SELECT count(*) AS n FROM eats_orders').get().n, 1);
+  assert.equal((await ok(f.seller, `/api/eats/orders/${existing.id}/accept`, { expectedVersion: existing.version })).order.status, 'accepted');
+  assert.equal((await requestRide(f.customer)).status, 'requested');
 });
 
 test('private kitchen search and customer orders show only town; assigned courier gets pickup address', async (t) => {
@@ -198,6 +233,51 @@ test('a complete customer, restaurant and courier order preserves totals and ver
   assert.equal((await f.stranger.send(`/api/eats/orders/${id}`)).status, 404);
   const row = f.h.db.prepare('SELECT pickup_pin, delivery_pin FROM eats_orders WHERE id=?').get(id);
   assert.equal(row.pickup_pin, null); assert.equal(row.delivery_pin, null);
+});
+
+test('staff can recover an uncollected delivery without restoring food or retaining courier access', async (t) => {
+  const f = await fixture(t, { persistent: true }); await f.open();
+  let order = await f.ready(); const originalPin = order.pickupPin;
+  ({ order } = await ok(f.driver, `/api/eats/orders/${order.id}/claim`, { expectedVersion: order.version }));
+  const path = `/api/eats/orders/${order.id}/unassign`;
+  assert.equal((await f.customer.post(path, { expectedVersion: order.version, reason: 'Courier unavailable' })).status, 409);
+  assert.equal((await f.admin.post(path, { expectedVersion: order.version })).status, 400);
+  const key = randomUUID(), data = { expectedVersion: order.version, reason: 'Courier did not arrive at the kitchen.' };
+  const first = await f.admin.post(path, data, key);
+  assert.equal(first.status, 200, JSON.stringify(first.body)); order = first.body.order;
+  assert.equal(order.status, 'ready'); assert.equal(order.courier, null);
+  assert.equal(order.events.at(-1).reason, data.reason);
+  assert.equal((await f.driver.send(`/api/eats/orders/${order.id}`)).status, 404);
+  assert.equal((await ok(f.driver, '/api/driver/application')).application.busy, false);
+  assert.equal((await ok(f.seller, `/api/eats/orders/${order.id}`)).order.pickupPin === originalPin, false);
+  assert.equal((await ok(f.customer, `/api/eats/orders/${order.id}`)).order.courier, null);
+  assert.ok((await ok(f.drivers[1], '/api/eats/work')).available.some((job) => job.id === order.id));
+  await f.h.restart();
+  assert.equal((await f.admin.post(path, data, key)).body.replayed, true);
+  assert.equal((await f.admin.post(path, data)).body.error.code, 'STALE_VERSION');
+  ({ order } = await ok(f.drivers[1], `/api/eats/orders/${order.id}/claim`, { expectedVersion: order.version }));
+  assert.equal(order.courier.id, f.drivers[1].user.id);
+  assert.equal((await f.driver.post(`/api/eats/orders/${order.id}/pickup`, { expectedVersion: order.version, pin: originalPin })).status, 404);
+});
+
+test('staff can stop a failed delivery after collection with an audit reason and no stock restoration', async (t) => {
+  const f = await homeFixture(t, { persistent: true });
+  let order = await f.ready(); const id = order.id;
+  ({ order } = await ok(f.driver, `/api/eats/orders/${id}/claim`, { expectedVersion: order.version }));
+  ({ order } = await ok(f.driver, `/api/eats/orders/${id}/pickup`, { expectedVersion: order.version, pin: (await ok(f.seller, `/api/eats/orders/${id}`)).order.pickupPin }));
+  assert.equal((await f.customer.post(`/api/eats/orders/${id}/cancel`, { expectedVersion: order.version, reason: 'Lost delivery' })).status, 409);
+  const data = { expectedVersion: order.version, reason: 'Courier reported that the prepared food was lost.' }, key = randomUUID();
+  const first = await f.admin.post(`/api/eats/orders/${id}/cancel`, data, key);
+  assert.equal(first.status, 200, JSON.stringify(first.body)); order = first.body.order;
+  assert.equal(order.status, 'cancelled'); assert.equal(order.events.at(-1).reason, data.reason);
+  assert.equal(order.pickupPin, undefined); assert.equal(order.deliveryPin, undefined);
+  assert.equal((await ok(f.driver, '/api/eats/work')).current.length, 0);
+  assert.equal((await ok(f.driver, '/api/driver/application')).application.busy, false);
+  assert.equal((await ok(f.seller, '/api/eats/store')).menu[0].portionsRemaining, 2);
+  await f.h.restart();
+  assert.equal((await f.admin.post(`/api/eats/orders/${id}/cancel`, data, key)).body.replayed, true);
+  assert.equal((await f.driver.post(`/api/eats/orders/${id}/deliver`, { expectedVersion: order.version, pin: '000000' })).body.error.code, 'ORDER_CLOSED');
+  assert.equal((await ok(f.customer, `/api/eats/orders/${id}`)).order.status, 'cancelled');
 });
 
 test('food reservation is atomic, excludes own orders, and blocks vehicle changes and overlapping ride work', async (t) => {
