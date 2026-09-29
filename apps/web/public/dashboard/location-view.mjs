@@ -10,7 +10,7 @@ export function createLocationView({ onEnable, onUsePickup, onSearch, onFindRide
   const plannerMap = createMapView($('planner-map'), { onPick });
   const trackingMap = createMapView($('tracking-map'));
   let online = false, settings = null, tracking = null, planner = null;
-  let kemmyKey = '', kemmyDismissed = false, ratingChoice = 0;
+  let kemmyKey = '', kemmyDismissed = false, ratingChoice = 0, shownQuote = null;
   const resultKeys = { pickup: '', destination: '' };
   function locked(id, value) { $(id).disabled = value; $(id).dataset.locked = String(value); }
   function baseFare(pricing) {
@@ -43,7 +43,17 @@ export function createLocationView({ onEnable, onUsePickup, onSearch, onFindRide
     $('planner-online').hidden = rideFlow;
     $('planner-online').textContent = state.online ? 'Turn off address search' : 'Enable address search';
     locked('planner-online', !state.settings?.enabled || state.booking);
-    $('planner-error').textContent = state.error;
+    $('planner-error').textContent = rideFlow ? '' : state.error;
+    // The route panel is hidden until a destination is selected. Keep pickup and
+    // search failures beside Find rides, where they can actually be seen.
+    $('ride-search-error').textContent = rideFlow ? state.error : '';
+    $('ride-search-status').textContent = !rideFlow || state.error ? ''
+      : state.blocked ? 'Finish or cancel your current journey before finding another ride.'
+      : state.locatingPickup ? 'Reading your current pickup location…'
+      : state.searching.destination ? 'Searching for your destination…'
+      : state.quoting ? 'Calculating your suggested fare…'
+      : state.quote ? state.expired ? 'Your fare preview has expired. Refresh it below.' : 'Your suggested fare and ride options are ready below.'
+      : state.results.destination.length && !state.destination ? 'Choose your destination from the results to see the suggested fare.' : '';
     $('planner-blocked').hidden = !state.blocked;
     $('planner-content').hidden = !state.online;
     $('planner-provider-note').textContent = state.settings?.enabled
@@ -73,10 +83,7 @@ export function createLocationView({ onEnable, onUsePickup, onSearch, onFindRide
         resultKeys[side] = key; $(`location-${side}-results`).replaceChildren();
         for (const place of state.results[side]) {
           const row = element('li'), button = element('button', place.name, 'location-result'); button.type = 'button';
-          button.addEventListener('click', () => {
-            onSelect(side, place);
-            if (side === 'destination') $('location-planner').scrollIntoView?.({ behavior: 'smooth', block: 'start' });
-          });
+          button.addEventListener('click', () => onSelect(side, place));
           row.append(button); $(`location-${side}-results`).append(row);
         }
       }
@@ -86,9 +93,10 @@ export function createLocationView({ onEnable, onUsePickup, onSearch, onFindRide
       $(`location-target-${side}`).disabled = state.blocked || !state.online || state.booking || (rideFlow && side === 'pickup');
     }
     $('location-coordinate-fields').disabled = !state.online || state.blocked || state.booking;
-    $('location-preview').hidden = rideFlow;
+    $('location-preview').hidden = rideFlow && (!state.pickup || !state.destination || state.quoting || Boolean(state.quote && !state.expired));
     locked('location-preview', !state.pickup || !state.destination || state.blocked || state.quoting || state.booking || !state.online);
-    $('location-preview').textContent = state.quoting ? 'Updating ride options…' : 'Update ride options';
+    $('location-preview').textContent = state.quoting ? 'Updating ride options…'
+      : rideFlow ? state.expired ? 'Refresh suggested fare' : 'Retry suggested fare' : 'Update ride options';
     locked('location-book', !state.quote || state.expired || state.blocked || state.quoting || state.booking);
     $('location-quote').hidden = !state.quote;
     renderRideOptions(state);
@@ -103,6 +111,11 @@ export function createLocationView({ onEnable, onUsePickup, onSearch, onFindRide
         ? 'Find a ' + (category?.name ?? 'selected') + ' driver & negotiate ↗' : 'Find a delivery driver ↗';
       $('location-expiry').textContent = state.expired ? 'These ride options expired. Find rides again.' : 'Fare preview valid for 15 minutes. The final fare still requires agreement.';
     }
+    if (rideFlow && state.quote && state.quote.id !== shownQuote && !state.blocked && !state.expired) {
+      $('location-quote').scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+    }
+    shownQuote = state.quote?.id ?? null;
+    if (!state.quote) $('location-price').textContent = '';
     plannerMap.render({ enabled: state.online && Boolean(state.settings?.tiles), tiles: state.settings?.tiles,
       pickup: state.pickup, destination: state.destination, route: state.quote?.route.coordinates,
       focusKey: JSON.stringify([state.pickup, state.destination, state.quote?.id]) });
@@ -182,11 +195,12 @@ export function createLocationView({ onEnable, onUsePickup, onSearch, onFindRide
     setOnline(enabled, configuration) { online = enabled; settings = configuration; if (tracking) renderTracking(tracking); },
     selected(side, point) { $(`location-${side}-query`).value = point.name; },
     resetPlanner() {
-      planner = null; plannerMap.reset(); $('location-planner').hidden = true;
+      planner = null; shownQuote = null; plannerMap.reset(); $('location-planner').hidden = true;
       $('location-pickup-query').value = ''; $('location-pickup-results').replaceChildren(); $('location-pickup-selected').textContent = ''; resultKeys.pickup = '';
       $('location-destination-query').value = ''; $('location-destination-results').replaceChildren(); $('location-destination-selected').textContent = ''; resultKeys.destination = '';
       for (const id of ['location-latitude', 'location-longitude', 'location-pin-name']) $(id).value = '';
       $('location-quote').hidden = true; $('planner-error').textContent = '';
+      $('ride-search-error').textContent = ''; $('ride-search-status').textContent = ''; $('location-price').textContent = '';
     },
     resetTracking() { tracking = null; kemmyKey = ''; kemmyDismissed = false; ratingChoice = 0; trackingMap.reset(); $('location-tracking').hidden = true; $('kemmy-card').hidden = true; $('kemmy-reopen').hidden = true; $('tracking-error').textContent = ''; $('tracking-status').textContent = ''; },
   });

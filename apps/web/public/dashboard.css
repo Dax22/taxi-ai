@@ -609,6 +609,7 @@
 /* Professional ride options */
 @layer components {
   .ride-options-panel { margin-top: 18px; }
+  .ride-fare-summary { margin: 14px 0; padding: 18px; border: 0; border-radius: 16px; background: #fff3ce; }
   .ride-options { display: grid; gap: 10px; margin: 14px 0 18px; }
   .ride-option {
     display: grid; grid-template-columns: minmax(0,1fr) auto; grid-template-areas: "name fare" "purpose fare";

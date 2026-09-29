@@ -23,6 +23,12 @@ function BookingScreen() {
   const policy = transportCategory(s.category), delivery = s.service === 'courier' || policy?.service === 'delivery';
   const settings = s.settings, locked = !!s.busy || !!s.uncertain, disabled = locked || s.stale;
   const planningDisabled = disabled || s.locatingPickup;
+  const passengerRoute = !delivery && s.mode === 'route';
+  const showRideSearch = passengerRoute && settings?.online.enabled && !settings.current.length && !settings.blockedBy;
+  const fareStatus = s.error ? '' : s.locatingPickup ? 'Reading your current pickup location…'
+    : s.destination.searching ? 'Searching for your destination…'
+    : s.busy === 'preview' ? 'Calculating your suggested fare…'
+    : s.destination.results.length && !s.destination.selected ? 'Choose your destination from the results to see the suggested fare.' : '';
   const wide = width >= 820 && fontScale <= 1.3;
   const showDeveloperSample = __DEV__ && process.env.EXPO_PUBLIC_SHOW_SAMPLE_BOOKING === '1';
   const samplePickup = settings?.areas.find((area) => area.id === s.pickupId);
@@ -30,8 +36,10 @@ function BookingScreen() {
     { text: 'Keep journey', style: 'cancel' }, { text: 'Cancel journey', style: 'destructive', onPress: () => void c.cancel(ride) },
   ]);
   const shown = settings?.current.length ? settings.current : s.lastRide ? [s.lastRide] : [];
+  const routePreview = s.preview && <RoutePreview preview={s.preview} now={s.now} disabled={disabled} busy={s.busy === 'request'} passengerName={!delivery && s.passenger.kind === 'guest' ? s.passenger.name.trim() : undefined}
+    onRequest={() => void c.submit()} onPreview={() => void c.preview()} onChooseCategory={passengerRoute ? (id) => { c.chooseCategory(id); void c.preview(); } : undefined}/>;
   return <Screen><Pill>RIDES & DELIVERIES · NIGERIA</Pill><Heading title={delivery ? 'Send a parcel.' : 'Where to?'} subtitle={delivery ? 'Choose pickup and delivery addresses, a suitable vehicle and an agreed fare.' : 'Your route. Your choice. A fare you both agree.'}/>
-    <Text style={styles.small}>Development preview · no live rides or payments.</Text><Notice message={s.error}/>
+    <Text style={styles.small}>Development preview · no live rides or payments.</Text>{!showRideSearch && <Notice message={s.error}/>}
     {s.uncertain && <Card><Text style={styles.h2}>Let’s confirm that action.</Text><Text style={styles.body}>The connection ended before confirmation arrived. Retrying reuses the original action to avoid creating a duplicate request.</Text>
       <Button title={s.uncertain === 'request' ? 'Retry the same request' : 'Retry the same cancellation'} busy={!!s.busy} onPress={() => void c.retry()}/></Card>}
     {s.stale && settings && <Text accessibilityLiveRegion="polite" style={styles.body}>Refresh to check your latest account status before making changes.</Text>}
@@ -42,14 +50,18 @@ function BookingScreen() {
       <Text style={styles.body}>{settings.blockedBy === 'online' ? 'Go offline from your driver account on the website before requesting a ride.' : 'Finish or cancel your driver journey before requesting a ride.'}</Text></Card>}
     {settings && !settings.current.length && !settings.blockedBy && <VehicleCategories value={s.category} onChange={(id) => c.chooseCategory(id)} disabled={locked} courier={s.service === 'courier'}/>}
     {settings && !settings.current.length && !settings.blockedBy && <>
+      {!delivery && <PassengerForm passenger={s.passenger} controller={c} disabled={disabled}/>}
       {!delivery && s.mode === 'route' && settings.online.enabled && <Card><Pill>YOUR DESTINATION</Pill><Text style={styles.h2}>Where are you going?</Text>
         <Text style={styles.body}>Type an address, landmark, town or city anywhere in Nigeria.</Text>
         <Text style={styles.small}>Pickup is your current phone location. Find rides reads a fresh location, searches your destination and then shows the suggested fare.</Text>
         <Text style={styles.small}>If more than one place matches, choose the correct destination before fares are shown.</Text>
-        <PlaceSearch endpoint="destination" state={s} controller={c} disabled={planningDisabled} actionTitle={s.destination.searching ? 'Finding rides…' : 'Find rides'}
+        <PlaceSearch endpoint="destination" state={s} controller={c} disabled={planningDisabled} actionTitle={s.locatingPickup ? 'Reading your location…' : s.destination.searching ? 'Finding rides…' : 'Find rides'}
           onSearch={() => void c.findRides()} onSelect={(place) => void c.chooseRideDestination(place)}/>
+        {!!fareStatus && <Text style={styles.body} accessibilityLiveRegion="polite">{fareStatus}</Text>}
+        <Notice message={s.error}/>
+        {s.pickup.selected && s.destination.selected && !s.preview && !s.busy && <Button title="Retry suggested fare" disabled={planningDisabled} onPress={() => void c.preview()}/>}
       </Card>}
-      {!delivery && <PassengerForm passenger={s.passenger} controller={c} disabled={disabled}/>} 
+      {passengerRoute && routePreview}
       {delivery && <Card><Text style={styles.h2}>What are you sending?</Text>
         {([['description', 'Parcel description and size'], ['weightKg', 'Total weight (kg)'], ['recipientName', 'Recipient name'], ['pickupInstructions', 'Pickup instructions (optional)'], ['dropoffInstructions', 'Drop-off instructions (optional)']] as [keyof DeliveryDraft, string][]).map(([field, label]) => <Field key={field} label={label} value={s.delivery[field]} editable={!disabled} keyboardType={field === 'weightKg' ? 'decimal-pad' : 'default'} maxLength={field === 'weightKg' ? 10 : field === 'recipientName' ? 100 : 240} onChangeText={(value) => c.editDelivery(field, value)}/>)}
         <Text style={styles.small}>{s.category === 'standard' ? 'Car' : vehicleCategory(s.category)?.name} parcel limit: {parcelLoadLimit(s.category)} kg. Matching also checks the driver’s approved load capacity. Confirm the load fits before collection.</Text><Text style={styles.small}>After requesting, share a private tracking invitation from your journey. Your recipient signs in and accepts it to follow the delivery. They give the drop-off code to the driver only after receiving the parcel.</Text>
@@ -82,8 +94,7 @@ function BookingScreen() {
             <Text style={styles.small}>{s.destinationId ? 'Destination matched to a sample area.' : `Sample areas: ${settings.areas.filter((area) => area.id !== s.pickupId).map((area) => area.name).join(', ')}.`}</Text></>}
           {(s.mode === 'sample' || delivery && s.consent) && <Button title={s.preview ? 'Preview route again' : 'Preview route & fare'} secondary={!!s.preview} busy={s.busy === 'preview'} disabled={planningDisabled} onPress={() => void c.preview()}/>}
         </Card></View>
-        {s.preview && <View style={[look.column, wide && look.wideColumn]}><RoutePreview preview={s.preview} now={s.now} disabled={disabled} busy={s.busy === 'request'} passengerName={!delivery && s.passenger.kind === 'guest' ? s.passenger.name.trim() : undefined}
-          onRequest={() => void c.submit()} onPreview={() => void c.preview()} onChooseCategory={!delivery && s.mode === 'route' ? (id) => { c.chooseCategory(id); void c.preview(); } : undefined}/></View>}
+        {!passengerRoute && routePreview && <View style={[look.column, wide && look.wideColumn]}>{routePreview}</View>}
         </View>}
       </>}
     </>}

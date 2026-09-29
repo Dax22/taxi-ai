@@ -18,6 +18,7 @@ const { createMapView } = await import(mapSource);
 const viewSource = imports(await readFile(new URL('../public/dashboard/location-view.mjs', import.meta.url), 'utf8'))
   .replace("'./map-view.mjs'", JSON.stringify(mapSource));
 const { createLocationView } = await import(uri(viewSource));
+const { createLocationPlanner } = await import(uri(imports(await readFile(new URL('../public/dashboard/location-planner.mjs', import.meta.url), 'utf8'))));
 const html = await readFile(new URL('../public/dashboard.html', import.meta.url), 'utf8');
 const ids = new Set([...html.matchAll(/id="([^"]+)"/g)].map((match) => match[1]));
 
@@ -28,6 +29,8 @@ class NodeFixture {
   setAttribute(name, value) { this.attributes[name] = value; }
   append(...nodes) { this.children.push(...nodes); }
   replaceChildren(...nodes) { this.children = nodes; }
+  scrolls = 0;
+  scrollIntoView() { this.scrolls++; }
   set innerHTML(_) { throw new Error('Untrusted map labels must use textContent'); }
   getBoundingClientRect() { return { left: 20, top: 10, width: 400, height: 200 }; }
   fire(type, details = {}) { let prevented = false; this.handlers[type]?.({ preventDefault() { prevented = true; }, ...details }); return prevented; }
@@ -129,6 +132,54 @@ test('planner binds actual HTML controls, renders plain-text places and prevents
   view.renderPlanner({ ...state, blocked: true }); assert.equal(node('location-preview').disabled, true); assert.equal(node('location-book').disabled, true);
   view.resetPlanner(); assert.equal(node('location-pickup-selected').textContent, ''); assert.equal(node('location-destination-query').value, ''); assert.equal(node('location-destination-results').children.length, 0);
   assert.equal(descendants(node('planner-map')).filter((n) => n.tag === 'image').length, 0);
+});
+
+test('Find rides exposes pickup failures, destination choices and fare progress, then reveals a real quote after retry', async (t) => {
+  const { node } = setup(t);
+  let planner, denyLocation = true, finishQuote;
+  const view = createLocationView({ onPreview: () => planner.preview(), onFindRide: (_, query) => planner.findRides(query),
+    onSelect: (side, place) => planner.chooseRidePlace(side, place) });
+  const quote = { id: 'saved-quote', expiresAt: 20_000, route: { pickup, destination,
+    distanceMeters: 7000, durationSeconds: 1200, suggestedFareKobo: 250000, coordinates: [[7.4, 9.08], [7.45, 9.1]],
+    pricing: { baseKobo: 50000, perKmKobo: 20000, perMinuteKobo: 3000, minimumKobo: 100000, incrementKobo: 5000, distanceKobo: 140000, timeKobo: 60000 } } };
+  planner = createLocationPlanner({ view, serverNow: () => 1000, onOnline() {}, onBook() {},
+    client: { request: async (path) => path === '/api/locations' ? { settings } : { places: [destination, { ...destination, name: 'Another result' }] },
+      command: () => new Promise((resolve, reject) => { finishQuote = { resolve, reject }; }) },
+    device: { supported: () => true, locate: async () => {
+      if (denyLocation) throw new Error('Your current pickup must be inside Nigeria.');
+      return { coords: { latitude: pickup.lat, longitude: pickup.lng, accuracy: 12 } };
+    } } });
+  await planner.setContext({ id: 'customer', role: 'customer' }, false);
+  await planner.findRides('Destination');
+  assert.equal(node('location-planner').hidden, true);
+  assert.match(node('ride-search-error').textContent, /inside Nigeria/);
+  assert.equal(node('location-quote').hidden, true);
+  assert.equal(node('location-price').textContent, '');
+
+  denyLocation = false;
+  await planner.findRides('Destination');
+  assert.equal(node('ride-search-error').textContent, '');
+  assert.match(node('ride-search-status').textContent, /Choose your destination.*suggested fare/);
+  assert.equal(node('location-quote').hidden, true);
+  const selecting = planner.chooseRidePlace('destination', destination);
+  assert.match(node('ride-search-status').textContent, /Calculating your suggested fare/);
+  finishQuote.reject(new Error('The route provider is temporarily unavailable.'));
+  await selecting;
+  assert.match(node('ride-search-error').textContent, /provider.*unavailable/);
+  assert.equal(node('location-price').textContent, '');
+  assert.equal(node('location-preview').hidden, false);
+  assert.equal(node('location-preview').disabled, false);
+
+  const retry = planner.preview(); finishQuote.resolve({ quote }); await retry;
+  assert.equal(node('location-quote').hidden, false);
+  assert.equal(node('location-price').textContent, '₦2,500');
+  assert.equal(node('location-book').disabled, false);
+  assert.equal(node('ride-search-error').textContent, '');
+  assert.equal(node('location-quote').scrolls, 1, 'new fare is brought into view');
+  planner.tick(); assert.equal(node('location-quote').scrolls, 1, 'polls do not move the page again');
+  planner.clear('destination');
+  assert.equal(node('location-quote').hidden, true);
+  assert.equal(node('location-price').textContent, '', 'editing the route clears the old fare');
 });
 
 test('tracking distinguishes last-known GPS and exposes a stop control during permission lookup', (t) => {

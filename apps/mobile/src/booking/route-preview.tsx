@@ -23,6 +23,7 @@ export function RoutePreview({ preview, now, disabled, busy, onRequest, onPrevie
   const rideOptions = transportCategory(selectedCategory)?.service === 'ride' ? (['standard','suv'] as VehicleCategoryId[]) : [selectedCategory];
   const isRide = transportCategory(selectedCategory)?.service === 'ride';
   return <Card><Pill>{onChooseCategory ? 'RIDE OPTIONS' : isRide ? 'RIDE REVIEW' : 'ROUTE PREVIEW'}</Pill>
+    <View style={look.fare} accessibilityLiveRegion="polite"><Text style={styles.label}>SUGGESTED FARE</Text><Text style={styles.title}>{fare(preview.suggestedFareKobo)}</Text><Text style={styles.body}>You and the driver agree the final fare.</Text></View>
     {onChooseCategory && <View style={look.options}>{rideOptions.map((id) => {
       const category = vehicleCategory(id), selected = id === selectedCategory;
       const amount = selected ? preview.suggestedFareKobo : baseFare ? categoryFare(baseFare,id) : null;
@@ -48,7 +49,6 @@ export function RoutePreview({ preview, now, disabled, busy, onRequest, onPrevie
     {preview.route?.distanceKind === 'straight_line' ? <><Text style={styles.body}>{(preview.route.distanceMeters / 1000).toFixed(1)} km in a straight line</Text><Text style={styles.small}>Direct-distance delivery estimate, not a road route or driving ETA. Confirm access and timing with the driver.</Text></> : preview.route ? <><View style={styles.row}><Text style={styles.body}>{(preview.route.distanceMeters / 1000).toFixed(1)} km</Text><Text style={styles.body}>About {Math.ceil((preview.route.durationSeconds ?? 0) / 60)} min driving</Text></View>
       <Text style={styles.small}>Route data: © OpenStreetMap contributors · OSRM. Travel time excludes traffic and driver arrival.</Text></>
       : <Text style={styles.small}>Sample areas for local testing. No road route or travel time is calculated.</Text>}
-    <View style={look.fare}><Text style={styles.label}>SUGGESTED FARE</Text><Text style={styles.title}>{fare(preview.suggestedFareKobo)}</Text><Text style={styles.body}>You and the driver agree the final fare.</Text></View>
     <Text style={styles.small}>This is a starting fare, not an accepted price. After a driver joins, agree the final amount in Taxi Ai chat before confirming the ride. No live dispatch or payment.</Text>
     {preview.expiresAt !== null && <Text style={styles.small}>{expired ? 'This preview has expired.' : `Route preview valid for about ${Math.max(1, Math.ceil((preview.expiresAt - now) / 60_000))} more min.`}</Text>}
     {expired ? <Button title={isRide ? 'Refresh ride options' : 'Refresh route preview'} onPress={onPreview} disabled={disabled}/>
