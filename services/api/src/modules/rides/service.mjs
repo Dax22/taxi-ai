@@ -12,6 +12,7 @@ import { fields } from '../../shared/validation.mjs';
 import { hasCapability, requireRole, requireEligibleDriver } from '../../shared/policies.mjs';
 import { requireParticipant, requireVersion, restoreNegotiation, canonical } from './domain.mjs';
 import { asyncFilter, asyncMap, asyncFlatMap } from '../../shared/async-collections.mjs';
+import { createRidePilotConfig } from '../../../../../packages/shared/src/ride-pilot.mjs';
 
 
 /**
@@ -20,7 +21,7 @@ import { asyncFilter, asyncMap, asyncFlatMap } from '../../shared/async-collecti
  */
 export function createRidesService({ repository, deliveries, passengerForRide, savePassenger, getAccount, unitOfWork, audit, tokens, clock, onRideClosed = () => {}, onTripCompleted = () => {},
   routeForRide = () => null, quoteForRide, bindQuote, availabilityFor = () => null, onClaim = () => {}, onEvent = () => {}, availableDriverIds = () => [], nearbyDriverIds = null, hasOtherWork = () => false, allowSimulation = false,
-  dispatch = null, isParcelRecipient = async () => false }) {
+  dispatch = null, isParcelRecipient = async () => false, ridePilot = createRidePilotConfig() }) {
   // Expiry commits independently of a command that may fail afterward.
   async function expireRequested(ride, now) {
     if (!ride || ride.status !== 'requested' || now < ride.requestExpiresAt) return;
@@ -251,6 +252,7 @@ export function createRidesService({ repository, deliveries, passengerForRide, s
     try { passenger = passengerDetails(data.passenger, category); } catch (error) { check(false, 'INVALID_PASSENGER', error.message); }
     const delivery = (await deliveries.validate(category, data.delivery));
     check(!delivery || passenger.kind === 'self', 'INVALID_PASSENGER', 'Parcel deliveries cannot include a passenger booking.');
+    if (!delivery) check(!ridePilot.paused, 'RIDES_PAUSED', 'New passenger ride requests are paused. Existing trips can continue.');
     let quote;
     if (routed) {
       check(typeof data.quoteId === 'string' && /^[a-f0-9-]{36}$/.test(data.quoteId), 'INVALID_ROUTE', 'Preview a route before requesting a ride.');
@@ -261,6 +263,8 @@ export function createRidesService({ repository, deliveries, passengerForRide, s
       try { quote = createDemoQuote(data.pickupId, data.destinationId); quote.suggestedFareKobo = categoryFare(quote.suggestedFareKobo, category); }
       catch (error) { check(false, 'INVALID_ROUTE', error.message); }
     }
+    if (!delivery) check(ridePilot.allows(routed ? quote : null), 'RIDE_PILOT_AREA',
+      'This passenger ride is outside the configured service area. Preview a route within the service area.');
     check(!(await repository.hasOpenRequest(user.id)), 'OPEN_REQUEST_EXISTS', 'You already have an open request. Finish or cancel it first.');
     check(!(await repository.hasDriverWork(user.id)) && !(await hasOtherWork(user.id)), 'DRIVER_BUSY', 'Finish or cancel your assigned work before requesting a personal ride.');
     check(!(await availabilityFor(user.id, now)), 'DRIVER_ONLINE', 'Go offline from Work before requesting a personal ride.');

@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { createRuntimeConfig } from '../src/infrastructure/runtime-config.mjs';
 import { createTelemetry } from '../src/infrastructure/telemetry.mjs';
 import { createCallConfig } from '../src/infrastructure/call-config.mjs';
+import { createRidePilotConfig } from '../../../packages/shared/src/ride-pilot.mjs';
 import { isInternalHealth, requestContext } from '../src/http/security.mjs';
 import { TEST_NOW, harness, participants, PASSWORD, httpFetch } from './helpers.mjs';
 
@@ -19,15 +20,17 @@ function configuration(t) {
   const file = join(dir, 'testers.json');
   writeFileSync(file, JSON.stringify({ version: 1, testers: [{ name: 'tester', tokenHash: hash(testerKey) }] }));
   const env = { TAXI_AI_MODE: 'staging', TAXI_AI_PUBLIC_ORIGIN: 'https://taxi.example.test', TAXI_AI_PROXY_TOKEN: proxyKey,
-    TAXI_AI_DB: join(dir, 'app.sqlite'), TAXI_AI_STAGING_ACCESS_FILE: file };
+    TAXI_AI_DB: join(dir, 'app.sqlite'), TAXI_AI_STAGING_ACCESS_FILE: file,
+    TAXI_AI_RIDES_PAUSED: 'false', TAXI_AI_RIDE_PILOT_BOUNDS: '8.9,7.3,9.3,7.6' };
   return { env, file, runtime: createRuntimeConfig(env) };
 }
 const gatewayHeaders = { Host: 'taxi.example.test', 'X-Taxi-Ai-Proxy-Token': proxyKey, 'X-Forwarded-Proto': 'https',
   'X-Forwarded-For': '192.0.2.10', Authorization: `Basic ${Buffer.from('tester:' + testerKey).toString('base64')}` };
 async function setup(t, options = {}) {
-  const { runtime } = configuration(t), logs = [];
+  const { runtime, env } = configuration(t), logs = [];
   const h = await harness(t, { runtime, gatewayHeaders, callConfig: createCallConfig({ TAXI_AI_CALLS_MODE: 'off' }),
-    telemetry: createTelemetry({ write: (line) => logs.push(JSON.parse(line)) }), ...options });
+    telemetry: createTelemetry({ write: (line) => logs.push(JSON.parse(line)) }),
+    ridePilot: createRidePilotConfig(env, runtime.mode), ...options });
   return { h, runtime, logs };
 }
 

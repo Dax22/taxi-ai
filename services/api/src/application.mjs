@@ -28,6 +28,7 @@ import { createRidesRepository } from './modules/rides/repository.mjs';
 import { createDeliveriesRepository } from './modules/deliveries/repository.mjs';
 import { createDeliveriesService } from './modules/deliveries/service.mjs';
 import { createRidesService } from './modules/rides/service.mjs';
+import { createRidePilotConfig } from '../../../packages/shared/src/ride-pilot.mjs';
 import { createEatsRepository } from './modules/eats/repository.mjs';
 import { deliveryAreas, EATS_LEGACY_AREA_IDS } from '../../../packages/shared/src/eats.mjs';
 import { distanceMeters } from '../../../packages/shared/src/locations.mjs';
@@ -95,6 +96,7 @@ import { createAnnouncementsService } from './modules/announcements/service.mjs'
 
 /** Composition root: the only place that wires business modules to adapters. */
 export function createApplication({ db, clock = Date.now, callConfig = createCallConfig(), mapProvider = createMapProvider(), allowSimulation = false,
+  ridePilot = createRidePilotConfig(),
   dispatchConfig = createDispatchConfig(), workerConfig = createWorkerConfig(), staffMfa = createStaffMfaConfig(),
   driverFaceProvider = createDriverFaceProvider({ config: readDriverFaceConfig({}) }),
   safetyAlertProvider = createSafetyAlertProvider(), accountMail = createAccountMail(), pushProvider = createPushProvider(), vehicleVisionProvider = createVehicleVisionProvider(),
@@ -163,7 +165,7 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
     quoteForRide: async (userId, id, now) => (await locations.quoteForRide(userId, id, now)),
     bindQuote: async (userId, id, rideId, now) => (await locations.bindQuote(userId, id, rideId, now)),
     availabilityFor: availability.positionFor, onClaim: availability.onClaim, availableDriverIds: availability.driverIds,
-    nearbyDriverIds: availability.nearbyDriverIds, allowSimulation,
+    nearbyDriverIds: availability.nearbyDriverIds, allowSimulation, ridePilot,
     onEvent: async ({ kind, ride, actorId, recipients = [], eventKey, now }) => {
       (await dispatch.observe({ kind, rideId: ride.id, locationMode: (await locations.routeForRide(ride.id)) ? 'gps' : 'sample', now }));
       const targets = kind === 'request' ? recipients : [ride.customerId,ride.driverId].filter((id) => id && id !== actorId);
@@ -203,6 +205,7 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
   calls = createCallsService({ repository: createCallsRepository(db), getAccount: accounts.profile,
     sessionOwner: accounts.sessionOwner, getRideContext: rides.conversationContext, unitOfWork, audit, tokens, clock, config: callConfig });
   locations = createLocationsService({ repository: createLocationsRepository(db), provider: mapProvider,
+    ridePilot,
     getAccount: accounts.profile, sessionOwner: accounts.sessionOwner, nativeAccessOwner: devices.accessOwner, nativeSessionOwner: devices.sessionOwner,
     getRideContext: rides.conversationContext, unitOfWork, tokens, audit, clock,
     onChange: async (rideId, now) => await family.onLocationEvent(rideId, now) });
