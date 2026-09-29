@@ -94,6 +94,18 @@ test('planner binds actual HTML controls, renders plain-text places and prevents
   assert.equal(node('location-pickup-manual').hidden, true);
   assert.equal(node('location-target-pickup').disabled, true);
   assert.equal(node('location-pickup-current').textContent, 'Refresh current pickup');
+  view.renderPlanner({ ...state, locatingPickup: true });
+  assert.equal(node('location-destination-search').disabled, true);
+  assert.equal(node('location-destination-search').textContent, 'Reading your location…');
+  view.renderPlanner(state);
+  view.renderPlanner({ ...state, service: 'delivery', rideDiscovery: false, target: 'pickup' });
+  assert.equal(node('location-pickup-manual').hidden, false);
+  assert.equal(node('location-target-pickup').disabled, false);
+  assert.equal(node('location-target-pickup').checked, true);
+  assert.equal(node('location-destination-search').textContent, 'Search destination');
+  assert.equal(node('location-ride-options').children.length, 1);
+  assert.match(node('location-book').textContent, /delivery driver/);
+  view.renderPlanner(state);
   node('location-pickup-current').fire('click'); assert.equal(actions.pop()[0], 'UsePickup');
   const result = node('location-destination-results').children[0].children[0];
   assert.equal(result.textContent, destination.name); result.fire('click'); assert.deepEqual(actions.pop(), ['Select', 'destination', destination]);

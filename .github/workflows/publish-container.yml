@@ -60,8 +60,8 @@ jobs:
           {
             echo "### Taxi AI deployment image"
             echo
-            echo "\\`ghcr.io/dax22/taxi-ai:${GITHUB_SHA}\\`"
+            printf '`%s`\n' "${IMAGE_NAME}:${GITHUB_SHA}"
             echo
-            echo "The same verified image is also tagged as \`ghcr.io/dax22/taxi-ai:integration\`."
+            printf 'The same verified image is also tagged as `%s:integration`.\n' "${IMAGE_NAME}"
             echo "Deploy by immutable SHA tag when promoting a release."
           } >> "${GITHUB_STEP_SUMMARY}"

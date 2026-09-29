@@ -44,7 +44,7 @@ const routeDevice = createGeolocation();
 const locationView = createLocationView({ onEnable: () => planner.enable(),
   onUsePickup: () => planner.snapshot().rideDiscovery ? planner.useRidePickup() : planner.useCurrentPickup(),
   onSearch: (side, query) => planner.search(side, query),
-  onFindRide: (_side, query) => planner.findRides(query),
+  onFindRide: (_side, query) => planner.snapshot().service === 'delivery' ? planner.search('destination', query) : planner.findRides(query),
   onClear: (side) => planner.clear(side),
   onSelect: (side, value) => planner.snapshot().rideDiscovery ? planner.chooseRidePlace(side, value) : planner.select(side, value),
   onChooseOption: async (id) => { view.selectCategory(id); await planner.preview(); },
@@ -104,7 +104,7 @@ const vehicleCheck = createVehiclePhotoCheck({client,onReport:(id,checkId)=>safe
 const view = createDashboardView({
   onEditVehicle: () => page.editVehicle(),
   onVehicleMismatch: (id) => safetyView.vehicleMismatch(id),
-  onCategoryChange: (id) => planner.setCategory(id),
+  onCategoryChange: (id, service) => planner.setCategory(id, service),
   serverNow: () => serverTime.now + performance.now() - serverTime.received,
   onCommand: (...args) => page.rideCommand(...args),
   onSelectionChange: (ride) => page.selection(ride),

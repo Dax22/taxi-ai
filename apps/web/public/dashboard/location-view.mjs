@@ -21,7 +21,7 @@ export function createLocationView({ onEnable, onUsePickup, onSearch, onFindRide
   function renderRideOptions(state) {
     const root = $('location-ride-options'); root.replaceChildren();
     if (!state.quote) return;
-    const route = state.quote.route, isRide = transportCategory(state.vehicleCategory)?.service === 'ride';
+    const route = state.quote.route, isRide = (state.service ?? transportCategory(state.vehicleCategory)?.service) === 'ride';
     const ids = isRide ? ['standard','suv'] : [state.vehicleCategory], base = baseFare(route.pricing);
     for (const id of ids) {
       const category = vehicleCategory(id); if (!category) continue;
@@ -37,7 +37,7 @@ export function createLocationView({ onEnable, onUsePickup, onSearch, onFindRide
   }
   function renderPlanner(state) {
     planner = state;
-    const rideFlow = transportCategory(state.vehicleCategory)?.service === 'ride';
+    const rideFlow = (state.service ?? transportCategory(state.vehicleCategory)?.service) === 'ride';
     $('location-planner').hidden = state.user?.role !== 'customer' || (rideFlow && !state.destination);
     if (state.user?.role !== 'customer') { plannerMap.reset(); return; }
     $('planner-online').hidden = rideFlow;
@@ -64,9 +64,9 @@ export function createLocationView({ onEnable, onUsePickup, onSearch, onFindRide
     for (const side of ['pickup', 'destination']) {
       const destination = side === 'destination';
       $(`location-${side}-fields`).disabled = state.blocked || state.booking || (!destination && !state.online);
-      locked(`location-${side}-search`, state.searching[side] || state.blocked || state.booking
+      locked(`location-${side}-search`, state.searching[side] || state.blocked || state.booking || (destination && state.locatingPickup)
         || (destination ? !state.settings?.enabled : !state.online));
-      if (destination) $('location-destination-search').textContent = state.searching.destination ? 'Finding rides…' : 'Find rides';
+      if (destination) $('location-destination-search').textContent = state.locatingPickup ? 'Reading your location…' : state.searching.destination ? 'Searching…' : rideFlow ? 'Find rides' : 'Search destination';
       $(`location-${side}-selected`).textContent = state[side] ? `${state[side].name} · ${state[side].lat.toFixed(5)}, ${state[side].lng.toFixed(5)}` : destination ? 'Type and choose a destination anywhere in Nigeria.' : 'Choose pickup.';
       const key = JSON.stringify(state.results[side]);
       if (resultKeys[side] !== key) {
@@ -99,7 +99,7 @@ export function createLocationView({ onEnable, onUsePickup, onSearch, onFindRide
       $('location-price').textContent = formatNaira(route.suggestedFareKobo);
       $('location-formula').textContent = `${route.distanceKind === 'straight_line' ? 'Direct-distance delivery estimate, not a road route. Confirm access and timing with the driver. ' : ''}Illustrative formula (${pricing.categoryMultiplier ?? 1}× category factor): ${formatNaira(pricing.baseKobo)} base + ${formatNaira(pricing.perKmKobo)}/km + ${formatNaira(pricing.perMinuteKobo)}/min. Minimum ${formatNaira(pricing.minimumKobo)}, rounded up to ${formatNaira(pricing.incrementKobo)}.`;
       const category = vehicleCategory(state.vehicleCategory);
-      $('location-book').textContent = transportCategory(state.vehicleCategory)?.service === 'ride'
+      $('location-book').textContent = rideFlow
         ? 'Find a ' + (category?.name ?? 'selected') + ' driver & negotiate ↗' : 'Find a delivery driver ↗';
       $('location-expiry').textContent = state.expired ? 'These ride options expired. Find rides again.' : 'Fare preview valid for 15 minutes. The final fare still requires agreement.';
     }
