@@ -13,6 +13,8 @@ services:
       - ALL
     stop_grace_period: 25s
     environment:
+      TAXI_AI_STAFF_MFA_KEY: ${TAXI_AI_STAFF_MFA_KEY:-}
+      TAXI_AI_STAFF_MFA_REQUIRED: ${TAXI_AI_STAFF_MFA_REQUIRED:-false}
       TAXI_AI_MODE: staging
       TAXI_AI_PUBLIC_ORIGIN: https://${TAXI_AI_DOMAIN:?Set the staging DNS name}
       TAXI_AI_PROXY_TOKEN: ${TAXI_AI_PROXY_TOKEN:?Generate a private proxy token}

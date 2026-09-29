@@ -214,7 +214,7 @@ test('redial limits, maximum duration and configuration changes cannot leave par
   assert.equal((await caller.get('/api/calls')).body.recent[0].reason, 'max_duration');
   assert.equal(h.db.prepare('SELECT count(*) AS n FROM voice_participants').get().n, 0);
   call = await start(caller, ride); await answer(callee, call); await signal(caller, call, 'offer');
-  createApplication({ db: h.db, clock: () => (TEST_NOW + 1_860_001), callConfig: createCallConfig({ TAXI_AI_CALLS_MODE: 'off' }) }).calls.sweep();
+  (await createApplication({ db: h.db, clock: () => (TEST_NOW + 1_860_001), callConfig: createCallConfig({ TAXI_AI_CALLS_MODE: 'off' }) }).calls.sweep());
   assert.equal((await caller.get('/api/calls')).body.recent[0].reason, 'unavailable');
   assert.equal(h.db.prepare('SELECT offer_sdp FROM voice_calls WHERE id = ?').get(call.id).offer_sdp, null);
   assert.equal(h.db.prepare('SELECT count(*) AS n FROM voice_participants').get().n, 0);

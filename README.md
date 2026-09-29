@@ -1,6 +1,6 @@
 # Taxi Ai
 
-Rides, Taxi Ai Eats and courier delivery, starting in Abuja, Nigeria.
+Rides, Taxi Ai Eats and courier delivery across Nigeria.
 
 Target product: **one Taxi Ai mobile app and one website**, with the same account
 and Customer, Drive & deliver and My store modes. A person can have multiple
@@ -8,13 +8,22 @@ approved capabilities. This direction is documented in the
 [unified platform plan](docs/unified-platform.md). The first milestone is implemented:
 one website account with Customer and Work modes for rides. The first iOS/Android
 app now shares sign-in, profiles, booking, driver availability, fare negotiation,
-chat and complete ride/delivery journeys. Taxi Ai Eats now adds restaurant browsing, checkout, My store and courier handovers as a test flow. See [Eats setup](docs/eats.md). See [unified accounts](docs/unified-accounts.md)
+chat and complete ride/delivery journeys. Taxi Ai Eats asks for a delivery location first, searches dishes and prices from restaurants, food vendors and home kitchens, and combines food into one checkout with separate kitchen deliveries. It also supports batch portions, meal photos, customer pickup, My store and handover codes as a test flow. See [Eats setup](docs/eats.md). See [unified accounts](docs/unified-accounts.md)
 and [mobile setup](apps/mobile/README.md).
+
+For the resolved VS Code/slider merge and database upgrade steps, see
+[the integration guide](docs/vscode-slider-integration.md).
+
+The backend now includes a PostgreSQL/PostGIS option, multiple API replicas,
+separate matching workers, account-change updates and load-test tooling. Local
+SQLite development continues to work. See [scalability and deployment](docs/scalability.md)
+for setup, data migration boundaries and measurement. This is not a claim of
+one-million-user capacity.
 
 ## What works today
 
 The yellow Taxi Ai website now includes **local customer, driver and administrator
-accounts** at `/app`. Customers choose an Abuja address or map pin, preview a road
+accounts** at `/app`. Customers choose a Nigerian address or map pin, preview a road
 route and request a test journey; an approved online driver near the pickup can
 select the request, make offers and agree a fare with the customer from a separate
 browser session. The customer can confirm a booking, and the driver can record
@@ -23,23 +32,30 @@ simulate payment and view a saved receipt; drivers can check their earnings prev
 Trip Safety adds trusted contacts, private test SOS records, administrator review
 and expiring trip links. Contact notifications are simulated; nothing is sent.
 Accounts, requests, trip history and agreements survive refresh
-and server restart. Dashboards refresh every three seconds while visible.
+and server restart. Web and native dashboards use authenticated account-change
+signals with a slower refresh fallback; see [realtime updates](docs/realtime-updates.md).
 
 This is a **development prototype**, not a launched transport service.
 Use test details. Fares are fictional examples and all requests are test requests.
 Drivers can explicitly share their browser-reported location during a confirmed
 test trip. There is no live dispatch or payment. Driver applications now store
-private documents and recorded manual checks; external identity/licence verification
-is not connected. Use fictional details and documents.
+private documents and recorded manual checks. Optional
+[automatic selfie-to-licence comparison](docs/driver-face-checks.md) is implemented
+but requires AWS configuration; liveness and licence-database verification are
+not connected. Use fictional details and documents.
 
 - One personal login, Customer/Work mode switching and optional driver enrollment.
-- Taxi Ai Eats on web/mobile: restaurant menus, single-store carts, itemized test checkout,
-  order history, My store and courier handover codes. [Try a food order](docs/eats.md).
+- Book a passenger ride for an adult friend on web/mobile, with separate booker
+  and passenger details and a private, revocable trip/PIN link shared manually.
+  The booker retains fare and payment authority. [Guest-ride setup](docs/guest-rides.md).
+- Taxi Ai Eats on web/mobile: location-first dish search, combined kitchen orders,
+  restaurants/vendors/home kitchens, town-only vendor and home-kitchen profiles, meal photos and finite
+  portions, delivery or pickup, test checkout and My store. [Try a food order](docs/eats.md).
 - Self-hosted Manrope typography across app text, inputs, navigation, web and admin.
 - Native sign-in, Home/Activity/Work/Updates/Account navigation and device revocation.
 - Native driver availability, job claiming, fare consent, chat, pickup/drop-off verification
   and a durable updates inbox, with optional Expo phone alerts. See [native journeys](docs/mobile-journeys.md).
-- Native **Book a ride**: Abuja address search, route/fare review, shared ride requests,
+- Native **Book a ride**: Nigeria-wide address search, route/fare review, shared ride requests,
   status recovery and pre-start cancellation. See [mobile booking](docs/mobile-booking.md).
 - Optional Google sign-up/sign-in for web and native development builds, with
   explicit password-confirmed linking for existing accounts. Configure your own
@@ -60,15 +76,29 @@ is not connected. Use fictional details and documents.
 - Website Download app section stays Coming soon until real store URLs are added.
 - Separate [operations dashboard](apps/admin/README.md) at `/admin`: searchable accounts,
   individual profiles, complete paginated trip history, exact fare/payment totals and analytics.
+- [Staff workspace](docs/admin-workspace.md): scoped roles and authenticator verification,
+  operations queues, searchable audit history, and assigned support/safety cases with
+  notes, response targets and synchronized saved SOS status.
+- [Finance, compliance and demand](docs/admin-finance-compliance-demand.md): simulation
+  ledger and record checks, driver document expiry and staff follow-ups, and area/time
+  demand analysis. Live payments remain unconfigured until a provider is connected.
+- [Nationwide coverage map](docs/nationwide-coverage-map.md): city navigation across
+  Nigeria, aggregate request demand, observed pickup waits, unserved requests and
+  current waiting requests versus eligible available drivers.
 - Additive schema-13 reporting indexes preserve existing accounts, sessions and trip history.
 - Server-checked trip roles, self-claim prevention and conflicting-work protection.
 - Private driver applications, contact/licence/vehicle details and bounded image uploads.
+- Optional automatic selfie-to-licence face comparison on web, iOS and Android,
+  with explicit consent, private results and staff review for uncertain outcomes.
 - Administrator approval, rejection and corrections with recorded manual checks and review history.
 - Current-document eligibility for new work, and stable driver/vehicle snapshots in trip history.
 - Explicit Online/Offline availability, nearby matching and five-minute request expiry.
 - GPS search expands from 5 km to 10 km after one minute; local sample-area matching
   supports testing outside Abuja without using device location.
-- Persistent SQLite data, password hashes and revocable sessions.
+- SQLite for local development or asynchronous PostgreSQL/PostGIS for multiple
+  API replicas, with shared password hashes, revocable sessions and retry records.
+- Timed ride offers and optional batch matching, with indexed nearby-driver
+  retrieval, coordinated regional workers and fresh eligibility checks before assignment.
 - One open request/active trip per customer and one negotiation/active trip per driver.
 - Explicit booking confirmation, driver progress, pickup PIN verification and completion.
 - Cancellation reasons, saved trip activity and paginated completed/cancelled/expired history.
@@ -78,7 +108,7 @@ is not connected. Use fictional details and documents.
   fare cards; reported messages appear in the local administrator dashboard.
 - In-app audio call controls: call, answer, decline, mute, hang up and recent
   call history. Local WebRTC preview with an optional TURN relay adapter.
-- Opt-in Abuja address search, map pins, road distance and estimated driving time.
+- Opt-in Nigeria-wide address search, map pins, road distance and estimated driving time.
 - Saved route quotes with an illustrative fare formula; explicit negotiation still
   determines the final fare. Quotes expire after 15 minutes.
 - Permission-based driver GPS for assigned participants, with explicitly created
@@ -163,7 +193,10 @@ test driver approval and a full customer/driver negotiation.
    See [the onboarding guide](docs/driver-onboarding.md) for corrections and renewals.
 
 The administrator role cannot be selected during registration or granted through
-an HTTP endpoint. Additional administrators and staff account recovery are not built yet.
+an HTTP endpoint. The Owner can now grant scoped Operations, Support, Safety or
+Finance membership to registered accounts at `/admin/staff`; this does not grant
+the legacy administrator role. See [admin workspace setup](docs/admin-workspace.md).
+Additional owner bootstrapping and staff authenticator recovery remain operator work.
 Customer/driver password recovery is available once [email delivery](docs/account-email.md) is configured.
 
 ## Try a complete customer/driver journey
@@ -175,7 +208,7 @@ Customer/driver password recovery is available once [email delivery](docs/accoun
 2. Open a different browser/profile or one private window and sign in as the
    approved driver and select **Work**. Two ordinary tabs share a login; use separate sessions.
 3. In **Your availability**, choose **Share location and go online** for a routed
-   request, using an Abuja device near the pickup. For a local sample request,
+   request, using a device in Nigeria near the pickup. For a local sample request,
    select the same sample pickup area and click **Go online in sample area**.
    Keep this driver page visible. Then select **Start negotiation** and offer ₦5,000.
    Claiming stops availability; trip location sharing remains a separate choice.
@@ -183,7 +216,7 @@ Customer/driver password recovery is available once [email delivery](docs/accoun
 5. The customer reviews the driver/fare and clicks **Confirm test booking**.
    Only the customer sees the six-digit pickup PIN.
    The driver may now click **Share my location** in Journey map and allow browser
-   location access. GPS must be within the Abuja preview area and accurate within
+   location access. GPS must be within Nigeria and accurate within
    200 metres. No location access starts automatically; Stop sharing stops the
    device watcher immediately. GPS controls work independently of online tiles.
 6. The driver clicks **On my way**, then **I have arrived**, enters the customer’s
@@ -204,7 +237,9 @@ Read [the payments guide](docs/payments.md) for controls, exact amounts, receipt
 driver totals and manual print/browser review.
 
 Read [the matching guide](docs/matching.md) for local testing, permission, radius,
-timeouts and manual validation. Read [the trip guide](docs/trips.md) for cancellation, pickup verification,
+timeouts and manual validation, and [timed driver offers](docs/dispatch.md) for road pickup
+estimates, sequential/batch settings, schema-27 upgrade steps and matching metrics.
+Read [the trip guide](docs/trips.md) for cancellation, pickup verification,
 history, database migration and the manual review checklist.
 
 Once a driver claims the request, its **Your conversation** panel opens. Send a
@@ -224,18 +259,24 @@ yet been verified; automated tests cover the lifecycle and media orchestration.
 
 ## Your local data
 
-The database is created automatically at `data/taxi-ai.sqlite` inside this repo.
+Without `TAXI_AI_DATABASE_URL`, the local SQLite database is created automatically
+at `data/taxi-ai.sqlite` inside this repo.
 Keep that file and its SQLite sidecar files on your own computer. They are ignored
 by Git and are never served by the website. Source code goes to GitHub; accounts,
 password hashes and ride history do not.
 
 `TAXI_AI_DB=/absolute/path/to/test.sqlite npm run dev` selects another database.
-Use the same variable for `npm run admin` when using a custom path. Migrations run
-automatically at startup. `npm run backup -- /absolute/new-backup.sqlite` makes a
+Use the same variable for `npm run admin` when using a custom path. SQLite migrations
+run automatically at startup. `npm run backup -- /absolute/new-backup.sqlite` makes a
 validated copy without changing the source. See [staging and recovery](docs/staging.md)
 for restore, transient-data removal, scheduling and off-host backup requirements.
 
-The current schema is **19**: Trip Safety added schema 9, unified accounts added
+SQLite is now at **schema 30**; PostgreSQL uses a separate migration history.
+Schemas 28–30 add account revisions, indexed location/expiry fields and regional
+worker coordination. Selecting PostgreSQL requires its migration command and a
+separate import of any existing SQLite data; see the
+[PostgreSQL migration and recovery runbook](docs/postgresql.md).
+Earlier milestones remain preserved: Trip Safety added schema 9, unified accounts added
 schema 10, native device sessions added schema 11 and initial vehicle selections
 add schema 12 in 0.17. This new table preserves the car chosen before full driver
 details are complete without changing existing applications or approvals. Release
@@ -259,7 +300,8 @@ open the upgraded database; use a separate test database when comparing versions
 
 By default the server listens on **127.0.0.1** and accepts localhost origins.
 The optional `TAXI_AI_MODE=staging` requires a configured HTTPS origin, private
-gateway token, invited tester access file and explicit persistent database path.
+gateway token, invited tester access file and either a persistent SQLite path
+or PostgreSQL connection URL.
 It uses secure host-only cookies. The Docker/Caddy reference setup publishes only
 the HTTPS gateway; the app port remains internal. No host, domain or cloud account
 has been provisioned. Follow [the staging guide](docs/staging.md) to configure and
@@ -283,20 +325,23 @@ review a deployment; the Docker image deliberately refuses an incomplete setup.
 | `services/api/src/modules/safety/` | Trusted contacts, private incidents, simulated alerts and expiring trip links |
 | `services/api/src/http/` | Request parsing, routing, cookies and response mapping |
 | `services/api/src/infrastructure/` | Database, password, token, audit and rate-limit adapters |
-| `services/api/migrations/` | Versioned SQLite schema |
+| `services/api/migrations/` | Versioned SQLite schema and PostgreSQL migrations |
 | `services/api/test/` | API, permissions, competing-request and restart tests |
 | `packages/shared/` | Fare rules, trip lifecycle vocabulary, money helpers and sample-area fixtures |
 | `scripts/create-admin.mjs` | Local first-administrator setup |
 | `scripts/check.mjs` | Syntax, imports and module-boundary checks |
-| `deploy/staging/` | Private Docker Compose/Caddy deployment configuration |
+| `deploy/staging/` | Single-process SQLite staging configuration |
+| `deploy/scale/` | PostgreSQL/PostGIS, two API replicas, separate workers and Caddy |
 | `scripts/database-snapshot.mjs` | Checked backups/restores into new files |
 | `scripts/staging-access.mjs` | Add/remove invited tester access keys |
 | `.github/workflows/ci.yml` | Automated verification on Node 22.12.0 and 24 |
 | `apps/mobile/` | Expo iOS/Android accounts, driver onboarding and customer ride requests |
 | `docs/` | Requirements, architecture, roadmap and approved brand |
 
-The backend is a **modular monolith**: business modules share one process/database
-and communicate through explicitly supplied functions. HTTP and storage details
+The backend is a **modular monolith**: business modules share one codebase and
+transactional database and communicate through explicitly supplied functions.
+The same modules run in the combined local process or PostgreSQL-backed API and
+worker processes. HTTP and storage details
 stay outside business services. Versioned migrations preserve existing accounts, sessions and rides.
 
 The terminal example runs with `npm run demo`. Read [the architecture](docs/architecture.md),
@@ -305,12 +350,19 @@ The terminal example runs with `npm run demo`. Read [the architecture](docs/arch
 
 ## Development and review
 
-The latest development branch is `feat/eats-ordering`. Version 0.24.0 / mobile
-0.8.0 adds Taxi Ai Eats and shared Manrope typography across app surfaces.
-Schema 19 preserves existing records and adds stores, menus, reviews, checkout
-quotes, food orders and retry records. See [Eats setup and acceptance](docs/eats.md)
-and [mobile setup](apps/mobile/README.md). Back up the database before changing
-branches; older releases may not support the existing schema.
+The combined development branch is `integration/resolved-vscode-slider`. It
+includes the nationwide and guest-ride work, the responsive homepage, timed
+dispatch and the scalability upgrades. Nationwide support removes Abuja-only
+geography restrictions and adds
+state/town selection, explicit kitchen coverage and nearby food-courier matching
+through private pickup locations. Schema 23 preserves existing records and adds
+private dispatch points. Nationwide location support does not imply live service
+in every town. Automated SMS and real payments are not connected.
+See [nationwide coverage](docs/nationwide.md).
+See [guest-ride setup and acceptance](docs/guest-rides.md),
+[Eats setup](docs/eats.md) and [mobile setup](apps/mobile/README.md).
+Back up the database before changing branches; older releases may not support the
+existing schema.
 Read [CONTRIBUTING.md](CONTRIBUTING.md) for the GitHub/VS Code workflow and where
 new code belongs. `npm run check` validates syntax and module conventions;
 `npm test` checks behaviour; `npm run verify` runs both. GitHub Actions is configured

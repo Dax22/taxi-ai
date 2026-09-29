@@ -31,9 +31,9 @@ function Application() {
       {f.application?.busy && <Text style={styles.body}>Finish or cancel assigned work before changing your application.</Text>}
       {f.step === 0 && <DetailsStep draft={f.draft} onChange={f.setDraft} disabled={f.pending || !f.canEdit} onSave={() => void f.save()} pending={f.pending}/>}
       {f.step === 1 && f.application && <DocumentsStep application={f.application} kind={f.kind} onKind={f.selectKind} expiresOn={f.expiresOn} onExpiry={f.setExpiresOn}
-        file={f.file} onChoose={() => void f.chooseFile()} onClear={f.clearFile} onUpload={() => void f.upload()} onRemove={remove} onContinue={() => { f.clearFile(); f.setStep(2); }}
+        file={f.file} onChoose={() => void f.chooseFile()} onCapture={() => void f.captureFile()} onClear={f.clearFile} onUpload={() => void f.upload()} onRemove={remove} onContinue={() => { f.clearFile(); f.setStep(2); }}
         disabled={f.pending || !f.canEdit || f.dirty} pending={f.pending}/>}
-      {f.step === 2 && f.application && <ReviewStep application={f.application} onSubmit={() => void f.change('submit')} onReopen={reopen} pending={f.pending} disabled={f.pending || f.stale || f.dirty || f.application.busy}/>}
+      {f.step === 2 && f.application && <ReviewStep application={f.application} onSubmit={() => void f.change('submit')} onReopen={reopen} onCompareFace={(consent) => void f.compareFace(consent)} pending={f.pending} disabled={f.pending || f.stale || f.dirty || !!f.file || f.application.busy}/>}
       <Button title="Refresh saved application" secondary onPress={reload} disabled={f.pending}/>
     </>}
   </Screen>;

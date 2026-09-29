@@ -10,11 +10,18 @@ keyboard, accessibility and tablet QA remain pending.
 
 - In-app account creation and sign-in, one-time Customer or Driver setup saved securely per account on this phone, session restore and per-device sign-out.
 - Customer Home or Driver tab, plus Activity, Updates and Account; driver application, booking and journey screens. The app does not switch between Customer and Driver after setup.
-- **Book a ride or delivery**: Standard/SUV passenger trips and van/truck/motorcycle
-  parcels with recipient details, category pricing and approved capacity matching; explicit Abuja search, route/fare review, shared ride requests,
+- **Book a ride or delivery**: Standard/SUV passenger trips and car/van/truck/motorcycle
+  parcels with recipient details, category pricing and approved capacity matching; explicit Nigeria-wide address search, route/fare review, shared ride requests,
   same-command retries, current status, registered vehicle and pre-start cancellation.
   Local sample journeys work without live providers. [Booking guide](../../docs/mobile-booking.md).
-- Activity for the selected experience, with current and paginated past journeys.
+- **Book for someone else** on Standard/SUV: identify the adult passenger and confirm
+  their agreement before requesting. The booker negotiates and confirms the fare;
+  assigned drivers see the passenger’s name without their phone number. A confirmed
+  guest journey offers a revocable private link shared manually through the phone’s
+  share menu. It includes pickup details and the PIN for the intended passenger;
+  no automated SMS, guest chat or payment collection is provided. Guest drafts stay
+  in memory, reset on account/category changes and retain the same payload on retry.
+- Separate customer/work activity with current and paginated past journeys.
 - Complete driver applications: guided make/year/model/colour dropdowns, years from
   2000 through the current year, Other fields for unlisted values,
   number plate, vehicle category, delivery load capacity, private PNG/JPEG uploads, expiry dates, review, corrections and resubmission.
@@ -24,13 +31,46 @@ keyboard, accessibility and tablet QA remain pending.
 - Shared rounded 3D-style vehicle icons in ten colours in Driver and journey details.
   Illustrations are labelled; exact-model 3D assets are not included.
 - The same manual approval workflow as the web. Administrators review on the web.
+- Optional [automatic face comparison](../../docs/driver-face-checks.md): capture a
+  selfie and licence front, consent, compare, and submit the result for review.
+  Requires the configured backend provider; no AWS credentials belong in the app.
 - Native device list and remote sign-out; web recovery at `/devices`.
-- Delivery requests and recipient drop-off codes.
+- **Taxi Ai Courier**: Home → Send a parcel opens a dedicated courier form, including
+  a car option (30 kg maximum). Passenger details never enter parcel requests.
+  Senders create, replace, share through the phone's share menu, or revoke a private
+  recipient invitation from their journey. Incoming parcels is available from Home,
+  Activity and Account: paste the sender's `/parcels#token=…` URL and explicitly accept
+  it into the signed-in account. An already signed-in Customer can also open the
+  `taxiai:///parcels?token=…` route to prefill, without accepting automatically.
+  The recipient sees delivery status, assigned driver/vehicle and, after collection,
+  fresh driver-shared location and the handover code. No SMS is sent automatically.
+  Tracking polls every five seconds in the foreground, uses the configured native
+  Apple/Google map, and clears private snapshots on failed permission checks,
+  backgrounding and account changes. Drivers must opt in to location sharing and
+  keep Taxi Ai open; continuous background GPS is not implemented.
 - Completed-trip test payments, saved receipts and a paginated Driver earnings preview use the same records as the website. Payment simulation only runs on the local development server; no money moves.
 - **Taxi Ai Eats** on Home, **My food orders** in Activity, **My store** in Account
-  and **Food deliveries** in Driver, with the same restaurant/menu/order records as
-  the website. See [Eats setup](../../docs/eats.md) for the full test journey.
-- Locally bundled Manrope typography across text, fields, buttons and navigation, matching the website and admin workspace.
+  and **Food deliveries** in Work, with the same restaurant/menu/order records as
+  the website. Home kitchens can sell small batches, upload meal photos and offer
+  delivery or customer pickup. **Sell from home** is available in Eats and Account;
+  **My store** manages kitchen details, remaining portions and incoming orders.
+  Eats asks for the delivery location first, then searches listed dishes and prices.
+  Combine food from up to five kitchens, review each kitchen’s fees and place the
+  orders together. Home kitchens and food vendors publicly list their town and state;
+  restaurants list their business address. Private sellers share a collection point when
+  food is ready. The page uses overhead Nigerian-food artwork. See [Eats setup](../../docs/eats.md) for the full test journey.
+- **Nigeria-wide locations**: ride address searches and GPS accept locations across
+  Nigeria. Eats asks for a state/FCT and any town or local area; no Abuja location
+  is preselected. Kitchens explicitly choose the towns they deliver to, initially
+  only their own. Delivery sellers outside the legacy sample areas must add a private
+  pickup GPS point at their kitchen before opening for delivery or accepting delivery orders;
+  incomplete drafts and pickup-only kitchens can be saved without one. The point
+  is kept off customer-facing profiles and needs review. Changing the kitchen town
+  clears a previously selected pickup point.
+  Local availability still depends on approved drivers and kitchens. Development
+  sample rides retain their original Abuja fixtures.
+- Locally bundled Manrope typography across text, fields, buttons and navigation.
+- Customer/Driver experience setup, native registration, ratings, Kemmy journey guidance, GPS pickup, test payments and earnings are preserved from the VS Code checkpoint.
 
 Native Driver now supports foreground location, online/offline availability and job
 claiming. Both participants negotiate fares, chat and finish rides/deliveries in the

@@ -24,10 +24,21 @@ function clearTransientState(db, now) {
     db.prepare(`UPDATE location_shares SET active = 0, position_json = NULL, session_hash = NULL,
       client_hash = NULL, stopped_at = COALESCE(stopped_at, ?)`).run(now);
     db.prepare(`UPDATE driver_availability SET active = 0, area_id = NULL, position_json = NULL,
+      latitude = NULL, longitude = NULL, expires_at = NULL,
       native_session_id = NULL, session_hash = NULL, client_hash = NULL, stopped_at = COALESCE(stopped_at, ?), reason = COALESCE(reason, 'snapshot_reset')`).run(now);
     db.prepare(`UPDATE trip_share_links SET active=0,token_hash=NULL,session_hash=NULL,version=version+1,
       ended_at=?,reason='snapshot_reset' WHERE active=1`).run(now);
+    db.prepare(`UPDATE guest_ride_links SET active=0,token_hash=NULL,session_binding=NULL,version=version+1,
+      ended_at=?,reason='snapshot_reset' WHERE active=1`).run(now);
+    db.prepare(`UPDATE parcel_tracking_links SET active=0,token_hash=NULL,version=version+1,
+      ended_at=?,reason='snapshot_reset' WHERE active=1`).run(now);
+    db.prepare(`UPDATE family_shares SET active=0,version=version+1,ended_at=?,reason='snapshot_reset'
+      WHERE active=1 OR reason='completed'`).run(now);
+    db.exec("UPDATE family_push_jobs SET status='suppressed',token='',ticket=NULL,lease_until=0 WHERE status IN ('queued','provider_accepted');");
+    db.exec("UPDATE safety_monitor_sessions SET enabled=0,binding='',expires_at=0; UPDATE safety_auto_alerts SET status='cancelled',version=version+1 WHERE status IN ('countdown','queued'); UPDATE safety_delivery_jobs SET status='cancelled' WHERE status IN ('queued','sending','failed');");
+    db.prepare("UPDATE dispatch_offers SET status='revoked',closed_at=? WHERE status='pending'").run(now);
     db.exec('DELETE FROM location_quotes WHERE ride_id IS NULL;');
+    db.exec('DELETE FROM account_revisions; UPDATE worker_leases SET expires_at=0, fencing_token=fencing_token+1;');
   });
 }
 

@@ -108,7 +108,7 @@ each test phone. Generate an ordinary test offer/message from the other account
 and verify inbox, receipt and visible phone delivery. Keep push off until the
 matching project and provider credentials are configured.
 
-For trip GPS acceptance, use two physical phones within the Abuja preview area.
+For trip GPS acceptance, use two physical phones within Nigeria.
 Book and confirm a trip, then choose **Share my location** on the driver's
 Journey screen. Confirm an actual moving GPS fix and its timestamp on the customer
 phone and private trip link. Navigate to Safety and back without stopping updates.

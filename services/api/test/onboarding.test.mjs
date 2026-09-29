@@ -10,7 +10,7 @@ import { createDriverDocumentCodec } from '../src/infrastructure/driver-document
 async function applicants(h) {
   const driver = h.client(), other = h.client(), admin = h.client();
   await driver.register('applicant', 'driver'); await other.register('other-driver', 'driver'); await admin.register('reviewer');
-  bootstrapAdmin(h.db, admin.user.email); await admin.post('/api/auth/login', { email: admin.user.email, password: PASSWORD });
+  (await bootstrapAdmin(h.db, admin.user.email)); await admin.post('/api/auth/login', { email: admin.user.email, password: PASSWORD });
   return { driver, other, admin };
 }
 const app = async (driver) => (await driver.send('/api/driver/application')).body.application;
@@ -168,7 +168,7 @@ test('a revoked session during a streamed upload cannot write after logout', asy
     req = httpRequest(h.base + '/api/driver/application/upload', { method: 'POST', headers: {
       Cookie: driver.cookie, Origin: h.base, 'Content-Type': 'application/json', 'X-CSRF-Token': driver.csrf,
       'Idempotency-Key': randomUUID(), 'Content-Length': Buffer.byteLength(data),
-    } }, (res) => { const chunks = []; res.on('data', (chunk) => chunks.push(chunk)); res.on('end', () => resolve({ status: res.statusCode, body: JSON.parse(Buffer.concat(chunks)) })); });
+    } }, (res) => { const chunks = []; res.on('data', (chunk) => chunks.push(chunk)); res.on('end', async () => (await resolve({ status: res.statusCode, body: JSON.parse(Buffer.concat(chunks)) }))); });
     req.on('error', reject); req.write(data.slice(0, 15), started);
   });
   await ready;

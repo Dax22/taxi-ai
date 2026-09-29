@@ -63,7 +63,7 @@ test('web Google signup creates one customer account and uses stable subject acr
   assert.deepEqual((await web.send('/api/account/sign-in-methods')).body.methods, { password: false, google: true });
   assert.equal((await web.send('/api/auth/login', { email: identity.email, password: PASSWORD })).status, 401);
   assert.equal((await web.send('/api/admin/console/accounts')).status, 403);
-  assert.throws(() => bootstrapAdmin(h.db, identity.email), { code: 'INVALID_ACCOUNT' });
+  (await assert.rejects(async () => (await bootstrapAdmin(h.db, identity.email)), { code: 'INVALID_ACCOUNT' }));
   await web.send('/api/auth/logout', {}); await h.restart(); provider.config.origin = h.base;
   state.identity.email = 'updated-google@example.test';
   await web.finish(await web.start());
@@ -117,7 +117,7 @@ test('linking rechecks the original session after Google responds and rejects th
 });
 test('staff cannot connect or sign in with Google and native credentials cannot authorize staff', async (t) => {
   const { h, state } = await fixture(t), admin = browser(h), google = browser(h);
-  await admin.register('admin@example.test'); const a = bootstrapAdmin(h.db, 'admin@example.test');
+  await admin.register('admin@example.test'); const a = (await bootstrapAdmin(h.db, 'admin@example.test'));
   await admin.send('/api/auth/login', { email: a.email, password: PASSWORD });
   assert.equal((await admin.send('/api/account/google/link', { password: PASSWORD })).status, 403);
   state.identity = { ...identity, email: a.email };
@@ -172,4 +172,30 @@ test('schema 13 upgrades preserve existing records and all Google pages are expl
     const r = await web.send(path); assert.equal(r.status, 200); assert.equal(r.headers.get('cache-control'), 'no-store');
     assert.match(r.headers.get('content-security-policy'), /script-src 'self'/);
   }
+});
+
+
+test('Google signup preserves selected starting experience without granting Driver or Seller permissions', async (t) => {
+  const webFixture = await fixture(t), web = browser(webFixture.h);
+  const state = await web.start('/api/auth/google/start', { intent: 'eats_seller' });
+  assert.equal(webFixture.h.db.prepare('SELECT signup_intent AS intent FROM google_auth_attempts').get().intent, 'eats_seller');
+  const finished = await web.finish(state);
+  assert.equal(finished.headers.get('location'), '/app?google=success&start=eats_seller');
+  const user = (await web.send('/api/session')).body.user;
+  assert.equal(user.startingExperience, 'eats_seller');
+  assert.deepEqual(user.capabilities, ['customer']);
+  assert.equal(user.driver, null);
+  assert.equal(webFixture.h.db.prepare('SELECT count(*) AS n FROM eats_memberships').get().n, 0);
+
+  const nativeFixture = await fixture(t);
+  nativeFixture.state.identity = { subject: 'google-driver-start', email: 'google-driver-start@example.test', name: 'Google Driver Start' };
+  const challenge = (await native(nativeFixture.h, '/auth/google/challenge', { intent: 'driver' })).body;
+  const signedIn = await native(nativeFixture.h, '/auth/google', {
+    challenge: challenge.challenge, idToken: `fixture.${challenge.nonce}`, deviceName: 'Intent phone',
+  });
+  assert.equal(signedIn.status, 200, JSON.stringify(signedIn.body));
+  assert.equal(signedIn.body.user.startingExperience, 'driver');
+  assert.deepEqual(signedIn.body.user.capabilities, ['customer']);
+  assert.equal(signedIn.body.user.driver, null);
+  assert.equal(nativeFixture.h.db.prepare('SELECT count(*) AS n FROM drivers').get().n, 0);
 });

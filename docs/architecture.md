@@ -1,13 +1,21 @@
 # Taxi Ai architecture
 
-Taxi Ai uses a **modular monolith**: one backend process and database, with
-separate business modules and explicit dependencies. The current code implements
+Taxi Ai uses a **modular monolith**: separate business modules and explicit
+dependencies share one application codebase and transactional storage. Local
+development uses one combined process with SQLite. The PostgreSQL option runs
+multiple HTTP replicas and separate coordinated workers against a shared database. The current code implements
 accounts, driver review, ride/fare negotiation, trip lifecycle, participant chat
 and audio calling, route quotes, driver location sharing, availability/nearby matching and simulated payments/receipts/earnings. Category-aware bookings use the shared
 journey engine; a deliveries module owns parcel details and handover verification.
 The Eats module owns restaurant menus, store membership, test checkout and food
 fulfilment. It shares worker capacity with journeys through injected ports.
 See [Eats architecture and acceptance](eats.md).
+The guest-rides module owns immutable passenger details and revocable trip links;
+the booking account retains fare, trip-management and payment authority.
+See [booking for someone else](guest-rides.md).
+See [scalability and deployment](scalability.md) for the PostgreSQL/PostGIS path,
+worker roles, routing capacity and load-test limits. The implementation does not
+establish capacity for one million users.
 See [ADR 0001](decisions/0001-modular-monolith.md) for the decision and tradeoffs.
 
 The target product is now one app and website with Customer, Drive & deliver
@@ -53,8 +61,9 @@ See [vehicle photo checks](vehicle-photo-checks.md) for configuration and limits
 | Account email | Verification and recovery actions, durable delivery intentions and bounded retries | `account_email_tokens`, `account_email_jobs` |
 | Drivers | Private applications, documents, manual review and expiry eligibility | `drivers`, `driver_applications`, `driver_documents`, `driver_document_reads`, `driver_application_events`, `driver_application_commands` |
 | Rides | Requests, fares, bookings, pickup verification, progress, cancellation and history | `rides`, `fare_events`, `idempotency`, `ride_trips`, `ride_activity` |
+| Guest rides | Immutable guest passenger snapshots, booker-owned link management and limited public trip views | `guest_ride_passengers`, `guest_ride_links`, `guest_ride_commands` |
 | Deliveries | Parcel validation, category/capacity eligibility and drop-off verification | `delivery_orders` |
-| Eats | Store membership/review, menus, test checkout, kitchen and courier food handovers | `eats_stores`, `eats_memberships`, `eats_reviews`, `eats_menu`, `eats_quotes`, `eats_orders`, `eats_commands` |
+| Eats | Store membership/review, dish search, menus, combined test checkout, kitchen and courier food handovers | `eats_stores`, `eats_memberships`, `eats_reviews`, `eats_menu`, `eats_quotes`, `eats_orders`, `eats_commands`, `eats_photos`, `eats_checkouts`, `eats_collection_points`, `eats_store_dispatch_points`, `eats_order_dispatch_points` |
 | Notifications | Account-scoped inbox, device opt-in and durable push/receipt retries | `account_notifications`, `push_registrations`, `push_jobs` |
 | Vehicle checks | Optional photo observations, comparison, retry reservation and expiry | `vehicle_photo_checks` |
 | Chat | Participant messages, read markers, retries and reports | `chat_messages`, `chat_reads`, `chat_commands`, `chat_reports` |
@@ -63,7 +72,10 @@ See [vehicle photo checks](vehicle-photo-checks.md) for configuration and limits
 | Availability | Driver Online/Offline, separate location consent, freshness and lease expiry | `driver_availability`, `availability_commands` |
 | Payments | Completed-trip simulated payments, attempts, receipts and earnings summaries | `payments`, `payment_attempts`, `payment_receipts`, `payment_commands` |
 | Shared domain | Pure fare state machine, lifecycle vocabulary, money, coordinate helpers and sample quotes | No storage or network |
-| Infrastructure | SQLite, migrations, password hashing, random tokens, audit and rate limits | `audit_events`, `rate_limits`, connection lifecycle |
+| Dispatch | Timed invitations, bounded regional matching and matching metrics | `dispatch_offers`, `dispatch_commands`, `dispatch_journeys` |
+| Realtime | Account-scoped change revisions and authenticated long polling | `account_revisions` |
+| Worker coordination | Expiring leases and commit fencing for shared background jobs | `worker_leases` |
+| Infrastructure | SQLite/PostgreSQL adapters, migrations, password hashing, random tokens, audit and rate limits | `audit_events`, `rate_limits`, connection lifecycle |
 | HTTP | Route dispatch, request parsing, cookies, CSRF and error/status translation | No business state |
 
 Every feature lives under `services/api/src/modules/<feature>/`:
@@ -103,7 +115,7 @@ flowchart TD
   Calls --> Repos
   Calls --> Accounts
   Calls --> Rides
-  Repos --> DB[SQLite]
+  Repos --> DB["SQLite or PostgreSQL/PostGIS"]
 ```
 
 Arrows represent calls, not permission to import an implementation. The
@@ -120,7 +132,7 @@ These are test journeys; the homepage demo remains an independent in-memory exam
 
 For each authenticated ride mutation, the service:
 
-1. Validates the command key and begins a synchronous unit of work.
+1. Validates the command key and begins an awaited database unit of work.
 2. Reloads the actor, checks a previous key's command fingerprint, or validates
    permissions and the current ride version.
 3. Applies the command using server time and the pure fare rules.
@@ -138,19 +150,23 @@ key returns the current saved ride; a different command with that key is rejecte
 Rate-limit counters are intentionally a separate transaction so failed attempts
 still count. Expensive password work runs outside transactions.
 
-Repository operations and `unitOfWork(callback)` are synchronous contracts in
-this version. Async callbacks and promise results are rejected; never schedule
-background writes inside them. A future PostgreSQL adapter requires coordinated
-async contract changes, migration and transaction/concurrency tests. Changing the
-repository constructor alone is insufficient.
+Repository operations and `unitOfWork(callback)` are asynchronous contracts.
+The local SQLite adapter serializes access to its connection for the whole
+transaction, including awaited calls. PostgreSQL pins a pooled connection to a
+serializable transaction and retries serialization/deadlock failures within a
+bounded budget. Nested units use savepoints. Every business write must be awaited;
+external routing, mail and other provider I/O stays outside the transaction.
+Foreign keys, unique constraints and version checks remain database-enforced.
+See [scalability](scalability.md) for pool sizing and operational verification.
 
-The existing `data/taxi-ai.sqlite` location is preserved. Ordered migrations
-`002_chat.sql`, `003_trip_lifecycle.sql`, `004_voice_calls.sql` and
-`005_locations.sql`, `006_matching.sql`, `007_payments.sql`, `008_driver_onboarding.sql`
-and `009_trip_safety.sql`, followed by `010_account_capabilities.sql`, advance
-the current schema to 10 without resetting
-records or silently booking prior agreements. Older binaries refuse the upgraded
-database. Local data and secrets are excluded from Git and static serving.
+The existing `data/taxi-ai.sqlite` location is preserved. Ordered SQLite
+migrations preserve accounts, fares and journeys; the current schema includes
+realtime revisions, indexed locations and worker regions/leases through migration
+30. PostgreSQL has its own migrations, including PostGIS indexes, applied with
+`npm run db:postgres:migrate` before application startup. Setting a PostgreSQL URL
+does not copy an existing SQLite database; follow [PostgreSQL migration and recovery](postgresql.md).
+Older SQLite binaries refuse a newer
+schema. Local data and secrets are excluded from Git and static serving.
 See [API notes](../services/api/README.md) for routes and current security limits.
 
 ## Fare rules
@@ -163,7 +179,7 @@ consent. Returned snapshots are copies, not mutable internal state.
 
 Amounts are positive safe integer kobo. Suggestions are nonbinding; sample quotes
 are fictional. Route quotes use an explicit illustrative formula, not an AI
-estimator or a validated Abuja market rate. Server-persisted events reconstruct the fare
+estimator or a validated local market rate. Server-persisted events reconstruct the fare
 model; clients cannot upload snapshots or set event clocks. Ride versions also
 include claiming/cancelling before a fare conversation; fare-event versions track
 only the shared model. Their distinct sequences are validated separately.
@@ -224,6 +240,25 @@ Customer/Work modes share account use cases and versioned API contracts. Eats
 and My store are separate native screens using the same authenticated account. Device sessions, secure credential storage and
 expiry/revocation are implemented separately from browser cookies. Native views
 and device adapters remain platform-aware. Schema 19 implements one owner membership per store/account in the Eats module.
+Schema 20 adds home-kitchen defaults and normalized photos; batch reservations,
+order transitions and command records commit atomically. Image decoding is an
+injected infrastructure port outside the transaction, with session revalidation
+before saving. Private vendor and home-kitchen addresses are projected by participant and order stage.
+Schema 21 adds combined checkout and order-specific collection points. Vendor and
+home-kitchen profiles now use only a town/area; private collection details are supplied when
+food is ready. Dish search checks delivery coverage against published menus, and
+combined checkout commits every kitchen's order and stock reservation together.
+Schema 22 adds guest passenger snapshots and session-bound guest links without
+changing existing ride ownership. A missing passenger snapshot means a self booking.
+The shared link controller preserves exact retries and holds raw secrets only in
+memory; public link reads return a separate allowlisted trip projection. Completion,
+cancellation, replacement, revocation and session expiry end access. Snapshot copies
+clear guest-link secrets and active state along with other transient capabilities.
+Schema 23 adds private store pickup locations and immutable order dispatch points.
+Nigeria-wide country validation and canonical state/town identifiers live in pure
+shared modules. The Eats service enforces declared delivery areas and nearby GPS
+courier matching; a change in national scope never grants an old store nationwide
+coverage. Existing sample IDs remain readable. See [nationwide coverage](nationwide.md).
 Mode selection remains per client; authorization, ownership and worker capacity
 remain server-side. Workspace resets and retry keys are now scoped to account
 and Customer/Work mode. Calls/GPS/availability use a separate session client and
@@ -273,8 +308,11 @@ The location service receives account/session and narrow ride-context ports.
 timeouts, response caps, caching and per-provider request pacing. The domain
 validates bounded points, route geometry/distance/time and computes integer-kobo
 suggestions. No browser-supplied distance or fare can become a route quote.
+Search uses the Nigeria country filter and search extent; shared polygon validation
+guards coordinates independently of the provider. Local matching radii remain
+unchanged when routes and GPS are accepted elsewhere in Nigeria.
 
-External I/O runs outside synchronous database transactions. Quote creation then
+External I/O runs outside database transactions. Quote creation then
 rechecks the live session, role, retry fingerprint and per-user limit inside the
 transaction. Rides receives `quoteForRide`, `bindQuote` and `routeForRide` ports;
 insertion, quote consumption, audit and retry key commit together. This creates
@@ -322,7 +360,7 @@ gateway token and tester-key hashes before startup. HTTP enforces the gateway
 and tester boundary before routing; business authorization still uses account
 sessions. Staging cookies use the `__Host-` prefix, Secure, HttpOnly and
 SameSite=Strict, without Domain. Local cookies are never accepted in staging.
-The staging configuration itself adds no schema changes; the current application schema is 9.
+Staging keeps the same business schema and authorization rules as local development.
 
 `health.mjs` checks database/schema readability and shutdown state. Telemetry
 records only generated request IDs, coarse categories, method, status and timing;
@@ -335,9 +373,13 @@ consistent SQLite snapshot, clears transient authentication/communication/locati
 state in the copy, validates integrity/foreign keys and atomically publishes to
 a new filename. It cannot overwrite a destination. Restoring repeats validation
 and sanitization and requires an explicit database-path switch while the app is
-stopped. The reference deployment uses one non-root app container, one persistent
-local volume and an HTTPS gateway; multi-replica deployment is unsupported.
-See [staging](staging.md) for secret handling, recovery and remaining live checks.
+stopped. This snapshot command is specific to SQLite. PostgreSQL needs its own
+protected backups and tested restore procedure; it is not backed up by copying a
+SQLite file. The SQLite staging template keeps one app process and local volume.
+The scale template uses two HTTP replicas, separate workers and PostgreSQL behind
+an HTTPS gateway. It remains a single-host example, not a highly available cluster.
+See [staging](staging.md) and [scalability](scalability.md) for recovery, deployment
+boundaries and required live checks.
 
 `npm run check` checks syntax, missing imports, dependency direction, cycles and
 our SQL/network placement conventions. It assumes static ESM imports and uses a
@@ -348,8 +390,9 @@ runs the same command on Node 22.12.0 and Node 24 for pushes and pull requests.
 A modular structure is a maintainability foundation, not production readiness.
 Before real bookings, implement verified onboarding/account recovery,
 production session operations, operated encrypted off-host backups and retention, deployment
-monitoring and measured concurrency/scale. Actual dispatch, production trip
-safety operations, production mapping and payments are additional product milestones. Current
+monitoring and measured concurrency/scale. Timed dispatch is implemented for test
+journeys; production trip safety operations, operated mapping and payments remain
+additional product milestones. Current
 administrator approval records manual review evidence and gates new test rides; it does not contact identity/licence providers.
 
 ## Driver availability and request matching
@@ -364,10 +407,22 @@ API projection over a cancelled storage record, with an explicit closure reason.
 It is committed before a rejected late command; successful claims instead commit
 the request, availability closure, audit and retry key together.
 
-The current preview scans open requests, filters by fresh availability and distance,
-then sorts and caps at 50. Larger deployments need indexed geospatial retrieval.
-No new external geocoding or routing request occurs during candidate matching.
-See [matching](matching.md) for consent, privacy, lifecycle and validation.
+Timed dispatch partitions requests into 0.05-degree pickup cells; driver searches
+cross cell borders using the pickup radius. PostgreSQL uses a PostGIS index and
+SQLite uses coordinate bounds, followed by the shared distance and eligibility
+checks. Each cycle has bounded ride/driver pages with continuation cursors so
+exhausted early candidates do not permanently hide later candidates. Pending
+offers are excluded across regions and global unique indexes prevent competing
+workers from issuing two active offers to the same driver or request.
+
+Road ETA queries run outside transactions. Before writing offers, workers check
+lease ownership, ride versions, current location, approval, availability and
+workload again. Fare acceptance and booking confirmation remain explicit.
+Ordinary availability, trip-location and ride requests validate only their own
+state; workers handle indexed expiry and rotating maintenance pages. The legacy
+request-list mode remains available for local compatibility testing.
+See [matching](matching.md), [realtime updates](realtime-updates.md) and
+[scalability](scalability.md) for consent, privacy, lifecycle and measurement limits.
 
 ## Simulated payments
 
@@ -415,7 +470,7 @@ must receive the same access controls as the database.
 `modules/safety/` separates pure validation/state transitions, SQL, service rules
 and route adapters. Composition injects readonly account, participant trip,
 current shared-location and session-owner ports. Incident creation snapshots those
-ports within one synchronous transaction; it does not reach into another module's
+ports within one awaited transaction; it does not reach into another module's
 repository or open a nested transaction. Notifications are durable simulated rows,
 not external side effects. Contact removal and administrator closure cancel queued
 work in the same transaction. Trip closure revokes links through a narrow callback
@@ -471,6 +526,32 @@ Schema 13 adds reporting indexes without data backfill or record changes.
 
 Staff role checks are applied both at HTTP and service boundaries. Audited detail
 views, bounded filters, stable pagination and exact kobo sums are shared across
-the pages. The application presently uses existing web administrator cookies on
-the same origin; dedicated staff sessions/origin, MFA and granular permissions
-remain production requirements. See [setup and module map](../apps/admin/README.md).
+the pages. The application uses existing web cookies on the same origin;
+dedicated staff sessions/origin remain deployment work.
+
+`staff-access` owns separate staff membership, permissions, encrypted TOTP factors
+and session-bound verification. `admin-operations` owns bounded queue projections.
+`admin-cases` owns support/safety workflow and receives narrow evidence and source
+incident synchronization ports from the composition root. Privileged HTTP writes
+recheck the current session and permission inside the mutation transaction.
+SQLite migrations 33–35 and PostgreSQL migrations 5–7 add these tables and indexes,
+derive Owner memberships from existing administrators and backfill saved SOS cases.
+See [setup and module map](../apps/admin/README.md) and
+[roles and workflow](admin-workspace.md).
+
+`admin-finance` provides read-only simulated payment projections, exact kobo totals
+and local record checks. `admin-demand` aggregates historical request cohorts and
+separately captures current eligible driver supply. Neither mutates payments or
+matching. `admin-compliance` projects document status through the canonical driver
+eligibility port and owns internal follow-up tasks, events and idempotency records
+(SQLite migration 36, PostgreSQL migration 8). It cannot approve drivers or send
+notifications. All three use scoped staff permissions; see the
+[finance, compliance and demand guide](admin-finance-compliance-demand.md).
+
+The same `admin-demand` module also owns `/api/admin/console/demand/coverage`.
+Its SQL projection groups saved pickup points and current eligible supply into
+bounded geographic cells, without returning raw locations. The staff map has
+separate projection/navigation and rendering modules, backed by bundled country
+geometry and sourced city navigation anchors. Historical requests and measured
+pickup waits remain separate from current waiting requests and driver supply;
+see [nationwide coverage](nationwide-coverage-map.md).

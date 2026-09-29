@@ -4,7 +4,7 @@ import { harness, participants, requestRide, claimRide } from './helpers.mjs';
 import { createApplication } from '../src/application.mjs';
 import { createPushProvider } from '../src/infrastructure/push-provider.mjs';
 import { createNotificationsRepository } from '../src/modules/notifications/repository.mjs';
-import { transaction } from '../src/infrastructure/database.mjs';
+import { asAsyncDatabase } from '../src/infrastructure/async-database.mjs';
 import { randomUUID } from 'node:crypto';
 import { DETAILS, fixtureApi, submitApplication, approveApplication } from './driver-fixtures.mjs';
 const projectId='00000000-0000-4000-8000-000000000001',token='ExpoPushToken[fixture_no_real_destination]';
@@ -12,9 +12,9 @@ async function fixture(t){
   const h=await harness(t),{customer,driver,admin}=await participants(h);
   const sent=[],receipts=[];
   const provider={enabled:true,projectId,send:async(data)=>{sent.push(data);return{status:'ticket',ticket:'fixture-ticket'};},receipt:async(ticket)=>{receipts.push(ticket);return{status:'ok'};}};
-  const app=createApplication({db:h.db,clock:()=>h.now,allowSimulation:true,pushProvider:provider});
-  const credentials=app.devices.issue(customer.user.id,'Test device').credentials;
-  app.notifications.register(customer.user.id,credentials.sessionId,{token,projectId});
+  const app=createApplication({db:h.db,clock:()=>h.now,allowSimulation:true,pushProvider:provider,dispatchConfig:{mode:'legacy'}});
+  const credentials=(await app.devices.issue(customer.user.id,'Test device')).credentials;
+  (await app.notifications.register(customer.user.id,credentials.sessionId,{token,projectId}));
   const ride=await claimRide(driver,await requestRide(customer));
   return{h,customer,driver,admin,app,credentials,provider,ride,sent,receipts};
 }
@@ -34,13 +34,13 @@ async function arrival(f) {
 
 test('arrival details and phone alerts belong to the rider and retain the assigned vehicle snapshot after later edits', async (t) => {
   const f = await fixture(t), ride = await arrival(f);
-  const notices = () => f.app.notifications.list(f.customer.user.id, null, f.credentials.sessionId).notifications.filter(n => n.kind === 'arrive');
-  assert.equal(notices().length, 1); const saved = notices()[0]; assert.equal(saved.arrivalActive, true);
+  const notices = async () => (await f.app.notifications.list(f.customer.user.id, null, f.credentials.sessionId)).notifications.filter(n => n.kind === 'arrive');
+  assert.equal((await notices()).length, 1); const saved = (await notices())[0]; assert.equal(saved.arrivalActive, true);
   for (const expected of ['driver0', 'Toyota Corolla', 'Yellow', 'Standard', 'TEST-DRIVER']) assert.ok(saved.body.includes(expected), expected);
   for (const privateValue of [DETAILS.phone, DETAILS.licenceNumber, ride.pickup.name, ride.destination.name]) assert.ok(!saved.body.includes(privateValue));
   const outsider = f.h.client(); await outsider.register('unrelated');
-  assert.throws(() => f.app.notifications.open(outsider.user.id, saved.id), { code: 'NOT_FOUND' });
-  assert.equal(f.app.notifications.list(f.driver.user.id, null, null).notifications.some(n => n.body), false);
+  (await assert.rejects(async () => (await f.app.notifications.open(outsider.user.id, saved.id)), { code: 'NOT_FOUND' }));
+  assert.equal((await f.app.notifications.list(f.driver.user.id, null, null)).notifications.some(n => n.body), false);
   await f.app.notifications.deliverPending();
   assert.equal(f.sent.filter(n => n.arrivalBody).length, 1); assert.equal(f.sent.find(n => n.arrivalBody).arrivalBody, saved.body);
   const customerView = (await f.customer.send(`/api/rides/${ride.id}`)).body.ride;
@@ -50,14 +50,14 @@ test('arrival details and phone alerts belong to the rider and retain the assign
   await f.driver.post('/api/driver/application/reopen', { expectedVersion: application.version });
   await submitApplication(fixtureApi(f.driver), '2099-12-31', { ...DETAILS, vehicle: { ...DETAILS.vehicle, make: 'Honda', model: 'Civic', colour: 'Blue', plate: 'NEW-TEST' } });
   await approveApplication(fixtureApi(f.admin), f.driver.user.id);
-  assert.equal(f.app.accounts.profile(f.driver.user.id).driver.vehicle.plate, 'NEW-TEST');
-  assert.equal(notices()[0].body, saved.body); assert.equal(notices()[0].arrivalActive, false);
+  assert.equal((await f.app.accounts.profile(f.driver.user.id)).driver.vehicle.plate, 'NEW-TEST');
+  assert.equal((await notices())[0].body, saved.body); assert.equal((await notices())[0].arrivalActive, false);
 });
 
 test('unsent arrival alerts expire and are discarded after pickup or cancellation', async (t) => {
   for (const outcome of ['start', 'cancel', 'expired']) {
     const f = await fixture(t), ride = await arrival(f);
-    const id = f.app.notifications.list(f.customer.user.id, null, f.credentials.sessionId).notifications.find(n => n.kind === 'arrive').id;
+    const id = (await f.app.notifications.list(f.customer.user.id, null, f.credentials.sessionId)).notifications.find(n => n.kind === 'arrive').id;
     if (outcome === 'start') {
       const current = (await f.customer.send(`/api/rides/${ride.id}`)).body.ride;
       await step(f.driver, ride, 'start', { pickupPin: current.trip.pickupPin });
@@ -72,8 +72,8 @@ test('unsent arrival alerts expire and are discarded after pickup or cancellatio
 test('deleting Work closes queued alerts and a late provider reply cannot revive them after reapplication', async (t) => {
   const f = await fixture(t);
   await step(f.customer, f.ride, 'cancel'); await f.driver.online();
-  const device = f.app.devices.issue(f.driver.user.id, 'Work phone').credentials, workToken = 'ExpoPushToken[work_fixture_no_real_destination]';
-  f.app.notifications.register(f.driver.user.id, device.sessionId, { token: workToken, projectId });
+  const device = (await f.app.devices.issue(f.driver.user.id, 'Work phone')).credentials, workToken = 'ExpoPushToken[work_fixture_no_real_destination]';
+  (await f.app.notifications.register(f.driver.user.id, device.sessionId, { token: workToken, projectId }));
   await requestRide(f.customer);
   let finish, started;
   const ready = new Promise((resolve) => { started = resolve; });
@@ -83,10 +83,10 @@ test('deleting Work closes queued alerts and a late provider reply cannot revive
   };
   const sending = f.app.notifications.deliverPending(); await ready;
   const version = (await f.driver.send('/api/driver/application')).body.application.version;
-  f.app.accounts.deleteDriverProfile(f.driver.user.id, { expectedVersion: version, confirmation: 'DELETE' }, randomUUID());
+  (await f.app.accounts.deleteDriverProfile(f.driver.user.id, { expectedVersion: version, confirmation: 'DELETE' }, randomUUID()));
   const workJobs = () => f.h.db.prepare("SELECT j.status FROM push_jobs j JOIN account_notifications n ON n.id=j.notification_id WHERE n.mode='work'").all();
   assert.ok(workJobs().length); assert.ok(workJobs().every((j) => j.status === 'dead'));
-  f.app.accounts.addDriverProfile(f.driver.user.id, { vehicle: DETAILS.vehicle }, randomUUID());
+  (await f.app.accounts.addDriverProfile(f.driver.user.id, { vehicle: DETAILS.vehicle }, randomUUID()));
   finish({ status: 'ticket', ticket: 'late-work-ticket' }); await sending;
   assert.ok(workJobs().every((j) => j.status === 'dead'));
 });
@@ -101,9 +101,10 @@ test('push jobs persist separately from transactions, await receipts and contain
 });
 
 test('temporary provider failures retry from the outbox, concurrent workers are guarded, and invalid tokens are disabled',async(t)=>{
-  const f=await fixture(t);let calls=0,resolve;
-  f.provider.send=()=>{calls++;return new Promise((r)=>{resolve=r;});};
-  const first=f.app.notifications.deliverPending();await f.app.notifications.deliverPending();assert.equal(calls,1);
+  const f=await fixture(t);let calls=0,resolve,entered;
+  const ready = new Promise(r => { entered = r; });
+  f.provider.send=()=>{calls++;return new Promise((r)=>{resolve=r;entered();});};
+  const first=f.app.notifications.deliverPending();await ready;await f.app.notifications.deliverPending();assert.equal(calls,1);
   resolve({status:'retry'});await first;assert.equal(f.h.db.prepare('SELECT status FROM push_jobs').get().status,'pending');
   f.h.advance(60_000);f.provider.send=async()=>{calls++;return{status:'unregistered'};};await f.app.notifications.deliverPending();
   assert.equal(calls,2);assert.equal(f.h.db.prepare('SELECT count(*) AS n FROM push_registrations').get().n,0);
@@ -113,36 +114,36 @@ test('temporary provider failures retry from the outbox, concurrent workers are 
 test('sign-out, opt-out and reassignment of a phone token prevent old-account jobs from being delivered',async(t)=>{
   for(const action of ['revoke','disable','transfer']){
     const f=await fixture(t);
-    if(action==='revoke')f.app.devices.revoke(f.customer.user,f.credentials.sessionId);
-    if(action==='disable')f.app.notifications.unregister(f.customer.user.id,f.credentials.sessionId,{});
+    if(action==='revoke')(await f.app.devices.revoke(f.customer.user,f.credentials.sessionId));
+    if(action==='disable')(await f.app.notifications.unregister(f.customer.user.id,f.credentials.sessionId,{}));
     if(action==='transfer'){
       const other=f.h.client();await other.register('token-recipient');
-      const session=f.app.devices.issue(other.user.id,'Other account').credentials;
-      f.app.notifications.register(other.user.id,session.sessionId,{token,projectId});
+      const session=(await f.app.devices.issue(other.user.id,'Other account')).credentials;
+      (await f.app.notifications.register(other.user.id,session.sessionId,{token,projectId}));
     }
     await f.app.notifications.deliverPending();assert.equal(f.sent.length,0,action);assert.equal(f.h.db.prepare('SELECT status FROM push_jobs').get().status,'dead');
   }
 });
 
 test('device revocation during provider I/O is rechecked, and stopped workers do not access a closed database',async(t)=>{
-  const f=await fixture(t);let finish;f.provider.send=()=>new Promise((resolve)=>{finish=resolve;});
-  const pending=f.app.notifications.deliverPending();f.app.devices.revoke(f.customer.user,f.credentials.sessionId);finish({status:'ticket',ticket:'late-ticket'});await pending;
+  const f=await fixture(t);let finish,entered;const ready=new Promise(r=>{entered=r;});f.provider.send=()=>new Promise((resolve)=>{finish=resolve;entered();});
+  const pending=f.app.notifications.deliverPending();await ready;(await f.app.devices.revoke(f.customer.user,f.credentials.sessionId));finish({status:'ticket',ticket:'late-ticket'});await pending;
   assert.equal(f.h.db.prepare('SELECT status FROM push_jobs').get().status,'dead');
-  const g=await fixture(t);let done;g.provider.send=()=>new Promise((resolve)=>{done=resolve;});
-  const stopping=g.app.notifications.deliverPending();g.app.notifications.stop();done({status:'ticket',ticket:'after-close'});await stopping;
+  const g=await fixture(t);let done,enteredAgain;const readyAgain=new Promise(r=>{enteredAgain=r;});g.provider.send=()=>new Promise((resolve)=>{done=resolve;enteredAgain();});
+  const stopping=g.app.notifications.deliverPending();await readyAgain;(await g.app.notifications.stop());done({status:'ticket',ticket:'after-close'});await stopping;
   assert.equal(g.h.db.prepare('SELECT status FROM push_jobs').get().status,'pending');
 });
 
 test('notification pagination and reads are private and stable when newer events arrive',async(t)=>{
   const f=await fixture(t),repo=createNotificationsRepository(f.h.db);
-  transaction(f.h.db,()=>{for(let i=0;i<55;i++)f.app.notifications.publish({userId:f.customer.user.id,rideId:f.ride.id,kind:'message',mode:'customer',eventKey:`fixture-${i}`});});
-  const page=f.app.notifications.list(f.customer.user.id,null,f.credentials.sessionId);assert.equal(page.notifications.length,50);assert.ok(page.nextBefore);
-  transaction(f.h.db,()=>f.app.notifications.publish({userId:f.customer.user.id,rideId:f.ride.id,kind:'arrive',mode:'customer',eventKey:'new-arrival'}));
-  const older=f.app.notifications.list(f.customer.user.id,page.nextBefore,f.credentials.sessionId);assert.equal(older.notifications.length,6);
+  await asAsyncDatabase(f.h.db).transaction(async ()=>{for(let i=0;i<55;i++)(await f.app.notifications.publish({userId:f.customer.user.id,rideId:f.ride.id,kind:'message',mode:'customer',eventKey:`fixture-${i}`}));});
+  const page=(await f.app.notifications.list(f.customer.user.id,null,f.credentials.sessionId));assert.equal(page.notifications.length,50);assert.ok(page.nextBefore);
+  await asAsyncDatabase(f.h.db).transaction(async ()=>(await f.app.notifications.publish({userId:f.customer.user.id,rideId:f.ride.id,kind:'arrive',mode:'customer',eventKey:'new-arrival'})));
+  const older=(await f.app.notifications.list(f.customer.user.id,page.nextBefore,f.credentials.sessionId));assert.equal(older.notifications.length,6);
   assert.equal(page.notifications.some((n)=>older.notifications.some((old)=>old.id===n.id)),false);
-  assert.throws(()=>f.app.notifications.list(f.driver.user.id,page.nextBefore),{code:'NOT_FOUND'});
-  assert.equal(repo.unread(f.customer.user.id),57);f.app.notifications.read(f.customer.user.id,page.notifications[0].id);f.app.notifications.read(f.customer.user.id,page.notifications[0].id);
-  assert.equal(repo.unread(f.customer.user.id),56);
+  (await assert.rejects(async ()=>(await f.app.notifications.list(f.driver.user.id,page.nextBefore)),{code:'NOT_FOUND'}));
+  assert.equal((await repo.unread(f.customer.user.id)),57);(await f.app.notifications.read(f.customer.user.id,page.notifications[0].id));(await f.app.notifications.read(f.customer.user.id,page.notifications[0].id));
+  assert.equal((await repo.unread(f.customer.user.id)),56);
 });
 
 test('Expo adapter uses generic bounded payloads, fixed HTTPS endpoints, tickets and receipt error semantics',async()=>{
@@ -166,4 +167,74 @@ test('Expo arrival text contains the requested identity while routing data remai
   assert.deepEqual(requests[0].data, { notificationId:3 }); assert.equal(requests[0].ttl, 300);
   await provider.send({ token,notificationId:4,arrivalBody:'x'.repeat(501) });
   assert.equal(requests[1].title, 'Taxi Ai'); assert.match(requests[1].body, /new journey update/);
+});
+
+async function dispatchPushFixture(t) {
+  const h = await harness(t, { dispatchConfig: { mode: 'sequential' } });
+  const { customer, driver } = await participants(h);
+  const sent = [], receipts = [];
+  const provider = { enabled: true, projectId,
+    send: async (data) => { sent.push(data); return { status: 'ticket', ticket: 'dispatch-ticket' }; },
+    receipt: async (ticket) => { receipts.push(ticket); return { status: 'ok' }; } };
+  const app = createApplication({ db: h.db, clock: () => h.now, allowSimulation: true,
+    pushProvider: provider, dispatchConfig: { mode: 'sequential' } });
+  const device = (await app.devices.issue(driver.user.id, 'Dispatch phone')).credentials;
+  (await app.notifications.register(driver.user.id, device.sessionId, { token, projectId }));
+  const ride = await requestRide(customer);
+  await app.dispatch.refresh();
+  const offer = (await app.dispatch.forDriver(driver.user.id, h.now));
+  assert.equal(offer.rideId, ride.id);
+  const job = h.db.prepare(`SELECT j.id FROM push_jobs j JOIN account_notifications n ON n.id=j.notification_id
+    WHERE n.user_id=? AND n.kind='request'`).get(driver.user.id);
+  assert.ok(job);
+  return { h, app, driver, ride, offer, job, sent, receipts, provider };
+}
+
+test('expired and declined dispatch invitations discard pending push jobs without a provider send', async (t) => {
+  for (const outcome of ['expired', 'declined']) {
+    const f = await dispatchPushFixture(t);
+    if (outcome === 'expired') f.h.advance(20_000);
+    else (await f.app.dispatch.decline({ userId: f.driver.user.id, offerId: f.offer.id, key: randomUUID(), data: {} }));
+    await f.app.notifications.deliverPending();
+    assert.equal(f.sent.length, 0, outcome);
+    assert.equal(f.h.db.prepare('SELECT status FROM push_jobs WHERE id=?').get(f.job.id).status, 'dead', outcome);
+  }
+});
+
+test('a dispatch push retry rechecks its offer while an already-sent ticket can finish its receipt', async (t) => {
+  const retry = await dispatchPushFixture(t);
+  retry.provider.send = async (data) => { retry.sent.push(data); return { status: 'retry' }; };
+  await retry.app.notifications.deliverPending();
+  assert.equal(retry.sent.length, 1);
+  retry.h.advance(60_000);
+  await retry.app.notifications.deliverPending();
+  assert.equal(retry.sent.length, 1, 'an expired invitation cannot cause a new provider send');
+  assert.equal(retry.h.db.prepare('SELECT status FROM push_jobs WHERE id=?').get(retry.job.id).status, 'dead');
+
+  const ticket = await dispatchPushFixture(t);
+  await ticket.app.notifications.deliverPending();
+  assert.equal(ticket.sent.length, 1);
+  ticket.h.advance(15 * 60_000);
+  await ticket.app.notifications.deliverPending();
+  assert.deepEqual(ticket.receipts, ['dispatch-ticket']);
+  assert.equal(ticket.sent.length, 1);
+  assert.equal(ticket.h.db.prepare('SELECT status FROM push_jobs WHERE id=?').get(ticket.job.id).status, 'done');
+});
+
+test('separate push workers claim once and an expired worker cannot overwrite a replacement receipt', async (t) => {
+  const f = await fixture(t); let started, finish, sends = 0;
+  const ready = new Promise(resolve => { started = resolve; });
+  f.provider.send = async () => {
+    sends += 1;
+    if (sends === 1) { started(); return new Promise(resolve => { finish = resolve; }); }
+    return { status: 'ticket', ticket: 'replacement-ticket' };
+  };
+  const replacement = createApplication({ db: f.h.db, clock: () => f.h.now, pushProvider: f.provider, dispatchConfig: { mode: 'legacy' } });
+  const original = f.app.notifications.deliverPending(); await ready;
+  await replacement.notifications.deliverPending(); assert.equal(sends, 1);
+  f.h.advance(60_000);
+  await replacement.notifications.deliverPending(); assert.equal(sends, 2);
+  finish({ status: 'ticket', ticket: 'stale-ticket' }); await original;
+  const job = f.h.db.prepare('SELECT attempts,status,ticket FROM push_jobs').get();
+  assert.equal(job.attempts, 2); assert.equal(job.status, 'ticket'); assert.equal(job.ticket, 'replacement-ticket');
 });

@@ -1,3 +1,4 @@
+import { createRealtimeClient } from '/shared/realtime-client.mjs';
 import { createApiClient } from './dashboard/api-client.mjs';
 import { createEatsController } from '/shared/eats-controller.mjs';
 import { createEatsView } from './eats/view.mjs';
@@ -8,8 +9,9 @@ import { createGeolocation } from './dashboard/geolocation.mjs';
 
 let serverTime = { at: Date.now(), received: performance.now() }, sessionKey = null, syncing = false;
 const api = createApiClient({ onServerTime(at) { serverTime = { at, received: performance.now() }; } });
+const liveUpdates = createRealtimeClient({ read: (cursor, signal) => api.request(`/api/events?cursor=${cursor}&wait=25000`, { signal }), refresh: sync });
 const transport = createEatsTransport({ client: api, identity: () => sessionKey,
-  onChanged() { api.reset(); availability.reset(); controller.reset(); sessionKey = null; } });
+  onChanged() { liveUpdates.reset(); api.reset(); availability.reset(); controller.reset(); sessionKey = null; } });
 const controller = createEatsController({ api: transport, makeKey: () => crypto.randomUUID(), now: () => serverTime.at + performance.now() - serverTime.received });
 const screenPaths = { browse: '/eats', store: '/eats/sell', orders: '/eats?screen=orders', work: '/eats?screen=work', review: '/eats?screen=review' };
 const view = createEatsView(controller, {
@@ -47,20 +49,21 @@ async function sync() {
   try {
     const session = await api.request('/api/session'), nextKey = session.user ? `${session.user.id}:${session.csrfToken}` : null;
     const changed = nextKey !== sessionKey;
-    if (changed) { api.reset(); availability.reset(); controller.reset(); sessionKey = nextKey; }
+    if (changed) { liveUpdates.reset(); api.reset(); availability.reset(); controller.reset(); sessionKey = nextKey; }
     api.setCsrf(session.csrfToken); controller.context(session.user);
     if (session.user) {
+      liveUpdates.resume();
       if (changed) await route(); else await controller.refresh({ quiet: true });
       if (controller.snapshot().screen === 'work') await availability.poll();
     }
   } catch (error) {
-    if (error.status === 401 || error.code === 'SESSION_CHANGED') { controller.reset(); sessionKey = null; }
+    if (error.status === 401 || error.code === 'SESSION_CHANGED') { liveUpdates.reset(); controller.reset(); sessionKey = null; }
     document.getElementById('food-error').textContent = error.message;
   } finally { syncing = false; }
 }
-document.addEventListener('visibilitychange', () => { if (document.hidden) availability.shutdown(); else void sync(); });
-window.addEventListener('pagehide', () => availability.shutdown());
+document.addEventListener('visibilitychange', () => { if (document.hidden) { liveUpdates.pause(); availability.shutdown(); } else void sync(); });
+window.addEventListener('pagehide', () => { liveUpdates.reset(); availability.shutdown(); });
 window.addEventListener('popstate', () => void route());
-setInterval(() => void sync(), 5000);
+setInterval(() => { if (!sessionKey) void sync(); }, 30_000);
 setInterval(() => { if (!document.hidden) { controller.tick(); availability.tick(); } }, 1000);
 render(); void sync();

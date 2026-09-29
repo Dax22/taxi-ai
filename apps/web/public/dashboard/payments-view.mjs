@@ -35,8 +35,8 @@ export function createPaymentsView({ onStart, onSimulate, onPage, onOpenRide, on
       renderedReceipt = receiptKey; $('receipt-details').replaceChildren();
       if (receipt) {
         for (const [label, value] of [['Receipt / payment reference', receipt.reference], ['Trip', receipt.rideId],
-          ['Pickup', receipt.pickup], ['Destination', receipt.destination], ['Completed (Abuja time)', date(receipt.completedAt)],
-          ['Simulated payment (Abuja time)', date(receipt.paidAt)], ['Agreed fare / total (NGN)', formatPaymentNaira(receipt.amountKobo)]]) {
+          ['Pickup', receipt.pickup], ['Destination', receipt.destination], ['Completed (Nigeria · WAT)', date(receipt.completedAt)],
+          ['Simulated payment (Nigeria · WAT)', date(receipt.paidAt)], ['Agreed fare / total (NGN)', formatPaymentNaira(receipt.amountKobo)]]) {
           $('receipt-details').append(element('dt', label), element('dd', value));
         }
       }
@@ -65,7 +65,7 @@ export function createPaymentsView({ onStart, onSimulate, onPage, onOpenRide, on
           const row = element('article', undefined, 'payment-row');
           const description = element('div');
           description.append(element('strong', `Trip ${item.rideId.slice(0, 8).toUpperCase()}`),
-            element('small', `${date(item.completedAt)} · Abuja time`),
+            element('small', `${date(item.completedAt)} · Nigeria time (WAT)`),
             element('small', item.attempt?.reference ?? 'No payment attempt yet'));
           const amount = element('div', undefined, 'payment-row-amount');
           amount.append(element('strong', formatPaymentNaira(item.amountKobo)), element('span', PAYMENT_LABELS[item.status], 'status-badge'));

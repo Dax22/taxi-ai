@@ -1,7 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
+import { createApplication } from '../src/application.mjs';
 import { TEST_NOW, harness, participants, claimRide } from './helpers.mjs';
+import { NIGERIA_BOUNDS, distanceMeters } from '../../../packages/shared/src/locations.mjs';
+import { checkedRoute, MAX_ROUTE_METERS, MAX_ROUTE_SECONDS, position } from '../src/modules/locations/domain.mjs';
 
 const points = { pickup: { lat: 9.0765, lng: 7.3986, name: 'Pickup test landmark' }, destination: { lat: 9.09, lng: 7.45, name: 'Destination test landmark' } };
 function maps() {
@@ -31,7 +34,7 @@ async function booked(customer, driver) {
   let ride = await claimRide(driver, await routed(customer));
   ride = await change(driver, ride, 'offers', { amountKobo: 470000 });
   ride = await change(customer, ride, 'accept', { offerId: ride.negotiation.currentOffer.id });
-  return change(customer, ride, 'confirm');
+  return (await change(customer, ride, 'confirm'));
 }
 function windowFor(client) {
   const clientId = randomUUID();
@@ -66,7 +69,7 @@ test('address search is authenticated and bounded; route pricing and exact locat
 test('quote inputs reject forged metrics, invalid coordinates and same points; expired or stolen quotes cannot create rides', async (t) => {
   const { h, customer, provider } = await setup(t);
   for (const data of [null, { ...points, distanceMeters: 1 }, { ...points, pickup: { ...points.pickup, lat: '9.1' } },
-    { ...points, destination: points.pickup }, { ...points, destination: { ...points.destination, lng: 4 } }]) {
+    { ...points, destination: points.pickup }, { ...points, destination: { ...points.destination, lat: 6.3703, lng: 2.3912 } }]) {
     assert.equal((await customer.post('/api/locations/quotes', data)).status, 400);
   }
   const preview = await quote(customer);
@@ -79,10 +82,62 @@ test('quote inputs reject forged metrics, invalid coordinates and same points; e
   assert.equal(h.db.prepare('SELECT count(*) AS n FROM rides').get().n, 0);
 });
 
+test('national search and quotes accept Lagos, Kano and Port Harcourt while rejecting foreign points inside the bounding rectangle', async (t) => {
+  const { customer, provider } = await setup(t);
+  const cities = [
+    { lat: 6.5244, lng: 3.3792, name: 'Lagos test pickup' },
+    { lat: 12.0022, lng: 8.592, name: 'Kano test pickup' },
+    { lat: 4.8156, lng: 7.0498, name: 'Port Harcourt test pickup' },
+  ];
+  const foreign = [{ lat: 6.3703, lng: 2.3912, name: 'Cotonou' }, { lat: 10.591, lng: 14.3159, name: 'Maroua' }];
+  let searchBounds;
+  provider.search = async (query, bounds) => { searchBounds = bounds; return [...cities, ...foreign]; };
+  provider.route = async (a, b) => ({ distanceMeters: Math.ceil(distanceMeters(a, b) * 1.2), durationSeconds: 1200,
+    coordinates: [[a.lng, a.lat], [b.lng, b.lat]] });
+  assert.deepEqual((await customer.send('/api/locations')).body.settings.bounds, NIGERIA_BOUNDS);
+  assert.deepEqual((await customer.post('/api/locations/search', { query: 'town' })).body.places.map((p) => p.name), cities.map((p) => p.name));
+  assert.deepEqual(searchBounds, NIGERIA_BOUNDS);
+  for (const pickup of cities) {
+    const result = await customer.post('/api/locations/quotes', { pickup, destination: { ...pickup, lat: pickup.lat + 0.01, name: 'Nearby destination' } });
+    assert.equal(result.status, 201, JSON.stringify(result.body));
+    assert.equal(result.body.quote.route.pricing.policy, 'nigeria-preview-v1');
+    assert.equal(result.body.quote.route.pricing.illustrative, true);
+  }
+  for (const pickup of foreign) {
+    const result = await customer.post('/api/locations/quotes', { pickup, destination: cities[0] });
+    assert.equal(result.status, 400); assert.equal(result.body.error.code, 'INVALID_LOCATION');
+  }
+});
+
+test('national road previews allow interstate distances with bounded duration and reject routes that leave Nigeria', () => {
+  const endpoints = { pickup: { lat: 6.5244, lng: 3.3792, name: 'Lagos' }, destination: points.pickup, vehicleCategory: 'standard' };
+  const coordinates = [[3.3792, 6.5244], [3.947, 7.3775], [6.7333, 7.8], [points.pickup.lng, points.pickup.lat]];
+  const route = { distanceMeters: 750_000, durationSeconds: 9 * 60 * 60, coordinates };
+  const preview = checkedRoute(route, endpoints);
+  assert.equal(preview.distanceMeters, 750_000); assert.equal(preview.durationSeconds, 9 * 60 * 60);
+  assert.equal(preview.pricing.policy, 'nigeria-preview-v1');
+  for (const extra of [{ distanceMeters: MAX_ROUTE_METERS + 1 }, { durationSeconds: MAX_ROUTE_SECONDS + 1 }]) {
+    assert.throws(() => checkedRoute({ ...route, ...extra }, endpoints), { code: 'INVALID_ROUTE' });
+  }
+  assert.throws(() => checkedRoute({ ...route, coordinates: [coordinates[0], [2.3912, 6.3703], coordinates.at(-1)] }, endpoints), { code: 'INVALID_ROUTE' });
+});
+
+test('shared trip GPS accepts nationwide locations but retains national bounds, accuracy and freshness checks', () => {
+  for (const point of [{ lat: 6.5244, lng: 3.3792 }, { lat: 12.0022, lng: 8.592 }, { lat: 4.8156, lng: 7.0498 }]) {
+    assert.deepEqual(position(fix(point), TEST_NOW), { ...point, accuracy: 12, capturedAt: TEST_NOW });
+    for (const extra of [{ accuracy: 201 }, { capturedAt: TEST_NOW - 30_000 }]) {
+      assert.throws(() => position(fix({ ...point, ...extra }), TEST_NOW), { code: 'INVALID_LOCATION' });
+    }
+  }
+  for (const point of [{ lat: 6.3703, lng: 2.3912 }, { lat: 10.591, lng: 14.3159 }]) {
+    assert.throws(() => position(fix(point), TEST_NOW), { code: 'INVALID_LOCATION' });
+  }
+});
+
 test('quote retries, ride consumption and their rollback remain consistent through restart', async (t) => {
   const { h, customer, driver } = await setup(t, { persistent: true });
   const quoteKey = randomUUID();
-  const [first, second] = await Promise.all([quote(customer, quoteKey), quote(customer, quoteKey)]);
+  const [first, second] = await Promise.all([(quote(customer, quoteKey)), (quote(customer, quoteKey))]);
   assert.equal(first.id, second.id);
   assert.equal((await customer.post('/api/locations/quotes', { ...points, pickup: { ...points.pickup, name: 'Different place' } }, quoteKey)).body.error.code, 'KEY_REUSED');
   const rideKey = randomUUID();
@@ -207,6 +262,8 @@ test('trip completion and approval revocation clear GPS; unused expired quotes a
   assert.equal((await customer.send(`/api/rides/${next.id}/location`)).body.share, null);
   h.advance(75 * 60_000 + 1);
   await customer.send(`/api/rides/${next.id}/location`);
+  assert.ok(h.db.prepare('SELECT id FROM location_quotes WHERE id = ?').get(unused.id), 'participant tracking does not perform global quote cleanup');
+  await createApplication({ db: h.db, clock: () => h.now }).locations.sweep();
   assert.equal(h.db.prepare('SELECT id FROM location_quotes WHERE id = ?').get(unused.id), undefined);
   assert.equal(h.db.prepare('SELECT count(*) AS n FROM location_quote_commands WHERE quote_id = ?').get(unused.id).n, 0);
   assert.equal(h.db.prepare('SELECT count(*) AS n FROM location_quotes WHERE ride_id IS NOT NULL').get().n, 2);

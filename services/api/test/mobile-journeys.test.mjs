@@ -146,8 +146,8 @@ test('schema sixteen migration preserves existing web availability, native sessi
   const records=new Map(tables.map((name)=>[name,h.db.prepare(`SELECT * FROM ${name}`).all()]));
   const availability=h.db.prepare('SELECT * FROM driver_availability').all().map((row)=>({...row}));
   await h.restart();
-  for(const name of tables)assert.deepEqual(h.db.prepare(`SELECT * FROM ${name}`).all(),records.get(name),name);
-  assert.deepEqual(h.db.prepare('SELECT * FROM driver_availability').all().map(({native_session_id,...row})=>{assert.equal(native_session_id,null);return row;}),availability);
+  for(const name of tables)assert.deepEqual(h.db.prepare(`SELECT * FROM ${name}`).all().map(row=>{if(name==='rides'){assert.equal(row.dispatch_region,`sample:${row.pickup_id}`);delete row.dispatch_region;}return row;}),records.get(name),name);
+  assert.deepEqual(h.db.prepare('SELECT * FROM driver_availability').all().map(({native_session_id,expires_at,latitude,longitude,...row})=>{assert.equal(native_session_id,null);assert.equal(expires_at,row.seen_at+60_000);assert.equal(latitude,null);assert.equal(longitude,null);return row;}),availability);
   assert.equal(h.db.prepare('SELECT count(*) AS n FROM account_notifications').get().n,0);
   assert.equal(ok(await c.send('/booking/requests',sample,key)).ride.id,r.id);
   assert.equal(ok(await driver.send('/api/availability')).availability.online,true);

@@ -44,50 +44,50 @@ function paginate(clauses, params, filter, time = 'createdAt', id = 'id') {
 }
 export function createAdminConsoleRepository(db) {
   return Object.freeze({
-    accounts(filter) {
+    async accounts(filter) {
       const clauses = ["u.role<>'admin'"], params = {};
       if (filter.type !== 'all') clauses.push(`d.user_id IS ${filter.type === 'driver' ? 'NOT ' : ''}NULL`);
       if (filter.review !== 'all') { clauses.push('a.status=$review'); params.review = filter.review; }
       if (filter.q) { clauses.push("(instr(lower(u.name),$q)>0 OR instr(lower(u.email),$q)>0 OR instr(u.id,$q)>0 OR instr(lower(COALESCE(d.vehicle_plate,'')),$q)>0)"); params.q = filter.q.toLowerCase(); }
       const suffix = paginate(clauses, params, filter, 'u.created_at', 'u.id');
-      return db.prepare(`SELECT ${accountColumns} ${accountJoin} ${suffix}`).all(params);
+      return (await db.prepare(`SELECT ${accountColumns} ${accountJoin} ${suffix}`).all(params));
     },
-    account(id) {
-      return db.prepare(`SELECT ${accountColumns},d.vehicle_model AS vehicleModel,d.vehicle_plate AS vehiclePlate,
+    async account(id) {
+      return (await db.prepare(`SELECT ${accountColumns},d.vehicle_model AS vehicleModel,d.vehicle_plate AS vehiclePlate,
         COALESCE(json_extract(a.details_json,'$.vehicle'),s.vehicle_json) AS vehicleJson ${accountJoin}
-        LEFT JOIN driver_vehicle_selections s ON s.driver_id=u.id WHERE u.id=? AND u.role<>'admin'`).get(id) ?? null;
+        LEFT JOIN driver_vehicle_selections s ON s.driver_id=u.id WHERE u.id=? AND u.role<>'admin'`).get(id)) ?? null;
     },
-    accountCounts(start, end) {
-      return db.prepare(`SELECT count(*) AS total,count(d.user_id) AS drivers,count(*)-count(d.user_id) AS customerOnly,
+    async accountCounts(start, end) {
+      return (await db.prepare(`SELECT count(*) AS total,count(d.user_id) AS drivers,count(*)-count(d.user_id) AS customerOnly,
         COALESCE(sum(u.created_at>=? AND u.created_at<?),0) AS newAccounts,
         COALESCE(sum(a.status='submitted'),0) AS awaitingReview
-        ${accountJoin} WHERE u.role<>'admin'`).get(start, end);
+        ${accountJoin} WHERE u.role<>'admin'`).get(start, end));
     },
-    trips(filter, now, accountId = null) {
+    async trips(filter, now, accountId = null) {
       const { clauses, params } = tripWhere(filter, now, accountId), suffix = paginate(clauses, params, filter);
-      return db.prepare(`${journey} SELECT * FROM journey ${suffix}`).all(params);
+      return (await db.prepare(`${journey} SELECT * FROM journey ${suffix}`).all(params));
     },
-    trip(id, now) { return db.prepare(`${journey} SELECT * FROM journey WHERE id=$id`).get({ id, now }) ?? null; },
-    *facts(filter, now, accountId = null) {
+    async trip(id, now) { return (await db.prepare(`${journey} SELECT * FROM journey WHERE id=$id`).get({ id, now })) ?? null; },
+    async *facts(filter, now, accountId = null) {
       let before = null;
       while (true) {
         const { clauses, params } = tripWhere(filter, now, accountId);
         const suffix = paginate(clauses, params, { before, after: null, limit: 999 });
-        const rows = db.prepare(`${journey} SELECT id,createdAt,customerId,driverId,status,fareKobo,paymentStatus,paymentMode FROM journey ${suffix}`).all(params);
+        const rows = (await db.prepare(`${journey} SELECT id,createdAt,customerId,driverId,status,fareKobo,paymentStatus,paymentMode FROM journey ${suffix}`).all(params));
         for (const row of rows) yield row;
         if (rows.length < 1000) return;
         const last = rows.at(-1); before = { time: last.createdAt, id: last.id };
       }
     },
-    activity(id) {
-      return db.prepare(`SELECT a.type,a.reason,a.created_at AS createdAt,u.name AS actorName
-        FROM ride_activity a JOIN users u ON u.id=a.actor_id WHERE a.ride_id=? ORDER BY a.id`).all(id);
+    async activity(id) {
+      return (await db.prepare(`SELECT a.type,a.reason,a.created_at AS createdAt,u.name AS actorName
+        FROM ride_activity a JOIN users u ON u.id=a.actor_id WHERE a.ride_id=? ORDER BY a.id`).all(id));
     },
-    routes(filter, now) {
+    async routes(filter, now) {
       const { clauses, params } = tripWhere(filter, now, null);
-      return db.prepare(`${journey} SELECT pickupId,destinationId,pickupName,destinationName,count(*) AS requests,
+      return (await db.prepare(`${journey} SELECT pickupId,destinationId,pickupName,destinationName,count(*) AS requests,
         sum(status='completed') AS completed FROM journey WHERE ${clauses.join(' AND ')}
-        GROUP BY pickupId,destinationId,pickupName,destinationName ORDER BY requests DESC,pickupId,destinationId LIMIT 8`).all(params);
+        GROUP BY pickupId,destinationId,pickupName,destinationName ORDER BY requests DESC,pickupId,destinationId LIMIT 8`).all(params));
     },
   });
 }

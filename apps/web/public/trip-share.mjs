@@ -17,7 +17,7 @@ const viewer = createTripShareController({ client, token, now: () => serverTime.
     for (const [label, value] of [['Route', `${trip.pickup} → ${trip.destination}`], ['Trip', trip.reference],
       ['Status', RIDE_STATUS_LABELS[trip.status]], ['Driver', trip.driver.name],
       ['Vehicle / plate', `${trip.driver.vehicle.model} · ${trip.driver.vehicle.plate}`],
-      ['Last shared location', safetyLocation(trip.location)], ['Link expires', `${safetyTime(data.expiresAt)} (Abuja)`]]) {
+      ['Last shared location', safetyLocation(trip.location)], ['Link expires', `${safetyTime(data.expiresAt)} (WAT)`]]) {
       $('shared-details').append(element('dt', label), element('dd', value));
     }
   } },

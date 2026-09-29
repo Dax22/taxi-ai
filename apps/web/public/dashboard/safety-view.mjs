@@ -15,7 +15,7 @@ export function createSafetyView({ onAdd, onRemove, onRaise, onShare, onRevoke, 
   function incidentCard(record, admin) {
     const card = element('article', undefined, 'safety-record');
     card.append(element('h3', SAFETY_KINDS[record.kind]), element('p', INCIDENT_LABELS[record.status], 'status-badge'),
-      element('p', `Incident ${record.id} · ${safetyTime(record.createdAt)} (Abuja)`, 'small-note'));
+      element('p', `Incident ${record.id} · ${safetyTime(record.createdAt)} (WAT)`, 'small-note'));
     const snapshot = record.snapshot, details = element('dl', undefined, 'safety-details');
     for (const [label, value] of [['Trip reference', record.rideId], ['Route', `${snapshot.pickup} → ${snapshot.destination}`],
       ['Driver', `${snapshot.driver.name} · ${snapshot.driver.id}`], ['Vehicle / plate', `${snapshot.driver.vehicle.model} · ${snapshot.driver.vehicle.plate}`],
@@ -24,11 +24,11 @@ export function createSafetyView({ onAdd, onRemove, onRaise, onShare, onRevoke, 
       ['Report note', record.note || 'No note provided.']]) details.append(element('dt', label), element('dd', value));
     card.append(details);
     if(snapshot.vehicleCheck){const check=snapshot.vehicleCheck;card.append(element('h4',`AI photo comparison · ${CHECK_LABELS[check.comparison.outcome]}`),
-      element('p',`Reference ${check.id} · ${safetyTime(check.checkedAt)} (Abuja). AI observations only; no photo is retained and no automatic penalty was applied.`,'small-note'));
+      element('p',`Reference ${check.id} · ${safetyTime(check.checkedAt)} (WAT). AI observations only; no photo is retained and no automatic penalty was applied.`,'small-note'));
       for(const f of check.comparison.fields)card.append(element('p',`${CHECK_FIELDS[f.key]}: expected ${f.expected} · observed ${f.observed} · ${f.status}`));}
     card.append(element('h4', 'Recorded actions'));
     const events = element('ol', undefined, 'safety-events');
-    for (const item of record.events) events.append(element('li', `${item.action === 'created' ? 'Test SOS saved' : INCIDENT_LABELS[item.action]} · ${safetyTime(item.createdAt)} (Abuja) · ${item.actorId}${item.note ? ` · ${item.note}` : ''}`));
+    for (const item of record.events) events.append(element('li', `${item.action === 'created' ? 'Test SOS saved' : INCIDENT_LABELS[item.action]} · ${safetyTime(item.createdAt)} (WAT) · ${item.actorId}${item.note ? ` · ${item.note}` : ''}`));
     card.append(events, element('h4', 'Contact notifications · simulation only'));
     if (!record.notifications.length) card.append(element('p', 'No contacts were selected for this report.', 'small-note'));
     for (const notice of record.notifications) {
@@ -37,7 +37,7 @@ export function createSafetyView({ onAdd, onRemove, onRaise, onShare, onRevoke, 
         element('p', `${ALERT_LABELS[notice.status]} · attempt ${notice.attempts} of 3`, 'small-note'));
       const history = element('details'), list = element('ol', undefined, 'safety-events');
       history.append(element('summary', 'Test delivery history'));
-      for (const event of notice.events) list.append(element('li', `${ALERT_LABELS[event.status]} · attempt ${event.attempt} · ${safetyTime(event.createdAt)} (Abuja)`));
+      for (const event of notice.events) list.append(element('li', `${ALERT_LABELS[event.status]} · attempt ${event.attempt} · ${safetyTime(event.createdAt)} (WAT)`));
       history.append(list); row.append(history);
       if (admin && state.settings?.canSimulate) {
         const actions = element('div', undefined, 'review-actions');
@@ -88,7 +88,7 @@ export function createSafetyView({ onAdd, onRemove, onRaise, onShare, onRevoke, 
       for (const record of state.trip?.incidents ?? []) $('safety-incidents').append(incidentCard(record, false));
     }
     const share = state.trip?.share;
-    $('safety-share-status').textContent = share?.active ? `Link active until ${safetyTime(share.expiresAt)} (Abuja).`
+    $('safety-share-status').textContent = share?.active ? `Link active until ${safetyTime(share.expiresAt)} (WAT).`
       : 'No active trip link.';
     $('safety-share-create').textContent = share?.active ? 'Replace private link' : 'Create private link';
     $('safety-share-create').disabled = !state.trip?.canRaise || state.pending;
@@ -106,7 +106,7 @@ export function createSafetyView({ onAdd, onRemove, onRaise, onShare, onRevoke, 
       for (const record of state.queue?.incidents ?? []) {
         const row = element('article', undefined, 'safety-contact'), text = element('div');
         text.append(element('strong', `${SAFETY_KINDS[record.kind]} · ${record.reporter.name}`),
-          element('p', `${INCIDENT_LABELS[record.status]} · ${safetyTime(record.createdAt)} (Abuja)`, 'small-note'));
+          element('p', `${INCIDENT_LABELS[record.status]} · ${safetyTime(record.createdAt)} (WAT)`, 'small-note'));
         row.append(text, button('Open incident', () => onOpen(record.id), state.pending)); $('safety-admin-list').append(row);
       }
     }

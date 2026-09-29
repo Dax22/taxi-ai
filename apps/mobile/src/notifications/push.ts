@@ -1,3 +1,4 @@
+import { pushTarget } from './push-target';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { isDevice } from 'expo-device';
 import * as Notifications from 'expo-notifications';
@@ -7,7 +8,10 @@ export async function notificationToken(projectId: string): Promise<string> {
   if(!supported())throw new Error('Phone alerts require an installed device build. Updates are available inside the app.');
   const configured=Constants.easConfig?.projectId ?? Constants.expoConfig?.extra?.eas?.projectId;
   if(configured!==projectId)throw new Error('This build and the server must use the same notification project.');
-  if(Platform.OS==='android')await Notifications.setNotificationChannelAsync('journeys',{name:'Journey updates',importance:Notifications.AndroidImportance.DEFAULT});
+  if(Platform.OS==='android')await Promise.all([
+    Notifications.setNotificationChannelAsync('journeys',{name:'Journey updates',importance:Notifications.AndroidImportance.DEFAULT}),
+    Notifications.setNotificationChannelAsync('announcements',{name:'Taxi Ai announcements',importance:Notifications.AndroidImportance.DEFAULT}),
+  ]);
   let permission=await Notifications.getPermissionsAsync();
   if(!permission.granted)permission=await Notifications.requestPermissionsAsync();
   if(!permission.granted)throw new Error('Phone alerts are off. You can enable them in your phone settings; your updates remain in the app.');
@@ -17,11 +21,13 @@ export async function notificationToken(projectId: string): Promise<string> {
   })])).data;}finally{clearTimeout(timeout);}
 }
 // A tap opens an explicit review prompt. The payload cannot choose an account or authorize a journey.
-export function listenForPush(onUpdate:(id:number)=>void,onReceive:()=>void=()=>{}){
+export function listenForPush(onUpdate:(id:number)=>void,onReceive:()=>void=()=>{},onFamily:(eventId:string)=>void=()=>{},onAnnouncement:(announcementId:string)=>void=()=>{}){
   if(!supported())return()=>{};
   const receive=(response:Notifications.NotificationResponse|null)=>{
-    const id=response?.notification.request.content.data?.notificationId;
-    if(Number.isSafeInteger(id)&&Number(id)>0)onUpdate(Number(id));
+    const target=pushTarget(response?.notification.request.content.data);
+    if(target?.kind==='family')onFamily(target.eventId);
+    else if(target?.kind==='announcement')onAnnouncement(target.announcementId);
+    else if(target?.kind==='journey')onUpdate(target.notificationId);
     Notifications.clearLastNotificationResponse();
   };
   receive(Notifications.getLastNotificationResponse());

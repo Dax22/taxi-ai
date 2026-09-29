@@ -3,7 +3,7 @@ import { element } from './dom.mjs';
 
 /** Accessible category browsing. The caller owns navigation and booking visibility. */
 export function createVehicleCategoryPicker(container, { onSelect = () => {} } = {}) {
-  let selected = VEHICLE_CATEGORIES[0], disabled = false;
+  let selected = VEHICLE_CATEGORIES[0], disabled = false, allowed = null;
   const group = element('div', undefined, 'vehicle-category-grid');
   group.setAttribute('role', 'radiogroup');
   group.setAttribute('aria-label', 'Explore vehicle categories');
@@ -21,10 +21,10 @@ export function createVehicleCategoryPicker(container, { onSelect = () => {} } =
       element('span', category.statusLabel, 'vehicle-category-status'));
     button.addEventListener('click', () => select(category.id));
     button.addEventListener('keydown', (event) => {
-      const n = VEHICLE_CATEGORIES.length;
+      const visible = VEHICLE_CATEGORIES.filter((item) => !allowed || allowed.includes(item.id)), index = visible.findIndex((item) => item.id === category.id), n = visible.length;
       const next = { ArrowRight: (index + 1) % n, ArrowDown: (index + 1) % n,
         ArrowLeft: (index + n - 1) % n, ArrowUp: (index + n - 1) % n, Home: 0, End: n - 1 }[event.key];
-      if (next !== undefined) { event.preventDefault(); select(VEHICLE_CATEGORIES[next].id, true); }
+      if (next !== undefined) { event.preventDefault(); select(visible[next].id, true); }
     });
     group.append(button); return button;
   });
@@ -32,19 +32,27 @@ export function createVehicleCategoryPicker(container, { onSelect = () => {} } =
     buttons.forEach((button, index) => {
       const checked = VEHICLE_CATEGORIES[index].id === selected.id;
       button.setAttribute('aria-checked', String(checked));
+      if (VEHICLE_CATEGORIES[index].id === 'standard') {
+        button.children[1].textContent = allowed ? 'Car' : 'Standard';
+        button.children[2].textContent = allowed ? 'Small parcel deliveries' : VEHICLE_CATEGORIES[index].purpose;
+        button.children[3].textContent = allowed ? 'Delivery preview' : VEHICLE_CATEGORIES[index].statusLabel;
+        button.setAttribute('aria-label', allowed ? 'Car, small parcel deliveries' : 'Standard, everyday car rides');
+      }
+      button.hidden = Boolean(allowed && !allowed.includes(VEHICLE_CATEGORIES[index].id));
       button.tabIndex = checked ? 0 : -1; button.disabled = disabled;
     });
-    description.textContent = `${selected.name} · ${selected.statusLabel}. ${selected.description}`;
+    description.textContent = allowed && selected.id === 'standard' ? 'Car · Small parcel delivery. Confirm the load fits with your driver before collection.' : `${selected.name} · ${selected.statusLabel}. ${selected.description}`;
   }
   function select(id, focus = false) {
     const category = vehicleCategory(id);
-    if (disabled || !category) return;
+    if (disabled || !category || (allowed && !allowed.includes(id))) return;
     selected = category; render(); onSelect(category);
     if (focus) buttons[VEHICLE_CATEGORIES.indexOf(category)].focus();
   }
   container.replaceChildren(group, description); render();
   return Object.freeze({ selected: () => selected, select,
+    allow(ids) { allowed = ids; render(); },
     setDisabled(value) { disabled = Boolean(value); buttons.forEach((button) => { button.disabled = disabled; }); },
-    reset() { disabled = false; selected = VEHICLE_CATEGORIES[0]; render(); onSelect(selected); },
+    reset() { disabled = false; allowed = null; selected = VEHICLE_CATEGORIES[0]; render(); onSelect(selected); },
   });
 }

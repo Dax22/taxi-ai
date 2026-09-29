@@ -3,20 +3,21 @@ import { canUseMode, accountInMode, modeForRide } from '/shared/account-modes.mj
 
 const emptyState = () => ({ account: null, user: null, mode: 'customer', modePrompt: false,
   activeElsewhere: [], rides: [], available: [], drivers: [], reports: [], chatUnread: {},
-  history: [], historyCursor: null, historyLoaded: false, availabilityOnline: false, sampleMatchingEnabled: false });
+  history: [], historyCursor: null, historyLoaded: false, availabilityOnline: false, sampleMatchingEnabled: false, dispatchMode: 'legacy' });
 const closed = (ride) => ['completed', 'cancelled', 'expired'].includes(ride.status);
 const identity = (session) => session.user ? `${session.user.id}:${session.user.role}:${session.csrfToken}` : null;
 
 /** Session identity owns media. A separate, per-window mode owns workspace data. */
-export function createPageController({ client, activityClient = client, view, modeView, preferences,
-  conversation, conversationView, calls, sharing, availability, planner, payments, onboarding, safety, vehicleCheck, authForm, feedback }) {
+export function createPageController({ client, activityClient = client, view, modeView, preferences, initialMode = null,
+  conversation, conversationView, calls, sharing, availability, planner, payments, onboarding, safety, vehicleCheck, guests, parcels, authForm, feedback, onAccount = () => {} }) {
   let state = emptyState(), sessionKey = null, generation = 0, refreshing = null, busy = false;
-  const workspace = [conversation, planner, payments, ...[onboarding, safety, vehicleCheck].filter(Boolean)];
+  let entryMode = initialMode;
+  const workspace = [conversation, planner, payments, ...[onboarding, safety, vehicleCheck, guests, parcels].filter(Boolean)];
   const features = [...workspace, calls, sharing, availability];
   function render() { view.render(state); modeView?.render(state, busy); }
   function setBusy(value) { busy = value; view.setBusy(value); conversationView.setBusy(value); modeView?.render(state, value); }
   function clear() {
-    generation++; sessionKey = null; state = emptyState(); refreshing = null; client.reset();
+    generation++; sessionKey = null; state = emptyState(); refreshing = null; client.reset(); onAccount(null);
     if (activityClient !== client) activityClient.reset();
     view.reset(); modeView?.reset();
     for (const feature of features) feature.reset();
@@ -27,13 +28,16 @@ export function createPageController({ client, activityClient = client, view, mo
     if (changed) clear();
     sessionKey = identity(data); state.account = data.user;
     if (changed && data.user) {
-      const saved = preferences?.get(data.user.id);
+      // A booking link selects its workspace once, after sign-in, without changing availability or permissions.
+      const saved = canUseMode(data.user, entryMode) ? entryMode : preferences?.get(data.user.id);
+      entryMode = null;
       state.mode = canUseMode(data.user, saved) ? saved : 'customer';
     }
     if (state.mode === 'work' && !canUseMode(data.user, 'work')) resetWorkspace('customer');
     state.user = accountInMode(data.user, state.mode);
     client.setCsrf(data.csrfToken); activityClient.setCsrf(data.csrfToken);
-    client.setMode?.(state.mode); render();
+    guests?.session?.(data); parcels?.session?.(data);
+    client.setMode?.(state.mode); onAccount(sessionKey); render();
   }
   function resetWorkspace(mode) {
     generation++; refreshing = null;
@@ -62,6 +66,7 @@ export function createPageController({ client, activityClient = client, view, mo
   function selection(ride) {
     activityContext(ride);
     payments.context(state.user, ride); safety?.context(state.user, ride); vehicleCheck?.context(state.user,ride);
+    guests?.context(state.user, ride); parcels?.context(state.user, ride);
     void conversation.show(ride, state.user); void payments.poll(); void safety?.poll(); void vehicleCheck?.poll();
   }
   const scoped = (path, before = null) => `${path}?mode=${state.mode}${before ? `&before=${encodeURIComponent(before)}` : ''}`;
@@ -90,6 +95,7 @@ export function createPageController({ client, activityClient = client, view, mo
           }
           next.rides = data.rides; next.available = data.available; next.activeElsewhere = data.activeElsewhere ?? [];
           next.sampleMatchingEnabled = data.matchingSettings.allowSimulation;
+          next.dispatchMode = data.matchingSettings.dispatchMode ?? 'legacy';
         }
         if (epoch !== generation) return;
         if (first.user) {
@@ -102,9 +108,10 @@ export function createPageController({ client, activityClient = client, view, mo
         state = next; render();
         const selected = view.selected(), occupied = state.activeElsewhere.length > 0 || state.rides.some((ride) => isActiveRide(ride.status));
         activityContext(selected); onboarding?.context(state.user); safety?.context(state.user, selected); vehicleCheck?.context(state.user,selected);
+        guests?.context(state.user, selected); parcels?.context(state.user, selected);
         payments.context(state.user, selected); availability.context(state.user, occupied);
         void planner.setContext(state.user, occupied);
-        await Promise.all([payments.poll(), availability.poll(), conversation.show(selected, state.user), onboarding?.poll(), safety?.poll(),vehicleCheck?.poll()]);
+        await Promise.all([payments.poll(), availability.poll(), conversation.show(selected, state.user), onboarding?.poll(), safety?.poll(),vehicleCheck?.poll(),guests?.poll(),parcels?.poll()]);
         if (epoch === generation) feedback.synced();
       } catch (error) {
         if ([401, 403].includes(error.status)) clear();
@@ -159,8 +166,10 @@ export function createPageController({ client, activityClient = client, view, mo
     try { await refresh(); } catch { feedback.offline(); }
   }
   function rideCommand(path, data, message) {
+    if (/^\/api\/dispatch\/offers\/[^/]+\/decline$/.test(path)) return runAction(() => client.command(path, data), message);
     return runAction(async () => {
       const result = await client.rideCommand(path, data); view.select(result.ride.id);
+      if (path === '/api/rides') view.rideCreated?.(result.ride);
       if (closed(result.ride)) state.historyLoaded = false;
       return result;
     }, message);
@@ -201,6 +210,7 @@ export function createPageController({ client, activityClient = client, view, mo
     },
     authenticate: (path, data) => runAction(async () => {
       const result = await client.request(path, { method: 'POST', data }); session(result); authForm.reset();
+      if (path === '/api/auth/register') modeView?.startExperience?.(result.user?.startingExperience ?? data.intent ?? 'customer');
     }),
     logout: () => runAction(async () => {
       onboarding?.reset(); safety?.reset(); vehicleCheck?.reset(); calls.reset(); payments.reset(); void availability.stop(); availability.reset();

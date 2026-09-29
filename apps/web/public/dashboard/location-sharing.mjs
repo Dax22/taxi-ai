@@ -1,4 +1,4 @@
-import { canShareLocation, insideAbuja } from '/shared/locations.mjs';
+import { canShareLocation, insideNigeria } from '/shared/locations.mjs';
 
 export function createLocationSharing({ client, device, view, makeId = () => crypto.randomUUID(), now = Date.now, serverNow = Date.now }) {
   const headers = { locationClient: makeId() };
@@ -24,7 +24,7 @@ export function createLocationSharing({ client, device, view, makeId = () => cry
   function validFix(fix) {
     const value = { lat: fix.coords.latitude, lng: fix.coords.longitude, accuracy: fix.coords.accuracy,
       capturedAt: Math.round(serverNow() - Math.max(0, now() - fix.timestamp)) };
-    if (!insideAbuja(value)) throw new Error('Your location is outside the Abuja preview area.');
+    if (!insideNigeria(value)) throw new Error('Your location is outside Nigeria.');
     if (!Number.isFinite(value.accuracy) || value.accuracy <= 0 || value.accuracy > 200) throw new Error('Wait for a more accurate GPS fix (within 200 metres).');
     if (!Number.isFinite(fix.timestamp) || now() - fix.timestamp >= 30_000) throw new Error('GPS returned an old location. Request a fresh fix.');
     return value;

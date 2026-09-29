@@ -3,9 +3,14 @@ export function createApiClient({ fetchImpl = globalThis.fetch, makeKey = () => 
   let csrfToken = null, generation = 0, mode = '', writes = 0;
   const retryKeys = new Map();
 
-  async function request(path, { method = 'GET', data, key, callClient, locationClient, availabilityClient } = {}) {
+  async function request(path, { method = 'GET', data, key, callClient, locationClient, availabilityClient, signal } = {}) {
     if (!path.startsWith('/api/')) throw new Error('Use a same-origin API path.');
     const epoch = generation;
+    const abort = new AbortController(), cancel = () => abort.abort();
+    const timeout = setTimeout(cancel, path === '/api/driver/application/face-check' ? 45_000
+      : path.startsWith('/api/events?') ? 30_000 : path.startsWith('/api/vehicle-checks/') || /\/api\/eats\/stores\/[a-f0-9-]{36}\/photo$/.test(path) ? 35_000 : 12_000);
+    signal?.addEventListener('abort', cancel, { once: true });
+    if (signal?.aborted) cancel();
     if (method === 'POST') writes++;
     let response, body;
     try {
@@ -15,12 +20,12 @@ export function createApiClient({ fetchImpl = globalThis.fetch, makeKey = () => 
           ...(availabilityClient ? { 'X-Availability-Client': availabilityClient } : {}),
           ...(method === 'POST' ? { 'Content-Type': 'application/json',
             ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}), ...(key ? { 'Idempotency-Key': key } : {}) } : {}) },
-        ...(method === 'POST' ? { body: JSON.stringify(data ?? {}) } : {}), signal: AbortSignal.timeout(path.startsWith('/api/vehicle-checks/') || /\/api\/eats\/stores\/[a-f0-9-]{36}\/photo$/.test(path) ? 35_000 : 12_000) });
+        ...(method === 'POST' ? { body: JSON.stringify(data ?? {}) } : {}), signal: abort.signal });
       body = await response.json();
     } catch {
       if (epoch !== generation) throw changedSession();
       throw new Error('Connection interrupted. Check that Taxi Ai is running, then retry the same action.');
-    } finally { if (method === 'POST') writes--; }
+    } finally { clearTimeout(timeout); signal?.removeEventListener('abort', cancel); if (method === 'POST') writes--; }
     if (epoch !== generation) throw changedSession();
     if (!response.ok) {
       const error = new Error(body.error?.message ?? 'Unable to complete this request.');

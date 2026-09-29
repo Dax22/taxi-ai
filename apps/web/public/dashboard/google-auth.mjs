@@ -26,10 +26,10 @@ export function createGoogleSignIn({ client, view, navigate }) {
       catch { enabled = false; }
       view.available(enabled);
     },
-    async start() {
+    async start(intent = null) {
       if (!enabled || busy) return;
       busy = true; view.busy(true); view.error('');
-      try { const result = await client.request('/api/auth/google/start', { method: 'POST', data: {} }); navigate(googleDestination(result.redirectUrl)); }
+      try { const result = await client.request('/api/auth/google/start', { method: 'POST', data: intent ? { intent } : {} }); navigate(googleDestination(result.redirectUrl)); }
       catch (error) { view.error(error.message); busy = false; view.busy(false); }
     },
   });

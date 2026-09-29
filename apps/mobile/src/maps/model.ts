@@ -13,7 +13,7 @@ export function coordinate(point: MapPoint): Coordinate {
     throw new Error('This map position is unavailable.');
   return { latitude: point.lat, longitude: point.lng };
 }
-/** Abuja preview bounds do not cross the date line. Padding keeps pins away from map edges. */
+/** Nigeria route bounds do not cross the date line. Padding keeps pins away from map edges. */
 export function mapRegion(points: MapPoint[]): Region | null {
   if (!points.length) return null;
   const values = points.map(coordinate);

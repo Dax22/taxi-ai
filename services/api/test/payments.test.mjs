@@ -7,7 +7,7 @@ import { createApplication } from '../src/application.mjs';
 import { createPaymentsService } from '../src/modules/payments/service.mjs';
 import { createPaymentsRepository } from '../src/modules/payments/repository.mjs';
 import { simulatePayment } from '../src/infrastructure/simulated-payment-provider.mjs';
-import { transaction } from '../src/infrastructure/database.mjs';
+import { asAsyncDatabase } from '../src/infrastructure/async-database.mjs';
 import { tokens } from '../src/infrastructure/tokens.mjs';
 import { createAudit } from '../src/infrastructure/audit.mjs';
 import { saveSnapshot } from '../src/infrastructure/database-snapshot.mjs';
@@ -23,9 +23,9 @@ async function startedTrip(customer, driver, amountKobo = 470001) {
   ride = await step(customer, ride, 'accept', { offerId: ride.negotiation.currentOffer.id });
   ride = await step(customer, ride, 'confirm'); const pickupPin = ride.trip.pickupPin;
   ride = await step(driver, ride, 'depart'); ride = await step(driver, ride, 'arrive');
-  return step(driver, ride, 'start', { pickupPin });
+  return (await step(driver, ride, 'start', { pickupPin }));
 }
-async function complete(customer, driver, amountKobo) { return step(driver, await startedTrip(customer, driver, amountKobo), 'complete'); }
+async function complete(customer, driver, amountKobo) { return (await step(driver, await startedTrip(customer, driver, amountKobo), 'complete')); }
 async function payment(customer, ride) {
   const result = await customer.send(path(ride)); assert.equal(result.status, 200, JSON.stringify(result.body)); return result.body.payment;
 }
@@ -229,21 +229,22 @@ test('server verifies simulator identity, reference, amount, currency and status
   const h = await harness(t), { customer, driver } = await participants(h);
   const ride = await complete(customer, driver), current = await start(customer, await payment(customer, ride));
   const app = createApplication({ db: h.db });
-  const options = { repository: createPaymentsRepository(h.db), getAccount: app.accounts.profile, tripForPayment: app.rides.paymentContext,
-    unitOfWork: (fn) => transaction(h.db, fn), tokens, audit: createAudit(h.db), clock: () => (TEST_NOW + 1_000), allowSimulation: true };
+  const db = asAsyncDatabase(h.db);
+  const options = { repository: createPaymentsRepository(db), getAccount: app.accounts.profile, tripForPayment: app.rides.paymentContext,
+    unitOfWork: (fn) => db.transaction(fn), tokens, audit: createAudit(db), clock: () => (TEST_NOW + 1_000), allowSimulation: true };
   const input = { userId: customer.user.id, rideId: ride.id, attemptId: current.attempt.id, action: 'simulate', key: randomUUID(),
     data: { expectedVersion: current.version, outcome: 'success' } };
   for (const override of [{ reference: 'unknown' }, { amountKobo: 1 }, { amountKobo: '470001' }, { currency: 'USD' },
     { mode: 'live' }, { provider: 'paystack' }, { status: 'processing' }]) {
     const payments = createPaymentsService({ ...options, simulate: (data) => ({ ...simulatePayment(data), ...override }) });
-    assert.throws(() => payments.command(input), (error) => error.code === 'PAYMENT_VERIFICATION_FAILED');
+    (await assert.rejects(async () => (await payments.command(input)), (error) => error.code === 'PAYMENT_VERIFICATION_FAILED'));
     assert.deepEqual(await payment(customer, ride), current);
   }
   assert.equal(h.db.prepare('SELECT count(*) AS n FROM payment_receipts').get().n, 0);
   const disabled = createPaymentsService({ ...options, simulate: simulatePayment, allowSimulation: false });
-  assert.equal(disabled.get(customer.user.id, ride.id).settings.canSimulate, false);
-  assert.throws(() => disabled.command(input), (error) => error.code === 'FORBIDDEN');
-  assert.equal(createPaymentsService({ ...options, simulate: simulatePayment }).command(input).payment.status, 'paid');
+  assert.equal((await disabled.get(customer.user.id, ride.id)).settings.canSimulate, false);
+  (await assert.rejects(async () => (await disabled.command(input)), (error) => error.code === 'FORBIDDEN'));
+  assert.equal((await createPaymentsService({ ...options, simulate: simulatePayment }).command(input)).payment.status, 'paid');
 });
 
 test('driver totals cover all saved trips with exact large values and stable private pagination', async (t) => {

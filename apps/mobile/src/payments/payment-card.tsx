@@ -27,8 +27,8 @@ export function PaymentCard({ rideId }: { rideId: string }) {
   }, [client, rideId]);
   useFocusEffect(useCallback(() => {
     active.current = true; const run = ++epoch.current; void refresh();
-    const poll = setInterval(() => { if (run === epoch.current) void refresh(); }, 10000);
-    return () => { active.current = false; epoch.current++; clearInterval(poll); pending.current = null; };
+    const changed = client.subscribeChanges(() => { if (run === epoch.current) return refresh(); });
+    return () => { active.current = false; epoch.current++; changed(); pending.current = null; };
   }, [refresh]));
   async function runCommand(command: Pending) {
     if (inFlight.current || !active.current) return;

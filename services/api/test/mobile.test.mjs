@@ -45,7 +45,7 @@ test('refresh replay commits revocation of that device family, including two sim
   const h = await harness(t), web = h.client(); await web.register('replay');
   const one = await login(h, web.user.email), two = await login(h, web.user.email, 'Other phone');
   const data = { refreshToken: one.credentials.refreshToken };
-  const outcomes = await Promise.all([send(h, '/auth/refresh', { data }), send(h, '/auth/refresh', { data })]);
+  const outcomes = await Promise.all([(send(h, '/auth/refresh', { data })), (send(h, '/auth/refresh', { data }))]);
   assert.deepEqual(outcomes.map((r) => r.status).sort(), [200,401]);
   const rotated = outcomes.find((r) => r.status === 200).body.credentials;
   assert.equal((await send(h, '/session', { token: rotated.accessToken })).status, 401);
@@ -65,7 +65,7 @@ test('mode and account scope cannot grant privileges or expose another person’
   assert.equal((await send(h, '/admin/drivers', { token })).status, 404);
   assert.equal((await send(h, '/auth/login', { data: { email: admin.user.email, password: PASSWORD, deviceName: 'Staff phone' } })).status, 403);
   const vehicle = { model: 'Toyota Corolla', plate: 'TEST-MOBILE' }, key = randomUUID();
-  const enroll = () => send(h, '/account/driver-profile', { token, data: { vehicle }, headers: { 'Idempotency-Key': key } });
+  const enroll = async () => (await send(h, '/account/driver-profile', { token, data: { vehicle }, headers: { 'Idempotency-Key': key } }));
   assert.equal((await enroll()).body.replayed, false); assert.equal((await enroll()).body.replayed, true);
   const profile = (await send(h, '/session', { token })).body.user;
   parseAccount(profile); assert.deepEqual(profile.capabilities, ['customer','driver']);
@@ -84,7 +84,7 @@ test('per-device revocation, idempotent logout and staff promotion invalidate al
   assert.equal((await send(h, '/session', { token: first.credentials.accessToken })).status, 401);
   for (let i = 0; i < 2; i++) assert.equal((await send(h, '/auth/logout', { data: { refreshToken: first.credentials.refreshToken } })).status, 200);
   assert.equal((await send(h, '/session', { token: second.credentials.accessToken })).status, 200);
-  bootstrapAdmin(h.db, web.user.email);
+  (await bootstrapAdmin(h.db, web.user.email));
   assert.equal((await send(h, '/session', { token: second.credentials.accessToken })).status, 401);
   assert.equal((await send(h, '/auth/refresh', { data: { refreshToken: second.credentials.refreshToken } })).status, 401);
 });

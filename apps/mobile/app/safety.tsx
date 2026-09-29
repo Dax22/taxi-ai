@@ -1,3 +1,4 @@
+import { MonitoringCard } from '../src/safety/monitoring-card';
 import { useEffect, useState } from 'react';
 import { Alert, Share } from 'react-native';
 import { Text } from '../src/ui/typography';
@@ -22,10 +23,11 @@ function SafetyScreen({id,mismatch,vehicleCheckId}:{id:string;mismatch:boolean;v
  async function share(){if(c.snapshot().loading||c.snapshot().uncertain)return;setError('');const owner=user?.id;await c.refresh();const latest=c.snapshot();if(client.account()?.id!==owner||latest.stale||latest.busy||latest.loading||latest.uncertain||!latest.token||!latest.trip?.share?.active||latest.trip.share.expiresAt<=latest.trip.serverNow)return;
  try{await Share.share({message:`Private Taxi Ai test-trip link. Anyone with this link and preview access can view the trip until it ends or the link expires. ${client.safetyLink(latest.token)}`});}catch{setError('Could not open sharing. The link was not confirmed sent.');}}
  return <Screen><Heading title="Trip safety" subtitle="For customers and drivers"/>
- <Card><Text style={styles.h2}>SOS and emergency help</Text><Text style={styles.body}>This preview can save an incident for administrator review. It does not call emergency services or send alerts to trusted contacts. No staffed response is promised. If you are in immediate danger, contact local emergency services directly.</Text></Card>
+ <Card><Text style={styles.h2}>Manual SOS preview</Text><Text style={styles.body}>This manual report saves an incident for administrator review. It does not call emergency services or send contact alerts. The separate monitoring panel below handles consent-based automatic alerts. No staffed response is promised. If you are in immediate danger, contact local emergency services directly.</Text></Card>
  <Notice message={s.error||error}/><Notice message={s.notice}/><Button title="Refresh safety details" secondary busy={s.loading} disabled={s.busy} onPress={()=>void c.refresh()}/>
  {s.uncertain&&<Button title="Retry the same safety action" busy={s.busy} onPress={()=>void c.retry()}/>}
- <Card><Text style={styles.h2}>Trusted contacts</Text><Text style={styles.small}>Up to three contacts. Numbers are unverified and notifications are unavailable. Editing or removing a contact cancels their pending test alerts.</Text>
+ <MonitoringCard key={`${id}:${user?.id}`} id={id} contacts={s.contacts}/>
+ <Card><Text style={styles.h2}>Trusted contacts</Text><Text style={styles.small}>Up to three contacts. Numbers are unverified. Choose recipients separately in Safety monitoring. Editing or removing a contact cancels pending alerts.</Text>
  {s.contacts.map(contact=><Card key={contact.id}><Text style={styles.body}>{contact.name} · {contact.phone}</Text><Button title={`Edit ${contact.name}`} secondary disabled={locked} onPress={()=>{setEditing(contact);setName(contact.name);setPhone(contact.phone);}}/><Button title={`Remove ${contact.name}`} secondary disabled={locked} onPress={()=>confirm('Remove contact','Remove this saved contact?',`contacts/${contact.id}/remove`,{expectedVersion:contact.version})}/></Card>)}
  <Field label="Contact name" value={name} maxLength={80} editable={!locked} onChangeText={setName}/><Field label="Phone including country code" value={phone} maxLength={16} keyboardType="phone-pad" editable={!locked} onChangeText={setPhone}/>
  <Button title={editing?'Save contact changes':'Add trusted contact'} disabled={locked||!name.trim()||!phone.trim()||!editing&&s.contacts.length>=3} onPress={()=>{const data={name:name.trim(),phone:phone.trim(),...(editing?{expectedVersion:editing.version}:{})};void c.command(editing?`contacts/${editing.id}/edit`:'contacts',data).then(()=>{if(!c.snapshot().error){setEditing(null);setName('');setPhone('');}});}}/>

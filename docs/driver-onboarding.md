@@ -2,8 +2,9 @@
 
 Taxi Ai now has a private application workflow for the driver and the first local
 administrator. It records manual review evidence and controls access to new test
-rides. It does not perform identity-provider, licence-database, biometric or
-vehicle-registry checks. Use fictional documents while this remains a development
+rides. Optional [automatic selfie-to-licence face comparison](driver-face-checks.md)
+is available through a configured AWS provider on web, iOS and Android. It does
+not perform liveness, licence-database or vehicle-registry checks. Use fictional documents while this remains a development
 preview. The five document categories are product review requirements, not a
 statement of all requirements for operating in Nigeria.
 
@@ -17,7 +18,9 @@ statement of all requirements for operating in Nigeria.
    document and vehicle photo showing the plate. Only PNG/JPEG images up to 2 MiB
    each are accepted. The licence, vehicle document and insurance need expiry
    dates. Photos have no expiry date.
-4. Click **Submit for review**. The submitted version is locked. **Reopen for
+4. If automatic comparison is enabled, consent and choose **Compare my face**
+   after saving the documents. A completed result, including one needing staff
+   review, is required. Click **Submit for review**. The submitted version is locked. **Reopen for
    changes** withdraws it; reopening an approved application pauses new rides.
 5. Sign into the separate administrator account in another browser profile or
    private session. Use the [first-administrator setup](../README.md#set-up-the-first-administrator-when-needed)
@@ -54,7 +57,7 @@ and document IDs/hashes/expiry dates are recorded together in an application eve
 Downloads prove access, not that a person performed a meaningful check. The prototype
 trusts the administrator’s attestations; it cannot establish document authenticity.
 
-Expiry is the exclusive end of the stated day in Abuja (UTC+1). Eligibility is
+Expiry is the exclusive end of the stated day in Nigeria (WAT, UTC+1). Eligibility is
 checked on going online, availability updates and matching, selecting a new request,
 customer booking confirmation, and starting a trip. Expiry removes online
 availability. A trip already in progress can still finish; history, earnings,
@@ -87,6 +90,7 @@ queue. Only opening the authorised private application returns them.
 | `POST /api/driver/application/save` | Applicant; `expectedVersion`, `details` |
 | `POST /api/driver/application/upload` | Applicant; version, kind, name, MIME type, base64 and expiry |
 | `POST /api/driver/application/remove` | Applicant; version and current document ID |
+| `POST /api/driver/application/face-check` | Applicant; version, explicit consent and configured provider; private comparison result |
 | `POST /api/driver/application/submit` | Applicant; complete/current evidence and version |
 | `POST /api/driver/application/reopen` | Applicant; withdraw/reopen the exact version |
 | `GET /api/admin/drivers` | Administrator; up to 100 application summaries, submitted first |
@@ -96,9 +100,11 @@ queue. Only opening the authorised private application returns them.
 
 Every command requires a session, same-origin/CSRF validation and an idempotency
 key. Uploads require the driver role before reading the larger body, and session
-validity is checked again after the body arrives. Commands run synchronously in
-one transaction with evidence, state, events and retry keys. There are no external
-calls inside that transaction. Stale/conflicting commands return 409; neither the
+validity is checked again after the body arrives. Ordinary commands run in
+one transaction with evidence, state, events and retry keys. Face comparison
+reserves an attempt, calls its provider outside the transaction, then finalizes
+only current evidence. There are no external calls inside a transaction.
+Stale/conflicting commands return 409; neither the
 API nor client automatically applies a review to a newer application version.
 
 ## Upload and storage limits

@@ -8,7 +8,7 @@ import { openDatabase, SCHEMA_VERSION } from '../src/infrastructure/database.mjs
 import { createApplication } from '../src/application.mjs';
 import { tokens } from '../src/infrastructure/tokens.mjs';
 
-test('schema seven preserves paid receipts and active trips, snapshots vehicles and never invents verification evidence', (t) => {
+test('schema seven preserves paid receipts and active trips, snapshots vehicles and never invents verification evidence', async (t) => {
   const dir = mkdtempSync(join(tmpdir(), 'taxi-onboarding-upgrade-')); t.after(() => rmSync(dir, { recursive: true, force: true }));
   const path = join(dir, 'old.sqlite'), old = new DatabaseSync(path); old.exec('PRAGMA foreign_keys=ON');
   for (const name of ['001_initial', '002_chat', '003_trip_lifecycle', '004_voice_calls', '005_locations', '006_matching', '007_payments']) {
@@ -47,15 +47,15 @@ test('schema seven preserves paid receipts and active trips, snapshots vehicles 
   try {
     assert.ok(SCHEMA_VERSION >= 9);
     for (const name of names) {
-      const rows = db.prepare(`SELECT * FROM ${name}`).all().map((row) => { if (name === 'rides') { assert.equal(row.vehicle_category, 'standard'); delete row.driver_snapshot_json; delete row.vehicle_category; } return row; });
+      const rows = db.prepare(`SELECT * FROM ${name}`).all().map((row) => { if (name === 'rides') { assert.equal(row.vehicle_category, 'standard'); delete row.driver_snapshot_json; delete row.vehicle_category; assert.equal(row.dispatch_region, `sample:${row.pickup_id}`); delete row.dispatch_region; } return row; });
       assert.equal(JSON.stringify(rows), before.get(name), name);
     }
-    const app = createApplication({ db, clock: () => 2000, allowSimulation: true }), user = app.accounts.sessionFor('legacy-session').user;
+    const app = createApplication({ db, clock: () => 2000, allowSimulation: true }), user = (await app.accounts.sessionFor('legacy-session')).user;
     assert.equal(user.driver.status, 'approved'); assert.equal(user.driver.eligibility.eligible, false); assert.equal(user.driver.eligibility.reviewStatus, 'draft');
     for (const table of ['driver_documents', 'driver_application_events', 'driver_document_reads']) assert.equal(db.prepare(`SELECT count(*) AS n FROM ${table}`).get().n, 0);
-    const saved = app.rides.get(user, active); assert.equal(saved.driver.vehicle.plate, 'OLD-001');
-    assert.throws(() => app.rides.mutate({ userId: driverId, key: tokens.id(), action: 'claim', id: available, data: { expectedVersion: 0 } }), { code: 'DRIVER_NOT_ELIGIBLE' });
-    const finished = app.rides.mutate({ userId: driverId, key: tokens.id(), action: 'complete', id: active, data: { expectedVersion: saved.version } });
+    const saved = (await app.rides.get(user, active)); assert.equal(saved.driver.vehicle.plate, 'OLD-001');
+    (await assert.rejects(async () => (await app.rides.mutate({ userId: driverId, key: tokens.id(), action: 'claim', id: available, data: { expectedVersion: 0 } })), { code: 'DRIVER_NOT_ELIGIBLE' }));
+    const finished = (await app.rides.mutate({ userId: driverId, key: tokens.id(), action: 'complete', id: active, data: { expectedVersion: saved.version } }));
     assert.equal(finished.ride.status, 'completed'); assert.equal(db.prepare('SELECT payload_json FROM payment_receipts WHERE ride_id=?').get(completed).payload_json, receipt);
     assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(), []);
   } finally { db.close(); }

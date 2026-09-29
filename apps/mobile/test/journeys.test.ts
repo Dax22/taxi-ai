@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { setImmediate as settle } from 'node:timers/promises';
 import { JourneyController } from '../src/journeys/controller.ts';
 import { WorkController } from '../src/work/controller.ts';
-import { parseJourney, parseWork, parseThread, parseNotifications } from '../../../packages/shared/src/mobile-journeys.mjs';
+import { parseJourney, parseWork, parseDeclinedOffer, parseThread, parseNotifications } from '../../../packages/shared/src/mobile-journeys.mjs';
 import type { Journey, JourneyResult, Work, Availability, AvailabilityResult, Position, Thread } from '../../../packages/shared/src/mobile-journeys.mjs';
 const id='00000000-0000-4000-8000-000000000001',env={apiVersion:1 as const,serverNow:1_000_000};
 const base:Journey={id,version:1,status:'negotiating',vehicleCategory:'standard',delivery:null,pickup:'Wuse',destination:'Maitama',suggestedFareKobo:450000,fareKobo:null,expiresAt:null,canCancel:true,driver:null,
@@ -83,6 +83,7 @@ function work(){
   const api:ConstructorParameters<typeof WorkController>[0]={work:async()=>structuredClone(value),online:async(_client,data,key)=>{calls.push({kind:'online',data,key});value={...value,availability:lease};return{...env,availability:lease};},
     offline:async(_client,id,key)=>{calls.push({kind:'offline',data:id,key});value={...value,availability:null};return{...env,availability:{...lease,online:false,owned:false,expiresAt:null,reason:'offline'}};},
     heartbeat:async(_client,id,sequence,position)=>{calls.push({kind:'heartbeat',data:{id,sequence,position}});return{...env,availability:{...lease,sequence}};},
+    declineOffer:async(offerId,key)=>{calls.push({kind:'decline',data:offerId,key});value={...value,available:value.available.filter((job)=>job.offer?.id!==offerId)};return{...env,declined:true,replayed:false};},
     journeyCommand:async(_id,action,data,key)=>{calls.push({kind:action,data,key});return{...env,ride:{...base,mode:'work'}};}};
   const position:Position={lat:9.08,lng:7.4,accuracy:10,capturedAt:env.serverNow};
   const f={api,calls,position,value,set:(w:Partial<Work>)=>{value={...value,...w};}};
@@ -106,6 +107,52 @@ test('uncertain job claim retains the original job and key across refresh and bl
   f.api.journeyCommand=async(_id,action,data,key)=>{f.calls.push({kind:action,data,key});throw new Error('Lost confirmation');};await c.claim(job);assert.equal(c.snapshot().uncertain,true);
   f.set({available:[],availability:null});await c.refresh();await c.online('wuse-ii');assert.equal(f.calls.length,1);
   f.api.journeyCommand=async(_id,action,data,key)=>{f.calls.push({kind:action,data,key});return{...env,ride:{...base,mode:'work'}};};await c.retry();assert.deepEqual(f.calls[0],f.calls[1]);assert.equal(c.snapshot().journey?.id,id);
+});
+
+const dispatchJob={id,version:1,vehicleCategory:'standard' as const,pickup:'Wuse',destination:'Maitama',suggestedFareKobo:450000,expiresAt:env.serverNow+300000,approximateDistanceKm:2,
+  offer:{id:'00000000-0000-4000-8000-000000000002',expiresAt:env.serverNow+20000,pickupEtaMinutes:4,etaSource:'road' as const}};
+
+test('ride acceptance pins the timed offer and version; expiry and replaced offers are blocked before a timer tick',async()=>{
+  const f=work();let now=0;f.set({available:[dispatchJob],availability:lease});
+  const c=new WorkController(f.api,()=>id,async()=>f.position,()=>now);c.activate();await settle();
+  const shown=c.snapshot().work!.available[0];now=20000;await c.claim(shown);await c.decline(shown);assert.equal(f.calls.length,0);
+  now=0;f.set({available:[{...dispatchJob,offer:{...dispatchJob.offer,id:'00000000-0000-4000-8000-000000000003'}}]});await c.refresh();
+  await c.claim(shown);await c.decline(shown);assert.equal(f.calls.length,0);
+  await c.claim(c.snapshot().work!.available[0]);assert.deepEqual(f.calls[0].data,{expectedVersion:1,offerId:'00000000-0000-4000-8000-000000000003'});
+});
+
+test('lost timed acceptance retries the exact offer after expiry and retains explicit fare negotiation',async()=>{
+  const f=work();let now=0;f.set({available:[dispatchJob],availability:lease});
+  const c=new WorkController(f.api,()=>id,async()=>f.position,()=>now);c.activate();await settle();
+  f.api.journeyCommand=async(_id,action,data,key)=>{f.calls.push({kind:action,data,key});throw new Error('Lost reply');};
+  const shown=c.snapshot().work!.available[0];await c.claim(shown);shown.offer!.id='00000000-0000-4000-8000-000000000003';now=30000;
+  f.api.journeyCommand=async(_id,action,data,key)=>{f.calls.push({kind:action,data,key});return{...env,ride:{...base,mode:'work'}};};
+  await c.retry();assert.deepEqual(f.calls[0],f.calls[1]);assert.equal(c.snapshot().journey?.status,'negotiating');
+  assert.deepEqual(f.calls[0].data,{expectedVersion:1,offerId:dispatchJob.offer.id});
+});
+
+test('declining keeps availability and an interrupted decline retries one key without claiming another request',async()=>{
+  const f=work();f.set({available:[dispatchJob],availability:lease});
+  const c=new WorkController(f.api,()=>id,async()=>f.position);c.activate();await settle();
+  f.api.declineOffer=async(offerId,key)=>{f.calls.push({kind:'decline',data:offerId,key});throw new Error('Lost reply');};
+  await c.decline(dispatchJob);assert.equal(c.snapshot().uncertain,true);await c.claim(dispatchJob);assert.equal(f.calls.length,1);
+  f.api.declineOffer=async(offerId,key)=>{f.calls.push({kind:'decline',data:offerId,key});f.set({available:[]});return{...env,declined:true,replayed:true};};
+  await c.retry();await settle();assert.deepEqual(f.calls[0],f.calls[1]);assert.equal(c.snapshot().availability?.online,true);
+  assert.equal(c.snapshot().work?.available.length,0);assert.equal(c.snapshot().journey,null);
+});
+
+test('work contracts accept old servers and reject misleading ETAs, invalid deadlines and multiple timed offers',()=>{
+  const old=work().value;parseWork(old);
+  const timed={...old,settings:{...old.settings,dispatchMode:'sequential'},available:[dispatchJob]};parseWork(timed);
+  for(const offer of [{...dispatchJob.offer,id:'bad'},{...dispatchJob.offer,expiresAt:dispatchJob.expiresAt+1},
+    {...dispatchJob.offer,pickupEtaMinutes:0},{...dispatchJob.offer,pickupEtaMinutes:1.5},{...dispatchJob.offer,etaSource:'sample'},
+    {...dispatchJob.offer,etaSource:'distance_fallback'},{...dispatchJob.offer,etaSource:'traffic_guaranteed'}]) {
+    assert.throws(()=>parseWork({...timed,available:[{...dispatchJob,offer}]}));
+  }
+  parseWork({...timed,available:[{...dispatchJob,offer:{...dispatchJob.offer,etaSource:'distance_fallback',pickupEtaMinutes:null}}]});
+  assert.throws(()=>parseWork({...timed,available:[dispatchJob,{...dispatchJob,id:'00000000-0000-4000-8000-000000000003'}]}));
+  assert.throws(()=>parseWork({...timed,settings:{...timed.settings,dispatchMode:'made_up'}}));
+  parseDeclinedOffer({...env,declined:true,replayed:false});assert.throws(()=>parseDeclinedOffer({...env,declined:false,replayed:false}));
 });
 
 test('runtime contracts reject private code leakage, malformed chat, invalid categories and arbitrary notification titles',()=>{

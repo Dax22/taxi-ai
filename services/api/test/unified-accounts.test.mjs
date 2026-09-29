@@ -1,4 +1,4 @@
-import { removeEatsFixtureTables } from './migration-fixtures.mjs';
+import { includeExpectedStaffOwners, removeEatsFixtureTables } from './migration-fixtures.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -18,7 +18,7 @@ async function change(client, ride, action, extra = {}) {
 async function agree(customer, driver) {
   let ride = await claimRide(driver, await requestRide(customer));
   ride = await change(driver, ride, 'offers', { amountKobo: 470001 });
-  return change(customer, ride, 'accept', { offerId: ride.negotiation.currentOffer.id });
+  return (await change(customer, ride, 'accept', { offerId: ride.negotiation.currentOffer.id }));
 }
 const call = (client, path, data = {}, key = randomUUID()) => client.send(path, { method: 'POST', data,
   headers: { 'X-Call-Client': 'aaaa1111-1111-4111-8111-111111111111', 'Idempotency-Key': key } });
@@ -68,7 +68,7 @@ test('capabilities cannot be forged through mode selection, signup, enrollment o
   await addDriver(customer);
   assert.equal((await customer.send('/api/admin/drivers')).status, 403);
   const separate = await harness(t), applicant = separate.client(); await applicant.register('applicant'); await addDriver(applicant);
-  assert.throws(() => bootstrapAdmin(separate.db, applicant.user.email), { code: 'INVALID_ACCOUNT' });
+  (await assert.rejects(async () => (await bootstrapAdmin(separate.db, applicant.user.email)), { code: 'INVALID_ACCOUNT' }));
 });
 
 test('the assigned passenger and driver retain distinct powers even when both have driver profiles', async (t) => {
@@ -159,8 +159,9 @@ test('schema nine gains capabilities without changing any existing records, revi
   const h = await harness(t, { persistent: true }), { customer, driver, admin } = await participants(h);
   const pending = h.client(); await pending.register('legacy-pending', 'driver');
   const ride = await agree(customer, driver); await change(customer, ride, 'confirm');
-  const tables = h.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT IN ('account_capabilities','account_commands','device_sessions','device_refresh_tokens','driver_vehicle_selections') ORDER BY name").all().map((row) => row.name).filter((name) => !['account_notifications','push_registrations','push_jobs'].includes(name));
+  const tables = h.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT IN ('account_capabilities','account_commands','device_sessions','device_refresh_tokens','driver_vehicle_selections') ORDER BY name").all().map((row) => row.name).filter((name) => !['account_notifications','push_registrations','push_jobs','dispatch_commands','dispatch_offers','dispatch_journeys','account_revisions','worker_leases'].includes(name));
   const snapshot = new Map(tables.map((name) => [name, h.db.prepare(`SELECT * FROM ${name}`).all()]));
+  includeExpectedStaffOwners(h.db, snapshot);
   removeEatsFixtureTables(h.db); h.db.exec('DROP TABLE vehicle_photo_checks; DROP TABLE push_jobs; DROP TABLE push_registrations; DROP TABLE account_notifications; ALTER TABLE driver_availability DROP COLUMN native_session_id; DROP TABLE delivery_orders; ALTER TABLE rides DROP COLUMN vehicle_category; DROP TABLE driver_vehicle_selections; DROP TABLE device_refresh_tokens; DROP TABLE device_sessions; DROP TABLE account_commands; DROP TABLE account_capabilities; PRAGMA user_version=9;');
   await h.restart();
   for (const name of tables) assert.deepEqual(h.db.prepare(`SELECT * FROM ${name}`).all(), snapshot.get(name), name);
@@ -173,4 +174,53 @@ test('schema nine gains capabilities without changing any existing records, revi
   await h.restart();
   assert.equal(h.db.prepare('SELECT count(*) AS n FROM account_capabilities').get().n, 5);
   assert.deepEqual(h.db.prepare('PRAGMA foreign_key_check').all(), []);
+});
+
+
+test('Kemmy setup is deterministic, authenticated and persists across web/native sessions and restart', async (t) => {
+  const h = await harness(t, { persistent: true }), customer = h.client(), outsider = h.client();
+  await customer.register('kemmy-owner');
+  await outsider.register('kemmy-outsider');
+
+  let setup = (await customer.send('/api/account/kemmy-setup')).body;
+  assert.equal(setup.assistant, 'Kemmy');
+  assert.equal(setup.deterministic, true);
+  assert.equal(setup.nextStep, 'welcome');
+  assert.equal(setup.autoOpen, true);
+  assert.equal(setup.completedAt, null);
+
+  setup = (await customer.post('/api/account/kemmy-setup', { action: 'dismiss' })).body;
+  assert.equal(setup.autoOpen, false);
+  assert.equal(setup.nextStep, 'welcome');
+  setup = (await customer.post('/api/account/kemmy-setup', { action: 'resume' })).body;
+  assert.equal(setup.autoOpen, true);
+
+  setup = (await customer.post('/api/account/kemmy-setup', { action: 'start' })).body;
+  assert.equal(setup.nextStep, 'email');
+  setup = (await customer.post('/api/account/kemmy-setup', { action: 'email-later' })).body;
+  assert.equal(setup.nextStep, 'experience');
+  setup = (await customer.post('/api/account/kemmy-setup', { action: 'experience', value: 'customer' })).body;
+  assert.equal(setup.nextStep, 'notifications');
+  setup = (await customer.post('/api/account/kemmy-setup', { action: 'notifications', value: 'in_app' })).body;
+  assert.equal(setup.nextStep, 'safety');
+  setup = (await customer.post('/api/account/kemmy-setup', { action: 'safety', value: 'later' })).body;
+  assert.equal(setup.nextStep, 'finish');
+  setup = (await customer.post('/api/account/kemmy-setup', { action: 'complete' })).body;
+  assert.equal(setup.nextStep, 'complete');
+  assert.equal(setup.autoOpen, false);
+  assert.ok(Number.isSafeInteger(setup.completedAt));
+
+  assert.equal((await outsider.send('/api/account/kemmy-setup')).body.nextStep, 'welcome');
+  assert.equal(h.db.prepare('SELECT count(*) AS n FROM account_kemmy_setup').get().n, 1);
+
+  await h.restart();
+  setup = (await customer.send('/api/account/kemmy-setup')).body;
+  assert.equal(setup.nextStep, 'complete');
+  assert.equal(setup.experience, 'customer');
+
+  setup = (await customer.post('/api/account/kemmy-setup', { action: 'restart' })).body;
+  assert.equal(setup.nextStep, 'email');
+  assert.equal(setup.completedAt, null);
+  assert.equal(setup.experience, null);
+  assert.equal((await customer.post('/api/account/kemmy-setup', { action: 'experience', value: 'admin' })).body.error.code, 'INVALID_INPUT');
 });

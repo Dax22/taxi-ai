@@ -19,8 +19,8 @@ export function VehiclePhotoCheck({rideId}:{rideId:string}) {
   const [photo,setPhoto]=useState<VehiclePhoto|null>(null),[choosing,setChoosing]=useState(false),[error,setError]=useState('');
   const alive=useRef(false),selection=useRef(0);
   useFocusEffect(useCallback(()=>{alive.current=true;return()=>{alive.current=false;selection.current++;setPhoto(null);setChoosing(false);setError('');};},[controller]));
-  useFocusEffect(useCallback(()=>{if(blocked)return;void controller.activate();const poll=setInterval(()=>void controller.load(true),5000);
-    return()=>{clearInterval(poll);controller.pause();};},[controller,blocked]));
+  useFocusEffect(useCallback(()=>{if(blocked)return;void controller.activate();const changed=client.subscribeChanges(()=>controller.load(true));
+    return()=>{changed();controller.pause();};},[controller,blocked]));
   async function choose(camera:boolean){
     if(choosing||s.pending||blocked)return;
     const epoch=++selection.current,owner=user?.id;setChoosing(true);setError('');setPhoto(null);

@@ -1,4 +1,4 @@
-import { insideAbuja } from '/shared/locations.mjs';
+import { insideNigeria } from '/shared/locations.mjs';
 import { POSITION_MS } from '/shared/matching.mjs';
 
 /** Separate consent and browser lifetime from location sharing on a booked trip. */
@@ -32,7 +32,7 @@ export function createAvailabilityController({ client, device, view, onStatus = 
     const age = now() - value.timestamp;
     const point = { lat: value.coords.latitude, lng: value.coords.longitude, accuracy: value.coords.accuracy,
       capturedAt: Math.round(serverNow() - Math.max(0, age)) };
-    if (!insideAbuja(point)) throw new Error('Your location is outside the Abuja preview area. Local testing can use a sample area.');
+    if (!insideNigeria(point)) throw new Error('Your location is outside Nigeria. Local testing can use a sample area.');
     if (!Number.isFinite(point.accuracy) || point.accuracy <= 0 || point.accuracy > 200) throw new Error('Wait for a location accurate to within 200 metres.');
     if (!Number.isFinite(age) || age >= POSITION_MS || age < -5000) throw new Error('A fresh device location is required.');
     return point;

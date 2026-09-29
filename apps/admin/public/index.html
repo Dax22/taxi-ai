@@ -10,16 +10,21 @@
   <a class="skip-link" href="#main">Skip to dashboard</a>
   <section id="sign-in" class="sign-in" hidden aria-labelledby="sign-in-title">
     <div class="sign-in-story"><a class="brand" href="/"><img src="/assets/taxi-ai-mark.svg" alt="" width="46" height="46"><span>Taxi Ai<small>OPERATIONS</small></span></a>
-      <div><p class="eyebrow">ABUJA / ONE CONNECTED CITY</p><h1>A clearer view.<br>Of every journey.</h1><p>Accounts, journeys and the numbers behind them.<br>Your Taxi Ai operations workspace.</p></div>
+      <div><p class="eyebrow">NIGERIA / CONNECTED JOURNEYS</p><h1>A clearer view.<br>Of every journey.</h1><p>Accounts, journeys and the numbers behind them.<br>Your Taxi Ai operations workspace.</p></div>
       <p class="story-footer">Built around people. Powered by insight.</p>
     </div>
-    <div class="sign-in-card"><p class="eyebrow">STAFF ACCESS</p><h2 id="sign-in-title">Welcome back.</h2><p class="muted">Sign in with your administrator account.</p>
+    <div class="sign-in-card"><p class="eyebrow">STAFF ACCESS</p><h2 id="sign-in-title">Welcome back.</h2><p class="muted">Sign in with your staff account.</p>
       <p id="auth-error" class="error" role="alert"></p>
       <form id="login-form"><label for="email">Email address</label><input id="email" type="email" autocomplete="username" maxlength="254" required>
         <label for="password">Password</label><input id="password" type="password" autocomplete="current-password" minlength="12" maxlength="128" required>
         <button id="login-submit" class="button primary" type="submit">Open dashboard <span aria-hidden="true">↗</span></button>
-      </form><p class="small muted">Administrator access is assigned separately. Customer and driver accounts cannot open this workspace.</p><a class="text-link" href="/app">Back to the Taxi Ai app ↗</a>
+      </form><p class="small muted">Staff access is assigned separately. Your role controls the records and actions available in this workspace.</p><a class="text-link" href="/app">Back to the Taxi Ai app ↗</a>
     </div>
+  </section>
+  <section id="mfa-card" class="mfa-card sign-in-card" hidden aria-labelledby="mfa-title">
+    <p class="eyebrow">PROTECT YOUR STAFF ACCESS</p><h2 id="mfa-title">Authenticator verification</h2>
+    <p id="mfa-description" class="muted"></p><p id="mfa-error" class="error" role="alert"></p><div id="mfa-content"></div>
+    <a class="text-link" href="/admin">Back to workspace</a><button id="mfa-logout" class="button quiet" type="button">Sign out</button>
   </section>
   <div id="loading" class="loading-screen" role="status">Opening Taxi Ai Operations…</div>
   <div id="workspace" class="workspace" hidden>
@@ -30,19 +35,28 @@
         <a href="/admin/accounts" data-section="accounts"><span aria-hidden="true">◎</span>Accounts</a>
         <a href="/admin/trips" data-section="trips"><span aria-hidden="true">↗</span>Trips</a>
         <a href="/admin/analytics" data-section="analytics"><span aria-hidden="true">▥</span>Analytics</a>
+        <a href="/admin/operations" data-section="operations"><span aria-hidden="true">◷</span>Live operations</a>
+        <a href="/admin/announcements" data-section="announcements"><span aria-hidden="true">◉</span>Announcements</a>
+        <a href="/admin/finance" data-section="finance"><span aria-hidden="true">₦</span>Finance centre</a>
+        <a href="/admin/compliance" data-section="compliance"><span aria-hidden="true">✓</span>Driver compliance</a>
+        <a href="/admin/demand" data-section="demand"><span aria-hidden="true">▦</span>Demand analytics</a>
+        <a href="/admin/coverage" data-section="coverage"><span aria-hidden="true">◇</span>Coverage map</a>
+        <a href="/admin/cases" data-section="cases"><span aria-hidden="true">▤</span>Support & safety</a>
+        <a href="/admin/staff" data-section="staff"><span aria-hidden="true">♙</span>Staff access</a>
+        <a href="/admin/audit" data-section="audit"><span aria-hidden="true">≡</span>Staff activity</a>
       </nav>
-      <div class="sidebar-bottom"><p class="nav-caption">REVIEW WORKSPACE</p><a class="text-link" href="/app">Applications & support ↗</a>
+      <div id="legacy-review" class="sidebar-bottom"><p class="nav-caption">REVIEW WORKSPACE</p><a class="text-link" href="/app">Applications & support ↗</a>
         <p><a class="text-link" href="/eats?screen=review">Eats restaurant review ↗</a></p>
-        <div class="workspace-label"><span class="city-dot" aria-hidden="true"></span><div><strong>Abuja, Nigeria</strong><small>Development preview</small></div></div>
+        <div class="workspace-label"><span class="city-dot" aria-hidden="true"></span><div><strong>Nigeria</strong><small>Development preview</small></div></div>
       </div>
     </aside>
-    <div class="main-shell"><header class="topbar"><p>Taxi Ai <span>/</span> <strong id="breadcrumb">Overview</strong></p><div class="staff"><span id="staff-name"></span><button id="logout" class="button quiet" type="button">Sign out</button></div></header>
+    <div class="main-shell"><header class="topbar"><p>Taxi Ai <span>/</span> <strong id="breadcrumb">Overview</strong></p><div class="staff"><span id="staff-name"></span><button id="security" class="button quiet" type="button">Security</button><button id="logout" class="button quiet" type="button">Sign out</button></div></header>
       <main id="main" tabindex="-1"><div class="preview-banner"><strong>DEVELOPMENT PREVIEW</strong><span>Payment amounts are simulations. No money has moved.</span></div>
-        <div class="page-heading"><div><p id="page-eyebrow" class="eyebrow">ABUJA OPERATIONS</p><h1 id="page-title">Overview</h1><p id="page-description" class="muted"></p></div><button id="refresh" class="button secondary" type="button">↻ Refresh</button></div>
-        <div class="update-line"><p id="updated" role="status"></p><span>All times in Abuja · WAT</span></div>
-        <p id="page-error" class="error" role="alert"></p><div id="page-content"></div>
+        <div class="page-heading"><div><p id="page-eyebrow" class="eyebrow">NIGERIA OPERATIONS</p><h1 id="page-title">Overview</h1><p id="page-description" class="muted"></p></div><button id="refresh" class="button secondary" type="button">↻ Refresh</button></div>
+        <div class="update-line"><p id="updated" role="status"></p><span>All times in Nigeria · WAT</span></div>
+        <p id="page-error" class="error" role="alert"></p><div id="action-feedback" role="status" hidden><p id="action-message"></p><button id="retry-action" class="button primary" type="button">Retry the same action</button></div><div id="page-content"></div>
       </main>
-      <footer class="footer">Taxi Ai Operations <span>One city. Every journey accounted for.</span></footer>
+      <footer class="footer">Taxi Ai Operations <span>Across Nigeria. Every journey accounted for.</span></footer>
     </div>
   </div>
   <noscript><p>Enable JavaScript to sign in to the operations dashboard.</p></noscript>

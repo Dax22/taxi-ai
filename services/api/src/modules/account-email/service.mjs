@@ -10,72 +10,72 @@ export function createAccountEmailService({ repository, accounts, mail, password
   let running = false, stopped = false;
   const settings = () => ({ enabled: mail.enabled });
   const enabled = () => check(mail.enabled, 'EMAIL_DISABLED', 'Account emails are not available yet. Please try again once email delivery is enabled.');
-  function status(userId) {
-    const state = accounts.emailState(userId);
+  async function status(userId) {
+    const state = (await accounts.emailState(userId));
     check(state, 'FORBIDDEN', 'Use your customer or driver account.');
     return { enabled: mail.enabled, verified: state.verified, email: state.email };
   }
-  function allowance(email, purpose) {
+  async function allowance(email, purpose) {
     try {
       // Apply the same private mailbox limits to existing and unknown addresses.
-      rateLimiter.consume(`email-minute:${purpose}:${email}`, clock(), 1, 60_000);
-      rateLimiter.consume(`email-hour:${purpose}:${email}`, clock(), 3, HOUR);
+      (await rateLimiter.consume(`email-minute:${purpose}:${email}`, clock(), 1, 60_000));
+      (await rateLimiter.consume(`email-hour:${purpose}:${email}`, clock(), 3, HOUR));
       return true;
     } catch (error) { if (error.code === 'RATE_LIMITED') return false; throw error; }
   }
-  function enqueue(userId, purpose, email) {
-    return unitOfWork(() => {
-      if (repository.countJobs() >= 1000) return false;
-      repository.enqueue(tokens.id(),userId,purpose,email,clock()); return true;
-    });
+  async function enqueue(userId, purpose, email) {
+    return (await unitOfWork(async () => {
+      if ((await repository.countJobs()) >= 1000) return false;
+      (await repository.enqueue(tokens.id(),userId,purpose,email,clock())); return true;
+    }));
   }
-  function requestReset(data) {
+  async function requestReset(data) {
     fields(data, ['email']); const email = emailAddress(data.email); enabled();
-    const allowed = allowance(email, 'reset');
-    const state = accounts.emailStateForAddress(email);
-    if (allowed && state?.passwordEnabled) enqueue(state.id,'reset',email);
+    const allowed = (await allowance(email, 'reset'));
+    const state = (await accounts.emailStateForAddress(email));
+    if (allowed && state?.passwordEnabled) (await enqueue(state.id,'reset',email));
     return accepted(); // No account existence, delivery result or token is exposed.
   }
-  function requestVerification(userId, data = {}) {
+  async function requestVerification(userId, data = {}) {
     fields(data, []); enabled();
-    const state = accounts.emailState(userId);
+    const state = (await accounts.emailState(userId));
     check(state, 'FORBIDDEN', 'Use your customer or driver account.');
-    if (allowance(state.email,'verify') && !state.verified) enqueue(userId,'verify',state.email);
+    if ((await allowance(state.email,'verify')) && !state.verified) (await enqueue(userId,'verify',state.email));
     return accepted();
   }
-  function onRegistered(userId) { if (mail.enabled) requestVerification(userId); }
-  function readToken(value, purpose) {
+  async function onRegistered(userId) { if (mail.enabled) (await requestVerification(userId)); }
+  async function readToken(value, purpose) {
     if (typeof value !== 'string' || !/^[a-f0-9]{64}$/.test(value)) return invalid();
-    const hash = tokens.digest(value), record = repository.token(hash,purpose,clock());
-    const state = record && accounts.emailState(record.userId);
+    const hash = tokens.digest(value), record = (await repository.token(hash,purpose,clock()));
+    const state = record && (await accounts.emailState(record.userId));
     if (!state || record.email !== state.email || record.credentialHash !== state.passwordHash
       || (purpose === 'reset' && !state.passwordEnabled)) return invalid();
     return { hash, record, state };
   }
-  function verify(data) {
+  async function verify(data) {
     fields(data, ['token']);
-    return unitOfWork(() => {
-      const { hash, record } = readToken(data.token,'verify');
-      accounts.confirmEmail(record.userId, record.email);
-      repository.deleteToken(hash);
-      audit.record(record.userId,'account.email_verified',record.userId,clock());
+    return (await unitOfWork(async () => {
+      const { hash, record } = (await readToken(data.token,'verify'));
+      (await accounts.confirmEmail(record.userId, record.email));
+      (await repository.deleteToken(hash));
+      (await audit.record(record.userId,'account.email_verified',record.userId,clock()));
       return { verified: true };
-    });
+    }));
   }
   async function reset(data) {
     fields(data, ['token','password']); const password = passwordInput(data.password);
-    readToken(data.token,'reset');
+    (await readToken(data.token,'reset'));
     const passwordHash = await passwords.hash(password);
-    return unitOfWork(() => {
+    return (await unitOfWork(async () => {
       // Re-read after hashing: expiry, a parallel reset or a role change may win.
-      const { record } = readToken(data.token,'reset');
-      accounts.replacePassword(record.userId,record.email,record.credentialHash,passwordHash);
-      accounts.confirmEmail(record.userId,record.email);
-      repository.deleteUserTokens(record.userId); repository.deleteUserJobs(record.userId);
-      if (mail.enabled) repository.enqueue(tokens.id(),record.userId,'changed',record.email,clock());
-      audit.record(record.userId,'account.password_reset',record.userId,clock());
+      const { record } = (await readToken(data.token,'reset'));
+      (await accounts.replacePassword(record.userId,record.email,record.credentialHash,passwordHash));
+      (await accounts.confirmEmail(record.userId,record.email));
+      (await repository.deleteUserTokens(record.userId)); (await repository.deleteUserJobs(record.userId));
+      if (mail.enabled) (await repository.enqueue(tokens.id(),record.userId,'changed',record.email,clock()));
+      (await audit.record(record.userId,'account.password_reset',record.userId,clock()));
       return { reset: true };
-    });
+    }));
   }
   async function deliverPending() {
     if (!mail.enabled || running || stopped) return;
@@ -83,39 +83,39 @@ export function createAccountEmailService({ repository, accounts, mail, password
     try {
       // Bound each sweep. SMTP happens outside transactions and request latency.
       for (let index = 0; index < 2 && !stopped; index++) {
-        const delivery = unitOfWork(() => {
-          repository.sweep(clock());
-          const job = repository.due(clock()); if (!job) return null;
-          const state = accounts.emailState(job.userId);
+        const delivery = (await unitOfWork(async () => {
+          (await repository.sweep(clock()));
+          const job = (await repository.due(clock())); if (!job) return null;
+          const state = (await accounts.emailState(job.userId));
           if (!state || state.email !== job.email || job.createdAt + HOUR <= clock() || job.attempts >= 3
             || (job.purpose === 'verify' && state.verified) || (job.purpose === 'reset' && !state.passwordEnabled)) {
-            repository.deleteJob(job.id); return { skipped: true };
+            (await repository.deleteJob(job.id)); return { skipped: true };
           }
           const lease = tokens.generate(), token = job.purpose === 'changed' ? null : tokens.generate();
-          repository.claim(job.id,lease,clock());
-          if (token) repository.putToken({ hash: tokens.digest(token), userId: job.userId, purpose: job.purpose,
-            email: state.email, credentialHash: state.passwordHash, expiresAt: clock() + (job.purpose === 'reset' ? HOUR / 2 : 24 * HOUR) });
+          if (!await repository.claim(job.id,lease,clock())) return { skipped: true };
+          if (token) (await repository.putToken({ hash: tokens.digest(token), userId: job.userId, purpose: job.purpose,
+            email: state.email, credentialHash: state.passwordHash, expiresAt: clock() + (job.purpose === 'reset' ? HOUR / 2 : 24 * HOUR) }));
           return { job, lease, token };
-        });
+        }));
         if (!delivery) break;
         if (delivery.skipped) continue;
         const { job, lease, token } = delivery;
         let sent = false;
         try { await mail.send({ email: job.email, purpose: job.purpose, token }); sent = true; } catch { /* Never log provider errors, recipients or links. */ }
         if (stopped) break;
-        unitOfWork(() => {
-          if (!repository.owns(job.id,lease)) return;
+        (await unitOfWork(async () => {
+          if (!(await repository.owns(job.id,lease))) return;
           if (sent) {
-            repository.deleteJob(job.id); audit.record(job.userId,'account.email_accepted',job.userId,clock());
+            (await repository.deleteJob(job.id)); (await audit.record(job.userId,'account.email_accepted',job.userId,clock()));
           } else {
-            if (token) repository.deleteToken(tokens.digest(token));
-            if (job.attempts >= 2) { repository.deleteJob(job.id); audit.record(job.userId,'account.email_failed',job.userId,clock()); }
-            else repository.retry(job.id, clock() + (job.attempts + 1) * 60_000);
+            if (token) (await repository.deleteToken(tokens.digest(token)));
+            if (job.attempts >= 2) { (await repository.deleteJob(job.id)); (await audit.record(job.userId,'account.email_failed',job.userId,clock())); }
+            else (await repository.retry(job.id, clock() + (job.attempts + 1) * 60_000));
           }
-        });
+        }));
       }
     } finally { running = false; }
   }
   return Object.freeze({ settings, status, requestReset, requestVerification, onRegistered, verify, reset, deliverPending,
-    stop() { stopped = true; mail.close(); } });
+    async stop() { stopped = true; (await mail.close()); } });
 }

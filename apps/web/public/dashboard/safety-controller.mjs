@@ -1,5 +1,5 @@
 /** Account- and trip-scoped safety state. Share secrets live only in this controller. */
-export function createSafetyController({ client, view, origin, copy }) {
+export function createSafetyController({ client, view, origin, copy, monitor }) {
   let user = null, ride = null, contacts = null, trip = null, queue = null, incident = null, settings = null;
   let selected = null, filter = 'open', before = null, secret = null, generation = 0, polling = null, pending = false;
   let error = '', message = '';
@@ -7,13 +7,14 @@ export function createSafetyController({ client, view, origin, copy }) {
   const render = () => view.render({ user, ride, contacts, trip, queue, incident, settings, filter, before, pending, error, message,
     shareUrl: secret && trip?.share?.id === secret.id && trip.share.active ? `${origin}/trip-share#${secret.token}` : '' });
   function reset() {
+    monitor?.reset();
     generation++; user = ride = contacts = trip = queue = incident = settings = selected = secret = polling = null;
     filter = 'open'; before = null; pending = false; error = message = ''; view.reset(); render();
   }
   function context(account, journey) {
     const nextRide = account?.role === 'admin' ? null : journey;
     if (user?.id !== account?.id || user?.role !== account?.role || ride?.id !== nextRide?.id) reset();
-    user = account; ride = nextRide; render();
+    user = account; ride = nextRide; void monitor?.context(account,nextRide); render();
   }
   function verify(result) {
     if (result?.viewerId !== user?.id) {

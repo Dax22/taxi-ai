@@ -86,8 +86,8 @@ test('unread markers are per participant, monotonic and bounded; messages pagina
   const path = pathFor(ride);
   const app = createApplication({ db: h.db, clock: () => TEST_NOW });
   // Exercise the real service with enough records to cross an HTTP page boundary.
-  for (let n = 1; n <= 105; n++) app.chat.send({ userId: customer.user.id, rideId: ride.id,
-    key: randomUUID(), data: { body: `Message ${n}` } });
+  for (let n = 1; n <= 105; n++) (await app.chat.send({ userId: customer.user.id, rideId: ride.id,
+    key: randomUUID(), data: { body: `Message ${n}` } }));
   const first = (await driver.send(path)).body;
   assert.equal(first.messages.length, 100); assert.equal(first.hasMore, true);
   assert.equal(first.nextAfter, 100); assert.equal(first.unread, 105);
@@ -162,8 +162,8 @@ test('the prototype message cap bounds storage and marks a full conversation rea
   const { customer, driver } = await participants(h);
   const ride = await claimRide(driver, await requestRide(customer));
   const app = createApplication({ db: h.db, clock: () => TEST_NOW });
-  for (let n = 1; n <= 500; n++) app.chat.send({ userId: customer.user.id, rideId: ride.id,
-    key: randomUUID(), data: { body: `Message ${n}` } });
+  for (let n = 1; n <= 500; n++) (await app.chat.send({ userId: customer.user.id, rideId: ride.id,
+    key: randomUUID(), data: { body: `Message ${n}` } }));
   assert.equal((await customer.post(`${pathFor(ride)}/messages`, { body: 'Over the limit' })).body.error.code, 'MESSAGE_LIMIT');
   assert.equal((await driver.send(pathFor(ride))).body.canSend, false);
 });

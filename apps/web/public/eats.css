@@ -16,8 +16,27 @@
 @media(max-width:900px) { .food-restaurants { grid-template-columns:repeat(2,minmax(0,1fr)); }.food-shopping { grid-template-columns:minmax(0,1fr) 320px; }.food-management { grid-template-columns:1fr; } }
 @media(max-width:650px) { .food-shell { width:calc(100% - 32px); }.food-header { padding:18px 16px; }.food-header .brand { font-size:20px; }.food-header>.text-link { font-size:12px; }.food-hero { padding:26px; }.food-filters,.food-shopping,.food-restaurants { grid-template-columns:1fr; }.food-cart { position:static; }.food-nav button { padding:10px 14px; font-size:13px; }.food-nav button:last-child { margin-left:0; }.food-menu-row { align-items:start; flex-wrap:wrap; }.food-footer { flex-direction:column; } }
 @media(prefers-reduced-motion:reduce) { html { scroll-behavior:auto; } }
+/* Neighbourhood storefront: original food art, generous type and clear order controls. */
+.food-hero { min-height:470px; background:#ffde72 url('/assets/eats-nigerian-table.jpg') center/cover no-repeat; padding:44px; }
+.food-hero-copy { position:relative; z-index:1; width:52%; }
+.food-hero h1 { font-size:clamp(38px,4.8vw,64px); max-width:600px; }
+.food-hero-copy>p { max-width:410px; }.food-location { max-width:390px; padding:12px 18px 18px; margin-top:22px; border-radius:20px; background:rgba(255,255,255,.94); box-shadow:0 6px 24px #70571912; }.food-location label { margin-top:6px; }.food-location input,.food-location select { min-height:44px; }.food-art-note { position:absolute; bottom:14px; right:20px; border-radius:8px; padding:3px 8px; background:#fff9; font-size:10px; }
+.food-discovery-bar,.food-section-heading { display:flex; flex-wrap:wrap; gap:16px; justify-content:space-between; align-items:center; margin:22px 0; }.food-discovery-bar>p { color:#606762; font-size:14px; margin-right:auto; }.food-toggle { display:flex; background:#e8eae2; border-radius:28px; padding:4px; gap:4px; }.food-toggle button { min-height:42px; padding:10px 24px; border:0; border-radius:24px; background:transparent; font:inherit; font-weight:650; }.food-toggle [aria-pressed="true"] { background:#171a18; color:#fff; }.food-cuisine-chips { display:flex; gap:12px; overflow-x:auto; padding:4px 0 18px; }.food-cuisine-chips button { flex:0 0 auto; min-width:102px; display:grid; gap:8px; align-content:center; text-align:center; padding:18px 14px; min-height:106px; background:#fff; border:1px solid #dfe3dc; border-radius:22px; font:inherit; font-weight:600; }.food-cuisine-chips button>span:first-child { font-size:30px; }.food-cuisine-chips [aria-pressed="true"] { border:2px solid #171a18; background:#fff0bd; }.food-filters { grid-template-columns:2fr 1fr 1fr 1fr; gap:14px; }.food-section-heading h2 { font-size:32px; letter-spacing:-.03em; margin-bottom:0; }.food-section-heading .eyebrow { margin:0 0 8px; }.food-section-heading label { margin:0; }
+.food-restaurant { transition:transform .15s ease; }.food-restaurant:hover { transform:translateY(-3px); }.food-cover { min-height:184px; overflow:hidden; }.food-cover img { width:100%; height:200px; object-fit:cover; }.food-meal-photo { width:132px; height:112px; border-radius:16px; object-fit:cover; flex-shrink:0; }.food-menu-row>div:first-child { order:0; }.food-menu-row .food-quantity { order:2; }.food-menu-row>.food-meal-photo { order:1; }.food-kitchen-type { color:#465443; font-size:12px; font-weight:650; }.food-seller-banner { display:flex; justify-content:space-between; align-items:center; gap:32px; padding:32px; border-radius:24px; background:#e6ecdf; margin:30px 0; }.food-seller-banner h2 { max-width:520px; font-size:30px; letter-spacing:-.03em; }.food-seller-banner p { max-width:600px; }.food-seller-banner>.button { flex-shrink:0; }.food-empty { grid-column:1/-1; padding:40px; background:white; border:1px dashed #b7c0af; border-radius:24px; }.food-empty p { max-width:640px; }.food-stock { color:#68705e; font-size:12px; margin:8px 0; }.food-photo-edit { max-width:220px; height:140px; object-fit:cover; border-radius:12px; }
+@media(max-width:900px) { .food-hero-copy { width:62%; }.food-hero { padding:30px; }.food-filters { grid-template-columns:1fr 1fr; }.food-seller-banner { align-items:start; flex-direction:column; gap:8px; }.food-menu-row .food-quantity { flex-basis:100%; justify-content:flex-end; } }
+@media(max-width:650px) { .food-hero { padding:22px; padding-top:186px; background-size:auto 390px; background-position:right top; background-repeat:no-repeat; }.food-hero-copy { width:100%; background:#ffde72; border-radius:18px; padding-top:6px; }.food-hero h1 { font-size:42px; }.food-hero-copy>p { max-width:none; }.food-location { max-width:none; margin-top:16px; }.food-art-note { top:150px; bottom:auto; }.food-discovery-bar { gap:12px; }.food-discovery-bar>p { display:none; }.food-toggle button { padding:10px 20px; }.food-cuisine-chips { margin-right:-16px; }.food-cuisine-chips button { min-width:86px; padding:14px 12px; min-height:96px; }.food-filters { gap:12px; }.food-filters>div:first-child { grid-column:1/-1; }.food-section-heading h2 { font-size:28px; }.food-cover img { height:210px; }.food-seller-banner { padding:24px; }.food-seller-banner h2 { font-size:26px; }.food-menu-row { flex-wrap:wrap; }.food-menu-row>div:first-child { flex-basis:50%; }.food-meal-photo { width:94px; height:94px; }.food-empty { padding:24px; } }
+@media(prefers-reduced-motion:reduce) { .food-restaurant { transition:none; }.food-restaurant:hover { transform:none; } }
+/* The location-first meal builder shares dish and checkout state with mobile. */
+.food-meal-hero { background-image:linear-gradient(90deg,#ffdb68 0%,#ffdb68eb 28%,#ffdb6800 66%),url('/assets/eats-nigerian-table.jpg'); }
+.food-meal-hero .food-hero-copy { width:48%; }.food-meal-hero .food-location { max-width:430px; }.food-location .button { width:100%; margin-top:16px; }
+.food-destination { display:flex; justify-content:space-between; align-items:center; gap:20px; padding:18px 24px; border:1px solid #dfe3dc; background:white; border-radius:18px; margin:24px 0; }.food-destination p { margin:5px 0 0; overflow-wrap:anywhere; }.food-destination button { flex-shrink:0; }
+.food-craving { margin:30px 0 16px; }.food-craving>label { font-size:clamp(24px,3vw,34px); letter-spacing:-.03em; margin-bottom:16px; }.food-search-line { display:flex; gap:12px; }.food-search-line input { flex:1; border-radius:30px; padding:16px 22px; min-height:58px; }.food-search-line button { border-radius:30px!important; min-width:150px; }.food-meal-suggestions { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:12px; }.food-meal-suggestions .button { border-radius:24px; }
+.food-meal-layout { display:grid; grid-template-columns:minmax(0,1fr) 350px; align-items:start; gap:28px; margin:24px 0; }.food-meal-layout .food-section-heading { margin-top:0; }.food-meal-layout .food-section-heading h2 { font-size:28px; }.food-dishes { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; margin:20px 0; }.food-dish { border:1px solid #dfe3dc; border-radius:22px; background:white; overflow:hidden; display:flex; flex-direction:column; }.food-dish-photo { width:100%; height:175px; object-fit:cover; }.food-dish-info { padding:20px; display:flex; flex-direction:column; flex:1; }.food-dish-info h3 { margin-top:10px; }.food-dish-info p { margin:0 0 8px; }.food-dish-seller { font-weight:600; font-size:14px; }.food-dish-bottom { display:flex; gap:10px; align-items:center; flex-wrap:wrap; justify-content:space-between; margin-top:auto; padding-top:12px; }.food-dish-bottom strong { font-size:20px; }.food-dish-bottom .food-quantity { gap:8px; }.food-dish-bottom .food-quantity button { width:40px; min-height:40px; padding:0; }
+.food-meal-basket { position:sticky; top:20px; }.food-meal-basket>.button,.food-meal-basket section>.button { width:100%; margin-top:16px; }.food-basket-group { padding:16px 0; border-bottom:1px solid #dfe3dc; }.food-basket-group h3 { font-size:16px; }.food-basket-line { display:flex; align-items:center; gap:10px; justify-content:space-between; }.food-basket-line p { font-size:14px; }.food-basket-line .button { padding:8px 10px; min-height:44px; font-size:12px; }.food-subtotal { font-weight:700; }#food-meal-checkout { margin-top:22px; border-top:2px solid #171a18; padding-top:12px; }.food-kitchen-browser { margin:30px 0; border:1px solid #dfe3dc; padding:22px; border-radius:22px; }.food-kitchen-browser summary { cursor:pointer; font-weight:650; min-height:44px; align-content:center; }.food-area-options { display:grid; grid-template-columns:1fr 1fr; gap:4px 16px; }
+@media(max-width:1050px) { .food-dishes { grid-template-columns:1fr; }.food-meal-hero .food-hero-copy { width:58%; } }
+@media(max-width:760px) { .food-meal-layout { grid-template-columns:1fr; }.food-meal-basket { position:static; }.food-dishes { grid-template-columns:repeat(2,minmax(0,1fr)); }.food-destination { align-items:start; }.food-destination .button { min-width:100px; } }
+@media(max-width:650px) { .food-meal-hero { background-image:url('/assets/eats-nigerian-table.jpg'); background-size:auto 360px; }.food-meal-hero .food-hero-copy { width:100%; padding:14px 4px 0; }.food-meal-hero h1 { font-size:40px; }.food-search-line { flex-direction:column; }.food-search-line button { min-height:48px; }.food-dishes { grid-template-columns:1fr; }.food-dish-photo { height:210px; }.food-destination { padding:18px; flex-wrap:wrap; }.food-kitchen-browser { padding:18px; }.food-area-options { grid-template-columns:1fr; } }
 
-/* Customer discovery: location first, then dish-led search. */
 .food-editorial { position:relative; isolation:isolate; min-height:370px; border-radius:30px; overflow:hidden; background:#f7ead6; margin:16px 0 24px; box-shadow:0 22px 48px #31241412; }
 .food-editorial img { position:absolute; inset:0; z-index:-2; width:100%; height:100%; object-fit:cover; object-position:center; }
 .food-editorial::after { content:""; position:absolute; inset:0; z-index:-1; background:linear-gradient(90deg,#faf6ef 0%,#faf6efee 26%,#faf6ef00 59%); }
@@ -41,42 +60,9 @@
 .food-seller-steps strong { font-size:13px; color:#f4c349; }
 .food-seller-steps span { font-size:13px; line-height:1.4; font-weight:650; }
 .food-seller-copy>p.food-seller-preview { margin:24px 0 0; color:#c2cfc3; font-size:13px; line-height:1.5; }
-.food-delivery-gate { padding:28px 32px; border-color:#e9ddc8; box-shadow:0 12px 34px #3728130b; }
-.food-delivery-gate h2 { margin:4px 0 5px; }
-.food-delivery-gate p { margin:0; color:#5b615c; }
-.food-delivery-gate .eyebrow { color:#a56b08; font-size:11px; font-weight:800; letter-spacing:.1em; }
-.food-delivery-fields { display:grid; grid-template-columns:minmax(0,2fr) minmax(180px,1fr); gap:16px; align-items:end; }
-.food-delivery-gate .button { margin-top:16px; }
-.food-delivery-confirmed { margin-top:14px!important; color:#315839!important; font-weight:650; }
-.food-filters { grid-template-columns:minmax(0,2fr) minmax(180px,1fr); margin-top:28px; }
-.food-filters label { color:#5d625b; font-size:12px; letter-spacing:.07em; font-weight:800; }
-#food-search { min-height:58px; padding-left:18px; font-size:17px; border-color:#d8c99f; box-shadow:0 8px 22px #7a5c2310; }
-.food-section-heading { display:flex; align-items:end; justify-content:space-between; gap:16px; margin:34px 0 16px; }
-.food-section-heading h2 { margin:4px 0 0; }
-.food-section-heading p { margin:0; color:#5f655d; }
-.food-section-heading .eyebrow { font-size:11px; color:#aa710b; letter-spacing:.12em; font-weight:800; }
-.food-dishes { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:18px; }
-.food-dish { padding:0; margin:0; overflow:hidden; }
-.food-dish>img,.food-dish-art { display:block; width:100%; height:185px; object-fit:cover; background:#f5e8cf; }
-.food-dish-art { background-image:url('/assets/eats-nigerian-table.jpg'); background-size:cover; background-position:70% center; }
-.food-dish-body { padding:18px; }
-.food-dish-body h3 { margin:0 0 5px; }
-.food-dish-body .food-price { display:block; font-size:17px; margin:12px 0; }
-.food-dish-body .button { width:100%; }
-.food-menu-photo { float:left; width:88px; height:88px; margin:0 14px 4px 0; object-fit:cover; border-radius:13px; }
-.food-store-menu-row>div:first-child,.food-review-menu-item { display:flex; align-items:center; gap:12px; }
-.food-store-menu-row>div:first-child p { margin:0; }
-.food-store-menu-row .food-actions { margin:0; }
-.food-store-photo { display:block; width:76px; height:76px; flex:none; object-fit:cover; border-radius:12px; }
-.food-seller-location { color:#5e655f; font-size:13px; margin:4px 0 0; }
-.food-restaurants { margin-bottom:26px; }
-.food-restaurant-info .food-seller-location { margin:0; }
 .food-card[hidden],.food-editorial[hidden],#food-discovery-content[hidden],#food-shopping[hidden] { display:none; }
-@media(max-width:900px) { .food-dishes { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 @media(max-width:900px) { .food-seller-intro { grid-template-columns:minmax(0,1fr) 38%; }.food-seller-intro img { object-position:68% center; } }
 @media(max-width:650px) {
-  .food-header-links { gap:5px 14px; }
-  .food-header-links .text-link { font-size:12px; }
   .food-seller-intro { display:flex; flex-direction:column; border-radius:24px; }
   .food-seller-copy { padding:28px 24px; }
   .food-seller-intro h1 { font-size:39px; }
@@ -89,10 +75,4 @@
   .food-editorial-copy { padding:28px 24px 16px; }
   .food-editorial h1 { font-size:38px; }
   .food-editorial-copy>p:not(.eyebrow) { font-size:15px; }
-  .food-delivery-gate { padding:22px; }
-  .food-delivery-fields,.food-filters,.food-dishes { grid-template-columns:1fr; }
-  .food-dish { display:grid; grid-template-columns:112px minmax(0,1fr); }
-  .food-dish>img,.food-dish-art { height:100%; min-height:150px; }
-  .food-dish-body { padding:14px; }
-  .food-section-heading { display:block; }
 }

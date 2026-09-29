@@ -1,9 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { setImmediate as flush } from 'node:timers/promises';
 import { readDriverFile } from '../src/onboarding/document-file.ts';
 import { detailsFromDraft, draftFromDetails } from '../src/onboarding/form.ts';
 import { parseOnboarding } from '../../../packages/shared/src/mobile-contracts.mjs';
 import { MAX_DRIVER_FILE_BYTES } from '../../../packages/shared/src/driver-onboarding.mjs';
+import type { DriverOnboarding, DriverFaceCheck } from '../../../packages/shared/src/mobile-contracts.mjs';
+import { canCompareDriverFace, pollDriverFaceCheck } from '../src/onboarding/face-check.ts';
 const details = { legalName: 'Fictional Driver', phone: '+2348000000000', licenceNumber: 'TEST-LICENCE',
   vehicle: { make: 'Toyota', model: 'Corolla', year: 2020, colour: 'Silver', plate: 'TEST-123' } };
 const application = { driverId: 'driver',status:'draft',version:1,busy:false,details,vehicle:details.vehicle,
@@ -63,4 +66,68 @@ test('native vehicle applications retain category and require a bounded delivery
   assert.equal(detailsFromDraft(draft).vehicle.payloadKg, 10); assert.equal(detailsFromDraft(draft).vehicle.category, 'motorcycle');
   for (const payloadKg of ['', '0', '21', 'abc']) assert.throws(() => detailsFromDraft({ ...draft, payloadKg }));
   assert.equal(draftFromDetails({ ...details, vehicle: detailsFromDraft(draft).vehicle }).payloadKg, '10');
+});
+
+test('native face comparison requires explicit consent, current saved evidence and an editable application', () => {
+  const check: DriverFaceCheck = { available: true, provider: 'aws_rekognition', status: 'not_started', reason: null, checkedAt: null,
+    similarity: null, threshold: 95, consentVersion: 'driver-face-match-v1', retryAfter: null };
+  const app = parseOnboarding({ apiVersion: 1, serverNow: 1000, application: { ...application, faceCheck: check, documents: [
+    { id: 'selfie', kind: 'profile_photo', name: 'selfie.jpg', mimeType: 'image/jpeg', sizeBytes: 100, expiresOn: null },
+    { id: 'licence', kind: 'driving_licence', name: 'licence.jpg', mimeType: 'image/jpeg', sizeBytes: 100, expiresOn: '2099-12-31' },
+  ] } });
+  const options = { consent: true, now: 1000 };
+  assert.equal(canCompareDriverFace(app, options), true);
+  assert.equal(canCompareDriverFace(app, { ...options, consent: false }), false);
+  assert.equal(canCompareDriverFace(app, { ...options, blocked: true }), false, 'pending requests, stale details and unsaved changes block comparison');
+  for (const patch of [{ faceCheck: undefined }, { documents: [] }, { busy: true }, { status: 'submitted' as const }, { status: 'approved' as const },
+    { faceCheck: { ...check, available: false } }, { faceCheck: { ...check, status: 'pending' as const } },
+    { faceCheck: { ...check, status: 'matched' as const } }, { faceCheck: { ...check, retryAfter: 1001 } }]) {
+    assert.equal(canCompareDriverFace({ ...app, ...patch }, options), false);
+  }
+  assert.equal(canCompareDriverFace({ ...app, faceCheck: { ...check, status: 'needs_review', retryAfter: 1000 } }, options), true);
+  assert.equal(app.status, 'draft'); assert.equal(app.eligibility.eligible, false);
+});
+
+test('native face results preserve review states and reject malformed evidence without breaking older servers', () => {
+  const check: DriverFaceCheck = { available: true, provider: 'aws_rekognition', status: 'needs_review', reason: 'low_similarity', checkedAt: 1000,
+    similarity: 54, threshold: 95, consentVersion: 'driver-face-match-v1', retryAfter: 61000 };
+  const parse = (faceCheck: unknown): DriverOnboarding => parseOnboarding({ apiVersion: 1, serverNow: 1000, application: { ...application, faceCheck } });
+  assert.equal(parse(undefined).faceCheck, undefined);
+  assert.equal(parse(check).faceCheck?.status, 'needs_review');
+  assert.equal(parse({ ...check, threshold: null }).faceCheck?.threshold, null);
+  for (const patch of [{ available: 'yes' }, { status: 'approved' }, { similarity: 101 }, { similarity: NaN }, { threshold: -1 },
+    { checkedAt: 'now' }, { retryAfter: -1 }, { reason: { rawProviderError: true } }, { consentVersion: null }]) {
+    assert.throws(() => parse({ ...check, ...patch }), /incompatible response/);
+  }
+});
+
+test('pending comparison recovery reads serially, pauses during edits and never publishes after leaving the account', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const app = parseOnboarding({ apiVersion: 1, serverNow: 1000, application });
+  let reads = 0, updates = 0, busy = true, current = true, timedOut = false;
+  let finish!: (value: DriverOnboarding) => void;
+  let signal!: AbortSignal;
+  const stop = pollDriverFaceCheck({ read: (s) => { reads++; signal = s; return new Promise((resolve) => { finish = resolve; }); },
+    current: () => current, busy: () => busy, update: () => { updates++; }, timeout: () => { timedOut = true; } });
+  t.mock.timers.tick(2000); await flush(); assert.equal(reads, 0);
+  busy = false; t.mock.timers.tick(2000); await flush(); assert.equal(reads, 1);
+  t.mock.timers.tick(10000); await flush(); assert.equal(reads, 1, 'an unfinished read cannot overlap another');
+  current = false; stop(); assert.equal(signal.aborted, true);
+  finish(app); await flush(); assert.equal(updates, 0);
+  t.mock.timers.tick(100000); await flush(); assert.equal(reads, 1); assert.equal(timedOut, false);
+});
+
+test('pending comparison recovery stops on a terminal result or its deadline', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const app = parseOnboarding({ apiVersion: 1, serverNow: 1000, application });
+  let reads = 0, updates = 0, timedOut = 0;
+  pollDriverFaceCheck({ read: async () => { reads++; return app; }, current: () => true, busy: () => false,
+    update: () => { updates++; }, timeout: () => { timedOut++; } });
+  t.mock.timers.tick(2000); await flush(); t.mock.timers.tick(100000); await flush();
+  assert.equal(reads, 1); assert.equal(updates, 1); assert.equal(timedOut, 0);
+  let signal!: AbortSignal;
+  pollDriverFaceCheck({ read: (s) => { signal = s; return new Promise(() => {}); }, current: () => true, busy: () => false,
+    update: () => { updates++; }, timeout: () => { timedOut++; } });
+  t.mock.timers.tick(2000); await flush(); t.mock.timers.tick(88000); await flush();
+  assert.equal(signal.aborted, true); assert.equal(timedOut, 1); assert.equal(updates, 1);
 });

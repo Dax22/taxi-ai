@@ -11,7 +11,7 @@ import { openDatabase } from '../src/infrastructure/database.mjs';
 import { createApplication } from '../src/application.mjs';
 import { createCallConfig } from '../src/infrastructure/call-config.mjs';
 
-export const bootstrapAdmin = (db, email) => createApplication({ db }).accounts.bootstrapAdmin(email);
+export const bootstrapAdmin = async (db, email) => (await createApplication({ db }).accounts.bootstrapAdmin(email));
 
 // Test fixtures only. No accounts or passwords are seeded into the application.
 // A calendar-realistic fixed clock also exercises vehicle model-year policy.
@@ -23,20 +23,21 @@ export function httpFetch(url, options = {}) {
   return new Promise((resolve, reject) => {
     const request = httpRequest(url, { method: options.method ?? 'GET', headers: options.headers }, (response) => {
       const chunks = []; response.on('data', (chunk) => chunks.push(chunk)); response.on('error', reject);
-      response.on('end', () => resolve(new Response(Buffer.concat(chunks), { status: response.statusCode,
-        headers: Object.fromEntries(Object.entries(response.headers).map(([key, value]) => [key, Array.isArray(value) ? value.join(', ') : value])) })));
+      response.on('end', async () => (await resolve(new Response(Buffer.concat(chunks), { status: response.statusCode,
+        headers: Object.fromEntries(Object.entries(response.headers).map(([key, value]) => [key, Array.isArray(value) ? value.join(', ') : value])) }))));
     });
     request.on('error', reject); request.end(options.body);
   });
 }
 
-export async function harness(t, { persistent = false, callConfig = createCallConfig({}), mapProvider, runtime, gatewayHeaders = {}, telemetry, googleProvider, accountMail, vehicleVisionProvider } = {}) {
+export async function harness(t, { persistent = false, callConfig = createCallConfig({}), mapProvider, runtime, gatewayHeaders = {}, telemetry, googleProvider, accountMail, vehicleVisionProvider, driverFaceProvider, staffMfa,
+  dispatchConfig = { mode: 'legacy' } } = {}) {
   const folder = persistent ? await mkdtemp(join(tmpdir(), 'taxi-ai-test-')) : null;
   const filename = folder ? join(folder, 'test.sqlite') : ':memory:';
   let now = TEST_NOW, server, db, base, stopped = true;
   async function start() {
     db = openDatabase(filename);
-    server = createAppServer({ db, clock: () => now, callConfig, mapProvider, runtime, telemetry, googleProvider, accountMail, vehicleVisionProvider });
+    server = createAppServer({ db, clock: () => now, callConfig, mapProvider, runtime, telemetry, googleProvider, accountMail, vehicleVisionProvider, driverFaceProvider, dispatchConfig, staffMfa });
     server.listen(0, '127.0.0.1');
     await once(server, 'listening');
     base = `http://127.0.0.1:${server.address().port}`;
@@ -45,6 +46,7 @@ export async function harness(t, { persistent = false, callConfig = createCallCo
   async function stop() {
     if (stopped) return;
     await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+    await server.closeResources();
     stopped = true;
   }
   await start();
@@ -100,7 +102,7 @@ export async function harness(t, { persistent = false, callConfig = createCallCo
 export async function participants(h, driverCount = 1, { online = true } = {}) {
   const customer = h.client(); await customer.register('customer');
   const admin = h.client(); await admin.register('operator');
-  bootstrapAdmin(h.db, admin.user.email);
+  (await bootstrapAdmin(h.db, admin.user.email));
   const login = await admin.post('/api/auth/login', { email: admin.user.email, password: PASSWORD });
   assert.equal(login.status, 200);
   const drivers = [];

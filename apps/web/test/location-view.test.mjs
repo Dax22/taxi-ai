@@ -1,13 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { ABUJA_CENTER } from '../../../packages/shared/src/locations.mjs';
+import { NIGERIA_CENTER } from '../../../packages/shared/src/locations.mjs';
 
 const uri = (source) => `data:text/javascript,${encodeURIComponent(source)}`;
 function imports(source) {
   return source.replaceAll("'/shared/locations.mjs'", `'${new URL('../../../packages/shared/src/locations.mjs', import.meta.url)}'`)
     .replaceAll("'/shared/vehicle-profile.mjs'", `'${new URL('../../../packages/shared/src/vehicle-profile.mjs', import.meta.url)}'`)
     .replaceAll("'/shared/demo-booking.mjs'", `'${new URL('../../../packages/shared/src/demo-booking.mjs', import.meta.url)}'`)
+    .replaceAll("'/shared/transport-categories.mjs'", `'${new URL('../../../packages/shared/src/transport-categories.mjs', import.meta.url)}'`)
+    .replaceAll("'/shared/vehicle-categories.mjs'", `'${new URL('../../../packages/shared/src/vehicle-categories.mjs', import.meta.url)}'`)
     .replaceAll("'/shared/kemmy.mjs'", `'${new URL('../../../packages/shared/src/kemmy.mjs', import.meta.url)}'`)
     .replaceAll("'./dom.mjs'", `'${new URL('../public/dashboard/dom.mjs', import.meta.url)}'`);
 }
@@ -57,8 +59,8 @@ test('map opt-in gates all external tiles; re-renders preserve caching and late 
   assert.match(root.children.at(-1).textContent, /could not load/);
   const canvas = descendants(root).find((n) => n.tag === 'svg');
   canvas.fire('click', { clientX: 220, clientY: 110 });
-  assert.ok(Math.abs(picked[0].lat - ABUJA_CENTER.lat) < 0.00001);
-  assert.ok(Math.abs(picked[0].lng - ABUJA_CENTER.lng) < 0.00001);
+  assert.ok(Math.abs(picked[0].lat - NIGERIA_CENTER.lat) < 0.00001);
+  assert.ok(Math.abs(picked[0].lng - NIGERIA_CENTER.lng) < 0.00001);
   assert.equal(canvas.fire('keydown', { key: 'ArrowRight' }), true);
   canvas.fire('keydown', { key: 'Enter' }); assert.ok(picked[1].lng > picked[0].lng);
   map.reset(); images[0].fire('error'); canvas.fire('click', { clientX: 220, clientY: 110 });
@@ -68,7 +70,7 @@ test('map opt-in gates all external tiles; re-renders preserve caching and late 
 
 function locationSetup(t) {
   const { node, stars } = setup(t), actions = [];
-  const view = createLocationView(Object.fromEntries(['Enable', 'UsePickup', 'Search', 'Clear', 'Select', 'Pick', 'Target', 'Preview', 'Book', 'Start', 'Stop', 'Rate']
+  const view = createLocationView(Object.fromEntries(['Enable', 'UsePickup', 'Search', 'FindRide', 'Clear', 'Select', 'ChooseOption', 'Pick', 'Target', 'Preview', 'Book', 'Start', 'Stop', 'Rate']
     .map((name) => [`on${name}`, (...args) => actions.push([name, ...args])])));
   return { node, stars, actions, view };
 }
@@ -79,21 +81,50 @@ test('planner binds actual HTML controls, renders plain-text places and prevents
   const { node, actions, view } = locationSetup(t);
   const state = { user: { role: 'customer' }, online: true, settings, searching: { pickup: false, destination: false },
     results: { pickup: [], destination: [destination] }, pickup, destination, target: 'destination', error: '',
-    blocked: false, booking: false, locatingPickup: false, supported: true, quoting: false, expired: false, quote: { id: 'quote', route: {
+    blocked: false, booking: false, locatingPickup: false, supported: true, quoting: false, expired: false, rideDiscovery: true, vehicleCategory: 'standard', quote: { id: 'quote', route: {
       distanceMeters: 7000, durationSeconds: 1200, suggestedFareKobo: 250000, coordinates: [[7.4, 9.08], [7.45, 9.1]],
       pricing: { baseKobo: 50000, perKmKobo: 20000, perMinuteKobo: 3000, minimumKobo: 100000, incrementKobo: 5000 },
     } } };
   view.renderPlanner(state);
   assert.equal(node('location-distance').textContent, '7.0 km'); assert.equal(node('location-duration').textContent, '20 min');
   assert.equal(node('location-book').disabled, false);
+  assert.equal(node('location-ride-options').children.length, 2);
+  assert.equal(node('location-ride-options').children[0].attributes['aria-checked'], 'true');
   assert.match(node('location-pickup-selected').textContent, /<img src=x/);
+  assert.equal(node('location-pickup-manual').hidden, true);
+  assert.equal(node('location-target-pickup').disabled, true);
+  assert.equal(node('location-pickup-current').textContent, 'Refresh current pickup');
+  view.renderPlanner({ ...state, locatingPickup: true });
+  assert.equal(node('location-destination-search').disabled, true);
+  assert.equal(node('location-destination-search').textContent, 'Reading your location…');
+  view.renderPlanner(state);
+  view.renderPlanner({ ...state, service: 'delivery', rideDiscovery: false, target: 'pickup' });
+  assert.equal(node('location-pickup-manual').hidden, false);
+  assert.equal(node('location-target-pickup').disabled, false);
+  assert.equal(node('location-target-pickup').checked, true);
+  assert.equal(node('location-destination-search').textContent, 'Search destination');
+  assert.equal(node('location-ride-options').children.length, 1);
+  assert.match(node('location-book').textContent, /delivery driver/);
+  view.renderPlanner(state);
   node('location-pickup-current').fire('click'); assert.equal(actions.pop()[0], 'UsePickup');
   const result = node('location-destination-results').children[0].children[0];
   assert.equal(result.textContent, destination.name); result.fire('click'); assert.deepEqual(actions.pop(), ['Select', 'destination', destination]);
   node('location-destination-query').value = 'Maitama'; node('location-destination-form').fire('submit');
-  assert.deepEqual(actions.pop(), ['Search', 'destination', 'Maitama']);
+  assert.deepEqual(actions.pop(), ['FindRide', 'destination', 'Maitama']);
   node('location-latitude').value = '9.08'; node('location-longitude').value = '7.4'; node('location-pin-name').value = ' Test pin ';
   node('location-coordinate-form').fire('submit'); assert.deepEqual(actions.pop(), ['Pick', { lat: 9.08, lng: 7.4, name: 'Test pin' }]);
+  // The shipped numeric inputs must allow nationwide points before browser validation lets the submit handler run.
+  for (const point of [{ lat: 6.6018, lng: 3.3515, name: 'Lagos' }, { lat: 12.0022, lng: 8.592, name: 'Kano' }]) {
+    for (const [id, value] of [['location-latitude', point.lat], ['location-longitude', point.lng]]) {
+      const input = html.match(new RegExp(`<input\\b[^>]*id="${id}"[^>]*>`))?.[0];
+      const minimum = Number(input?.match(/\bmin="([^"]+)"/)?.[1]), maximum = Number(input?.match(/\bmax="([^"]+)"/)?.[1]);
+      assert.ok(Number.isFinite(minimum) && Number.isFinite(maximum), `${id} has numeric HTML bounds`);
+      assert.ok(value >= minimum && value <= maximum, `${point.name} passes ${id} browser range validation`);
+      node(id).value = String(value);
+    }
+    node('location-pin-name').value = point.name;
+    node('location-coordinate-form').fire('submit'); assert.deepEqual(actions.pop(), ['Pick', point]);
+  }
   view.renderPlanner({ ...state, expired: true }); assert.equal(node('location-book').disabled, true); assert.match(node('location-expiry').textContent, /expired/);
   view.renderPlanner({ ...state, blocked: true }); assert.equal(node('location-preview').disabled, true); assert.equal(node('location-book').disabled, true);
   view.resetPlanner(); assert.equal(node('location-pickup-selected').textContent, ''); assert.equal(node('location-destination-query').value, ''); assert.equal(node('location-destination-results').children.length, 0);
@@ -123,11 +154,11 @@ test('the driver marker uses the trip vehicle colour only with a reported positi
   const vehicle = { model:'Toyota Corolla',plate:'TEST-123',colour:'Blue' };
   const cars = () => descendants(root).filter((n) => n.tag === 'image' && n.attributes.href.startsWith('/assets/vehicles/'));
   map.render({ enabled:true,tiles,vehicle }); assert.equal(cars().length,0);
-  map.render({ enabled:true,tiles,vehicle,driver:ABUJA_CENTER,stale:true });
+  map.render({ enabled:true,tiles,vehicle,driver:NIGERIA_CENTER,stale:true });
   assert.equal(cars().length,1); assert.equal(cars()[0].attributes.href,'/assets/vehicles/sedan-blue.png');
   assert.equal(cars()[0].attributes.opacity,'.55');
   assert.ok(descendants(root).some((n) => n.tag === 'g' && n.attributes.class === 'map-marker map-marker-stale'));
-  map.render({ enabled:false,tiles,vehicle,driver:ABUJA_CENTER }); assert.equal(cars().length,0);
+  map.render({ enabled:false,tiles,vehicle,driver:NIGERIA_CENTER }); assert.equal(cars().length,0);
 });
 
 test('Kemmy uses the map ETA, prompts after arrival and submits one completed ride rating', (t) => {

@@ -1,0 +1,23 @@
+export type FamilyRideStatus = 'booked'|'on_way'|'arrived'|'in_progress'|'completed'|'cancelled';
+export type FamilyContact = {id:string;version:number;status:'pending'|'active'|'declined'|'revoked'|'expired';direction:'sharing_with'|'watching';name:string;createdAt:number;expiresAt:number;canShare:boolean};
+export type FamilyCheckIn = {requestedAt:number|null;respondedAt:number|null;response:'okay'|'help'|'arrived'|null};
+export type FamilyTripSummary = {shareId:string;version:number;rideId:string;status:FamilyRideStatus;relationship:'sharing_with'|'watching';name:string;sharingActive:boolean;safeArrivalAt:number|null;checkIn:FamilyCheckIn|null;endedAt:number|null;canRequestCheckIn:boolean;canRespond:boolean;canRequestHelp:boolean;canConfirmArrival:boolean};
+export type FamilyVehicleLocation = {lat:number;lng:number;accuracy:number;capturedAt:number;source:'driver_shared';stale:boolean};
+export type FamilyTrip = FamilyTripSummary & {passengerName?:string;pickup?:string;destination?:string;driver?:{name:string;vehicle:{model:string;plate:string;colour:string|null;category:string}};location?:FamilyVehicleLocation|null};
+export type FamilyDelivery = {status:'saved'|'queued'|'provider_accepted'|'delivered'|'failed'|'suppressed';configured:boolean;acceptedAt:number|null;providerConfirmedAt:number|null;deliveredAt:number|null};
+export type FamilyEvent = {id:string;shareId:string|null;kind:string;title:string;createdAt:number;state:'saved'|'acknowledged';acknowledgedAt:number|null;delivery?:FamilyDelivery};
+export type FamilyDashboard = {adultConfirmed:boolean;contacts:FamilyContact[];trips:FamilyTripSummary[];availableTrips:{rideId:string;status:FamilyRideStatus;pickup:string;destination:string}[];inbox:FamilyEvent[];limits:{contacts:5;checkInCooldownMs:300000}};
+export type FamilyResponse = {family:FamilyDashboard;serverNow:number;apiVersion?:1;replayed?:boolean};
+export type FamilyTripResponse = {trip:FamilyTrip;serverNow:number;apiVersion?:1};
+export type FamilyCommandResult = FamilyResponse & {replayed:boolean};
+export type FamilyCommands = {
+ invite:{email:string;adultConfirmed:true};accept:{contactId:string;expectedVersion:number;adultConfirmed:true};
+ decline:{contactId:string;expectedVersion:number};'revoke-contact':{contactId:string;expectedVersion:number};
+ share:{rideId:string;contactId:string};'stop-sharing':{shareId:string;expectedVersion:number};
+ 'request-check-in':{shareId:string;expectedVersion:number};respond:{shareId:string;expectedVersion:number;response:'okay'|'help'|'arrived'};
+ acknowledge:{eventId:string};
+};
+export type FamilyAction = keyof FamilyCommands;
+export function readFamilyResponse(value:unknown):FamilyResponse;
+export function readFamilyCommandResult(value:unknown):FamilyCommandResult;
+export function readFamilyTripResponse(value:unknown):FamilyTripResponse;

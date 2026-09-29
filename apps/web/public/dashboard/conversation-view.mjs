@@ -44,7 +44,7 @@ export function createConversationView({ onSend, onReport, onAccept, onRead, ser
     current = context;
     $('chat-panel').hidden = false;
     const peer = context.user.role === 'driver' ? context.ride.customer : context.ride.driver;
-    $('chat-title').textContent = peer ? `Chat with ${peer.name}` : 'Your conversation';
+    $('chat-title').textContent = peer ? `Chat with ${peer.name}${context.ride.passenger?.kind === 'guest' ? context.user.role === 'driver' ? ' · Person booking' : ' · Driver' : ''}` : 'Your conversation';
     $('chat-waiting').hidden = Boolean(context.ride.driver);
     $('chat-content').hidden = !context.ride.driver;
     if (!context.ride.driver) { canSend = false; $('chat-unread').textContent = 'Waiting for a driver'; }
@@ -61,6 +61,7 @@ export function createConversationView({ onSend, onReport, onAccept, onRead, ser
       : !canSend ? 'This test conversation has reached its 500-message limit.'
         : 'Messages stay in Taxi Ai. Sending a message does not agree a fare.';
     $('chat-compose-note').textContent += ` ${CHAT_SAFETY_NOTICE}`;
+    if (context.ride.passenger?.kind === 'guest') $('chat-compose-note').textContent += ' This conversation is between the driver and the person booking; the guest passenger does not receive these messages.';
     const key = JSON.stringify([keyFor(context), context.ride.version, context.messages.at(-1)?.sequence,
       context.thread.reportedMessageIds]);
     if (rendered !== key) {

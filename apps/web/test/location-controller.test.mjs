@@ -18,14 +18,14 @@ const pickup = { lat: 9.08, lng: 7.4, name: 'Pickup' }, destination = { lat: 9.1
 const currentPickup = { lat: pickup.lat, lng: pickup.lng, name: 'Current location' };
 
 function plannerSetup() {
-  const f = { requests: [], commands: [], books: [], time: 1000, states: [], locates: 0 };
+  const f = { requests: [], commands: [], books: [], time: 1000, states: [], locates: 0, supported: true };
   const client = {
     async request(path, options) { f.requests.push({ path, options }); if (f.requestHook) return f.requestHook(path, options);
       return path === '/api/locations' ? { settings: { enabled: true, mode: 'community' } } : { places: [pickup] }; },
     async command(path, data) { f.commands.push({ path, data }); if (f.commandHook) return f.commandHook(path, data);
       return { quote: { id: 'quote-one', expiresAt: 2000, route: { pickup, destination } } }; },
   };
-  const device = { supported: () => true, locate: async () => {
+  const device = { supported: () => f.supported, locate: async () => {
     f.locates++; return f.locateHook ? f.locateHook() : { coords: { latitude: pickup.lat, longitude: pickup.lng, accuracy: 12 } };
   } };
   f.c = createLocationPlanner({ client, device, serverNow: () => f.time,
@@ -36,16 +36,17 @@ function plannerSetup() {
 }
 async function enabled(f) { await f.c.setContext(customer, false); f.c.enable(); await f.c.useCurrentPickup(); f.c.select('destination', destination); }
 
-test('online search needs explicit enabling, manual destination submission and current pickup; settings alone send no addresses', async () => {
+test('online search needs explicit enabling, explicit address submission or current pickup; settings alone send no addresses', async () => {
   const f = plannerSetup(); await f.c.setContext(customer, false);
   await f.c.search('destination', 'Maitama'); assert.equal(f.requests.length, 1); assert.equal(f.online, false);
-  f.c.enable(); await f.c.search('pickup', 'Wuse'); assert.equal(f.requests.length, 1);
-  await f.c.search('destination', 'Maitama'); assert.equal(f.requests.length, 2);
-  assert.deepEqual(f.requests[1].options.data, { query: 'Maitama' });
+  f.c.enable(); await f.c.search('pickup', 'Wuse'); assert.equal(f.requests.length, 2);
+  assert.deepEqual(f.requests[1].options.data, { query: 'Wuse' });
+  await f.c.search('destination', 'Maitama'); assert.equal(f.requests.length, 3);
+  assert.deepEqual(f.requests[2].options.data, { query: 'Maitama' });
   await f.c.useCurrentPickup(); assert.equal(f.locates, 1); assert.deepEqual(f.c.snapshot().pickup, currentPickup);
   f.c.reset(); assert.equal(f.c.snapshot().pickup, null); assert.equal(f.online, false);
   await f.c.setContext(driver, false); f.c.enable(); await f.c.search('destination', 'Wuse');
-  assert.equal(f.requests.filter((r) => r.path.endsWith('/search')).length, 1);
+  assert.equal(f.requests.filter((r) => r.path.endsWith('/search')).length, 2);
 });
 
 test('late searches and quotes are discarded after input changes, map opt-out or account changes', async () => {
@@ -176,4 +177,131 @@ test('category changes invalidate both saved and in-flight quotes, including a s
   f.commandHook = null; await f.c.preview(); assert.equal(f.commands.at(-1).data.vehicleCategory, 'truck');
   assert.ok(f.c.snapshot().quote); f.c.setCategory('motorcycle'); assert.equal(f.c.snapshot().quote, null);
   f.c.reset(); assert.equal(f.c.snapshot().vehicleCategory, 'standard');
+});
+
+
+test('the web route planner accepts Lagos and Kano pins while rejecting neighbouring countries', async () => {
+  const f = plannerSetup(); await f.c.setContext(customer, false); f.c.enable();
+  const lagos = { lat: 6.6018, lng: 3.3515, name: 'Ikeja' }, kano = { lat: 12.0022, lng: 8.592, name: 'Kano' };
+  f.c.select('pickup', lagos); f.c.select('destination', kano); await f.c.preview();
+  assert.deepEqual(f.commands[0].data, { pickup: lagos, destination: kano, vehicleCategory: 'standard' });
+  f.c.select('pickup', { lat: 6.3667, lng: 2.4333, name: 'Cotonou' });
+  assert.deepEqual(f.c.snapshot().pickup, lagos); assert.match(f.c.snapshot().error, /Nigeria/);
+});
+
+test('an address selection cancels a pending GPS pickup and a newer GPS request invalidates an in-flight quote', async () => {
+  const f = plannerSetup(); await enabled(f);
+  const gps = deferred(); f.locateHook = () => gps.promise;
+  const pending = f.c.useCurrentPickup(); f.c.select('pickup', pickup);
+  assert.equal(f.states.at(-1).locatingPickup, false);
+  gps.resolve({ coords: { latitude: 6.45, longitude: 3.4, accuracy: 10 } }); await pending;
+  assert.deepEqual(f.c.snapshot().pickup, pickup);
+  const quote = deferred(); f.commandHook = () => quote.promise;
+  const preview = f.c.preview(), second = deferred(); f.locateHook = () => second.promise;
+  const current = f.c.useCurrentPickup(); quote.resolve({ quote: { id: 'outdated', expiresAt: 2000 } }); await preview;
+  assert.equal(f.c.snapshot().quote, null);
+  second.resolve({ coords: { latitude: 6.45, longitude: 3.4, accuracy: 10 } }); await current;
+  assert.equal(f.c.snapshot().pickup.lat, 6.45); assert.equal(f.states.at(-1).locatingPickup, false);
+});
+
+
+test('Find rides refreshes current pickup, searches nationwide and prepares a fare without a second preview click', async () => {
+  const f = plannerSetup();
+  await f.c.setContext(customer, false);
+  f.c.enable();
+  f.c.select('pickup', { ...pickup, name: 'Old manual pickup' });
+  f.requestHook = async (path) => path === '/api/locations/search'
+    ? { places: [destination] }
+    : { settings: { enabled: true, mode: 'community' } };
+  await f.c.findRides('Maitama');
+  assert.equal(f.online, true);
+  assert.equal(f.locates, 1);
+  assert.deepEqual(f.c.snapshot().destination, destination);
+  assert.deepEqual(f.c.snapshot().pickup, currentPickup);
+  assert.equal(f.commands.length, 1);
+  assert.deepEqual(f.commands[0].data, { pickup: currentPickup, destination, vehicleCategory: 'standard' });
+  assert.equal(f.c.snapshot().quote?.id, 'quote-one');
+});
+
+test('Find rides keeps ambiguous destination matches visible until the customer selects one', async () => {
+  const f = plannerSetup(), second = { ...destination, name: 'Maitama District', lng: 7.451 };
+  await f.c.setContext(customer, false);
+  f.requestHook = async (path) => path === '/api/locations/search'
+    ? { places: [destination, second] }
+    : { settings: { enabled: true, mode: 'community' } };
+  await f.c.findRides('Maitama');
+  assert.equal(f.commands.length, 0);
+  assert.equal(f.locates, 1);
+  assert.deepEqual(f.c.snapshot().pickup, currentPickup);
+  assert.equal(f.c.snapshot().results.destination.length, 2);
+  await f.c.chooseRidePlace('destination', second);
+  assert.equal(f.locates, 1);
+  assert.equal(f.commands.length, 1);
+  assert.equal(f.c.snapshot().destination?.name, 'Maitama District');
+});
+
+test('Find rides ignores an old destination submitted before the GPS permission wait', async () => {
+  const f = plannerSetup(), gps = deferred();
+  await f.c.setContext(customer, false); f.locateHook = () => gps.promise;
+  const pending = f.c.findRides('Old destination');
+  f.c.clear('destination'); // The destination input changed while permission was pending.
+  gps.resolve({ coords: { latitude: pickup.lat, longitude: pickup.lng, accuracy: 12 } });
+  await pending;
+  assert.equal(f.requests.filter((request) => request.path.endsWith('/search')).length, 0);
+  assert.equal(f.commands.length, 0);
+  assert.deepEqual(f.c.snapshot().results.destination, []);
+  await f.c.findRides('New destination');
+  assert.deepEqual(f.requests.at(-1).options.data, { query: 'New destination' });
+});
+
+test('a repeated Find rides submission during GPS permission keeps the first lookup alive', async () => {
+  const f = plannerSetup(), gps = deferred();
+  await f.c.setContext(customer, false); f.locateHook = () => gps.promise;
+  f.requestHook = async (path) => path === '/api/locations/search'
+    ? { places: [destination] }
+    : { settings: { enabled: true, mode: 'community' } };
+  const first = f.c.findRides('Maitama');
+  await f.c.findRides('Maitama');
+  assert.equal(f.locates, 1);
+  gps.resolve({ coords: { latitude: pickup.lat, longitude: pickup.lng, accuracy: 12 } });
+  await first;
+  assert.equal(f.requests.filter((request) => request.path.endsWith('/search')).length, 1);
+  assert.equal(f.c.snapshot().quote?.id, 'quote-one');
+});
+
+test('Find rides requires a new successful GPS fix even when a manual pickup is saved', async () => {
+  const f = plannerSetup(); await f.c.setContext(customer, false); f.c.enable();
+  f.c.select('pickup', { ...pickup, name: 'Old manual pickup' });
+  f.supported = false;
+  await f.c.findRides('Maitama');
+  assert.equal(f.c.snapshot().pickup, null);
+  assert.equal(f.commands.length, 0);
+  assert.equal(f.requests.filter((request) => request.path.endsWith('/search')).length, 0);
+  assert.match(f.c.snapshot().error, /geolocation/);
+  f.supported = true; f.locateHook = async () => { throw new Error('GPS denied'); };
+  f.c.select('pickup', { ...pickup, name: 'Another manual pickup' });
+  await f.c.findRides('Maitama');
+  assert.equal(f.c.snapshot().pickup, null);
+  assert.equal(f.commands.length, 0);
+});
+
+test('standard-car courier mode enables manual pickup and cancels pending passenger GPS', async () => {
+  const f = plannerSetup(), gps = deferred();
+  await f.c.setContext(customer, false); f.locateHook = () => gps.promise;
+  const pending = f.c.findRides('Maitama');
+  f.c.setCategory('standard', 'delivery');
+  assert.equal(f.c.snapshot().rideDiscovery, false);
+  assert.equal(f.c.snapshot().service, 'delivery');
+  assert.equal(f.c.snapshot().target, 'pickup');
+  f.c.setTarget('pickup'); f.c.pick({ ...pickup, name: 'Parcel collection' });
+  gps.resolve({ coords: { latitude: 6.45, longitude: 3.4, accuracy: 12 } });
+  await pending;
+  assert.equal(f.c.snapshot().pickup.name, 'Parcel collection');
+  assert.equal(f.requests.filter((request) => request.path.endsWith('/search')).length, 0);
+  f.c.select('destination', destination); await f.c.preview();
+  assert.equal(f.commands.length, 1);
+  assert.equal(f.c.snapshot().quote.id, 'quote-one');
+  f.c.setCategory('standard', 'ride');
+  assert.equal(f.c.snapshot().pickup, null);
+  assert.equal(f.c.snapshot().quote, null);
 });

@@ -22,10 +22,21 @@ export function validPayload(categoryId, value) {
   return category?.service === 'delivery' && Number.isFinite(value) && value > 0
     && value <= category.maxLoadKg && Math.abs(value * 1000 - Math.round(value * 1000)) < 0.000001;
 }
+// A car may carry a small parcel without changing its approved vehicle category.
+// These are platform booking limits; the driver must still confirm the item fits.
+export function parcelLoadLimit(categoryId) {
+  return categoryId === 'standard' ? 30 : transportCategory(categoryId)?.maxLoadKg ?? null;
+}
+export function supportsParcelCategory(categoryId) { return parcelLoadLimit(categoryId) !== null; }
+function validParcelWeight(categoryId, value) {
+  const limit = parcelLoadLimit(categoryId);
+  return limit !== null && Number.isFinite(value) && value > 0 && value <= limit
+    && Math.abs(value * 1000 - Math.round(value * 1000)) < 0.000001;
+}
 export function deliveryDetails(categoryId, data) {
   const category = transportCategory(categoryId);
   if (!category) throw new Error('Choose a vehicle category.');
-  if (category.service === 'ride') {
+  if (category.service === 'ride' && (categoryId !== 'standard' || data == null)) {
     if (data !== undefined && data !== null) throw new Error('Parcel details are only for deliveries.');
     return null;
   }
@@ -42,7 +53,7 @@ export function deliveryDetails(categoryId, data) {
     }
     return value.trim();
   };
-  if (!validPayload(categoryId, data.weightKg)) throw new Error(`Enter a total weight above zero and up to ${category.maxLoadKg} kg (preview limit).`);
+  if (!validParcelWeight(categoryId, data.weightKg)) throw new Error(`Enter a total weight above zero and up to ${parcelLoadLimit(categoryId)} kg.`);
   return { description: clean(data.description, 'Parcel description', 2, 240), weightKg: data.weightKg,
     recipientName: clean(data.recipientName, 'Recipient name', 2, 100),
     pickupInstructions: clean(data.pickupInstructions ?? '', 'Pickup instructions', 0, 240),
@@ -50,6 +61,7 @@ export function deliveryDetails(categoryId, data) {
 }
 export function vehicleMatches(vehicle, categoryId, weightKg = null) {
   if (!transportCategory(categoryId) || (vehicle?.category ?? 'standard') !== categoryId) return false;
+  if (categoryId === 'standard' && weightKg !== null) return validParcelWeight(categoryId, weightKg);
   return transportCategory(categoryId).service === 'ride'
     || (validPayload(categoryId, vehicle?.payloadKg) && validPayload(categoryId, weightKg) && weightKg <= vehicle.payloadKg);
 }

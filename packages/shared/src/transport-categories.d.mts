@@ -5,5 +5,7 @@ export const TRANSPORT_CATEGORIES: Readonly<Record<VehicleCategoryId, TransportC
 export function transportCategory(id?: unknown): TransportCategory | null;
 export function categoryFare(kobo: number, id?: VehicleCategoryId): number;
 export function validPayload(categoryId: unknown, value: unknown): boolean;
+export function parcelLoadLimit(categoryId: unknown): number | null;
+export function supportsParcelCategory(categoryId: unknown): boolean;
 export function deliveryDetails(categoryId: VehicleCategoryId, data?: unknown): DeliveryDetails | null;
 export function vehicleMatches(vehicle: { category?: VehicleCategoryId; payloadKg?: number | null } | null | undefined, categoryId: VehicleCategoryId, weightKg?: number | null): boolean;

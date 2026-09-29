@@ -82,3 +82,22 @@ transparent landscape sources keep their 3:2 proportions, with the nose facing
 left. Cards and map markers contain the complete vehicle without cropping.
 See [the artwork prompts and provenance](design/vehicle-icons.md).
 See [vehicle identity](vehicle-identity.md) for the exact-model catalogue roadmap.
+
+### Eats discovery artwork
+
+The shared `eats-hero.png` is a strictly overhead Nigerian-food composition with
+jollof rice, grilled chicken, plantain, egusi and pounded yam, suya, moi moi and
+puff-puff on a yellow tabletop. It appears on web and native discovery, labelled
+“Nigerian food inspiration · AI artwork.” It does not represent any seller's meal.
+The primary dish cards use seller-uploaded photos when supplied and never fill
+missing product photos with this generic artwork. Both platforms retain the
+shared Manrope typography policy.
+
+Created with the built-in image-generation tool (new generation, no reference
+image), 1536 × 1024 PNG. The identical files are
+`apps/web/public/assets/eats-hero.png` and
+`apps/mobile/src/assets/eats-hero.png`.
+
+Final generation prompt:
+
+> Use case: ads-marketing. Asset type: photographic hero artwork for Taxi Ai Eats website and mobile app in Abuja, Nigeria. Create a premium, appetizing, strictly top-down overhead flat-lay photograph of several recognisably Nigerian dishes in separate ceramic bowls and plates: party jollof rice with grilled chicken, golden fried plantain (dodo), egusi soup beside pounded yam, suya with onion and tomato, leaf-wrapped moi moi, and a small bowl of puff-puff. Camera perfectly perpendicular to the table, no tilted or side view. Warm amber-yellow tabletop matching Taxi Ai's yellow branding, natural daylight, rich realistic food texture, restrained dark-green and neutral crockery accents. Wide landscape composition, 1536 by 1024, dishes artfully arranged along the right two-thirds and edges, quieter uncluttered yellow space on the left third to hold live interface text. No text, logos, watermark, people, hands, phone or app UI. All food is generic illustrative menu inspiration, not a photograph of any actual vendor's products.

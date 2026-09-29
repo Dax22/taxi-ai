@@ -1,124 +1,97 @@
+import { MealBuilder } from '../src/eats/meal-builder';
 import { useEffect, useState } from 'react';
-import { Image, StyleSheet, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 import { Text } from '../src/ui/typography';
 import { router, useLocalSearchParams } from 'expo-router';
-import { EATS_CUISINES } from '../../../packages/shared/src/eats.mjs';
-import type { FoodDish, FoodMenuItem, FoodStore } from '../../../packages/shared/src/eats.mjs';
-import type { EatsController, EatsState } from '../../../packages/shared/src/eats-controller.mjs';
+import { EATS_COLOURS, EATS_SYMBOLS, EATS_SELLERS, foodAvailable, foodStock, discoverKitchens, isPrivateKitchen } from '../../../packages/shared/src/eats.mjs';
+import type { FoodFulfillment } from '../../../packages/shared/src/eats.mjs';
 import { useEatsScreen } from '../src/eats/provider';
-import { FoodFeedback, FoodMoney, FoodOrders, FoodPreview } from '../src/eats/components';
+import { FoodFeedback, FoodMoney, FoodOrders, FoodPreview, food } from '../src/eats/components';
+import { CuisineChips, DiscoveryChip, FoodHero, FoodPhoto, discovery } from '../src/eats/discovery';
 import { Button, Card, Field, Heading, Pill, Screen, fare, styles } from '../src/ui/components';
 import { SelectField } from '../src/ui/select-field';
-import { useSession } from '../src/session/provider';
-import tableImage from '../src/assets/eats-nigerian-table.jpg';
-import jollofImage from '../src/assets/eats-jollof.jpg';
-import egusiImage from '../src/assets/eats-egusi.jpg';
-import suyaImage from '../src/assets/eats-suya.jpg';
+import { FoodLocationFields, foodLocationLabel } from '../src/eats/location-fields';
 
-const sellerLocation = (seller: { sellerType?: string; address?: string; town?: string }) =>
-  seller.sellerType === 'restaurant' || !seller.sellerType ? seller.address ?? '' : seller.town ?? '';
-const dishImage = (name: string) => /jollof/i.test(name) ? jollofImage : /egusi|pounded yam/i.test(name) ? egusiImage : /suya/i.test(name) ? suyaImage : tableImage;
-function DishPhoto({ item }: { item: FoodMenuItem }) {
-  const { client } = useSession();
-  const [failed, setFailed] = useState(false);
-  useEffect(() => { setFailed(false); }, [item.id, item.photoVersion]);
-  const uploaded = Boolean(item.photoVersion) && !failed;
-  return <Image source={uploaded ? client.eatsImageSource(item.id, item.photoVersion!) : dishImage(item.name)}
-    onError={() => setFailed(true)} style={look.dishImage}
-    accessibilityLabel={uploaded ? `${item.name} photo from the seller` : `Illustrative overhead food photo for ${item.name}`}/>;
-}
-const sellerKind = (seller: FoodStore) => seller.sellerType === 'private_kitchen' ? 'PRIVATE KITCHEN' : seller.sellerType === 'vendor' ? 'VENDOR' : 'RESTAURANT';
-
-function DeliveryLocation({ state: s, controller: c, locked }: { state: EatsState; controller: EatsController; locked: boolean }) {
-  return <Card><Pill>STEP 1 · DELIVERY LOCATION</Pill><Text style={styles.h2}>Where should we bring your food?</Text>
-    {s.deliveryConfirmed ? <><Text style={styles.body}>{s.address.line}</Text><Text style={styles.small}>{s.areas.find((area) => area.id === s.address.areaId)?.name}</Text>
-      <Button title="Change delivery location" secondary disabled={locked} onPress={() => c.changeDelivery()}/></> : <>
-      <Text style={styles.small}>Enter your street, building and landmark before searching for food.</Text>
-      <Field label="Delivery address and landmark" value={s.address.line} onChangeText={(line) => c.delivery({ ...s.address, line }, s.instructions)} maxLength={240} placeholder="Street, building, nearby landmark" editable={!locked}/>
-      <SelectField label="Abuja area" value={s.address.areaId} onChange={(areaId) => c.delivery({ ...s.address, areaId }, s.instructions)} disabled={locked} options={s.areas.map((area) => ({ value: area.id, label: area.name }))}/>
-      <Button title="Show food near me" disabled={locked || s.address.line.trim().length < 8 || !s.areas.length} onPress={() => c.confirmDelivery()}/>
-    </>}
-  </Card>;
-}
-function DishCard({ dish, locked, onOpen }: { dish: FoodDish; locked: boolean; onOpen(): void }) {
-  return <Card><View style={look.dishRow}><DishPhoto item={dish}/>
-    <View style={look.dishInfo}><Text style={styles.h2}>{dish.name}</Text><Text style={styles.small}>{dish.seller.name} · {sellerLocation(dish.seller)}</Text>
-      <Text style={styles.body}>{fare(dish.priceKobo)}</Text></View></View>
-    {!!dish.description && <Text style={styles.small}>{dish.description}</Text>}
-    <Button title={dish.seller.isOpen ? 'View dish & menu' : 'Kitchen closed'} disabled={locked || !dish.seller.isOpen} onPress={onOpen}/>
-  </Card>;
-}
-function Discover({ state: s, controller: c, locked }: { state: EatsState; controller: EatsController; locked: boolean }) {
-  const [query, setQuery] = useState(''), [cuisine, setCuisine] = useState(''), [detail, setDetail] = useState(false);
-  useEffect(() => { if (query === s.query) return; const timer = setTimeout(() => void c.search(query), 280); return () => clearTimeout(timer); }, [query, s.query, c]);
-  useEffect(() => { if (!s.deliveryConfirmed) setDetail(false); }, [s.deliveryConfirmed]);
-  async function select(id: string, replace = false) { if (await c.selectRestaurant(id, replace)) setDetail(true); }
-  const dishes = s.dishes.filter((dish) => !cuisine || dish.seller.cuisine === cuisine);
-  const sellers = s.restaurants.filter((seller) => !cuisine || seller.cuisine === cuisine);
-  return <>
-    <View style={look.hero}><View style={look.heroCopy}><Text style={styles.label}>TAXI AI EATS · ABUJA</Text><Text style={look.heroTitle}>Good food, right to your door.</Text>
-      <Text style={styles.body}>Nigerian favourites from local restaurants, vendors and private kitchens.</Text></View>
-      <Image source={tableImage} style={look.heroImage} accessibilityLabel="Overhead view of jollof rice, suya, egusi, pounded yam, moi-moi and puff-puff"/></View>
-    <DeliveryLocation state={s} controller={c} locked={locked}/>
-    {s.deliveryConfirmed && <>
-      {!detail && <>
-        <Field label="STEP 2 · WHAT WOULD YOU LIKE TO EAT?" value={query} onChangeText={setQuery} placeholder="Try jollof rice, suya or egusi" maxLength={100} editable={!locked}/>
-        <SelectField label="Cuisine" value={cuisine} onChange={setCuisine} options={[{ value: '', label: 'All cuisines' }, ...EATS_CUISINES.map((name) => ({ value: name, label: name }))]} disabled={locked}/>
-        <Heading title="Made for your craving." subtitle="Real menu items from approved kitchens."/>
-        {!s.loading && !dishes.length && <Card><Text style={styles.body}>{query ? 'No menu items match yet. Try another dish or cuisine.' : 'Approved kitchens will appear here as they add dishes.'}</Text></Card>}
-        {dishes.map((dish) => <DishCard key={`${dish.seller.id}:${dish.id}`} dish={dish} locked={locked} onOpen={() => void select(dish.seller.id)}/>)}
-        <Heading title="Explore local kitchens." subtitle="Find a seller you’ll love."/>
-        {!s.loading && !sellers.length && <Card><Text style={styles.body}>No approved sellers match this search yet.</Text></Card>}
-        {sellers.map((seller) => <Card key={seller.id}><Image source={tableImage} style={look.sellerImage} accessibilityLabel="Overhead photograph of Nigerian dishes"/>
-          <Pill>{`${sellerKind(seller)} · ${seller.isOpen ? 'OPEN' : 'CLOSED'}`}</Pill><Text style={styles.h2}>{seller.name}</Text>
-          <Text style={styles.body}>{sellerLocation(seller)}</Text><Text style={styles.small}>{seller.cuisine} · {seller.prepMinutes} min preparation · {fare(seller.deliveryFeeKobo)} delivery</Text>
-          <Button title={`View ${seller.name} menu`} disabled={locked} onPress={() => void select(seller.id)}/></Card>)}
-        {!!s.cart.length && s.restaurant && <Button title={`Return to ${s.restaurant.name} cart`} secondary onPress={() => setDetail(true)}/>}
-      </>}
-      {s.replaceRestaurantId && <Card><Text style={styles.h2}>Start a new cart?</Text><Text style={styles.body}>This preview checks out one kitchen at a time. Switching sellers replaces your current items.</Text>
-        <Button title="Replace cart" disabled={locked} onPress={() => void select(s.replaceRestaurantId!, true)}/><Button title="Keep my cart" secondary onPress={c.keepRestaurant}/></Card>}
-      {detail && s.restaurant && <><Button title="Back to food search" secondary onPress={() => setDetail(false)}/>
-        <Image source={tableImage} style={look.sellerImage} accessibilityLabel="Overhead photograph of Nigerian dishes"/>
-        <Heading title={s.restaurant.name} subtitle={s.restaurant.description}/><Text style={styles.body}>{sellerLocation(s.restaurant)}</Text>
-        <Text style={styles.small}>{s.restaurant.prepMinutes} min preparation · Minimum {fare(s.restaurant.minimumKobo)} · {s.restaurant.isOpen ? 'Open for test orders' : 'Closed'}</Text>
-        <Text style={styles.small}>Confirm ingredients and dietary requirements directly with the kitchen before ordering.</Text>
-        {s.menu.map((item) => { const quantity = s.cart.find((line) => line.itemId === item.id)?.quantity ?? 0; return <Card key={item.id}>
-          <View style={look.dishRow}><DishPhoto item={item}/>
-            <View style={look.dishInfo}><Pill>{item.category.toUpperCase()}</Pill><Text style={styles.h2}>{item.name}</Text><Text style={styles.body}>{fare(item.priceKobo)}</Text></View></View>
-          <Text style={styles.small}>{item.description}</Text><View style={styles.row}><Button title={`− ${item.name}`} secondary disabled={locked || quantity === 0} onPress={() => c.quantity(item.id, quantity - 1)}/>
-            <Text accessibilityLiveRegion="polite" style={styles.body}>{quantity}</Text><Button title={`+ ${item.name}`} disabled={locked || quantity >= 20 || !s.restaurant?.isOpen} onPress={() => c.quantity(item.id, quantity + 1)}/></View>
-        </Card>; })}
-        <Card><Heading title="Your basket."/>{!s.cart.length && <Text style={styles.body}>Choose something delicious from the menu.</Text>}
-          {s.cart.map((line) => { const item = s.menu.find((menuItem) => menuItem.id === line.itemId); return <View key={line.itemId} style={styles.stack}>
-            <Text style={styles.body}>{line.quantity} × {item?.name ?? 'Unavailable item'}{item ? ` · ${fare(item.priceKobo * line.quantity)}` : ''}</Text>
-            <Button title={`Remove ${item?.name ?? 'item'}`} secondary disabled={locked} onPress={() => c.quantity(line.itemId, 0)}/></View>; })}
-          <Text style={styles.small}>Delivering to {s.address.line} · {s.areas.find((area) => area.id === s.address.areaId)?.name}</Text>
-          <Field label="Kitchen or delivery instructions (optional)" value={s.instructions} onChangeText={(instructions) => c.delivery(s.address, instructions)} multiline maxLength={240} editable={!locked}/>
-          <Button title="Review total" busy={s.busy} disabled={locked || !s.cart.length || !s.restaurant.isOpen} onPress={() => void c.checkout()}/>
-        </Card>
-        {s.quote && <Card><Text style={styles.h2}>Review your order</Text><FoodMoney value={s.quote.totals}/><Text style={styles.body}>{s.quote.address.line}</Text>
-          <Text style={styles.small}>Total held until {new Date(s.quote.expiresAt).toLocaleTimeString()}. Test checkout · no charge.</Text>
-          <Button title="Place test order" disabled={locked || s.now >= s.quote.expiresAt} onPress={() => void c.place().then((ok) => { const id = c.snapshot().orderId; if (ok && id) router.push({ pathname: '/food-order', params: { id } }); })}/></Card>}
-      </>}
-    </>}
-  </>;
-}
 export default function Eats() {
   const params = useLocalSearchParams<{ section?: string }>(), screen = params.section === 'orders' ? 'orders' : 'browse';
   const { state: s, controller: c, locked } = useEatsScreen(screen);
-  return <Screen><FoodPreview/><View style={styles.row}><Button title="Discover" secondary disabled={s.busy || s.uncertain} onPress={() => router.setParams({ section: 'browse' })}/>
-    <Button title="My food orders" secondary disabled={s.busy || s.uncertain} onPress={() => router.setParams({ section: 'orders' })}/></View>
+  const [menusOpen, setMenusOpen] = useState(false);
+  const [query, setQuery] = useState(''), [cuisine, setCuisine] = useState(''), [area, setArea] = useState(''), [sellerType, setSellerType] = useState('');
+  const [openOnly, setOpenOnly] = useState(false), [sort, setSort] = useState('recommended'), [detail, setDetail] = useState(false), [limit, setLimit] = useState(24);
+  const [filtersOpen, setFiltersOpen] = useState(false), [addressOpen, setAddressOpen] = useState(false), [filterKey, setFilterKey] = useState(0);
+  useEffect(() => {
+    setMenusOpen(false); setDetail(false); setFiltersOpen(false); setAddressOpen(false);
+    setQuery(''); setCuisine(''); setArea(''); setSellerType(''); setOpenOnly(false); setSort('recommended'); setLimit(24); setFilterKey((value) => value + 1);
+  }, [s.user?.id]);
+  const admin = s.user?.role === 'admin', navigating = s.busy || s.uncertain;
+  const home = () => router.push({ pathname: '/my-store', params: { type: 'home_kitchen' } });
+  const areaName = foodLocationLabel;
+  async function select(id: string, replace = false) { if (await c.selectRestaurant(id, replace)) setDetail(true); }
+  const restaurants = discoverKitchens(s.restaurants, { q: query, cuisine, areaId: area, sellerType, fulfillment: s.fulfillment, openOnly, sort });
+  const modeAvailable = s.restaurant && (s.fulfillment === 'pickup' ? s.restaurant.pickupEnabled : s.restaurant.deliveryEnabled !== false);
+  return <Screen><Pill>TAXI AI EATS · NIGERIA</Pill><FoodPreview/>
+    <View style={styles.row}><Button title="Discover" secondary disabled={navigating} onPress={() => { setDetail(false); setMenusOpen(false); router.setParams({ section: 'browse' }); if (screen === 'browse') void c.navigate('browse'); }}/><Button title="My food orders" secondary disabled={navigating} onPress={() => router.setParams({ section: 'orders' })}/></View>
     <FoodFeedback state={s} controller={c}/>
-    {screen === 'orders' ? <><Heading title="Good food, on its way." subtitle="Current orders and your food history."/><FoodOrders orders={s.orders}/>
-      {s.nextBefore && <Button title="Load older orders" secondary disabled={locked || s.loading} onPress={() => void c.refresh({ before: s.nextBefore })}/>}</>
-      : <Discover state={s} controller={c} locked={locked}/>}
-    <Button title="Refresh Eats" secondary busy={s.loading} disabled={s.busy || s.uncertain} onPress={() => void c.refresh()}/>
+    {screen === 'orders' ? <><Heading title="Good food, on its way." subtitle="Current orders and your food history."/><FoodOrders orders={s.orders}/>{s.nextBefore && <Button title="Load older orders" secondary disabled={locked || s.loading} onPress={() => void c.refresh({ before: s.nextBefore })}/>}</> : <>
+      {!menusOpen || !s.deliveryConfirmed ? <MealBuilder key={s.user?.id} state={s} controller={c} locked={locked} onMenus={() => { setMenusOpen(true); setDetail(false); setArea(s.catalogAreaId); setFilterKey((value) => value + 1); }} onPlaced={() => router.setParams({ section: 'orders' })}/> : <>
+      <Button title="Back to building my meal" secondary disabled={navigating} onPress={() => setMenusOpen(false)}/>
+      {!detail && <>
+        <View style={styles.row}><DiscoveryChip label="Delivery" selected={s.fulfillment === 'delivery'} disabled={navigating} onPress={() => { c.fulfillment('delivery'); setLimit(24); }}/><DiscoveryChip label="Pickup" selected={s.fulfillment === 'pickup'} disabled={navigating} onPress={() => { c.fulfillment('pickup'); setLimit(24); }}/>{!admin && <DiscoveryChip label="Sell from home" disabled={navigating} onPress={home}/>}</View>
+        {s.fulfillment === 'delivery' && <>
+          <DiscoveryChip label={s.address.line ? `Deliver to: ${s.address.line}` : 'Add a delivery address'} expanded={addressOpen} disabled={navigating} onPress={() => setAddressOpen(!addressOpen)}/>
+          {addressOpen && <><Field label="Where are we eating?" value={s.address.line} onChangeText={(line) => c.delivery({ ...s.address, line }, s.instructions)} placeholder="Delivery address and landmark" maxLength={240} editable={!navigating}/><Text style={styles.body}>{areaName(s.address.areaId)}</Text><Button title="Change delivery location" secondary disabled={navigating} onPress={() => { c.editDelivery(); setMenusOpen(false); setDetail(false); }}/></>}
+        </>}
+        <Field label="Find your next favourite" value={query} onChangeText={(v) => { setQuery(v); setLimit(24); }} placeholder="Kitchen or cuisine" maxLength={100}/>
+        <CuisineChips value={cuisine} onChange={(v) => { setCuisine(v); setLimit(24); }}/>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={discovery.controls}>
+          {[{ value: '', label: 'All kitchens' }, { value: 'home_kitchen', label: 'Home kitchens' }, { value: 'restaurant', label: 'Restaurants' }, { value: 'food_vendor', label: 'Food vendors' }].map((option) => <DiscoveryChip key={option.value} label={option.label} selected={sellerType === option.value} onPress={() => { setSellerType(option.value); setLimit(24); }}/>) }
+          <DiscoveryChip label="Open now" selected={openOnly} onPress={() => { setOpenOnly(!openOnly); setLimit(24); }}/>
+          <DiscoveryChip label={area || sort !== 'recommended' ? 'Filters · active' : 'Filters'} selected={filtersOpen || Boolean(area) || sort !== 'recommended'} expanded={filtersOpen} onPress={() => setFiltersOpen(!filtersOpen)}/>
+        </ScrollView>
+        {filtersOpen && <Card>
+          <FoodLocationFields key={filterKey} label="Kitchen filter" value={area} onChange={(v) => { setArea(v); setLimit(24); }} disabled={navigating || s.loading}/>
+          <SelectField label="Sort by" value={sort} onChange={(v) => { setSort(v); setLimit(24); }} options={[{ value: 'recommended', label: 'Kitchen name · open kitchens first' }, { value: 'prep', label: 'Preparation time' }, { value: 'fee', label: 'Delivery fee' }]}/>
+          <Text style={styles.small}>Kitchen area filters where the food is prepared. It does not set your delivery area.</Text>
+          <View style={styles.row}><Button title="Clear filters" secondary disabled={navigating || s.loading} onPress={() => { setQuery(''); setCuisine(''); setSellerType(''); setArea(''); setSort('recommended'); setOpenOnly(false); setLimit(24); setFilterKey((value) => value + 1); void c.browseLocation(''); }}/><Button title="Show kitchens" busy={s.loading} disabled={navigating || s.loading} onPress={() => { void c.browseLocation(area).then((ok) => { if (ok) setFiltersOpen(false); }); }}/></View>
+        </Card>}
+        <FoodHero/>
+        <Heading title="Find something delicious." subtitle={`${restaurants.length} ${restaurants.length === 1 ? 'kitchen' : 'kitchens'} · ${s.fulfillment === 'pickup' ? 'Customer pickup' : 'Delivery'}`}/>
+        {!s.loading && !restaurants.length && <Card><Text style={styles.h2}>{s.restaurants.length ? 'Let’s try another craving.' : 'Make room at the table.'}</Text><Text style={styles.body}>{s.restaurants.length ? 'Try another area, cuisine, kitchen type or order option.' : 'The first kitchens are on their way. Create a test home kitchen, add a menu and complete staff review to explore the full ordering flow.'}</Text>{!admin && <Button title="Start a home kitchen" secondary disabled={navigating} onPress={home}/>}</Card>}
+        {restaurants.slice(0, limit).map((r) => <Card key={r.id}>
+          {r.coverPhotoId ? <FoodPhoto id={r.coverPhotoId} controller={c} label={`${r.name} · meal photo supplied by the kitchen`}/> : <View style={[food.cover, { backgroundColor: EATS_COLOURS[r.cuisine] }]}><Text accessible={false} style={food.symbol}>{EATS_SYMBOLS[r.cuisine]}</Text></View>}
+          <Text style={styles.label}>{EATS_SELLERS[r.sellerType ?? 'restaurant']}</Text><Text style={styles.h2}>{r.name}</Text><Pill>{r.isOpen ? 'OPEN FOR TEST ORDERS' : 'CLOSED'}</Pill><Text style={styles.body}>{r.description}</Text><Text style={styles.small}>{r.cuisine} · {areaName(r.areaId)}</Text>{!isPrivateKitchen(r.sellerType) && !r.addressHidden && <Text style={styles.small}>{r.address}</Text>}<Text style={styles.small}>{r.prepMinutes} min preparation · {s.fulfillment === 'pickup' ? 'Pickup · no delivery fee' : `${fare(r.deliveryFeeKobo)} delivery`}</Text><Button title={`View ${r.name} menu`} disabled={locked} onPress={() => void select(r.id)}/>
+        </Card>)}
+        {restaurants.length > limit && <Button title="Show more kitchens" secondary onPress={() => setLimit(limit + 24)}/>}
+        {!!s.cart.length && s.restaurant && <Button title={`Return to ${s.restaurant.name} cart`} secondary disabled={navigating} onPress={() => setDetail(true)}/>}
+        {!admin && <View style={discovery.seller}><Text style={styles.label}>YOUR RECIPE. YOUR OPPORTUNITY.</Text><Text style={styles.h2}>Turn your home cooking into a little extra.</Text><Text style={styles.body}>Set your menu, price each portion and choose when you’re open. We’ll make room for your kitchen.</Text><Button title="Sell from home" disabled={navigating} onPress={home}/></View>}
+      </>}
+      {s.replaceRestaurantId && <Card><Text style={styles.h2}>Start a new cart?</Text><Text style={styles.body}>Each order comes from one kitchen. This replaces the items in your current cart.</Text><Button title="Replace cart" disabled={locked} onPress={() => void select(s.replaceRestaurantId!, true)}/><Button title="Keep my cart" secondary disabled={navigating} onPress={c.keepRestaurant}/></Card>}
+      {detail && s.restaurant && <>
+        <Button title="Back to kitchens" secondary disabled={navigating} onPress={() => setDetail(false)}/>
+        <Pill>{EATS_SELLERS[s.restaurant.sellerType ?? 'restaurant'].toUpperCase()}</Pill><Heading title={s.restaurant.name} subtitle={s.restaurant.description}/>
+        <Text style={styles.body}>{isPrivateKitchen(s.restaurant.sellerType) || s.restaurant.addressHidden ? `${areaName(s.restaurant.areaId)} · Private collection point shared with the assigned courier or pickup customer when food is ready.` : s.restaurant.address}</Text>
+        <Text style={styles.small}>{s.restaurant.prepMinutes} min preparation · Minimum {fare(s.restaurant.minimumKobo)} · {s.restaurant.isOpen ? 'Open for test orders' : 'Closed'}</Text>
+        <Text style={styles.small}>Ingredients and allergen information are supplied by the kitchen. Special requests are not guaranteed; confirm dietary requirements before ordering.</Text>
+        {s.menu.map((item) => { const quantity = s.cart.find((i) => i.itemId === item.id)?.quantity ?? 0; return <View key={item.id} style={food.menuRow}>
+          {item.photoId && <FoodPhoto id={item.photoId} controller={c} label={item.name} compact/>}<Pill>{item.category.toUpperCase()}</Pill><Text style={styles.h2}>{item.name}</Text><Text style={styles.body}>{item.description}</Text>{!!item.allergens && <Text style={styles.small}>Allergens: {item.allergens}</Text>}<Text style={styles.body}>{fare(item.priceKobo)}</Text><Text style={styles.small}>{foodStock(item)}</Text>
+          <View style={food.quantity}><Button title={`− ${item.name}`} secondary disabled={locked || quantity === 0} onPress={() => c.quantity(item.id, quantity - 1)}/><Text accessibilityLiveRegion="polite" style={styles.body}>{quantity}</Text><Button title={`+ ${item.name}`} disabled={locked || quantity >= Math.min(20, item.portionsRemaining ?? 20) || !foodAvailable(item) || !s.restaurant?.isOpen} onPress={() => c.quantity(item.id, quantity + 1)}/></View>
+        </View>; })}
+        <Card><Heading title="Your cart."/>{!s.cart.length && <Text style={styles.body}>Choose something delicious from the menu.</Text>}
+          {s.cart.map((line) => { const item = s.menu.find((i) => i.id === line.itemId); return <View key={line.itemId} style={styles.stack}><Text style={styles.body}>{line.quantity} × {item?.name ?? 'Unavailable item'}{item ? ` · ${fare(item.priceKobo * line.quantity)}` : ' · Remove before checkout'}</Text><Button title={`Remove ${item?.name ?? 'item'}`} secondary disabled={navigating} onPress={() => c.quantity(line.itemId, 0)}/></View>; })}
+          <SelectField label="How would you like your food?" value={s.fulfillment} onChange={(v) => c.fulfillment(v as FoodFulfillment)} disabled={navigating} options={[{ value: 'delivery', label: 'Delivery', disabled: s.restaurant.deliveryEnabled === false }, { value: 'pickup', label: 'Customer pickup · no delivery fee', disabled: !s.restaurant.pickupEnabled }]}/>
+          {!modeAvailable && <Text style={styles.body}>Choose an order option offered by this kitchen.</Text>}
+          {s.fulfillment === 'pickup' ? <Text style={styles.body}>Collect your food yourself. Food vendors and home kitchens share a private collection point when your food is ready.</Text> : <>
+            <Field label="Delivery address and landmark" value={s.address.line} editable={!navigating} onChangeText={(line) => c.delivery({ ...s.address, line }, s.instructions)} maxLength={240} placeholder="Street, building and nearby landmark"/>
+            <Text style={styles.body}>{areaName(s.address.areaId)}</Text>
+            <Button title="Change delivery location" secondary disabled={navigating} onPress={() => { c.editDelivery(); setMenusOpen(false); setDetail(false); }}/>
+          </>}
+          <Field label="Kitchen or handover instructions (optional)" value={s.instructions} onChangeText={(value) => c.delivery(s.address, value)} editable={!navigating} multiline maxLength={240}/>
+          <Button title="Review total" busy={s.busy} disabled={locked || !s.cart.length || (s.fulfillment !== 'pickup' && (s.address.line.trim().length < 8 || !s.address.areaId)) || !modeAvailable || !s.restaurant.isOpen} onPress={() => void c.checkout()}/>
+        </Card>
+        {s.quote && <Card><Text style={styles.h2}>Review your order</Text><Text style={styles.body}>{s.quote.fulfillment === 'pickup' ? 'Customer pickup · collect your food yourself.' : `Delivery to ${s.quote.address.line} · ${areaName(s.quote.address.areaId)}`}</Text><FoodMoney value={s.quote.totals}/><Text style={styles.small}>Total held until {new Date(s.quote.expiresAt).toLocaleTimeString()}. Test checkout · no charge. Preparation time excludes delivery.</Text><Button title="Place test order" disabled={locked || s.now >= s.quote.expiresAt} onPress={() => void c.place().then((ok) => { const id = c.snapshot().orderId; if (ok && id) router.push({ pathname: '/food-order', params: { id } }); })}/></Card>}
+      </>}
+      </>}
+    </>}
+    <Button title="Refresh Eats" secondary busy={s.loading} disabled={navigating} onPress={() => void c.refresh()}/>
   </Screen>;
 }
-const look = StyleSheet.create({
-  hero: { borderRadius: 24, overflow: 'hidden', backgroundColor: '#faf1df', marginVertical: 10 },
-  heroCopy: { padding: 24, gap: 8 }, heroTitle: { fontSize: 34, lineHeight: 38, letterSpacing: -1.2, fontWeight: '700', color: '#171a18' },
-  heroImage: { width: '100%', height: 210 }, sellerImage: { width: '100%', height: 176, borderRadius: 16, marginBottom: 12 },
-  dishRow: { flexDirection: 'row', gap: 14, alignItems: 'center' }, dishImage: { width: 94, height: 94, borderRadius: 14 },
-  dishInfo: { flex: 1, gap: 5 },
-});

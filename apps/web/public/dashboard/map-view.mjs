@@ -1,4 +1,4 @@
-import { ABUJA_CENTER, ABUJA_BOUNDS, project, unproject } from '/shared/locations.mjs';
+import { NIGERIA_CENTER, NIGERIA_BOUNDS, project, unproject } from '/shared/locations.mjs';
 import { element } from './dom.mjs';
 import { vehiclePresentation } from '/shared/vehicle-profile.mjs';
 
@@ -13,22 +13,22 @@ export function createMapView(root, { onPick } = {}) {
   };
   const frame = element('div', undefined, 'map-frame'), controls = element('div', undefined, 'map-controls');
   const canvas = svg('svg', { viewBox: `0 0 ${width} ${height}`, role: 'group', tabindex: '0',
-    'aria-label': onPick ? 'Abuja map. Arrow keys pan, plus or minus zoom. Enter selects the centre point.' : 'Journey map. Arrow keys pan; plus or minus zoom.' });
+    'aria-label': onPick ? 'Nigeria map. Arrow keys pan, plus or minus zoom. Enter selects the centre point.' : 'Journey map. Arrow keys pan; plus or minus zoom.' });
   const tiles = svg('g'), overlay = svg('g'), note = element('p', '', 'small-note map-status');
   canvas.append(tiles, overlay); frame.append(canvas); root.append(controls, frame, note);
-  let state = { enabled: false }, center = { ...ABUJA_CENTER }, zoom = 11, focusKey = null, tileKey = '', generation = 0, tileError = false;
-  function constrain(value) { return { lat: Math.max(ABUJA_BOUNDS.south, Math.min(ABUJA_BOUNDS.north, value.lat)), lng: Math.max(ABUJA_BOUNDS.west, Math.min(ABUJA_BOUNDS.east, value.lng)) }; }
+  let state = { enabled: false }, center = { ...NIGERIA_CENTER }, zoom = 6, focusKey = null, tileKey = '', generation = 0, tileError = false;
+  function constrain(value) { return { lat: Math.max(NIGERIA_BOUNDS.south, Math.min(NIGERIA_BOUNDS.north, value.lat)), lng: Math.max(NIGERIA_BOUNDS.west, Math.min(NIGERIA_BOUNDS.east, value.lng)) }; }
   function fit(points) {
-    if (!points.length) { center = { ...ABUJA_CENTER }; zoom = 11; return; }
+    if (!points.length) { center = { ...NIGERIA_CENTER }; zoom = 6; return; }
     if (points.length === 1) { center = constrain(points[0]); zoom = 14; return; }
-    for (zoom = 17; zoom >= 9; zoom--) {
+    for (zoom = 17; zoom >= 5; zoom--) {
       const pixels = points.map((p) => project(p, zoom));
       const left = Math.min(...pixels.map((p) => p.x)), right = Math.max(...pixels.map((p) => p.x));
       const top = Math.min(...pixels.map((p) => p.y)), bottom = Math.max(...pixels.map((p) => p.y));
       center = constrain(unproject({ x: (left + right) / 2, y: (top + bottom) / 2 }, zoom));
       if (right - left <= width - 160 && bottom - top <= height - 120) return;
     }
-    zoom = 9;
+    zoom = 5;
   }
   function render() {
     frame.hidden = controls.hidden = !state.enabled;
@@ -70,7 +70,7 @@ export function createMapView(root, { onPick } = {}) {
     if (onPick) overlay.append(svg('path', { d: `M390 200h20M400 190v20`, class: 'map-crosshair' }));
   }
   function move(dx, dy) { if (!state.enabled) return; const p = project(center, zoom); center = constrain(unproject({ x: p.x + dx, y: p.y + dy }, zoom)); render(); }
-  function scale(amount) { if (!state.enabled) return; zoom = Math.max(9, Math.min(17, zoom + amount)); render(); }
+  function scale(amount) { if (!state.enabled) return; zoom = Math.max(5, Math.min(17, zoom + amount)); render(); }
   for (const [label, action] of [['Zoom in', () => scale(1)], ['Zoom out', () => scale(-1)], ['West', () => move(-160, 0)],
     ['East', () => move(160, 0)], ['North', () => move(0, -120)], ['South', () => move(0, 120)],
     ...(onPick ? [['Use centre point', () => onPick({ ...center })]] : [])]) {
@@ -91,9 +91,9 @@ export function createMapView(root, { onPick } = {}) {
   return Object.freeze({
     render(next) {
       state = next;
-      if (focusKey !== next.focusKey) { focusKey = next.focusKey; fit([next.pickup, next.destination].filter(Boolean)); }
+      if (focusKey !== next.focusKey) { focusKey = next.focusKey; const points = [next.pickup, next.destination].filter(Boolean); fit(points.length ? points : [next.driver].filter(Boolean)); }
       render();
     },
-    reset() { state = { enabled: false }; center = { ...ABUJA_CENTER }; zoom = 11; focusKey = null; render(); },
+    reset() { state = { enabled: false }; center = { ...NIGERIA_CENTER }; zoom = 6; focusKey = null; render(); },
   });
 }

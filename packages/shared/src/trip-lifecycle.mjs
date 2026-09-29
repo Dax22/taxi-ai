@@ -7,7 +7,7 @@ export const TRIP_TRANSITIONS = Object.freeze({
 });
 
 export const RIDE_STATUS_LABELS = Object.freeze({
-  requested: 'Waiting for a driver', negotiating: 'Negotiating', agreed: 'Fare agreed · confirm booking',
+  requested: 'Waiting for a driver', negotiating: 'Negotiating', agreed: 'Fare agreed · confirm ride',
   booked: 'Booking confirmed', on_way: 'Driver on the way', arrived: 'Driver arrived',
   in_progress: 'Trip in progress', completed: 'Completed', cancelled: 'Cancelled', expired: 'No driver found · expired',
 });

@@ -23,6 +23,103 @@ function client(fetcher: (url: string, options: RequestInit) => Promise<Response
   return { app: new MobileClient({ origin: 'https://taxi.example.test', vault: v.port, fetchImpl: ((url, options) => fetcher(String(url), options ?? {})) as typeof fetch }), ...v };
 }
 
+test('parcel accept retains its token and key through auth refresh without saving the invitation', async () => {
+  const calls: Array<{ url: string; options: RequestInit }> = [], token = 'd'.repeat(64);
+  const { app, storage } = client(async (url, options) => {
+    if (url.endsWith('/auth/login')) return response(auth());
+    if (url.endsWith('/auth/refresh')) return response(auth(2));
+    calls.push({ url, options });
+    return new Headers(options.headers).get('Authorization') === `Bearer ${auth().credentials.accessToken}` ? unauthorized() : ok({ accepted: true });
+  });
+  await app.login(user.email, 'Test password', 'Phone');
+  await app.parcels('/parcels/accept', { token }, 'parcel-claim-key'); assert.equal(calls.length, 2);
+  assert.equal(calls[0].url, 'https://taxi.example.test/api/mobile/v1/parcels/accept');
+  assert.equal(calls[0].options.body, calls[1].options.body);
+  for (const call of calls) assert.equal(new Headers(call.options.headers).get('Idempotency-Key'), 'parcel-claim-key');
+  assert.equal(storage.value!.includes(token), false);
+  await assert.rejects(app.parcels('/family/accept'), /Invalid parcel API path/);
+});
+
+test('late parcel responses cannot cross logout into another account', async () => {
+  let finish!: (value: Response) => void;
+  const { app } = client(async url => {
+    if (url.endsWith('/auth/login')) return response(auth());
+    if (url.endsWith('/parcels/received')) return new Promise(resolve => { finish = resolve; });
+    return ok();
+  });
+  await app.login(user.email, 'Test password', 'Phone');
+  const pending = app.parcels('/parcels/received'), rejected = assert.rejects(pending, { code: 'SESSION_CHANGED' });
+  await settleRequest(); await app.logout(); finish(ok({ parcels: [] })); await rejected;
+});
+
+async function settleRequest() { await delay(0); }
+
+test('ride offer decline keeps its identity, empty body and idempotency key through access refresh', async () => {
+  const calls: Array<{ url: string; options: RequestInit }> = [];
+  const { app } = client(async (url, options) => {
+    if (url.endsWith('/auth/login')) return response(auth());
+    if (url.endsWith('/auth/refresh')) return response(auth(2));
+    calls.push({ url, options });
+    return new Headers(options.headers).get('Authorization') === `Bearer ${auth().credentials.accessToken}` ? unauthorized()
+      : ok({ declined: true, replayed: false });
+  });
+  await app.login(user.email, 'Test password', 'Phone');
+  assert.equal((await app.declineOffer(id, 'original-decline-key')).declined, true);
+  assert.equal(calls.length, 2); assert.equal(calls[0].url, calls[1].url);
+  assert.ok(calls[0].url.endsWith(`/work/offers/${id}/decline`));
+  for (const call of calls) {
+    assert.equal(call.options.body, '{}');
+    assert.equal(new Headers(call.options.headers).get('Idempotency-Key'), 'original-decline-key');
+  }
+});
+
+test('guest link commands retain the exact body and key through access refresh without persisting a private token', async () => {
+  const calls: RequestInit[] = [], secret = 'c'.repeat(64);
+  const { app, storage } = client(async (url, options) => {
+    if (url.endsWith('/auth/login')) return response(auth());
+    if (url.endsWith('/auth/refresh')) return response(auth(2));
+    calls.push(options);
+    return new Headers(options.headers).get('Authorization') === `Bearer ${auth().credentials.accessToken}` ? unauthorized()
+      : ok({ guest: { rideId: id, canCreate: true, link: { id, version: 1, active: true, expiresAt: 60000 } }, token: secret });
+  });
+  await app.login(user.email, 'Test password', 'Phone');
+  const result = await app.guestRides(`/guest-rides/${id}/link`, { expectedLinkId: null }, 'original-guest-link-key');
+  assert.equal(result.token, secret); assert.equal(calls.length, 2); assert.equal(calls[0].body, calls[1].body);
+  for (const attempt of calls) assert.equal(new Headers(attempt.headers).get('Idempotency-Key'), 'original-guest-link-key');
+  assert.equal(storage.value!.includes(secret), false); assert.equal(storage.value!.includes('guest-rides'), false);
+  await assert.rejects(app.guestRides('/safety/contacts'), /guest ride API path/);
+});
+
+test('guest link metadata or token arriving after logout cannot enter another account', async () => {
+  let finish!: (value: Response) => void;
+  const { app } = client(async (url) => {
+    if (url.endsWith('/auth/login')) return response(auth());
+    if (url.includes('/guest-rides/')) return new Promise((resolve) => { finish = resolve; });
+    return ok();
+  });
+  await app.login(user.email, 'Test password', 'Phone');
+  const pending = app.guestRides(`/guest-rides/${id}/link`, { expectedLinkId: null }, 'guest-link-key'), rejected = assert.rejects(pending, { code: 'SESSION_CHANGED' });
+  await app.logout(); finish(ok({ token: 'c'.repeat(64) })); await rejected;
+  assert.equal(app.account(), null);
+});
+
+test('the mobile activity boundary rejects guest phone numbers in Work current and past journeys', async () => {
+  let history = false, includePhone = true;
+  const { app } = client(async (url) => {
+    if (url.endsWith('/auth/login')) return response(auth());
+    const ride = { ...bookingRide, vehicleCategory: 'standard', createdAt: 1000, isDemo: true,
+      passenger: { kind: 'guest', name: 'Demo Passenger', ...(includePhone ? { phone: '+2348012345678' } : {}) } };
+    return ok({ current: history ? [] : [ride], history: history ? [ride] : [], activeElsewhere: [], nextBefore: null });
+  });
+  await app.login(user.email, 'Test password', 'Phone');
+  assert.equal((await app.activity('customer')).current[0].passenger?.kind, 'guest');
+  await assert.rejects(app.activity('work'), /incompatible guest ride response/);
+  history = true;
+  await assert.rejects(app.activity('work'), /incompatible guest ride response/);
+  includePhone = false;
+  assert.equal((await app.activity('work')).history[0].passenger?.kind, 'guest');
+});
+
 test('Work deletion sends explicit confirmation and version, publishes the customer account and leaves credentials intact', async () => {
   const writes: Array<{ url: string; options: RequestInit }> = [];
   const { app, storage } = client(async (url, options) => {
@@ -262,4 +359,114 @@ test('application edits preserve their version and request key through token rot
   assert.equal(attempts.length,3);
   application.driverId = 'another-driver';
   await assert.rejects(app.application(),{ code:'SESSION_CHANGED' });
+});
+
+test('native face comparison sends consent and version once per request key without storing biometric results', async () => {
+  const result = { driverId: user.id, status: 'draft', version: 4, busy: false, details: null,
+    vehicle: { model: 'Toyota Corolla', plate: 'TEST-123' }, documents: [], eligibility: { eligible: false, missing: [], expired: [] }, reviewReason: null,
+    faceCheck: { available: true, provider: 'aws_rekognition', status: 'matched', reason: null, checkedAt: 1000, similarity: 98.75, threshold: 95,
+      consentVersion: 'driver-face-match-v1', retryAfter: 61000 } };
+  const calls: Array<{ url: string; options: RequestInit }> = [];
+  const { app, storage } = client(async (url, options) => {
+    if (url.endsWith('/auth/login')) return response(auth());
+    if (url.endsWith('/auth/refresh')) return response(auth(2));
+    calls.push({ url, options });
+    return new Headers(options.headers).get('Authorization') === `Bearer ${auth().credentials.accessToken}` ? unauthorized() : ok({ application: result });
+  });
+  await app.login(user.email, 'Test password', 'Phone');
+  const application = await app.applicationCommand('face-check', { expectedVersion: 2, consent: true }, 'face-comparison-request');
+  assert.equal(calls.length, 2);
+  for (const { url, options } of calls) {
+    assert.ok(url.endsWith('/driver/application/face-check'));
+    assert.deepEqual(JSON.parse(String(options.body)), { expectedVersion: 2, consent: true });
+    assert.equal(new Headers(options.headers).get('Idempotency-Key'), 'face-comparison-request');
+  }
+  assert.equal(application.faceCheck?.status, 'matched');
+  assert.equal(application.status, 'draft'); assert.equal(application.eligibility.eligible, false);
+  assert.ok(!storage.value!.includes('98.75')); assert.ok(!storage.value!.includes('faceCheck'));
+});
+
+test('native face comparison allows provider processing beyond the ordinary timeout but aborts after 45 seconds', async (t) => {
+  let signal!: AbortSignal;
+  const { app } = client(async (url, options) => {
+    if (url.endsWith('/auth/login')) return response(auth());
+    signal = options.signal!;
+    return new Promise((_resolve, reject) => signal.addEventListener('abort', () => reject(new Error('Timed out')), { once: true }));
+  });
+  await app.login(user.email, 'Test password', 'Phone');
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const result = app.applicationCommand('face-check', { expectedVersion: 2, consent: true }, 'bounded-face-check');
+  const rejected = assert.rejects(result, { code: 'NETWORK' });
+  t.mock.timers.tick(12000); assert.equal(signal.aborted, false);
+  t.mock.timers.tick(32999); assert.equal(signal.aborted, false);
+  t.mock.timers.tick(1); assert.equal(signal.aborted, true); await rejected;
+});
+
+test('native live updates share one authenticated request and abort on background or logout', async () => {
+  const reads: RequestInit[] = [];
+  const { app } = client(async (url, options) => {
+    if (url.endsWith('/auth/login')) return response(auth());
+    if (url.includes('/events?')) {
+      reads.push(options);
+      return new Promise((_resolve, reject) => options.signal!.addEventListener('abort', () => reject(new Error('Aborted')), { once: true }));
+    }
+    return ok();
+  });
+  await app.login(user.email, 'Test password', 'Phone');
+  app.resumeUpdates(); app.resumeUpdates(); await delay(1);
+  assert.equal(reads.length, 1);
+  assert.equal(new Headers(reads[0].headers).get('Authorization'), `Bearer ${auth().credentials.accessToken}`);
+  app.pauseUpdates(); assert.equal(reads[0].signal!.aborted, true);
+  app.resumeUpdates(); await delay(1); assert.equal(reads.length, 2);
+  await app.logout(); assert.equal(reads[1].signal!.aborted, true);
+});
+
+const familyDashboard = () => ({ adultConfirmed: true, contacts: [], trips: [], availableTrips: [], inbox: [], limits: { contacts: 5, checkInCooldownMs: 300000 } });
+test('family sharing commands keep bearer authentication, consent and idempotency through token refresh', async () => {
+  const calls: Array<{ url: string; options: RequestInit }> = [];
+  const { app, storage } = client(async (url, options) => {
+    if (url.endsWith('/auth/login')) return response(auth());
+    if (url.endsWith('/auth/refresh')) return response(auth(2));
+    calls.push({ url, options });
+    return new Headers(options.headers).get('Authorization') === `Bearer ${auth().credentials.accessToken}` ? unauthorized()
+      : ok({ family: familyDashboard(), replayed: false });
+  });
+  await app.login(user.email, 'Test password', 'Phone');
+  await app.familyCommand('invite', { email: 'private-family@example.test', adultConfirmed: true }, 'original-family-key');
+  assert.equal(calls.length, 2);
+  for (const call of calls) {
+    assert.ok(call.url.endsWith('/api/mobile/v1/family/invite'));
+    assert.equal(new Headers(call.options.headers).get('Idempotency-Key'), 'original-family-key');
+    assert.equal(call.options.credentials, 'omit');
+    assert.deepEqual(JSON.parse(String(call.options.body)), { email: 'private-family@example.test', adultConfirmed: true });
+  }
+  assert.ok(!storage.value!.includes('private-family')); assert.ok(!storage.value!.includes('adultConfirmed'));
+});
+
+test('a family response received after logout cannot enter the next signed-in account', async () => {
+  let finish!: (value: Response) => void;
+  const { app } = client(async url => {
+    if (url.endsWith('/auth/login')) return response(auth());
+    if (url.endsWith('/family')) return new Promise(resolve => { finish = resolve; });
+    return ok();
+  });
+  await app.login(user.email, 'Test password', 'Phone');
+  const pending = app.familyDashboard(), rejected = assert.rejects(pending, { code: 'SESSION_CHANGED' });
+  await app.logout(); finish(ok({ family: familyDashboard() })); await rejected;
+  assert.equal(app.account(), null);
+});
+
+test('family read cancellation reaches the network and malformed observer payloads fail the client boundary', async () => {
+  let reading: RequestInit | undefined, forbidden = false;
+  const { app } = client(async (url, options) => {
+    if (url.endsWith('/auth/login')) return response(auth());
+    if (forbidden) return ok({ family: { ...familyDashboard(), pickupPin: '123456' } });
+    reading = options;
+    return new Promise((_resolve, reject) => options.signal!.addEventListener('abort', () => reject(new Error('Aborted')), { once: true }));
+  });
+  await app.login(user.email, 'Test password', 'Phone');
+  const controller = new AbortController(), pending = app.familyDashboard(controller.signal), rejected = assert.rejects(pending, { code: 'NETWORK' });
+  controller.abort(); await rejected; assert.equal(reading?.signal?.aborted, true);
+  forbidden = true; await assert.rejects(app.familyDashboard(), /incompatible Family Safety/);
+  await assert.rejects(app.familyTrip('../another-user'), /Invalid family trip/);
 });

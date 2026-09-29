@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createMapProvider } from '../src/infrastructure/map-provider.mjs';
-const bounds = { west: 7.1, south: 8.8, east: 7.65, north: 9.25 };
+import { NIGERIA_BOUNDS } from '../../../packages/shared/src/locations.mjs';
+const bounds = NIGERIA_BOUNDS;
 const places = { features: [{ geometry: { type: 'Point', coordinates: [7.4, 9.08] }, properties: { name: 'Wuse', city: 'Abuja' } }] };
 test('Photon search encodes and bounds user text, deduplicates inflight work, caches and rate limits all accounts together', async () => {
   let now = 1000, resolve;
@@ -14,12 +15,25 @@ test('Photon search encodes and bounds user text, deduplicates inflight work, ca
   assert.deepEqual(await first, await second); assert.equal(requests.length, 1);
   await provider.search('Wuse & cafe', bounds); assert.equal(requests.length, 1);
   assert.equal(requests[0].url.searchParams.get('q'), 'Wuse & cafe');
-  assert.equal(requests[0].url.searchParams.get('bbox'), '7.1,8.8,7.65,9.25');
+  assert.equal(requests[0].url.searchParams.get('bbox'), `${bounds.west},${bounds.south},${bounds.east},${bounds.north}`);
   assert.equal(requests[0].url.searchParams.get('countrycode'), 'NG');
   assert.match(requests[0].options.headers['User-Agent'], /TaxiAi/); assert.equal(requests[0].options.redirect, 'error');
   await assert.rejects(provider.search('Maitama', bounds), { code: 'MAPS_BUSY' });
   now += 1100; const third = provider.search('Maitama', bounds); resolve(Response.json(places)); await third;
   assert.equal(requests.length, 2);
+});
+test('Nigeria search keeps nationwide results and rejects foreign country metadata before domain coordinate validation', async () => {
+  const feature = (name, lat, lng, countrycode = 'NG') => ({ geometry: { type: 'Point', coordinates: [lng, lat] }, properties: { name, countrycode } });
+  let searched;
+  const provider = createMapProvider({ env: {}, fetchImpl: async (url) => {
+    searched = url;
+    return Response.json({ features: [feature('Lagos', 6.5244, 3.3792), feature('Kano', 12.0022, 8.592),
+      feature('Port Harcourt', 4.8156, 7.0498), feature('Cotonou', 6.3703, 2.3912, 'BJ'),
+      feature('Maroua', 10.591, 14.3159, 'CM'), feature('Wrong country label', 9.0765, 7.3986, 'CM')] });
+  } });
+  assert.deepEqual((await provider.search('town', bounds)).map((p) => p.name), ['Lagos', 'Kano', 'Port Harcourt']);
+  assert.equal(searched.searchParams.get('countrycode'), 'NG');
+  assert.equal(searched.searchParams.get('bbox'), `${bounds.west},${bounds.south},${bounds.east},${bounds.north}`);
 });
 test('OSRM uses car routes, bounded snapping and GeoJSON; upstream failures never become fictional road routes', async () => {
   let url;
@@ -36,4 +50,46 @@ test('OSRM uses car routes, bounded snapping and GeoJSON; upstream failures neve
   await assert.rejects(createMapProvider({ env: { TAXI_AI_MAPS_MODE: 'off' }, fetchImpl: () => { throw new Error('must not fetch'); } }).search('Wuse', bounds), { code: 'MAPS_UNAVAILABLE' });
   assert.throws(() => createMapProvider({ env: { TAXI_AI_SEARCH_URL: 'https://user:secret@example.test/api' } }));
   assert.throws(() => createMapProvider({ env: { TAXI_AI_TILE_URL: 'javascript:alert(1)' } }));
+});
+test('OSRM pickup table uses configured routing origin and shared rate limit, and never accepts fallback-speed cells', async () => {
+  let now = 1000;
+  const calls = [], pairs = [
+    { from: { lat: 9.08, lng: 7.4 }, to: { lat: 9.085, lng: 7.405 } },
+    { from: { lat: 9.081, lng: 7.401 }, to: { lat: 9.086, lng: 7.406 } },
+    { from: { lat: 9.082, lng: 7.402 }, to: { lat: 9.087, lng: 7.407 } },
+  ];
+  const provider = createMapProvider({ now: () => now, env: { TAXI_AI_ROUTING_URL: 'https://maps.example.test/routed-car/route/v1/driving/' },
+    fetchImpl: async (url) => {
+      calls.push(url);
+      return Response.json({ code: 'Ok', durations: [[180, 220, 300], [160, null, 400], [170, 210, 300]],
+        distances: [[1200, 1400, 2000], [1100, null, 2400], [1150, 1300, 1800]], fallback_speed_cells: [[2, 2]],
+        sources: pairs.map(({ from }) => ({ location: [from.lng, from.lat] })),
+        destinations: pairs.map(({ to }) => ({ location: [to.lng, to.lat] })) });
+    } });
+  const results = await provider.pickupEstimates(pairs);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].origin, 'https://maps.example.test');
+  assert.match(calls[0].pathname, /^\/routed-car\/table\/v1\/driving\//);
+  assert.equal(calls[0].searchParams.get('sources'), '0;2;4');
+  assert.equal(calls[0].searchParams.get('destinations'), '1;3;5');
+  assert.equal(calls[0].searchParams.get('annotations'), 'duration,distance');
+  assert.equal(calls[0].searchParams.get('radiuses'), '250;250;250;250;250;250');
+  assert.equal(calls[0].searchParams.has('fallback_speed'), false);
+  assert.deepEqual(results, [{ durationSeconds: 180, distanceMeters: 1200, source: 'osrm-table',
+    snappedFrom: [7.4, 9.08], snappedTo: [7.405, 9.085] }, null, null]);
+  assert.deepEqual(await provider.pickupEstimates(pairs), results); assert.equal(calls.length, 1);
+  await assert.rejects(provider.route(pairs[0].from, pairs[0].to), { code: 'MAPS_BUSY' });
+  now += 15_000; await provider.pickupEstimates(pairs); assert.equal(calls.length, 2);
+});
+test('OSRM pickup table bounds work and rejects unsupported endpoints or malformed tables', async () => {
+  let calls = 0;
+  const pair = { from: { lat: 9.08, lng: 7.4 }, to: { lat: 9.085, lng: 7.405 } };
+  const provider = createMapProvider({ fetchImpl: async () => { calls += 1; return Response.json({ code: 'Ok' }); } });
+  for (const pairs of [[], Array(17).fill(pair), [{ ...pair, from: { lat: NaN, lng: 7.4 } }]]) {
+    await assert.rejects(provider.pickupEstimates(pairs), { code: 'INVALID_ROUTE' });
+  }
+  assert.equal(calls, 0);
+  await assert.rejects(provider.pickupEstimates([pair]), { code: 'MAPS_UNAVAILABLE' });
+  await assert.rejects(createMapProvider({ env: { TAXI_AI_ROUTING_URL: 'https://maps.example.test/custom/' },
+    fetchImpl: () => assert.fail('unsupported table URL must not be queried') }).pickupEstimates([pair]), { code: 'MAPS_UNAVAILABLE' });
 });

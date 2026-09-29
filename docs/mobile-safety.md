@@ -1,5 +1,11 @@
 # Native trip safety
 
+The manual SOS flow documented below remains a simulator. A separate opt-in
+**Safety monitoring · experimental** panel now supports foreground motion/audio
+signals, persistent cancel countdowns and configurable gateway delivery. See
+[safety monitoring](safety-monitoring.md) for its actual capabilities and setup.
+
+
 Open **Activity → journey → Safety / SOS** as either customer or driver.
 The screen keeps trusted contacts, private trip links and your own incident
 records together. It remains a development preview: saving a concern does not

@@ -12,12 +12,12 @@ import { canonical } from '../src/modules/rides/domain.mjs';
 // Compare every pre-existing column while allowing the schema-six additions.
 function legacyRows(db, table) {
   return db.prepare(`SELECT * FROM ${table}`).all().map((row) => {
-    if (table === 'rides') { delete row.request_expires_at; delete row.closed_reason; delete row.driver_snapshot_json; delete row.vehicle_category; }
+    if (table === 'rides') { delete row.request_expires_at; delete row.closed_reason; delete row.driver_snapshot_json; delete row.vehicle_category; assert.equal(row.dispatch_region, `sample:${row.pickup_id}`); delete row.dispatch_region; }
     return row;
   });
 }
 
-test('schema five gains availability and deadlines while preserving saved route, fare and session data', (t) => {
+test('schema five gains availability and deadlines while preserving saved route, fare and session data', async (t) => {
   const folder = mkdtempSync(join(tmpdir(), 'taxi-matching-upgrade-'));
   t.after(() => rmSync(folder, { recursive: true, force: true }));
   const filename = join(folder, 'existing.sqlite'), old = new DatabaseSync(filename);
@@ -41,7 +41,7 @@ test('schema five gains availability and deadlines while preserving saved route,
     assert.equal(db.prepare('SELECT request_expires_at FROM rides').get().request_expires_at, 301000);
     assert.equal(db.prepare('SELECT count(*) AS n FROM driver_availability').get().n, 0, 'migration never makes drivers online');
     assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(), []);
-    createApplication({ db, clock: () => 301000 }).rides.sweep();
+    (await createApplication({ db, clock: () => 301000 }).rides.sweep());
     assert.equal(db.prepare('SELECT closed_reason FROM rides').get().closed_reason, 'request_expired');
     assert.equal(db.prepare('SELECT count(*) AS n FROM fare_events').get().n, 0);
     assert.equal(db.prepare('SELECT route_json FROM location_quotes').get().route_json, '{"fixture":"existing-saved-route"}');
@@ -65,7 +65,7 @@ test('synchronous transactions reject async callbacks and roll back promise-retu
   assert.equal(db.prepare('SELECT count(*) AS count FROM rate_limits').get().count, 1, 'rollback leaves the connection usable');
 });
 
-test('ordered migrations preserve a version-one database, including existing accounts, sessions and rides', (t) => {
+test('ordered migrations preserve a version-one database, including existing accounts, sessions and rides', async (t) => {
   const folder = mkdtempSync(join(tmpdir(), 'taxi-ai-migration-'));
   t.after(() => rmSync(folder, { recursive: true, force: true }));
   const filename = join(folder, 'existing.sqlite');
@@ -88,16 +88,16 @@ test('ordered migrations preserve a version-one database, including existing acc
     }
     assert.equal(upgraded.prepare('SELECT count(*) AS count FROM chat_messages').get().count, 0);
     const app = createApplication({ db: upgraded, clock: () => 2000 });
-    const session = app.accounts.sessionFor('existing-token');
+    const session = (await app.accounts.sessionFor('existing-token'));
     assert.equal(session.user.name, 'Existing customer');
-    assert.equal(app.rides.get(session.user, 'existing-ride').suggestedFareKobo, 450000);
+    assert.equal((await app.rides.get(session.user, 'existing-ride')).suggestedFareKobo, 450000);
   } finally { upgraded.close(); }
   const reopened = openDatabase(filename);
   assert.equal(reopened.prepare('PRAGMA user_version').get().user_version, SCHEMA_VERSION);
   reopened.close();
 });
 
-test('schema two upgrades without changing fares, chat, read markers, reports, sessions or saved retry commands', (t) => {
+test('schema two upgrades without changing fares, chat, read markers, reports, sessions or saved retry commands', async (t) => {
   const folder = mkdtempSync(join(tmpdir(), 'taxi-ai-trip-upgrade-'));
   t.after(() => rmSync(folder, { recursive: true, force: true }));
   const filename = join(folder, 'existing.sqlite');
@@ -140,16 +140,16 @@ test('schema two upgrades without changing fares, chat, read markers, reports, s
     for (const table of tables) assert.equal(JSON.stringify(legacyRows(upgraded, table)), snapshots.get(table), table);
     assert.deepEqual(upgraded.prepare('PRAGMA foreign_key_check').all(), []);
     const app = createApplication({ db: upgraded, clock: () => 2000 });
-    const user = app.accounts.sessionFor('old-session').user;
-    const before = app.rides.get(user, rideId);
+    const user = (await app.accounts.sessionFor('old-session')).user;
+    const before = (await app.rides.get(user, rideId));
     assert.equal(before.status, 'agreed'); assert.equal(before.trip, null, 'migration must not silently book old agreements');
     assert.equal(before.negotiation.agreement.amountKobo, 470000);
-    assert.equal(app.rides.mutate({ userId: customerId, key: 'existing-retry-key', action: 'accept', id: rideId, data }).replayed, true);
-    assert.equal(app.chat.thread(customerId, rideId).messages[0].body, 'Existing message');
-    assert.equal(app.chat.thread(customerId, rideId).unread, 0);
-    assert.equal(app.chat.send({ userId: driverId, rideId, key: 'existing-chat-key', data: { body: 'Existing message' } }).replayed, true);
-    assert.throws(() => app.rides.mutate({ userId: customerId, key: 'confirm-old-agreement', action: 'confirm', id: rideId, data: { expectedVersion: before.version } }), { code: 'DRIVER_NOT_ELIGIBLE' });
-    assert.equal(app.rides.get(user, rideId).status, 'agreed', 'legacy test approval is not identity verification');
+    assert.equal((await app.rides.mutate({ userId: customerId, key: 'existing-retry-key', action: 'accept', id: rideId, data })).replayed, true);
+    assert.equal((await app.chat.thread(customerId, rideId)).messages[0].body, 'Existing message');
+    assert.equal((await app.chat.thread(customerId, rideId)).unread, 0);
+    assert.equal((await app.chat.send({ userId: driverId, rideId, key: 'existing-chat-key', data: { body: 'Existing message' } })).replayed, true);
+    (await assert.rejects(async () => (await app.rides.mutate({ userId: customerId, key: 'confirm-old-agreement', action: 'confirm', id: rideId, data: { expectedVersion: before.version } })), { code: 'DRIVER_NOT_ELIGIBLE' }));
+    assert.equal((await app.rides.get(user, rideId)).status, 'agreed', 'legacy test approval is not identity verification');
   } finally { upgraded.close(); }
 });
 

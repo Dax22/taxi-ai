@@ -1,6 +1,6 @@
 export const DRIVER_DOCUMENTS = Object.freeze({
-  profile_photo: Object.freeze({ label: 'Driver photo', expires: false }),
-  driving_licence: Object.freeze({ label: 'Driving licence', expires: true }),
+  profile_photo: Object.freeze({ label: 'Driver selfie', expires: false }),
+  driving_licence: Object.freeze({ label: 'Driving licence (front)', expires: true }),
   vehicle_registration: Object.freeze({ label: 'Vehicle document', expires: true }),
   insurance: Object.freeze({ label: 'Insurance document', expires: true }),
   vehicle_photo: Object.freeze({ label: 'Vehicle photo showing number plate', expires: false }),
@@ -13,7 +13,7 @@ export const DRIVER_APPLICATION_LABELS = Object.freeze({ draft: 'Draft', submitt
   changes_requested: 'Corrections requested', rejected: 'Rejected', approved: 'Review approved' });
 export const MAX_DRIVER_FILE_BYTES = 2 * 1024 * 1024;
 
-// End of the stated calendar day in Abuja (UTC+1), as an exclusive deadline.
+// End of the stated calendar day in Nigeria (WAT, UTC+1), as an exclusive deadline.
 export function driverDocumentDeadline(value) {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
   const midnight = Date.parse(value + 'T00:00:00Z');

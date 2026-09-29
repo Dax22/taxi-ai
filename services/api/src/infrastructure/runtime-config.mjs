@@ -33,7 +33,7 @@ export function createRuntimeConfig(env = process.env) {
     || !origin.hostname.includes('.') || origin.hostname.endsWith('.') || isIP(origin.hostname.replace(/^\[|\]$/g, '')) || origin.hostname.endsWith('.localhost')) {
     throw new Error('Staging needs one HTTPS DNS origin, without credentials, path, query or fragment.');
   }
-  if (!env.TAXI_AI_DB || !isAbsolute(env.TAXI_AI_DB)) throw new Error('Staging needs an absolute TAXI_AI_DB path on persistent storage.');
+  if (!env.TAXI_AI_DATABASE_URL && (!env.TAXI_AI_DB || !isAbsolute(env.TAXI_AI_DB))) throw new Error('Staging needs TAXI_AI_DATABASE_URL or an absolute TAXI_AI_DB path on persistent storage.');
   if (!/^[a-f0-9]{64}$/.test(env.TAXI_AI_PROXY_TOKEN ?? '')) throw new Error('Staging needs a random 64-hex-character TAXI_AI_PROXY_TOKEN.');
   const file = env.TAXI_AI_STAGING_ACCESS_FILE;
   if (!file || !isAbsolute(file)) throw new Error('Staging needs an absolute TAXI_AI_STAGING_ACCESS_FILE.');

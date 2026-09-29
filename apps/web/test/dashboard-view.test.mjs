@@ -33,7 +33,7 @@ class ElementFixture {
   focus() { this.focused = true; }
   reset() { this.resets = (this.resets ?? 0) + 1; }
 }
-function setup(t) {
+function setup(t, serverNow = () => 1000) {
   const old = globalThis.document, nodes = new Map(), created = [];
   for (const [, tag, id] of html.matchAll(/<(\w+)\b[^>]*?\bid="([^"]+)"/g)) nodes.set(id, new ElementFixture(tag));
   const node = (id) => { assert.ok(nodes.has(id), `Missing HTML element #${id}`); return nodes.get(id); };
@@ -41,9 +41,9 @@ function setup(t) {
     querySelectorAll(selector) { const all = [...nodes.values(), ...created]; return selector === 'button'
       ? all.filter((value) => value.tag === 'button') : all.filter((value) => value.dataset.requestExpires); } };
   t.after(() => { globalThis.document = old; });
-  const commands = [], mismatches = [], edits = [];
-  const view = createDashboardView({ serverNow: () => 1000, onCommand: (...args) => commands.push(args), onVehicleMismatch: (id) => mismatches.push(id), onEditVehicle: () => edits.push(true), onReview() {}, onReportReview() {}, onSelectionChange() {}, onHistory() {} });
-  return { view, node, commands, mismatches, edits };
+  const commands = [], mismatches = [], edits = [], categoryChanges = [];
+  const view = createDashboardView({ serverNow, onCommand: (...args) => commands.push(args), onVehicleMismatch: (id) => mismatches.push(id), onEditVehicle: () => edits.push(true), onCategoryChange: (...args) => categoryChanges.push(args), onReview() {}, onReportReview() {}, onSelectionChange() {}, onHistory() {} });
+  return { view, node, commands, mismatches, edits, categoryChanges };
 }
 const customer = { id: 'customer', name: 'Passenger', role: 'customer' };
 const driver = { id: 'driver', name: 'Driver', role: 'driver', driver: { status: 'approved', eligibility: { eligible: true, reviewStatus: 'approved' }, vehicle: { model: 'Toyota', plate: 'TEST-001' } } };
@@ -51,6 +51,41 @@ const ride = { id: 'ride-one', status: 'booked', version: 4, createdAt: 1000, su
   pickup: { name: 'Wuse' }, destination: { name: 'Maitama' }, customer, driver: { id: driver.id, name: driver.name, vehicle: driver.driver.vehicle },
   negotiation: { agreement: { amountKobo: 470001 } }, trip: { pickupPin: '123456' }, activity: [] };
 const state = (user, rides = [ride]) => ({ user, rides, history: [], drivers: [], available: [], reports: [], chatUnread: {}, historyCursor: null });
+
+test('timed ride offers show a road ETA and expiry, send explicit offer consent and block expired actions before the next tick', (t) => {
+  let now = 1000; const h = setup(t, () => now);
+  const offered = { ...ride, status: 'requested', expiresAt: 301000, hasRoute: true, approximateDistanceKm: 2,
+    offer: { id: 'offer-one', expiresAt: 21000, pickupEtaMinutes: 4, etaSource: 'road' } };
+  h.view.render({ ...state(driver, []), availabilityOnline: true, dispatchMode: 'sequential', available: [offered] });
+  const row = h.node('available-list').children[0], [description, accept, decline] = row.children;
+  assert.ok(description.children.some((node) => node.textContent === 'Ride offer'));
+  assert.ok(description.children.some((node) => /About 4 min to pickup/.test(node.textContent)));
+  assert.ok(description.children.some((node) => /Respond within 20 seconds/.test(node.textContent)));
+  assert.ok(description.children.some((node) => /Both sides must agree/.test(node.textContent)));
+  assert.equal(accept.textContent, 'Accept and negotiate');
+  accept.handlers.click(); assert.deepEqual(h.commands[0].slice(0, 2), ['/api/rides/ride-one/claim', { expectedVersion: 4, offerId: 'offer-one' }]);
+  decline.handlers.click(); assert.deepEqual(h.commands[1].slice(0, 2), ['/api/dispatch/offers/offer-one/decline', {}]);
+  now = 21000; accept.handlers.click(); decline.handlers.click(); assert.equal(h.commands.length, 2);
+  h.view.tick(); assert.equal(accept.disabled, true); assert.equal(decline.disabled, true);
+  assert.ok(description.children.some((node) => /Offer expired/.test(node.textContent)));
+});
+
+test('sample and fallback ride offers do not claim road pickup times; stale handlers cannot accept a replaced offer', (t) => {
+  const h = setup(t), offered = { ...ride, status: 'requested', expiresAt: 301000, hasRoute: true, approximateDistanceKm: 2,
+    offer: { id: 'offer-one', expiresAt: 21000, pickupEtaMinutes: null, etaSource: 'distance_fallback' } };
+  const next = { ...state(driver, []), availabilityOnline: true, dispatchMode: 'batch', available: [offered] };
+  h.view.render(next); const oldAccept = h.node('available-list').children[0].children[1];
+  let labels = h.node('available-list').children[0].children[0].children.map((node) => node.textContent).join(' ');
+  assert.match(labels, /Road estimate unavailable/); assert.ok(!labels.includes('min to pickup'));
+  h.view.render({ ...next, available: [{ ...offered, offer: { ...offered.offer, id: 'offer-two', etaSource: 'sample' } }] });
+  oldAccept.handlers.click(); assert.equal(h.commands.length, 0);
+  labels = h.node('available-list').children[0].children[0].children.map((node) => node.textContent).join(' ');
+  assert.match(labels, /Local sample-area match/); assert.ok(!labels.includes('min to pickup'));
+  h.view.reset(); oldAccept.handlers.click(); assert.equal(h.commands.length, 0);
+  h.view.render({ ...next, dispatchMode: 'legacy', available: [{ ...offered, offer: undefined }] });
+  h.node('available-list').children[0].children[1].handlers.click();
+  assert.deepEqual(h.commands[0].slice(0, 2), ['/api/rides/ride-one/claim', { expectedVersion: 4 }]);
+});
 
 test('Edit / change vehicle is in the driver profile card and stays usable after dashboard ticks', (t) => {
   const h = setup(t), profile = html.match(/<section id="driver-panel"[^>]*>([\s\S]*?)<\/section>/)[1];
@@ -76,7 +111,7 @@ test('all categories book the selected service and delivery drafts clear at acco
   const category = (id) => group.children.find((button) => button.dataset.category === id);
   for (const id of ['standard', 'suv', 'van', 'truck', 'motorcycle']) {
     category(id).handlers.click(); h.view.render({ ...state(customer, []), sampleMatchingEnabled: true });
-    assert.equal(h.node('standard-ride-planner').hidden, false); assert.equal(h.node('customer-panel').hidden, false);
+    assert.equal(h.node('standard-ride-planner').hidden, false); assert.equal(h.node('customer-panel').hidden, true);
     assert.equal(category(id)['aria-checked'], 'true');
     const delivery = !['standard', 'suv'].includes(id);
     assert.equal(h.node('delivery-details-form').hidden, !delivery);
@@ -110,6 +145,30 @@ test('category keyboard navigation keeps focus and blocks switching while a comm
   assert.equal(buttons[1]['aria-checked'], 'true');
   h.view.setBusy(false); buttons[1].handlers.keydown({ key: 'Home', preventDefault() {} });
   assert.equal(buttons[0]['aria-checked'], 'true'); assert.equal(buttons[0].focused, true);
+});
+
+test('courier deep link survives authentication and books standard car parcels without passenger details', (t) => {
+  const oldLocation = globalThis.location; globalThis.location = { search: '?service=courier' };
+  t.after(() => { globalThis.location = oldLocation; });
+  const h = setup(t); h.view.render(state(null, [])); h.view.reset(); h.view.render(state(customer, []));
+  assert.equal(h.node('dashboard-title').textContent, 'Send a parcel across Nigeria.');
+  assert.equal(h.node('delivery-details-form').hidden, false); assert.equal(h.node('passenger-panel').hidden, true);
+  assert.equal(h.node('delivery-weight').max, '30');
+  assert.deepEqual(h.categoryChanges.at(-1), ['standard', 'delivery']);
+  const group = h.node('account-vehicle-categories').children[0];
+  assert.equal(group.children.find((button) => button.dataset.category === 'suv').hidden, true);
+  assert.equal(group.children[0].children[1].textContent, 'Car');
+  h.node('delivery-description').value = 'Books and clothes'; h.node('delivery-weight').value = '4';
+  h.node('delivery-recipient').value = 'Recipient';
+  const options = h.view.requestOptions();
+  assert.equal(options.vehicleCategory, 'standard'); assert.equal(options.delivery.weightKg, 4); assert.equal(options.passenger, undefined);
+  h.view.render(state({ ...customer, id: 'other-customer' }, []));
+  assert.equal(h.node('delivery-recipient').value, '', 'replacement accounts never inherit parcel drafts');
+  h.node('booking-service-ride').handlers.click();
+  assert.deepEqual(h.categoryChanges.at(-1), ['standard', 'ride']);
+  assert.equal(h.node('dashboard-title').textContent, 'Where will today take you?');
+  assert.equal(h.node('delivery-details-form').hidden, true); assert.equal(h.node('passenger-panel').hidden, false);
+  assert.deepEqual(h.view.requestOptions(), { vehicleCategory: 'standard', passenger: { kind: 'self' } });
 });
 
 test('dashboard reset removes trip identities, fare, plate, history and PIN before a different account renders', (t) => {
@@ -146,6 +205,13 @@ test('fare buttons retain the displayed offer version and never accept a newer p
   const negotiating = { ...ride, status: 'negotiating', trip: null,
     negotiation: { currentOffer: { id: 'offer-one', proposedBy: driver.id, amountKobo: 470001, expiresAt: 2000 } } };
   h.view.render(state(customer, [negotiating]));
+  assert.equal(h.node('fare-negotiation-guide').hidden, false);
+  assert.equal(h.node('fare-open-chat').textContent, 'Chat with driver');
+  assert.equal(h.node('fare-open-call').textContent, 'Call driver in app');
+  assert.match(h.node('accept-fare').textContent, /Accept exact fare/);
+  assert.match(h.node('fare-guidance').textContent, /Accept it only if you agree|exact offer/);
+  h.node('fare-open-chat').handlers.click(); assert.equal(h.node('chat-message').focused, true);
+  h.node('fare-open-call').handlers.click(); assert.equal(h.node('call-start').focused, true);
   const displayed = h.node('accept-fare').onclick;
   h.view.render(state(customer, [{ ...negotiating, version: 5, negotiation: { currentOffer: {
     id: 'offer-two', proposedBy: driver.id, amountKobo: 490000, expiresAt: 2000,
@@ -239,4 +305,48 @@ test('delivery handover controls require the code, respect lockout, and erase it
   assert.equal(h.node('delivery-complete').disabled, true);
   h.node('delivery-pin-form').handlers.submit({ preventDefault() {} }); assert.equal(h.commands.length, 1);
   h.view.reset(); assert.equal(h.node('driver-delivery-pin').value, ''); assert.equal(h.node('detail-delivery').textContent, '');
+});
+
+test('guest passenger consent gates booking; repeated renders preserve the exact draft and account/category changes clear it', (t) => {
+  const h = setup(t), empty = { ...state(customer, []), sampleMatchingEnabled: true };
+  h.view.render(empty);
+  assert.equal(h.node('passenger-panel').hidden, false);
+  h.node('request-destination').value = 'Maitama'; h.node('request-destination').handlers.input();
+  h.node('passenger-kind').value = 'guest'; h.node('passenger-kind').handlers.change();
+  h.node('passenger-name').value = 'Test Friend'; h.node('passenger-phone').value = '08012345678';
+  h.node('request-form').handlers.submit({ preventDefault() {} }); assert.equal(h.commands.length, 0);
+  assert.match(h.node('page-error').textContent, /adult/);
+  h.node('passenger-consent').checked = true;
+  h.node('passenger-phone').handlers.input(); assert.equal(h.node('passenger-consent').checked, false);
+  h.node('passenger-consent').checked = true;
+  h.node('request-form').handlers.submit({ preventDefault() {} });
+  const payload = h.commands.at(-1)[1];
+  assert.deepEqual(payload.passenger, { kind: 'guest', name: 'Test Friend', phone: '+2348012345678', consent: true });
+  h.view.setBusy(true); h.view.render(empty); h.view.setBusy(false);
+  assert.equal(h.node('passenger-name').value, 'Test Friend');
+  h.node('request-form').handlers.submit({ preventDefault() {} }); assert.deepEqual(h.commands.at(-1)[1], payload);
+  h.view.rideCreated(); assert.equal(h.node('passenger-name').value, ''); assert.equal(h.node('passenger-kind').value, 'self');
+  const categories = h.node('account-vehicle-categories').children[0].children;
+  categories.find((button) => button.dataset.category === 'van').handlers.click();
+  assert.equal(h.node('passenger-panel').hidden, true); assert.equal(h.node('passenger-name').value, '');
+  h.node('delivery-description').value = 'Test parcel'; h.node('delivery-weight').value = '1'; h.node('delivery-recipient').value = 'Recipient';
+  assert.equal(Object.hasOwn(h.view.requestOptions(), 'passenger'), false);
+  categories.find((button) => button.dataset.category === 'suv').handlers.click();
+  assert.deepEqual(h.view.requestOptions().passenger, { kind: 'self' });
+  h.node('passenger-kind').value = 'guest'; h.node('passenger-kind').handlers.change(); h.node('passenger-name').value = 'Private draft';
+  h.view.render({ ...empty, user: { ...customer, id: 'other-account' } });
+  assert.equal(h.node('passenger-name').value, ''); assert.equal(h.node('passenger-kind').value, 'self');
+});
+
+test('guest rider is labelled separately from booker, contact is owner-only, and pickup guidance addresses the actual passenger', (t) => {
+  const h = setup(t), guest = { ...ride, passenger: { kind: 'guest', name: 'Test Friend', phone: '+2348012345678' } };
+  h.view.render(state(customer, [guest]));
+  assert.match(h.node('detail-passenger').textContent, /Passenger: Test Friend.*Booked by: Passenger/);
+  assert.match(h.node('detail-passenger').textContent, /\+2348012345678/);
+  assert.match(h.node('pickup-pin-guidance').textContent, /Do not send the PIN to the driver remotely/);
+  assert.match(h.node('ride-list').children[0].children[0].children[2].textContent, /Passenger: Test Friend/);
+  h.view.render(state(driver, [guest]));
+  assert.ok(!h.node('detail-passenger').textContent.includes('+2348012345678'));
+  assert.match(h.node('pickup-pin-help').textContent, /passenger, Test Friend/);
+  h.view.reset(); assert.equal(h.node('detail-passenger').textContent, '');
 });

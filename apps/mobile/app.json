@@ -14,7 +14,6 @@
     "android": {
       "package": "com.taxiai.app",
       "blockedPermissions": [
-        "android.permission.RECORD_AUDIO",
         "android.permission.ACCESS_BACKGROUND_LOCATION"
       ]
     },
@@ -36,11 +35,28 @@
         }
       ],
       "expo-notifications",
-      ["expo-image-picker", {
-        "cameraPermission": "Allow Taxi Ai to take a food or vehicle photo when you choose to add one.",
-        "photosPermission": "Allow Taxi Ai to use the food or vehicle photo you select.",
-        "microphonePermission": false
-      }]
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Allow Taxi Ai to take your driver selfie, licence, food or vehicle photo when you choose to add one.",
+          "photosPermission": "Allow Taxi Ai to use the driver document, food or vehicle photo you select.",
+          "microphonePermission": false
+        }
+      ],
+      [
+        "expo-sensors",
+        {
+          "motionPermission": "Allow Taxi Ai to check for possible impacts while you enable foreground safety monitoring."
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Allow Taxi Ai to check sound levels for possible distress only while you enable foreground monitoring. Audio is not saved or uploaded.",
+          "enableBackgroundRecording": false,
+          "enableBackgroundPlayback": false
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
