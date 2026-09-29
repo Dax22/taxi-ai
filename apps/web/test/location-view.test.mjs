@@ -94,6 +94,10 @@ test('planner binds actual HTML controls, renders plain-text places and prevents
   assert.equal(node('location-pickup-manual').hidden, true);
   assert.equal(node('location-target-pickup').disabled, true);
   assert.equal(node('location-pickup-current').textContent, 'Refresh current pickup');
+  view.renderPlanner({ ...state, locatingPickup: true });
+  assert.equal(node('location-destination-search').disabled, true);
+  assert.equal(node('location-destination-search').textContent, 'Reading your location…');
+  view.renderPlanner(state);
   view.renderPlanner({ ...state, service: 'delivery', rideDiscovery: false, target: 'pickup' });
   assert.equal(node('location-pickup-manual').hidden, false);
   assert.equal(node('location-target-pickup').disabled, false);

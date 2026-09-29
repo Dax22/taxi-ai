@@ -72,6 +72,8 @@ export function createLocationPlanner({ client, view, onBook, onOnline, device =
     finally { if (generation === epoch && searches.pickup === request) { locatingPickup = false; render(); } }
   }
   async function findRides(query) {
+    // Keep the first submitted lookup alive during the pending permission prompt.
+    if (locatingPickup) return;
     if (!settings?.enabled || service !== 'ride' || user?.role !== 'customer' || blocked || booking) {
       error = settings ? 'Nationwide ride search is unavailable right now.' : 'Checking nationwide ride search…'; render(); return;
     }

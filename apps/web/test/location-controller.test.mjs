@@ -254,6 +254,21 @@ test('Find rides ignores an old destination submitted before the GPS permission 
   assert.deepEqual(f.requests.at(-1).options.data, { query: 'New destination' });
 });
 
+test('a repeated Find rides submission during GPS permission keeps the first lookup alive', async () => {
+  const f = plannerSetup(), gps = deferred();
+  await f.c.setContext(customer, false); f.locateHook = () => gps.promise;
+  f.requestHook = async (path) => path === '/api/locations/search'
+    ? { places: [destination] }
+    : { settings: { enabled: true, mode: 'community' } };
+  const first = f.c.findRides('Maitama');
+  await f.c.findRides('Maitama');
+  assert.equal(f.locates, 1);
+  gps.resolve({ coords: { latitude: pickup.lat, longitude: pickup.lng, accuracy: 12 } });
+  await first;
+  assert.equal(f.requests.filter((request) => request.path.endsWith('/search')).length, 1);
+  assert.equal(f.c.snapshot().quote?.id, 'quote-one');
+});
+
 test('Find rides requires a new successful GPS fix even when a manual pickup is saved', async () => {
   const f = plannerSetup(); await f.c.setContext(customer, false); f.c.enable();
   f.c.select('pickup', { ...pickup, name: 'Old manual pickup' });

@@ -64,9 +64,9 @@ export function createLocationView({ onEnable, onUsePickup, onSearch, onFindRide
     for (const side of ['pickup', 'destination']) {
       const destination = side === 'destination';
       $(`location-${side}-fields`).disabled = state.blocked || state.booking || (!destination && !state.online);
-      locked(`location-${side}-search`, state.searching[side] || state.blocked || state.booking
+      locked(`location-${side}-search`, state.searching[side] || state.blocked || state.booking || (destination && state.locatingPickup)
         || (destination ? !state.settings?.enabled : !state.online));
-      if (destination) $('location-destination-search').textContent = state.searching.destination ? 'Searching…' : rideFlow ? 'Find rides' : 'Search destination';
+      if (destination) $('location-destination-search').textContent = state.locatingPickup ? 'Reading your location…' : state.searching.destination ? 'Searching…' : rideFlow ? 'Find rides' : 'Search destination';
       $(`location-${side}-selected`).textContent = state[side] ? `${state[side].name} · ${state[side].lat.toFixed(5)}, ${state[side].lng.toFixed(5)}` : destination ? 'Type and choose a destination anywhere in Nigeria.' : 'Choose pickup.';
       const key = JSON.stringify(state.results[side]);
       if (resultKeys[side] !== key) {
