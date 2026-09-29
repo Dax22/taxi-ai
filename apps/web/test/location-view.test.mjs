@@ -149,7 +149,7 @@ test('Find rides exposes pickup failures, destination choices and fare progress,
     },
       command: () => new Promise((resolve, reject) => { finishQuote = { resolve, reject }; }) },
     device: { supported: () => true, locate: async () => {
-      if (outsideNigeria) return { coords: { latitude: 41.8781, longitude: -87.6298, accuracy: 12 } };
+      if (outsideNigeria) return { coords: { latitude: 41.8781, longitude: -87.6298, accuracy: 5000 } };
       return { coords: { latitude: pickup.lat, longitude: pickup.lng, accuracy: 12 } };
     } } });
   await planner.setContext({ id: 'customer', role: 'customer' }, false);

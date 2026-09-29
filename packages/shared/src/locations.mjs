@@ -40,6 +40,17 @@ export function insideNigeria(point) {
   return NIGERIA_POLYGONS.some(([outer, ...holes]) => withinRing(point, outer)
     && !holes.some((hole) => withinRing(point, hole)));
 }
+
+/** Country feedback can use a rough device fix; booking still needs 200 m accuracy. */
+export function assertCurrentPickup(point, accuracy) {
+  if (!point || !Number.isFinite(point.lat) || !Number.isFinite(point.lng)
+    || Math.abs(point.lat) > 90 || Math.abs(point.lng) > 180)
+    throw new Error('Your current location is unavailable. Check your device location settings and try again.');
+  if (!insideNigeria(point)) throw new Error(OUTSIDE_NIGERIA_PICKUP_MESSAGE);
+  if (!Number.isFinite(accuracy) || accuracy <= 0 || accuracy > 200)
+    throw new Error('Your pickup location is not accurate enough yet. Try again in an open area.');
+}
+
 export function distanceMeters(a, b) {
   const rad = Math.PI / 180, dLat = (b.lat - a.lat) * rad, dLng = (b.lng - a.lng) * rad;
   const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLng / 2) ** 2;

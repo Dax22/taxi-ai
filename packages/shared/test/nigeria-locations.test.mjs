@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { insideNigeria, NIGERIA_BOUNDS, NIGERIA_CENTER, ABUJA_CENTER, distanceMeters } from '../src/locations.mjs';
+import { insideNigeria, assertCurrentPickup, NIGERIA_BOUNDS, NIGERIA_CENTER, ABUJA_CENTER, distanceMeters } from '../src/locations.mjs';
 import { NIGERIA_POLYGONS } from '../src/nigeria-boundary.mjs';
 
 // Representative urban points in all 36 states and the FCT, not dispatch seeds.
@@ -43,6 +43,16 @@ test('national guard rejects malformed coordinates without coercion or throwing'
   for (const point of [null, undefined, false, 7, 'Nigeria', [], {}, {lat:'9.07',lng:7.4},
     {lat:9.07,lng:'7.4'}, {lat:NaN,lng:7.4}, {lat:9,lng:Infinity}, {lat:90,lng:7},
     {lat:-90,lng:-180}, {lat:0,lng:0}]) assert.equal(insideNigeria(point), false);
+});
+
+test('current pickup explains foreign locations before street-level accuracy checks on web and native', () => {
+  const chicago = { lat: 41.8781, lng: -87.6298 };
+  for (const accuracy of [12, 5000]) assert.throws(() => assertCurrentPickup(chicago, accuracy), /testing from outside Nigeria/);
+  assert.doesNotThrow(() => assertCurrentPickup(ABUJA_CENTER, 12));
+  for (const accuracy of [5000, null, undefined, 0, -1, NaN])
+    assert.throws(() => assertCurrentPickup(ABUJA_CENTER, accuracy), /not accurate enough/);
+  for (const point of [null, {}, { lat: NaN, lng: -87 }, { lat: 91, lng: 0 }, { lat: 0, lng: 181 }, { lat: null, lng: null }])
+    assert.throws(() => assertCurrentPickup(point, 12), /current location is unavailable/);
 });
 
 test('preserved multipolygons include their boundary vertices and cannot be mutated', () => {
