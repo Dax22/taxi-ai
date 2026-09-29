@@ -136,27 +136,34 @@ test('planner binds actual HTML controls, renders plain-text places and prevents
 
 test('Find rides exposes pickup failures, destination choices and fare progress, then reveals a real quote after retry', async (t) => {
   const { node } = setup(t);
-  let planner, denyLocation = true, finishQuote;
+  let planner, outsideNigeria = true, searches = 0, finishQuote;
   const view = createLocationView({ onPreview: () => planner.preview(), onFindRide: (_, query) => planner.findRides(query),
     onSelect: (side, place) => planner.chooseRidePlace(side, place) });
   const quote = { id: 'saved-quote', expiresAt: 20_000, route: { pickup, destination,
     distanceMeters: 7000, durationSeconds: 1200, suggestedFareKobo: 250000, coordinates: [[7.4, 9.08], [7.45, 9.1]],
     pricing: { baseKobo: 50000, perKmKobo: 20000, perMinuteKobo: 3000, minimumKobo: 100000, incrementKobo: 5000, distanceKobo: 140000, timeKobo: 60000 } } };
   planner = createLocationPlanner({ view, serverNow: () => 1000, onOnline() {}, onBook() {},
-    client: { request: async (path) => path === '/api/locations' ? { settings } : { places: [destination, { ...destination, name: 'Another result' }] },
+    client: { request: async (path) => {
+      if (path === '/api/locations') return { settings };
+      searches++; return { places: [destination, { ...destination, name: 'Another result' }] };
+    },
       command: () => new Promise((resolve, reject) => { finishQuote = { resolve, reject }; }) },
     device: { supported: () => true, locate: async () => {
-      if (denyLocation) throw new Error('Your current pickup must be inside Nigeria.');
+      if (outsideNigeria) return { coords: { latitude: 41.8781, longitude: -87.6298, accuracy: 12 } };
       return { coords: { latitude: pickup.lat, longitude: pickup.lng, accuracy: 12 } };
     } } });
   await planner.setContext({ id: 'customer', role: 'customer' }, false);
   await planner.findRides('Destination');
   assert.equal(node('location-planner').hidden, true);
-  assert.match(node('ride-search-error').textContent, /inside Nigeria/);
+  assert.match(node('ride-search-error').textContent, /testing from outside Nigeria/);
+  assert.match(node('ride-search-error').textContent, /can't show a suggested fare/);
+  assert.equal(planner.snapshot().pickup, null);
+  assert.equal(searches, 0);
+  assert.equal(finishQuote, undefined, 'foreign GPS never requests a fare');
   assert.equal(node('location-quote').hidden, true);
   assert.equal(node('location-price').textContent, '');
 
-  denyLocation = false;
+  outsideNigeria = false;
   await planner.findRides('Destination');
   assert.equal(node('ride-search-error').textContent, '');
   assert.match(node('ride-search-status').textContent, /Choose your destination.*suggested fare/);

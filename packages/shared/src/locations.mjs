@@ -3,6 +3,7 @@ import { NIGERIA_POLYGONS } from './nigeria-boundary.mjs';
 /** Display/search extent only: use insideNigeria for coordinate validation. */
 export const NIGERIA_BOUNDS = Object.freeze({ west: 2.671082, south: 4.272162, east: 14.669936, north: 13.880291 });
 export const NIGERIA_CENTER = Object.freeze({ lat: 9.0765, lng: 8.6753 });
+export const OUTSIDE_NIGERIA_PICKUP_MESSAGE = "You're testing from outside Nigeria. Pickups are supported only in Nigeria, so we can't show a suggested fare from your current location.";
 
 /** Legacy sample geography, retained for saved Abuja demo fixtures only. */
 export const ABUJA_BOUNDS = Object.freeze({ west: 7.1, south: 8.8, east: 7.65, north: 9.25 });

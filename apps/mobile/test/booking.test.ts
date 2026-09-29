@@ -4,7 +4,7 @@ import { setImmediate as settle } from 'node:timers/promises';
 import { BookingController } from '../src/booking/controller.ts';
 import { routeDrawing } from '../src/booking/route-drawing.ts';
 import { parsePreview, parseBookingRide } from '../../../packages/shared/src/mobile-booking.mjs';
-import type { Booking, BookingPreview, BookingRide, BookingRideResult, PlacesResult } from '../../../packages/shared/src/mobile-booking.mjs';
+import type { Booking, BookingPreview, BookingRide, BookingRideResult, Place, PlacesResult } from '../../../packages/shared/src/mobile-booking.mjs';
 
 const envelope = { apiVersion: 1 as const, serverNow: 1_000_000 };
 const pickup = { name: 'Wuse test pickup', lat: 9.08, lng: 7.4 }, destination = { name: 'Test destination', lat: 9.1, lng: 7.45 };
@@ -13,7 +13,7 @@ const ride: BookingRide = { id: '00000000-0000-4000-8000-000000000000', version:
 const preview: BookingPreview = { kind: 'sample', pickup: pickup.name, destination: destination.name, suggestedFareKobo: 450000,
   expiresAt: null, request: { pickupId: 'wuse-ii', destinationId: 'maitama' }, route: null };
 function deferred<T>() { let resolve!: (v: T) => void, reject!: (e: Error) => void; const promise = new Promise<T>((r, j) => { resolve = r; reject = j; }); return { resolve, reject, promise }; }
-function fixture() {
+function fixture(locatePickup: () => Promise<Place> = async () => ({ ...pickup, name: 'Current location' })) {
   let time = 1200, key = 0, locates = 0;
   const settings: Booking = { ...envelope, online: { enabled: true, searchHost: 'search.example.test', routeHost: 'route.example.test' },
     allowSample: true, areas: [{ id: 'wuse-ii', name: 'Wuse II' }, { id: 'maitama', name: 'Maitama' }], current: [], blockedBy: null };
@@ -27,7 +27,7 @@ function fixture() {
     cancelRide: async () => { settings.current = []; return { ...envelope, ride: { ...ride, status: 'cancelled', canCancel: false, version: 2, expiresAt: null } }; },
   };
   const controller = new BookingController(api, () => `command-key-${++key}`, () => time, async () => {
-    locates++; return { ...pickup, name: 'Current location' };
+    locates++; return locatePickup();
   });
   return { api, settings, controller, advance: (ms: number) => { time += ms; }, locates: () => locates };
 }
@@ -99,6 +99,31 @@ test('Find rides leaves ambiguous destinations for customer selection before pri
   assert.equal(f.locates(), 1);
   assert.equal(c.snapshot().destination.selected?.name, second.name);
   assert.equal(c.snapshot().preview?.kind, 'route');
+});
+
+test('Find rides explains foreign GPS without requesting a fare and recovers after a Nigerian location retry', async () => {
+  let outsideNigeria = true, searches = 0, quotes = 0;
+  const f = fixture(async () => outsideNigeria
+    ? { name: 'Current location', lat: 41.8781, lng: -87.6298 }
+    : { ...pickup, name: 'Current location' });
+  const routePreview = f.api.routePreview;
+  f.api.routePreview = async (...args) => { quotes++; return routePreview(...args); };
+  f.api.searchPlaces = async () => { searches++; return { ...envelope, places: [destination], attribution: 'Test source' }; };
+  await start(f); const c = f.controller;
+  assert.equal(f.locates(), 0, 'opening booking does not request GPS');
+  c.edit('destination', 'Maitama, Abuja');
+  await c.findRides();
+  assert.match(c.snapshot().error, /testing from outside Nigeria/);
+  assert.match(c.snapshot().error, /can't show a suggested fare/);
+  assert.equal(c.snapshot().pickup.selected, null);
+  assert.equal(c.snapshot().preview, null);
+  assert.equal(c.snapshot().locatingPickup, false);
+  assert.equal(searches, 0); assert.equal(quotes, 0);
+  outsideNigeria = false;
+  await c.findRides();
+  assert.equal(c.snapshot().error, '');
+  assert.equal(c.snapshot().preview?.kind, 'route');
+  assert.equal(searches, 1); assert.equal(quotes, 1);
 });
 
 test('typed sample destination must match an available area and editing removes an old preview', async () => {
