@@ -20,6 +20,8 @@ test('food action hints follow participant roles and stop at terminal states', (
   assert.deepEqual(eatsActions({ status: 'accepted' }, 'customer'), []);
   assert.deepEqual(eatsActions({ status: 'ready' }, 'store'), []);
   assert.deepEqual(eatsActions({ status: 'assigned' }, 'courier'), ['pickup']);
+  assert.deepEqual(eatsActions({ status: 'assigned' }, 'admin'), ['unassign', 'cancel']);
+  assert.deepEqual(eatsActions({ status: 'picked_up' }, 'admin'), ['cancel']);
   for (const role of ['customer', 'store', 'courier', 'admin']) assert.deepEqual(eatsActions({ status: 'delivered' }, role), []);
 });
 

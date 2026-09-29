@@ -30,7 +30,7 @@ function snapshot(o) {
 }
 function order(o) {
   snapshot(o); valid(Object.hasOwn(EATS_STATUS, o.status) && integer(o.version) && ['customer','store','courier','admin'].includes(o.role));
-  valid(Array.isArray(o.actions) && o.actions.every((a) => ['accept','reject','prepare','ready','claim','pickup','arrive','deliver','complete_pickup','cancel'].includes(a)));
+  valid(Array.isArray(o.actions) && o.actions.every((a) => ['accept','reject','prepare','ready','claim','pickup','arrive','deliver','complete_pickup','cancel','unassign'].includes(a)));
   valid(string(o.customerName) && (o.courier === null || object(o.courier) && id(o.courier.id) && string(o.courier.name) && object(o.courier.vehicle) && string(o.courier.vehicle.plate)));
   valid(Array.isArray(o.events) && o.events.length <= 30 && o.events.every((e) => object(e) && Object.hasOwn(EATS_STATUS, e.status) && integer(e.at) && (e.reason === undefined || string(e.reason))));
   valid(integer(o.createdAt) && integer(o.updatedAt));

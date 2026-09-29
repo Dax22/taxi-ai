@@ -33,6 +33,7 @@ import { deliveryAreas, EATS_LEGACY_AREA_IDS } from '../../../packages/shared/sr
 import { distanceMeters } from '../../../packages/shared/src/locations.mjs';
 import { normaliseFoodPhoto } from './infrastructure/food-photo-codec.mjs';
 import { createEatsService } from './modules/eats/service.mjs';
+import { createEatsConfig } from './modules/eats/config.mjs';
 import { normalizeDishPhoto } from './infrastructure/eats-photo-codec.mjs';
 import { createChatRepository } from './modules/chat/repository.mjs';
 import { createChatService } from './modules/chat/service.mjs';
@@ -95,6 +96,7 @@ import { createAnnouncementsService } from './modules/announcements/service.mjs'
 
 /** Composition root: the only place that wires business modules to adapters. */
 export function createApplication({ db, clock = Date.now, callConfig = createCallConfig(), mapProvider = createMapProvider(), allowSimulation = false,
+  eatsConfig = createEatsConfig(),
   dispatchConfig = createDispatchConfig(), workerConfig = createWorkerConfig(), staffMfa = createStaffMfaConfig(),
   driverFaceProvider = createDriverFaceProvider({ config: readDriverFaceConfig({}) }),
   safetyAlertProvider = createSafetyAlertProvider(), accountMail = createAccountMail(), pushProvider = createPushProvider(), vehicleVisionProvider = createVehicleVisionProvider(),
@@ -267,7 +269,8 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
     requirePermission: staffAccess.requirePermission, unitOfWork, clock, allowSimulation });
   const eats = createEatsService({ repository: eatsRepository, getAccount: accounts.profile, photoCodec: { normalize: normalizeDishPhoto },
     hasOtherWork: async (id) => (await rideRepository.hasDriverWork(id)) || (await rideRepository.hasCustomerWork(id, clock())),
-    availabilityFor: availability.positionFor, onClaim: availability.onClaim, tokens, unitOfWork, audit, clock, normalisePhoto: normaliseFoodPhoto });
+    availabilityFor: availability.positionFor, onClaim: availability.onClaim, tokens, unitOfWork, audit, clock, normalisePhoto: normaliseFoodPhoto,
+    paused: eatsConfig.paused });
   const googleAuth = createGoogleAuthService({ repository: createGoogleAuthRepository(db), provider: googleProvider,
     accounts, devices, tokens, unitOfWork, clock });
   return Object.freeze({ accounts, devices, drivers, rides, dispatch, eats, chat, calls, locations, availability, payments, safety, safetyMonitoring, guestRides, parcelTracking, family, familyDelivery, vehicleChecks, adminConsole, staffAccess, adminCases, adminOperations, adminFinance, adminCompliance, adminDemand, announcements, googleAuth, accountEmail, notifications, rateLimiter, realtime, workerCoordinator, clock });

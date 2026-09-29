@@ -8,14 +8,14 @@ import type { FoodAction } from '../../../packages/shared/src/eats.mjs';
 import { useEatsScreen } from '../src/eats/provider';
 import { FoodFeedback, FoodMoney, FoodPreview, food } from '../src/eats/components';
 import { Button, Card, Field, Heading, Pill, Screen, fare, styles } from '../src/ui/components';
-const labels: Record<FoodAction, string> = { accept: 'Accept order', reject: 'Decline order', prepare: 'Start preparing', ready: 'Ready for pickup', claim: 'Accept delivery', pickup: 'Confirm food collected', arrive: 'I’m at the delivery address', deliver: 'Confirm delivered', complete_pickup: 'Confirm customer collected', cancel: 'Cancel order' };
+const labels: Record<FoodAction, string> = { accept: 'Accept order', reject: 'Decline order', prepare: 'Start preparing', ready: 'Ready for pickup', claim: 'Accept delivery', pickup: 'Confirm food collected', arrive: 'I’m at the delivery address', deliver: 'Confirm delivered', complete_pickup: 'Confirm customer collected', cancel: 'Cancel order', unassign: 'Return to courier queue' };
 export default function FoodOrder() {
   const { id } = useLocalSearchParams<{ id: string }>(), { state: s, controller: c, locked } = useEatsScreen('order', id ?? null);
   const [pin, setPin] = useState(''), [reason, setReason] = useState(''), [collectionPoint, setCollectionPoint] = useState(''); const o = s.order;
   useEffect(() => { setPin(''); setReason(''); setCollectionPoint(''); }, [id]);
   async function action(value: FoodAction) {
     if (!o) return;
-    const extra = ['pickup','deliver','complete_pickup'].includes(value) ? { pin } : ['cancel','reject'].includes(value) ? { reason } : value === 'ready' && o.needsCollectionPoint ? { collectionPoint } : {};
+    const extra = ['pickup','deliver','complete_pickup'].includes(value) ? { pin } : ['cancel','reject','unassign'].includes(value) ? { reason } : value === 'ready' && o.needsCollectionPoint ? { collectionPoint } : {};
     if (await c.orderAction(o, value, extra)) { setPin(''); setReason(''); setCollectionPoint(''); }
   }
   return <Screen><FoodPreview/><FoodFeedback state={s} controller={c}/>
@@ -26,14 +26,14 @@ export default function FoodOrder() {
       </Card>
       {!!o.actions.length && <Card><Text style={styles.h2}>Next step</Text>
         {o.actions.some((a) => ['pickup','deliver','complete_pickup'].includes(a)) && <><Field label="Six-digit handover code" value={pin} onChangeText={setPin} maxLength={6} keyboardType="number-pad" editable={!locked}/><Text style={styles.small}>Get the code from the person handing over or receiving the food, in person.</Text></>}
-        {o.actions.some((a) => ['cancel','reject'].includes(a)) && <Field label="Reason (for cancellation or decline)" value={reason} onChangeText={setReason} maxLength={240} editable={!locked}/>}
+        {o.actions.some((a) => ['cancel','reject','unassign'].includes(a)) && <><Field label="Reason shown to the customer and kitchen" value={reason} onChangeText={setReason} maxLength={240} editable={!locked}/><Text style={styles.small}>Do not include private incident details.</Text></>}
         {o.needsCollectionPoint && <><Field label="Private collection point and landmark" value={collectionPoint} onChangeText={setCollectionPoint} maxLength={240} editable={!locked}/><Text style={styles.small}>Shared only with the assigned courier or pickup customer for this order.</Text></>}
-        {o.actions.map((a) => <Button key={a} title={labels[a]} secondary={['cancel','reject'].includes(a)} disabled={locked || (a === 'ready' && o.needsCollectionPoint && collectionPoint.trim().length < 8) || (['pickup','deliver','complete_pickup'].includes(a) && !/^\d{6}$/.test(pin)) || (['cancel','reject'].includes(a) && reason.trim().length < 5)} onPress={() => void action(a)}/>)}
+        {o.actions.map((a) => <Button key={a} title={labels[a]} secondary={['cancel','reject','unassign'].includes(a)} disabled={locked || (a === 'ready' && o.needsCollectionPoint && collectionPoint.trim().length < 8) || (['pickup','deliver','complete_pickup'].includes(a) && !/^\d{6}$/.test(pin)) || (['cancel','reject','unassign'].includes(a) && reason.trim().length < 5)} onPress={() => void action(a)}/>)}
       </Card>}
       <Card><Text style={styles.h2}>Your food</Text>{o.lines.map((i) => <Text key={i.itemId} style={styles.body}>{i.quantity} × {i.name} · {fare(i.priceKobo * i.quantity)}</Text>)}<FoodMoney value={o.totals}/><Text style={styles.small}>Test checkout · no money charged.</Text></Card>
       <Card><Text style={styles.h2}>Order progress</Text>{o.events.map((e, i) => <View key={i} style={food.timeline}><Text style={styles.body}>{EATS_STATUS[e.status]}</Text><Text style={styles.small}>{new Date(e.at).toLocaleString()}</Text>{e.reason && <Text style={styles.body}>{e.reason}</Text>}</View>)}</Card>
     </>}
     <Button title="Refresh order" secondary busy={s.loading} disabled={s.busy || s.uncertain} onPress={() => void c.refresh()}/>
-    <Button title={o?.role === 'store' ? 'Return to My store' : o?.role === 'courier' ? 'Return to food deliveries' : 'My food orders'} secondary disabled={s.busy || s.uncertain} onPress={() => router.replace(o?.role === 'store' ? '/my-store' : o?.role === 'courier' ? '/food-work' : { pathname: '/eats', params: { section: 'orders' } })}/>
+    <Button title={o?.role === 'store' ? 'Return to My store' : o?.role === 'courier' ? 'Return to food deliveries' : o?.role === 'admin' ? 'Return to kitchen review' : 'My food orders'} secondary disabled={s.busy || s.uncertain} onPress={() => router.replace(o?.role === 'store' ? '/my-store' : o?.role === 'courier' ? '/food-work' : { pathname: '/eats', params: { section: o?.role === 'admin' ? 'review' : 'orders' } })}/>
   </Screen>;
 }
