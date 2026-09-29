@@ -31,13 +31,13 @@ export function httpFetch(url, options = {}) {
 }
 
 export async function harness(t, { persistent = false, callConfig = createCallConfig({}), mapProvider, runtime, gatewayHeaders = {}, telemetry, googleProvider, accountMail, vehicleVisionProvider, driverFaceProvider, staffMfa,
-  dispatchConfig = { mode: 'legacy' } } = {}) {
+  dispatchConfig = { mode: 'legacy' }, ridePilot } = {}) {
   const folder = persistent ? await mkdtemp(join(tmpdir(), 'taxi-ai-test-')) : null;
   const filename = folder ? join(folder, 'test.sqlite') : ':memory:';
   let now = TEST_NOW, server, db, base, stopped = true;
   async function start() {
     db = openDatabase(filename);
-    server = createAppServer({ db, clock: () => now, callConfig, mapProvider, runtime, telemetry, googleProvider, accountMail, vehicleVisionProvider, driverFaceProvider, dispatchConfig, staffMfa });
+    server = createAppServer({ db, clock: () => now, callConfig, mapProvider, runtime, telemetry, googleProvider, accountMail, vehicleVisionProvider, driverFaceProvider, dispatchConfig, staffMfa, ridePilot });
     server.listen(0, '127.0.0.1');
     await once(server, 'listening');
     base = `http://127.0.0.1:${server.address().port}`;
@@ -54,7 +54,7 @@ export async function harness(t, { persistent = false, callConfig = createCallCo
   return { get db() { return db; }, get base() { return base; }, get filename() { return filename; },
     get now() { return now; },
     beginShutdown() { server.beginShutdown(); },
-    advance(ms) { now += ms; }, async restart() { await stop(); await start(); },
+    advance(ms) { now += ms; }, async restart(options = {}) { await stop(); ridePilot = options.ridePilot ?? ridePilot; await start(); },
     client() {
       const client = { cookie: '', csrf: '', user: null };
       const availabilityClient = randomUUID();

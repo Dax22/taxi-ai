@@ -31,6 +31,7 @@ import { createPushProvider } from '../../services/api/src/infrastructure/push-p
 import { createVehicleVisionProvider } from '../../services/api/src/infrastructure/vehicle-vision-provider.mjs';
 import { createAccountMail } from '../../services/api/src/infrastructure/account-mail.mjs';
 import { createStaffMfaConfig } from '../../services/api/src/infrastructure/staff-config.mjs';
+import { createRidePilotConfig } from '../../packages/shared/src/ride-pilot.mjs';
 
 // Explicit allowlist: never serve the repository root or arbitrary disk paths.
 const routes = new Map([
@@ -181,6 +182,7 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
   clock = Date.now, callConfig = createCallConfig({ ...process.env, TAXI_AI_CALLS_MODE: process.env.TAXI_AI_CALLS_MODE ?? (runtime.mode === 'staging' ? 'off' : 'local') }),
   mapProvider = createMapProvider({ env: { ...process.env, TAXI_AI_MAPS_MODE: process.env.TAXI_AI_MAPS_MODE ?? (runtime.mode === 'staging' ? 'off' : 'community') } }),
   dispatchConfig = createDispatchConfig(process.env), workerConfig = createWorkerConfig(process.env), staffMfa = createStaffMfaConfig(process.env),
+  ridePilot = createRidePilotConfig(process.env, runtime.mode),
   telemetry = createTelemetry({ enabled: runtime.mode === 'staging' }),
   accountMail = createAccountMail({ config: createEmailConfig(process.env,runtime) }),
   safetyAlertProvider = createSafetyAlertProvider({env:process.env}),
@@ -193,7 +195,8 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
   if (workerConfig.role !== 'all' && db.kind !== 'postgres') throw new Error('Split API/worker deployments require PostgreSQL.');
   const application = createApplication({ db, clock, callConfig, mapProvider,
     dispatchConfig: { ...dispatchConfig, requestRefresh: workerConfig.role === 'all' }, workerConfig,
-    googleProvider, accountMail, pushProvider, vehicleVisionProvider, driverFaceProvider, safetyAlertProvider, staffMfa, allowSimulation: runtime.mode === 'local' });
+    googleProvider, accountMail, pushProvider, vehicleVisionProvider, driverFaceProvider, safetyAlertProvider, staffMfa, ridePilot,
+    allowSimulation: runtime.mode === 'local' });
   const httpApplication = workerConfig.role === 'api' ? { ...application, dispatch: { ...application.dispatch, refresh: async () => {} } } : application;
   const handleApi = createApiRouter(httpApplication, { secure: runtime.mode === 'staging' });
   const handleMobile = createMobileRouter(httpApplication);

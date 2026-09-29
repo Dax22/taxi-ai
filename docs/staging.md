@@ -14,6 +14,8 @@ establishes production capacity or enables live transport/payments.
 | Setting | Local default | Staging requirement |
 | --- | --- | --- |
 | `TAXI_AI_MODE` | `local` | `staging`; required when `NODE_ENV=production` |
+| `TAXI_AI_RIDES_PAUSED` | `false` | Defaults to `true`; blocks new passenger requests until an operator restarts with `false` and approved bounds |
+| `TAXI_AI_RIDE_PILOT_BOUNDS` | Unset | Required when unpausing; `minLat,minLng,maxLat,maxLng` inside the approved test area |
 | `PORT` | `3000` | Valid port; reference container uses `3000` internally |
 | `TAXI_AI_BIND` | Always `127.0.0.1` | `127.0.0.1`, or `0.0.0.0` on an isolated container network |
 | `TAXI_AI_PUBLIC_ORIGIN` | Derived from loopback Host | One HTTPS DNS origin, without path/query/credentials |
@@ -114,6 +116,8 @@ On that host, with Docker Compose available:
    and a new proxy token generated locally by `openssl rand -hex 32`. Keep the
    `.env` file private (`chmod 600 deploy/staging/.env`). Real values are ignored
    by Git and excluded from the image context.
+   New passenger requests default to paused. Follow the [ride pilot controls](ride-pilot-controls.md)
+   before selecting a test area or unpausing; parcel and Eats operations are separate.
 3. Create tester access using the command above. The app runs as UID 1000 and
    must read the mounted hash file. Keep its parent directory private (0700);
    make the **hash-only** JSON file readable in the container, for example:
@@ -297,6 +301,8 @@ Sample-area matching and new sample requests are local-only. Hosted staging
 requires fresh Nigerian GPS and provider-backed route requests. With maps disabled,
 users cannot create new routed requests; configure the provider for a hosted ride
 test. Availability GPS does not enable map tiles or trip tracking automatically.
+Passenger requests also require the operator to unpause them and configure a
+reviewed rectangular test area. Previously created trips continue during a pause.
 See [matching](matching.md) for controls, expiry and device review.
 
 ## Payments in private staging

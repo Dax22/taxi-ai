@@ -4,8 +4,9 @@ import { requireRole } from '../../shared/policies.mjs';
 import { transportCategory } from '../../../../../packages/shared/src/transport-categories.mjs';
 import { NIGERIA_BOUNDS, insideNigeria, canShareLocation } from '../../../../../packages/shared/src/locations.mjs';
 import { key, clientIdentity, endpoints, point, checkedRoute, directQuote, position, QUOTE_MS, FRESH_MS, SHARE_MS } from './domain.mjs';
+import { createRidePilotConfig } from '../../../../../packages/shared/src/ride-pilot.mjs';
 
-export function createLocationsService({ repository, provider, getAccount, sessionOwner, nativeAccessOwner = () => null, nativeSessionOwner = () => null, getRideContext, unitOfWork, tokens, audit, clock, onChange = async () => {} }) {
+export function createLocationsService({ repository, provider, getAccount, sessionOwner, nativeAccessOwner = () => null, nativeSessionOwner = () => null, getRideContext, unitOfWork, tokens, audit, clock, onChange = async () => {}, ridePilot = createRidePilotConfig() }) {
   async function context(input, clientRequired = false, planning = false) {
     const user = (await getAccount(input.userId));
     check(user, 'UNAUTHENTICATED', 'Sign in to use locations.');
@@ -37,7 +38,11 @@ export function createLocationsService({ repository, provider, getAccount, sessi
       && !/[\u0000-\u001f\u007f]/u.test(item.name)).map(point);
     return { places, attribution: '© OpenStreetMap contributors · Photon search' };
   }
-  const quoteView = (row) => ({ id: row.id, createdAt: row.createdAt, expiresAt: row.expiresAt, rideId: row.rideId, route: row.route });
+  const publicRoute = (route) => {
+    const { ridePilotCoverage, ...visible } = route;
+    return visible;
+  };
+  const quoteView = (row) => ({ id: row.id, createdAt: row.createdAt, expiresAt: row.expiresAt, rideId: row.rideId, route: publicRoute(row.route) });
   async function ownedQuote(userId, id) {
     const quote = (await repository.quote(id));
     check(quote && quote.customerId === userId, 'NOT_FOUND', 'Route quote not found.');
@@ -55,8 +60,11 @@ export function createLocationsService({ repository, provider, getAccount, sessi
     const replay = (await quoteReplay(ctx.userId, commandKey, fingerprint));
     if (replay) return replay;
     check((await repository.recentQuotes(ctx.userId, clock() - 60_000)) < 10, 'RATE_LIMITED', 'Wait before requesting more route previews.');
-    const route = transportCategory(points.vehicleCategory).service === 'delivery'
-      ? directQuote(points) : checkedRoute(await provider.route(points.pickup, points.destination), points);
+    const passengerCategory = transportCategory(points.vehicleCategory).service === 'ride';
+    const providerRoute = passengerCategory ? await provider.route(points.pickup, points.destination) : null;
+    const route = passengerCategory ? checkedRoute(providerRoute, points) : directQuote(points);
+    const coverage = passengerCategory && ridePilot.coverage(providerRoute.coordinates, [points.pickup, points.destination]);
+    if (coverage) route.ridePilotCoverage = coverage;
     // Provider I/O is outside the database transaction. Recheck authorization,
     // retry key and limits inside it before committing the server-owned quote.
     return (await unitOfWork(async () => {
@@ -189,6 +197,7 @@ export function createLocationsService({ repository, provider, getAccount, sessi
     const point = JSON.parse(share.positionJson);
     return { ...point, source: 'driver_shared', stale: now - point.capturedAt >= FRESH_MS };
   }
-  return Object.freeze({ settings, search, quote, quoteForRide, bindQuote, routeForRide: repository.rideRoute,
+  return Object.freeze({ settings, search, quote, quoteForRide, bindQuote,
+    routeForRide: async (rideId) => { const route = await repository.rideRoute(rideId); return route && publicRoute(route); },
     tracking, shareCommand, update, sweep, closeRide, safetyPosition });
 }
