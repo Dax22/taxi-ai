@@ -8,16 +8,18 @@ const mobileJourney = await readFile(new URL('../../mobile/app/journey.tsx', imp
 const mobileChat = await readFile(new URL('../../mobile/src/journeys/chat.tsx', import.meta.url), 'utf8');
 const mobilePreview = await readFile(new URL('../../mobile/src/booking/route-preview.tsx', import.meta.url), 'utf8');
 
-test('customer ride flow is destination-first with current-location pickup and fare negotiation', () => {
+test('customer chooses the passenger before the destination, then reviews fare before the map', () => {
   const vehicle = html.indexOf('id="vehicle-categories-panel"');
   const destinationPanel = html.indexOf('id="ride-destination-panel"');
   const destination = html.indexOf('id="location-destination-form"');
   const passenger = html.indexOf('id="passenger-panel"');
   const pickupPlanner = html.indexOf('id="location-planner"');
-  assert.ok(vehicle >= 0 && vehicle < destinationPanel);
+  assert.ok(vehicle >= 0 && vehicle < passenger);
+  assert.ok(passenger < destinationPanel);
   assert.ok(destinationPanel < destination);
-  assert.ok(destination < passenger);
-  assert.ok(passenger < pickupPlanner);
+  assert.ok(destination < pickupPlanner);
+  assert.ok(html.indexOf('id="ride-search-error"') < pickupPlanner, 'GPS/search errors must be outside the initially hidden planner');
+  assert.ok(html.indexOf('id="location-price"') < html.indexOf('id="planner-map"'));
   assert.match(html, /Where are you going\?/);
   assert.match(html, /Pickup:<\/strong> Your current location/);
   assert.match(html, /Pickup from your current location/);
@@ -38,14 +40,16 @@ test('customer ride flow is destination-first with current-location pickup and f
   assert.doesNotMatch(html, /id="request-destination-areas"/);
 });
 
-test('mobile ride flow puts destination before passenger and uses current GPS pickup', () => {
+test('mobile asks who is riding before the destination and shows the fare above the map', () => {
   const passenger = mobile.indexOf('<PassengerForm');
   const destination = mobile.indexOf('<Pill>YOUR DESTINATION</Pill>');
   const destinationSearch = mobile.indexOf('<PlaceSearch endpoint="destination"');
   const pickup = mobile.indexOf('<PlaceSearch endpoint="pickup"');
   assert.ok(destination >= 0 && destination < destinationSearch);
-  assert.ok(destinationSearch < passenger);
-  assert.ok(passenger < pickup);
+  assert.ok(passenger >= 0 && passenger < destination);
+  assert.ok(destinationSearch < pickup);
+  assert.ok(mobile.indexOf('{passengerRoute && routePreview}') < pickup);
+  assert.ok(mobilePreview.indexOf('SUGGESTED FARE') < mobilePreview.indexOf('<NativeMap'));
   assert.match(mobile, /Type an address, landmark, town or city anywhere in Nigeria/);
   assert.match(mobile, /Find rides/);
   assert.match(mobile, /Pickup is your current phone location/);
