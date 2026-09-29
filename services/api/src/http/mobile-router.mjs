@@ -118,6 +118,7 @@ export function createMobileRouter({ devices, accounts, drivers, rides, dispatch
       rideId: path.split('/')[3], attemptId: path.split('/')[5], action: 'simulate', key: request.headers['idempotency-key'], data }));
     else if (!write && path === '/driver/earnings') body = (await payments.earnings(session.user.id, query.get('before')));
     else if (write && path === '/account/email/request') body = (await accountEmail.requestVerification(session.user.id,data));
+    else if (write && path === '/locations/reverse') body = await locations.reverse({ userId: session.user.id, sessionToken: accessToken, native: true }, data);
     else if (path === '/booking' || path.startsWith('/booking/')) body = await booking({ path, write, user: session.user,
       accessToken, data, key: request.headers['idempotency-key'] });
     else if (path === '/work' || path.startsWith('/work/') || path.startsWith('/journeys/')) body = await journeys({ path, write, user: session.user,

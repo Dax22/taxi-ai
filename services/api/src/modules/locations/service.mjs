@@ -3,6 +3,7 @@ import { fields, label } from '../../shared/validation.mjs';
 import { requireRole } from '../../shared/policies.mjs';
 import { transportCategory } from '../../../../../packages/shared/src/transport-categories.mjs';
 import { NIGERIA_BOUNDS, insideNigeria, canShareLocation } from '../../../../../packages/shared/src/locations.mjs';
+import { NIGERIAN_STATES, foodAreaId } from '../../../../../packages/shared/src/nigeria-areas.mjs';
 import { key, clientIdentity, endpoints, point, checkedRoute, directQuote, position, QUOTE_MS, FRESH_MS, SHARE_MS } from './domain.mjs';
 
 export function createLocationsService({ repository, provider, getAccount, sessionOwner, nativeAccessOwner = () => null, nativeSessionOwner = () => null, getRideContext, unitOfWork, tokens, audit, clock, onChange = async () => {} }) {
@@ -28,6 +29,25 @@ export function createLocationsService({ repository, provider, getAccount, sessi
   }
   const planningContext = async (input) => (await context(input, false, true));
   async function settings(input) { (await planningContext(input)); return { ...provider.describe(), bounds: NIGERIA_BOUNDS, quoteSeconds: QUOTE_MS / 1000 }; }
+  function stateId(value) {
+    const normalized = String(value ?? '').normalize('NFKC').trim().toLowerCase().replace(/\s+state$/u, '');
+    if (['fct', 'abuja', 'abuja federal capital territory', 'federal capital territory'].includes(normalized)) return 'fct';
+    return NIGERIAN_STATES.find((state) => state.name.toLowerCase() === normalized)?.id ?? null;
+  }
+  async function reverse(input, data) {
+    (await planningContext(input)); fields(data, ['lat', 'lng']);
+    const point = { lat: Number(data.lat), lng: Number(data.lng) };
+    check(insideNigeria(point), 'INVALID_LOCATION', 'Your current delivery location must be inside Nigeria.');
+    const found = await provider.reverse(point);
+    (await planningContext(input));
+    const id = stateId(found.state);
+    check(id, 'MAPS_UNAVAILABLE', 'We found your location but could not match its Nigerian state. Enter the delivery address manually.');
+    let areaId;
+    try { areaId = foodAreaId(id, found.town); }
+    catch { check(false, 'MAPS_UNAVAILABLE', 'We found your location but could not identify its town. Enter the delivery address manually.'); }
+    return { place: { line: label(found.line, 'Current delivery address', 8, 240), areaId,
+      lat: found.lat, lng: found.lng, town: found.town, stateName: NIGERIAN_STATES.find((state) => state.id === id).name } };
+  }
   async function search(input, data) {
     (await planningContext(input)); fields(data, ['query']);
     const query = label(data.query, 'Address search', 3, 160);
@@ -189,6 +209,6 @@ export function createLocationsService({ repository, provider, getAccount, sessi
     const point = JSON.parse(share.positionJson);
     return { ...point, source: 'driver_shared', stale: now - point.capturedAt >= FRESH_MS };
   }
-  return Object.freeze({ settings, search, quote, quoteForRide, bindQuote, routeForRide: repository.rideRoute,
+  return Object.freeze({ settings, search, reverse, quote, quoteForRide, bindQuote, routeForRide: repository.rideRoute,
     tracking, shareCommand, update, sweep, closeRide, safetyPosition });
 }

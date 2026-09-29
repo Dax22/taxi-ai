@@ -43,9 +43,21 @@ export function menuDetails(data, store, previous = {}) {
     allergens: label(data.allergens ?? previous.allergens ?? '', 'Allergen information', 0, 300), portionsRemaining,
     category: label(data.category, 'Menu section', 2, 40), priceKobo: data.priceKobo, available: data.available };
 }
+function recipient(value, fulfillment) {
+  if (fulfillment === 'pickup' || value === undefined) return { kind: 'self' };
+  fields(value, ['kind', 'name', 'phone'], ['kind']);
+  check(['self', 'other'].includes(value.kind), 'INVALID_RECIPIENT', 'Choose whether this order is for you or someone else.');
+  if (value.kind === 'self') { fields(value, ['kind']); return { kind: 'self' }; }
+  const digits = String(value.phone ?? '').replace(/\D/g, '');
+  let phone = '';
+  if (digits.length === 11 && digits.startsWith('0')) phone = `+234${digits.slice(1)}`;
+  else if (digits.length === 13 && digits.startsWith('234')) phone = `+${digits}`;
+  check(/^\+234\d{10}$/.test(phone), 'INVALID_RECIPIENT', 'Enter the recipient’s Nigerian phone number.');
+  return { kind: 'other', name: label(value.name, 'Recipient name', 2, 80), phone };
+}
 export function checkedBasket(store, menu, data) {
   const required = ['storeId', 'expectedVersion', 'items', 'address', 'instructions'];
-  fields(data, [...required, 'fulfillment'], required);
+  fields(data, [...required, 'fulfillment', 'recipient'], required);
   const fulfillment = data.fulfillment ?? 'delivery';
   check(['delivery', 'pickup'].includes(fulfillment), 'INVALID_CART', 'Choose delivery or customer pickup.');
   check(fulfillment === 'pickup' ? store.pickupEnabled : store.deliveryEnabled !== false, 'STORE_UNAVAILABLE', 'This kitchen does not offer that order option.');
@@ -66,6 +78,7 @@ export function checkedBasket(store, menu, data) {
   try { totals = eatsTotals(lines, fulfillment === 'pickup' ? 0 : store.deliveryFeeKobo); } catch (error) { check(false, 'INVALID_CART', error.message); }
   check(totals.subtotalKobo >= store.minimumKobo, 'INVALID_CART', 'Add items to meet this kitchen’s minimum order.');
   return { fulfillment, restaurant: { sellerType: store.sellerType, id: store.id, name: store.name, address: isPrivateKitchen(store.sellerType) ? '' : store.address, areaId: store.areaId, prepMinutes: store.prepMinutes }, lines, totals,
+    recipient: recipient(data.recipient, fulfillment),
     address: fulfillment === 'pickup' ? { areaId: store.areaId } : { line: label(data.address.line, 'Delivery address and landmark', 8, 240), areaId: data.address.areaId },
     instructions: label(data.instructions, 'Delivery or kitchen instructions', 0, 240), isDemo: true, payment: { method: 'test', status: 'not_charged' } };
 }

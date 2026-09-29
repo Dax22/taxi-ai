@@ -12,7 +12,15 @@ const api = createApiClient({ onServerTime(at) { serverTime = { at, received: pe
 const liveUpdates = createRealtimeClient({ read: (cursor, signal) => api.request(`/api/events?cursor=${cursor}&wait=25000`, { signal }), refresh: sync });
 const transport = createEatsTransport({ client: api, identity: () => sessionKey,
   onChanged() { liveUpdates.reset(); api.reset(); availability.reset(); controller.reset(); sessionKey = null; } });
-const controller = createEatsController({ api: transport, makeKey: () => crypto.randomUUID(), now: () => serverTime.at + performance.now() - serverTime.received });
+const geolocation = createGeolocation();
+const controller = createEatsController({ api: transport, makeKey: () => crypto.randomUUID(), now: () => serverTime.at + performance.now() - serverTime.received,
+  async locateDelivery() {
+    if (!geolocation.supported()) throw new Error('Current location needs a supported browser on HTTPS or localhost.');
+    const fix = await geolocation.locate(), coords = fix.coords ?? {};
+    if (!Number.isFinite(coords.accuracy) || coords.accuracy <= 0 || coords.accuracy > 200) throw new Error('Your location is not accurate enough yet. Try again in an open area.');
+    const result = await transport.request('/locations/reverse', { method: 'POST', data: { lat: Number(coords.latitude), lng: Number(coords.longitude) } });
+    return result.place;
+  } });
 const screenPaths = { browse: '/eats', store: '/eats/sell', orders: '/eats?screen=orders', work: '/eats?screen=work', review: '/eats?screen=review' };
 const view = createEatsView(controller, {
   sellerPage: () => location.pathname === '/eats/sell',
@@ -30,7 +38,7 @@ const availabilityView = createAvailabilityView({
 });
 const availability = createAvailabilityController({
   client: { request: (path, options) => transport.request(path.slice(4), options), command: (path, data, options) => transport.command(path.slice(4), data, null, options) },
-  device: createGeolocation(), view: availabilityView, serverNow: () => serverTime.at + performance.now() - serverTime.received,
+  device: geolocation, view: availabilityView, serverNow: () => serverTime.at + performance.now() - serverTime.received,
 });
 function render() {
   const state = controller.snapshot(); view.render(state);

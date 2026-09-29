@@ -3,6 +3,7 @@ export function locationRoutes(locations) {
   return [
     { method: 'GET', path: /^\/api\/locations$/, access: 'read', handle: async (ctx) => ({ body: { settings: (await locations.settings(identity(ctx))) } }) },
     { method: 'POST', path: /^\/api\/locations\/search$/, access: 'write', handle: async (ctx) => ({ body: await locations.search(identity(ctx), ctx.data) }) },
+    { method: 'POST', path: /^\/api\/locations\/reverse$/, access: 'write', handle: async (ctx) => ({ body: await locations.reverse(identity(ctx), ctx.data) }) },
     { method: 'POST', path: /^\/api\/locations\/quotes$/, access: 'write', handle: async (ctx) => {
       const body = await locations.quote(identity(ctx), ctx.data, ctx.key); return { status: body.replayed ? 200 : 201, body };
     } },

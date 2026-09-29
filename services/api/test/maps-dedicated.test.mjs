@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createMapProvider } from '../src/infrastructure/map-provider.mjs';
 
 const env = { TAXI_AI_MAPS_MODE: 'dedicated', TAXI_AI_SEARCH_URL: 'https://search.example.test/api/',
+  TAXI_AI_REVERSE_URL: 'https://search.example.test/reverse/',
   TAXI_AI_ROUTING_URL: 'https://router.example.test/route/v1/driving/', TAXI_AI_TILE_URL: 'https://tiles.example.test/{z}/{x}/{y}.png' };
 const bounds = { west: 2, south: 4, east: 15, north: 14 };
 

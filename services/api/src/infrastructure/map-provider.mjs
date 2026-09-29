@@ -11,6 +11,7 @@ export function createMapProvider({ env = process.env, fetchImpl = globalThis.fe
   const mode = env.TAXI_AI_MAPS_MODE ?? 'community';
   if (!['community', 'dedicated', 'off'].includes(mode)) throw new Error('TAXI_AI_MAPS_MODE must be community, dedicated or off.');
   const searchUrl = endpoint(env.TAXI_AI_SEARCH_URL ?? 'https://photon.komoot.io/api/');
+  const reverseUrl = endpoint(env.TAXI_AI_REVERSE_URL ?? 'https://photon.komoot.io/reverse/');
   const routeUrl = endpoint(env.TAXI_AI_ROUTING_URL ?? 'https://routing.openstreetmap.de/routed-car/route/v1/driving/');
   const tiles = env.TAXI_AI_TILE_URL ?? 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
   const tileUrl = endpoint(tiles.replace('{z}', '1').replace('{x}', '1').replace('{y}', '1'));
@@ -29,11 +30,11 @@ export function createMapProvider({ env = process.env, fetchImpl = globalThis.fe
     throw new Error('Higher map budgets require TAXI_AI_MAPS_MODE=dedicated and dedicated endpoints.');
   }
   if (dedicated) {
-    if (!env.TAXI_AI_SEARCH_URL || !env.TAXI_AI_ROUTING_URL || !env.TAXI_AI_TILE_URL) {
-      throw new Error('Dedicated maps require explicit search, routing and tile URLs.');
+    if (!env.TAXI_AI_SEARCH_URL || !env.TAXI_AI_REVERSE_URL || !env.TAXI_AI_ROUTING_URL || !env.TAXI_AI_TILE_URL) {
+      throw new Error('Dedicated maps require explicit search, reverse-geocoding, routing and tile URLs.');
     }
     const communityDomains = ['komoot.io', 'openstreetmap.de', 'openstreetmap.org', 'project-osrm.org'];
-    if ([searchUrl, routeUrl, tileUrl].some((url) => communityDomains.some((domain) => url.hostname === domain || url.hostname.endsWith(`.${domain}`)))) {
+    if ([searchUrl, reverseUrl, routeUrl, tileUrl].some((url) => communityDomains.some((domain) => url.hostname === domain || url.hostname.endsWith(`.${domain}`)))) {
       throw new Error('Dedicated map budgets cannot target community map services.');
     }
   }
@@ -99,6 +100,23 @@ export function createMapProvider({ env = process.env, fetchImpl = globalThis.fe
           .filter((v) => typeof v === 'string' && v.trim()))].join(', ').slice(0, 160);
         return { lat: f.geometry.coordinates?.[1], lng: f.geometry.coordinates?.[0], name };
       });
+    },
+    async reverse(point) {
+      check(point && Number.isFinite(point.lat) && Number.isFinite(point.lng), 'INVALID_LOCATION', 'Choose a valid current location.');
+      const url = new URL(reverseUrl);
+      for (const [name, value] of Object.entries({ lat: String(point.lat), lon: String(point.lng), lang: 'en' })) url.searchParams.set(name, value);
+      const result = await json(url, 'search', 60 * 60_000);
+      check(result && (!result.type || result.type === 'FeatureCollection') && Array.isArray(result.features), 'MAPS_UNAVAILABLE', 'Current-location lookup returned an invalid response.');
+      const feature = result.features.find((f) => f?.geometry?.type === 'Point' && f.properties);
+      check(feature, 'MAPS_UNAVAILABLE', 'No address was found near your current location.');
+      const p = feature.properties ?? {};
+      const state = [p.state, p.county].find((v) => typeof v === 'string' && v.trim());
+      const town = [p.city, p.town, p.district, p.locality, p.county].find((v) => typeof v === 'string' && v.trim());
+      const street = [p.housenumber, p.street].filter((v) => typeof v === 'string' && v.trim()).join(' ');
+      const line = [...new Set([street, p.name, p.district, p.city, p.state].filter((v) => typeof v === 'string' && v.trim()))].join(', ');
+      check(state && town && line, 'MAPS_UNAVAILABLE', 'We could not identify the state, town and address for your current location.');
+      return { lat: Number(point.lat.toFixed(6)), lng: Number(point.lng.toFixed(6)), line: line.slice(0, 240),
+        state: String(state).trim().slice(0, 80), town: String(town).trim().slice(0, 80) };
     },
     async route(pickup, destination) {
       const url = new URL(`${routeUrl.href.replace(/\/$/, '')}/${pickup.lng},${pickup.lat};${destination.lng},${destination.lat}`);

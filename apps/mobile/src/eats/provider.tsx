@@ -5,6 +5,7 @@ import { randomUUID } from 'expo-crypto';
 import { createEatsController } from '../../../../packages/shared/src/eats-controller.mjs';
 import type { EatsController, EatsScreen } from '../../../../packages/shared/src/eats-controller.mjs';
 import { useSession } from '../session/provider';
+import { currentPickupPlace } from '../booking/location';
 const EatsContext = createContext<EatsController | null>(null);
 export function EatsProvider({ children }: PropsWithChildren) {
   const { client, user } = useSession();
@@ -15,7 +16,8 @@ export function EatsProvider({ children }: PropsWithChildren) {
       if (typeof result.serverNow === 'number') time = { at: result.serverNow, seen: performance.now() };
       return result;
     };
-    return createEatsController({ api: { request, command: request }, makeKey: randomUUID, now: () => time.at + performance.now() - time.seen });
+    return createEatsController({ api: { request, command: request }, makeKey: randomUUID, now: () => time.at + performance.now() - time.seen,
+      locateDelivery: async () => { const point = await currentPickupPlace(); return await client.reverseLocation(point.lat, point.lng); } });
   }, [client]);
   useEffect(() => { controller.context(user); }, [controller, user]);
   useEffect(() => () => controller.reset(), [controller]);

@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { createApplication } from '../src/application.mjs';
 import { TEST_NOW, harness, participants, claimRide } from './helpers.mjs';
 import { NIGERIA_BOUNDS, distanceMeters } from '../../../packages/shared/src/locations.mjs';
+import { foodAreaId } from '../../../packages/shared/src/nigeria-areas.mjs';
 import { checkedRoute, MAX_ROUTE_METERS, MAX_ROUTE_SECONDS, position } from '../src/modules/locations/domain.mjs';
 
 const points = { pickup: { lat: 9.0765, lng: 7.3986, name: 'Pickup test landmark' }, destination: { lat: 9.09, lng: 7.45, name: 'Destination test landmark' } };
@@ -11,6 +12,7 @@ function maps() {
   return { mode: 'community', tileOrigin: 'https://tile.openstreetmap.org',
     describe: () => ({ enabled: true, mode: 'community', tiles: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png' }),
     search: async () => [points.pickup, { lat: 51, lng: 0, name: 'Outside' }],
+    reverse: async (point) => ({ ...point, line: '17 Test Road, Ikeja, Lagos', state: 'Lagos State', town: 'Ikeja' }),
     route: async (a, b) => ({ distanceMeters: 7000, durationSeconds: 1200, coordinates: [[a.lng, a.lat], [7.42, 9.08], [b.lng, b.lat]] }),
   };
 }
@@ -80,6 +82,16 @@ test('quote inputs reject forged metrics, invalid coordinates and same points; e
   provider.route = async () => ({ distanceMeters: 1, durationSeconds: 1, coordinates: [] });
   assert.equal((await customer.post('/api/locations/quotes', points)).status, 503);
   assert.equal(h.db.prepare('SELECT count(*) AS n FROM rides').get().n, 0);
+});
+
+test('current-location reverse lookup returns a canonical Eats delivery area and rejects coordinates outside Nigeria', async (t) => {
+  const { customer } = await setup(t);
+  const result = await customer.post('/api/locations/reverse', { lat: 6.6018, lng: 3.3515 });
+  assert.equal(result.status, 200, JSON.stringify(result.body));
+  assert.deepEqual(result.body.place, { line: '17 Test Road, Ikeja, Lagos', areaId: foodAreaId('lagos', 'Ikeja'),
+    lat: 6.6018, lng: 3.3515, town: 'Ikeja', stateName: 'Lagos' });
+  const outside = await customer.post('/api/locations/reverse', { lat: 6.3703, lng: 2.3912 });
+  assert.equal(outside.status, 400); assert.equal(outside.body.error.code, 'INVALID_LOCATION');
 });
 
 test('national search and quotes accept Lagos, Kano and Port Harcourt while rejecting foreign points inside the bounding rectangle', async (t) => {

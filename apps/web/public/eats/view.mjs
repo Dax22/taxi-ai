@@ -270,9 +270,10 @@ export function createEatsView(controller, { geolocation = createGeolocation(), 
       card.append(text('p', 'TEST ORDER · ' + o.id.slice(0,8).toUpperCase(), 'eyebrow'), text('h1', EATS_STATUS[o.status]), text('h2', o.restaurant.name), text('p', `${o.customerName} · ${pickupAddress(o.restaurant)}`));
       card.append(text('p', o.fulfillment === 'pickup' ? 'Customer pickup · collect your food from the kitchen' : 'Delivery', 'food-tag'));
       if (o.address.line) card.append(text('p', `Deliver to: ${o.address.line} · ${foodAreaLabel(o.address.areaId)}`));
+      if (o.recipient?.kind === 'other') card.append(text('p', `Recipient: ${o.recipient.name} · ${o.recipient.phone}`));
       if (o.instructions) card.append(text('p', `Instructions: ${o.instructions}`));
       if (o.courier) card.append(text('p', `Courier: ${o.courier.name} · ${o.courier.vehicle.colour ?? ''} ${o.courier.vehicle.model} · ${o.courier.vehicle.plate}`));
-      if (o.pickupPin || o.deliveryPin) card.append(text('p', o.pickupPin ? 'Kitchen pickup code · share at handover only' : o.fulfillment === 'pickup' ? 'Your pickup code · show the kitchen when collecting your food' : 'Your delivery code · share only when you receive the food', 'small-note'), text('p', o.pickupPin ?? o.deliveryPin, 'food-pin'));
+      if (o.pickupPin || o.deliveryPin) card.append(text('p', o.pickupPin ? 'Kitchen pickup code · share at handover only' : o.fulfillment === 'pickup' ? 'Your pickup code · show the kitchen when collecting your food' : o.recipient?.kind === 'other' ? `Delivery code · share with ${o.recipient.name} only when the courier arrives` : 'Your delivery code · share only when you receive the food', 'small-note'), text('p', o.pickupPin ?? o.deliveryPin, 'food-pin'));
       for (const i of o.lines) card.append(text('p', `${i.quantity} × ${i.name} · ${formatNaira(i.priceKobo * i.quantity)}`));
       card.append(totals(o.totals), text('p', 'Test checkout · no money charged.', 'small-note'));
       const timeline = text('ol', undefined, 'food-timeline');

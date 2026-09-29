@@ -22,6 +22,9 @@ function snapshot(o) {
   valid(!Object.hasOwn(o.restaurant, 'dispatchPoint'));
   seller(o.restaurant); valid(o.fulfillment === undefined || ['delivery', 'pickup'].includes(o.fulfillment));
   valid(object(o.address) && string(o.address.areaId) && (o.address.line === undefined || string(o.address.line)) && string(o.instructions));
+  valid(o.recipient === undefined || object(o.recipient) && ['self', 'other'].includes(o.recipient.kind)
+    && (o.recipient.kind === 'self' ? Object.keys(o.recipient).length === 1
+      : string(o.recipient.name) && o.recipient.name.length >= 2 && string(o.recipient.phone) && /^\+234\d{10}$/.test(o.recipient.phone)));
   valid(o.isDemo === true && o.payment?.method === 'test' && o.payment.status === 'not_charged');
   valid(Array.isArray(o.lines) && o.lines.every((l) => object(l) && id(l.itemId) && string(l.name) && string(l.description)));
   const totals = eatsTotals(o.lines, o.totals?.deliveryFeeKobo);

@@ -11,20 +11,29 @@ import { FoodMoney, food } from './components';
 
 export function MealBuilder({ state: s, controller: c, locked, onMenus, onPlaced }: { state: EatsState; controller: EatsController; locked: boolean; onMenus(): void; onPlaced(): void }) {
   const [address, setAddress] = useState(s.address.line), [area, setArea] = useState(s.address.areaId), [query, setQuery] = useState(s.foodQuery);
+  const [recipientKind, setRecipientKind] = useState<'self' | 'other'>(s.recipient.kind), [recipientName, setRecipientName] = useState(s.recipient.kind === 'other' ? s.recipient.name : ''), [recipientPhone, setRecipientPhone] = useState(s.recipient.kind === 'other' ? s.recipient.phone : '');
   useEffect(() => { setAddress(s.address.line); setArea(s.address.areaId); }, [s.address.line, s.address.areaId]);
+  useEffect(() => { setRecipientKind(s.recipient.kind); setRecipientName(s.recipient.kind === 'other' ? s.recipient.name : ''); setRecipientPhone(s.recipient.kind === 'other' ? s.recipient.phone : ''); }, [s.recipient]);
   const town = foodLocationLabel;
   const admin = s.user?.role === 'admin';
   const search = (value = query) => { setQuery(value); void c.findMeals(value); };
   return <>
     <FoodHero/>
     {!s.deliveryConfirmed ? <Card>
-      <Heading title="First, where should we deliver?" subtitle="Choose your location to see dishes available for delivery."/>
-      <Field label="Delivery address and landmark" value={address} onChangeText={setAddress} placeholder="Street, building and a nearby landmark" maxLength={240} editable={!locked && !s.foodLoading}/>
+      <Heading title="First, where should we deliver?" subtitle="Use your present location or send food to someone else."/>
+      <View style={styles.row}><DiscoveryChip label="Deliver to me" selected={recipientKind === 'self'} disabled={locked || s.deliveryLocating} onPress={() => setRecipientKind('self')}/><DiscoveryChip label="Send to someone else" selected={recipientKind === 'other'} disabled={locked || s.deliveryLocating} onPress={() => setRecipientKind('other')}/></View>
+      {recipientKind === 'self' ? <Button title="Use my current location" secondary busy={s.deliveryLocating} disabled={locked || s.foodLoading || s.deliveryLocating} onPress={() => void c.useCurrentDelivery()}/> : <>
+        <Field label="Recipient name" value={recipientName} onChangeText={setRecipientName} placeholder="Who should receive the food?" maxLength={80} editable={!locked && !s.foodLoading}/>
+        <Field label="Recipient Nigerian phone number" value={recipientPhone} onChangeText={setRecipientPhone} placeholder="0801 234 5678" keyboardType="phone-pad" maxLength={24} editable={!locked && !s.foodLoading}/>
+        <Text style={styles.small}>You remain responsible for the order. Share the handover code with the recipient when the courier arrives.</Text>
+      </>}
+      <Field label="Delivery address and landmark" value={address} onChangeText={setAddress} placeholder="Street, building and a nearby landmark" maxLength={240} editable={!locked && !s.foodLoading && !s.deliveryLocating}/>
       <FoodLocationFields label="Delivery" value={area} onChange={setArea} disabled={locked || s.foodLoading}/>
       <Text style={styles.small}>Choose any Nigerian state or FCT and enter your town or local area. Menus depend on kitchens serving that location.</Text>
-      <Button title="Find food near me" busy={s.foodLoading} disabled={locked || address.trim().length < 8 || !area} onPress={() => void c.confirmDelivery({ line: address, areaId: area })}/>
+      <Button title="Find food for this address" busy={s.foodLoading} disabled={locked || s.deliveryLocating || address.trim().length < 8 || !area || (recipientKind === 'other' && (recipientName.trim().length < 2 || recipientPhone.replace(/\D/g, '').length < 11))}
+        onPress={() => void c.confirmDelivery({ line: address, areaId: area }, recipientKind === 'other' ? { kind: 'other', name: recipientName, phone: recipientPhone } : { kind: 'self' })}/>
     </Card> : <>
-      <Card><Text style={styles.label}>DELIVERING TO</Text><Text style={styles.body}>{s.address.line} · {town(s.address.areaId)}</Text><Button title="Change location" secondary disabled={s.busy || s.uncertain} onPress={() => c.editDelivery()}/></Card>
+      <Card><Text style={styles.label}>DELIVERING TO</Text><Text style={styles.body}>{s.address.line} · {town(s.address.areaId)}</Text>{s.recipient.kind === 'other' && <Text style={styles.small}>For {s.recipient.name} · {s.recipient.phone}</Text>}<Button title="Change location or recipient" secondary disabled={s.busy || s.uncertain} onPress={() => c.editDelivery()}/></Card>
       <Heading title="What do you want to eat?" subtitle="Mix dishes from restaurants, food vendors and home kitchens."/>
       <Field label="Your craving" value={query} onChangeText={setQuery} placeholder="Jollof rice, chicken and plantain" maxLength={200} returnKeyType="search" onSubmitEditing={() => search()} editable={!locked && !s.foodLoading}/>
       <Button title="Find my food" busy={s.foodLoading} disabled={locked} onPress={() => search()}/>
@@ -61,7 +70,7 @@ export function MealBuilder({ state: s, controller: c, locked, onMenus, onPlaced
         <Field label="Kitchen or delivery notes (optional)" value={s.instructions} onChangeText={(value) => c.delivery(s.address, value)} maxLength={240} multiline editable={!locked}/>
         <Button title="Review total" busy={s.busy} disabled={locked || s.foodLoading || !s.mealBasket.length || admin} onPress={() => void c.reviewMeal()}/>
       </Card>
-      {s.mealCheckout && <Card><Heading title="Review your meal" subtitle={`Delivery to ${s.address.line} · ${town(s.address.areaId)}`}/>
+      {s.mealCheckout && <Card><Heading title="Review your meal" subtitle={`Delivery to ${s.address.line} · ${town(s.address.areaId)}${s.recipient.kind === 'other' ? ` · For ${s.recipient.name}` : ''}`}/>
         {s.mealCheckout.quotes.map((quote) => <View key={quote.id} style={food.menuRow}><Text style={styles.h2}>{quote.restaurant.name}</Text>{quote.lines.map((line) => <Text key={line.itemId} style={styles.body}>{line.quantity} × {line.name} · {fare(line.quantity * line.priceKobo)}</Text>)}<FoodMoney value={quote.totals}/></View>)}
         <Text style={styles.h2}>Combined total · {fare(s.mealCheckout.totals.totalKobo)}</Text>
         <Text style={styles.small}>Total held until {new Date(s.mealCheckout.expiresAt).toLocaleTimeString()}. Separate deliveries from each kitchen. Test checkout · no payment is collected.</Text>
