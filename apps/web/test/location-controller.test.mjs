@@ -285,6 +285,20 @@ test('Find rides requires a new successful GPS fix even when a manual pickup is 
   assert.equal(f.commands.length, 0);
 });
 
+test('Find rides explains browser permission, unavailable-position and timeout failures without assuming a country', async () => {
+  for (const [code, expected] of [[1, /Location access is blocked/], [2, /could not determine/], [3, /timed out/]]) {
+    const f = plannerSetup(); await f.c.setContext(customer, false);
+    f.locateHook = async () => { throw { code }; }; // Browser GeolocationPositionError is not an Error instance.
+    await f.c.findRides('Maitama');
+    assert.match(f.c.snapshot().error, expected);
+    assert.doesNotMatch(f.c.snapshot().error, /outside Nigeria/);
+    assert.equal(f.c.snapshot().pickup, null);
+    assert.equal(f.states.at(-1).locatingPickup, false);
+    assert.equal(f.requests.filter((request) => request.path.endsWith('/search')).length, 0);
+    assert.equal(f.commands.length, 0);
+  }
+});
+
 test('standard-car courier mode enables manual pickup and cancels pending passenger GPS', async () => {
   const f = plannerSetup(), gps = deferred();
   await f.c.setContext(customer, false); f.locateHook = () => gps.promise;
