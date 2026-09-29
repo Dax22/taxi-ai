@@ -41,9 +41,9 @@ function setup(t, serverNow = () => 1000) {
     querySelectorAll(selector) { const all = [...nodes.values(), ...created]; return selector === 'button'
       ? all.filter((value) => value.tag === 'button') : all.filter((value) => value.dataset.requestExpires); } };
   t.after(() => { globalThis.document = old; });
-  const commands = [], mismatches = [], edits = [];
-  const view = createDashboardView({ serverNow, onCommand: (...args) => commands.push(args), onVehicleMismatch: (id) => mismatches.push(id), onEditVehicle: () => edits.push(true), onReview() {}, onReportReview() {}, onSelectionChange() {}, onHistory() {} });
-  return { view, node, commands, mismatches, edits };
+  const commands = [], mismatches = [], edits = [], categoryChanges = [];
+  const view = createDashboardView({ serverNow, onCommand: (...args) => commands.push(args), onVehicleMismatch: (id) => mismatches.push(id), onEditVehicle: () => edits.push(true), onCategoryChange: (...args) => categoryChanges.push(args), onReview() {}, onReportReview() {}, onSelectionChange() {}, onHistory() {} });
+  return { view, node, commands, mismatches, edits, categoryChanges };
 }
 const customer = { id: 'customer', name: 'Passenger', role: 'customer' };
 const driver = { id: 'driver', name: 'Driver', role: 'driver', driver: { status: 'approved', eligibility: { eligible: true, reviewStatus: 'approved' }, vehicle: { model: 'Toyota', plate: 'TEST-001' } } };
@@ -154,6 +154,7 @@ test('courier deep link survives authentication and books standard car parcels w
   assert.equal(h.node('dashboard-title').textContent, 'Send a parcel across Nigeria.');
   assert.equal(h.node('delivery-details-form').hidden, false); assert.equal(h.node('passenger-panel').hidden, true);
   assert.equal(h.node('delivery-weight').max, '30');
+  assert.deepEqual(h.categoryChanges.at(-1), ['standard', 'delivery']);
   const group = h.node('account-vehicle-categories').children[0];
   assert.equal(group.children.find((button) => button.dataset.category === 'suv').hidden, true);
   assert.equal(group.children[0].children[1].textContent, 'Car');
@@ -164,6 +165,7 @@ test('courier deep link survives authentication and books standard car parcels w
   h.view.render(state({ ...customer, id: 'other-customer' }, []));
   assert.equal(h.node('delivery-recipient').value, '', 'replacement accounts never inherit parcel drafts');
   h.node('booking-service-ride').handlers.click();
+  assert.deepEqual(h.categoryChanges.at(-1), ['standard', 'ride']);
   assert.equal(h.node('dashboard-title').textContent, 'Where will today take you?');
   assert.equal(h.node('delivery-details-form').hidden, true); assert.equal(h.node('passenger-panel').hidden, false);
   assert.deepEqual(h.view.requestOptions(), { vehicleCategory: 'standard', passenger: { kind: 'self' } });

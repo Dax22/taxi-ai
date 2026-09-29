@@ -53,7 +53,7 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
       $('dashboard-title').textContent = isDelivery() ? 'Send a parcel across Nigeria.' : 'Where will today take you?';
       $('dashboard-description').textContent = isDelivery() ? 'Choose pickup and delivery locations, add parcel details and invite your recipient to track it.' : 'Enter your destination, see the suggested fare, then discuss and agree the exact price with your driver.';
     }
-    onCategoryChange(category.id); updateQuote();
+    onCategoryChange(category.id, isDelivery() ? 'delivery' : 'ride'); updateQuote();
   }
   function selectedRide() { return state.rides.find((ride) => ride.id === selectedId) ?? state.history?.find((ride) => ride.id === selectedId); }
 
