@@ -71,3 +71,14 @@ TAXI_AI_TEST_POSTGRES_URL=postgresql://test_owner:YOUR_PASSWORD@localhost:5432/t
 Each test creates a unique schema and drops that schema on completion. The live tests skip when `TAXI_AI_TEST_POSTGRES_URL` is absent. Ordinary `npm test` also runs the SQL binding and conversion tests.
 
 Development verification can exercise the real PostgreSQL SQL engine and PostGIS through the experimental PGlite wire-protocol harness when a native server is unavailable. Its single backend does **not** validate independent PostgreSQL sessions, native connection-pool contention, failover, multi-process locking or production capacity. Run the live suite and replica/worker contention tests against native PostgreSQL before deployment; follow [the scaling runbook](scalability.md) for controlled load scenarios and capacity measurements.
+
+### Required native database gate
+
+Run `TAXI_AI_TEST_POSTGRES_URL=postgresql://test_role:TEST_PASSWORD@127.0.0.1:5432/taxi_ai_test npm run test:postgres`
+against a disposable native PostgreSQL 16+/PostGIS database. This command fails
+before testing if the URL is absent, the database is not a loopback test/load
+database, or two independent backend sessions cannot be established. It runs every
+PostgreSQL suite, including intentional multi-pool dispatch conflicts and lease
+fencing. The default `npm test` still permits local database suites to skip, but CI
+runs the dedicated native job on every pull request. See `docs/scalability.md` for
+the separate two-API/two-worker matching benchmark and profiling controls.

@@ -268,3 +268,79 @@ off-host backup/restore and operational alerting on the actual hosting platform.
 
 Deploying this template, training a matching model and claiming one-million-user
 capacity are separate decisions. None is implied by a passing unit-test suite.
+
+## Matching validation milestone
+
+CI now has a `PostgreSQL concurrency and journeys` job against native PostgreSQL
+16/PostGIS. `npm run test:postgres` refuses a missing database or a server without
+independent backends; it runs all PostgreSQL integration suites sequentially.
+The concurrency suite deliberately races separate pools: serialization retries,
+one pending offer per ride and per driver, competing leases, stale workers after
+routing, and transactional rollback. Existing PostgreSQL browser/native, Eats,
+family/courier and admin suites run in the same gate. Configure this job as a
+required check in GitHub branch protection if repository settings do not already
+require every verification job. A workflow job alone does not change protection.
+
+### Sample matching queries in staging
+
+Set `TAXI_AI_DISPATCH_PROFILE_SAMPLE_EVERY=10` on workers to sample every tenth
+regional cycle (0, the default, disables profiling; 1 profiles every cycle).
+Structured `dispatch_profile` logs contain total and phase duration in milliseconds
+(discovery including stale-offer cleanup, routing, and commit), database operation
+count/time, transaction retries, and at most 65 query fingerprints. Database time
+includes adapter/pool wait and retry work; it is not PostgreSQL CPU time. Transaction
+BEGIN/COMMIT statements are not separate query counts. SQL, parameters, rider/driver
+IDs, coordinates and region names are never logged. Fingerprints are the first
+16 hexadecimal characters of SHA-256 of `method:normalized SQL`; method is
+`get`, `all`, `run`, `exec`, or `query`, and normalization collapses whitespace and
+trims ends. Derive the same fingerprint from repository statements to locate
+repeated or slow queries, then use EXPLAIN (ANALYZE, BUFFERS) only on the disposable
+benchmark database. Profiling does not change matching policy or expose an endpoint.
+
+### Run the isolated benchmark on a staging host
+
+Provide a dedicated, disposable native PostgreSQL 16+/PostGIS database on
+loopback named `taxi_ai_load` (or another `taxi_ai_load*` / `taxi_ai_test*` name).
+Its role needs schema creation and the PostGIS/citext extensions, as for database
+integration tests. Keep this database separate from the invited pilot database.
+Do not run resource-heavy benchmarks alongside live operations on a shared host.
+
+```sh
+export TAXI_AI_LOAD_POSTGRES_URL='postgresql://test_role:TEST_PASSWORD@127.0.0.1:5432/taxi_ai_load'
+npm run matching:benchmark -- --rate 1 --duration-seconds 60 \
+  --warmup-seconds 10 --actors 40 --api-instances 2 --workers 2 \
+  --pool-size 10 --max-match-p95-ms 10000 --output matching-baseline.json
+```
+
+Each run creates/drops a unique schema and starts independent API and worker
+processes with separate pools; requests alternate between APIs using real
+session/CSRF/idempotency controls. Synthetic drivers pass normal onboarding.
+Fixed-rate arrivals create GPS quotes and requests while drivers poll, accept
+matches, negotiate fare, verify pickup PINs and complete journeys. Idle drivers
+send GPS heartbeats. Providers use deterministic fixtures; no real messages,
+payments or routing calls are sent. No existing website URL is accepted.
+
+The report separates setup, warmup, the arrival window and drain time. It includes
+HTTP errors/percentiles, scheduled/started/dropped arrivals, generator scheduling
+lag, completed journeys, request-to-accepted-offer percentiles, per-process memory,
+event-loop delay, sampled pool queue peaks and matching query/phase profiles.
+It exits nonzero for any dropped arrivals, incomplete/error journeys, HTTP error
+rate over 1%, p95 accepted-match latency above the chosen limit, missing commit
+profiles, profile overflow, or unhealthy warmup. CI runs a small two-API/two-worker
+smoke workload; that validates the harness, not capacity.
+
+Increase load in recorded stages on representative staging hardware. Actors are
+bounded at 200 customer/driver pairs, arrivals at 20/s, duration at five minutes,
+and total service pool connections at 80. Both customer and driver reuse waits
+15 seconds to respect account write budgets. Too few available actors causes
+explicit dropped arrivals; the generator never waits for capacity. Save reports
+with unique filenames (existing reports are not overwritten), commit SHA and host
+CPU/RAM/database version alongside each run. `--idle-accounts 1000000` can test
+account-table cardinality using synthetic inactive rows; it does **not** simulate
+one million active users, driver locations, or trip-history rows.
+
+Before claiming production capacity, repeat longer distributed tests for the
+expected active riders/drivers, city distribution, historical rides, realtime
+connections, real routing service latency/quotas, and worker/database failure.
+This milestone supplies concurrency evidence and a bounded repeatable benchmark;
+it does not certify one-million-user operation or change the deployed topology.

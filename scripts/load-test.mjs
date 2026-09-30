@@ -68,12 +68,12 @@ export function createMeasurements() {
 
 const POSITION = { lat: 9.08, lng: 7.4 };
 const fix = (offset = 0) => ({ lat: POSITION.lat + offset, lng: POSITION.lng, accuracy: 10, capturedAt: Date.now() });
-const fixtureMap = { mode: 'dedicated', tileOrigin: 'https://tiles.example.test', describe: () => ({ enabled: true, mode: 'dedicated' }),
+export const fixtureMap = { mode: 'dedicated', tileOrigin: 'https://tiles.example.test', describe: () => ({ enabled: true, mode: 'dedicated' }),
   route: async (from, to) => ({ distanceMeters: 7000, durationSeconds: 1200, coordinates: [[from.lng, from.lat], [to.lng, to.lat]] }),
   pickupEstimates: async (pairs) => pairs.map(({ from, to }) => ({ distanceMeters: 500, durationSeconds: 120,
     coordinates: [[from.lng, from.lat], [to.lng, to.lat]] })) };
 
-async function seed(application, count) {
+export async function seedSyntheticActors(application, count) {
   const password = `Load-only-${randomUUID()}-Aa1!`;
   const admin = await application.accounts.register({ name: 'Synthetic load operator', email: 'load-operator@example.test', password });
   await application.accounts.bootstrapAdmin(admin.email);
@@ -144,7 +144,7 @@ async function childServer() {
   process.once('SIGTERM', () => { void stop(); });
   try {
     const application = await createApplication(options);
-    const actors = await seed(application, Number(process.env.TAXI_AI_LOAD_ACTORS));
+    const actors = await seedSyntheticActors(application, Number(process.env.TAXI_AI_LOAD_ACTORS));
     server = await createAppServer({ ...options, telemetry: createTelemetry({ enabled: false }) });
     server.listen(0, '127.0.0.1'); await once(server, 'listening');
     lag.enable();
