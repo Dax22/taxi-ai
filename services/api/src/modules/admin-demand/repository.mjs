@@ -1,3 +1,4 @@
+import { floorIntegerSql } from '../../shared/sql-floor.mjs';
 // Historical request cohorts and current eligible supply are deliberately separate.
 // These projections never select customer identities, addresses, routes or exact GPS.
 // The domain supplies its allowed sample IDs as bound values, keeping storage
@@ -12,7 +13,7 @@ const region = (filter) => `CASE WHEN substr(r.dispatch_region,1,3)='ng:' AND ${
   AND length(${cellBody})-instr(${cellBody},':') BETWEEN 1 AND 4 THEN r.dispatch_region
   WHEN r.dispatch_region IN (${sampleNames(filter).map((name) => `'sample:' || ${name}`).join(',')}) THEN r.dispatch_region ELSE 'unassigned' END`;
 const driverRegion = (filter) => `CASE WHEN a.mode='sample' AND a.area_id IN (${sampleNames(filter).join(',')}) THEN 'sample:' || a.area_id
-  WHEN a.latitude IS NOT NULL AND a.longitude IS NOT NULL THEN 'ng:' || CAST(CAST(FLOOR(a.latitude*20) AS INTEGER) AS TEXT) || ':' || CAST(CAST(FLOOR(a.longitude*20) AS INTEGER) AS TEXT)
+  WHEN a.latitude IS NOT NULL AND a.longitude IS NOT NULL THEN 'ng:' || CAST(${floorIntegerSql('a.latitude*20')} AS TEXT) || ':' || CAST(${floorIntegerSql('a.longitude*20')} AS TEXT)
   ELSE 'unassigned' END`;
 const driverCategory = "COALESCE(json_extract(app.details_json,'$.vehicle.category'),'standard')";
 const eligibleDrivers = `FROM driver_availability a JOIN drivers d ON d.user_id=a.driver_id
@@ -102,8 +103,8 @@ function coverageRecords(filter) {
   located AS (SELECT *,CASE WHEN sourceKind='sample' THEN 'sample'
     WHEN lat IS NULL OR lng IS NULL OR lat<$nationalSouth OR lat>$nationalNorth OR lng<$nationalWest OR lng>$nationalEast THEN 'unlocated'
     WHEN lat<$south OR (lat>=$north AND $north<$nationalNorth) OR lng<$west OR (lng>=$east AND $east<$nationalEast) THEN 'outside' ELSE 'mapped' END AS mapKind FROM coverage_records),
-  gridded AS (SELECT *,CASE WHEN mapKind='mapped' THEN CAST(FLOOR(lng/CAST($cellDegrees AS DOUBLE PRECISION)) AS INTEGER) ELSE 0 END AS cellX,
-    CASE WHEN mapKind='mapped' THEN CAST(FLOOR(lat/CAST($cellDegrees AS DOUBLE PRECISION)) AS INTEGER) ELSE 0 END AS cellY FROM located)`;
+  gridded AS (SELECT *,CASE WHEN mapKind='mapped' THEN ${floorIntegerSql('lng/CAST($cellDegrees AS DOUBLE PRECISION)')} ELSE 0 END AS cellX,
+    CASE WHEN mapKind='mapped' THEN ${floorIntegerSql('lat/CAST($cellDegrees AS DOUBLE PRECISION)')} ELSE 0 END AS cellY FROM located)`;
 }
 
 export function createAdminDemandRepository(db) {
