@@ -13,9 +13,9 @@ explicit local delivery coverage and private pickup points for nearby couriers.
 | --- | --- | --- |
 | Browse, menu, cart and checkout | `/eats` | Home → Taxi Ai Eats |
 | Customer order history | `/eats?screen=orders` | Activity → My food orders |
-| Restaurant/vendor/home-kitchen settings, menu and kitchen orders | `/eats?screen=store` | Account → My store |
+| Restaurant/vendor/home-kitchen settings, menu and kitchen orders | `/eats/sell` (also `/eats?screen=store`) | Account → My store |
 | Courier collection and delivery | `/eats?screen=work` | Work → Food deliveries |
-| Staff approval | `/eats?screen=review`, also linked in `/admin` | Staff uses the website |
+| Staff store and photo review | `/eats?screen=review`, also linked in `/admin` | Staff uses the website |
 
 The seller hub is an account-scoped workspace for restaurants, vendors and private kitchens. It does not grant a public administrator
 role or change Customer/Work permissions. The first version supports one owner
@@ -53,7 +53,7 @@ recovers a lost response without duplicating any order.
 **Kitchen menus & customer pickup** retains the separate single-kitchen ordering
 flow. General Nigerian food inspiration appears as top-down photography-style
 artwork: jollof rice, grilled chicken, dodo, egusi, pounded yam, suya, moi moi and
-puff-puff. It is labelled AI artwork and never used to represent a seller's
+puff-puff. It is labelled illustrative artwork and never used to represent a seller's
 actual listing. Seller photos remain attached to the seller's own food.
 
 On web choose **Sell from home**; on mobile use **Eats → Sell from home** or
@@ -74,13 +74,58 @@ oversell it. Cancel/decline before preparation restores stock once if the batch
 has not been replaced; prepared food is not restored. Stock changes update the
 store version, so another checkout or dirty seller form must refresh first.
 
-Meal photos must be JPEG/PNG, up to 2 MiB and 16 megapixels, at least 160 × 120.
-The API fully decodes, rotates, resizes and re-encodes to JPEG; EXIF/GPS is removed.
-Photos are accessed through authenticated, store-scoped endpoints. Only approved,
-available menu photos appear to customers; superseded unreferenced photos are
-removed. Photo processing runs outside the database transaction, with a fresh
-session/membership/version check before saving. In-flight photo replies are
-cleared on account changes. The hero is labelled as general Nigerian food inspiration and AI artwork.
+## Vendor photos and image review
+
+Photos are optional. Vendors provide photographs of the actual dishes they sell,
+showing the portion and sides included in the price, plus an optional kitchen logo
+and cover photo. They must own the image or have permission to use it. Keep people,
+private home addresses, phone numbers and other personal details out of images.
+Taxi Ai provides clearly labelled illustrative artwork for editorial/category
+surfaces only. A missing, inaccessible or broken listing image displays **Photo
+coming soon**, never a generic dish image selected from the menu name. A kitchen
+without an approved cover may use an approved photo from its own available menu.
+Photo-less items remain searchable and orderable; photo review does not replace
+store approval or food availability checks.
+
+The website offers separate gallery and camera file selectors, a local preview,
+processing status, replacement and removal. Mobile offers its photo library and
+camera with the same save/review flow. Choosing an image does not publish it:
+save the menu item or the separate kitchen-image form to upload it. New dish,
+logo and cover images await staff review and remain hidden from customers until
+approved. Rejection includes a reason so the owner can replace or remove the image.
+The old photo is removed when a replacement is saved; the pending replacement is
+not displayed publicly. Changing a photo does not close an approved kitchen.
+
+Owners can also save a **private printed-menu reference**. Only the owning kitchen
+account can read it; customers, couriers, other vendors and staff cannot access it.
+It is a manual reference, with no OCR or automatic dish creation. Every sellable
+dish still needs its own name, price, description, allergen notes and availability.
+Describe the portion and included sides accurately; item modifiers remain future work. The reference never appears on the public menu or staff photo queue.
+
+Staff use **Photo review** at `/eats?screen=review`. Separate queues show pending,
+approved, rejected and existing legacy photos. Staff preview each image and enter
+a 10–500 character reason before approving or rejecting it. A changed image version
+requires reviewing the current image again. Staff cannot approve their own kitchen's
+images. Existing images survive migration as legacy content, labelled **not yet
+reviewed under the new photo policy** rather than presented as newly verified.
+Manual review records a decision; it does not prove image ownership or food safety.
+
+| Boundary | Limits and processing |
+| --- | --- |
+| Website selection | JPEG, PNG or WebP up to 8 MiB and 25 megapixels; whole frame resized to at most 1,600 pixels on the longest edge and compressed to JPEG up to 1 MiB. A stalled decode/encode times out after 15 seconds. |
+| Mobile camera/library | At least 160 × 120 pixels, at most 32 megapixels and 20 MiB; whole frame resized to at most 1,200 pixels on the longest edge and compressed to JPEG. |
+| Server: dish photo saved with menu item | JPEG/PNG up to 2 MiB and 16 megapixels, at least 160 × 120; independently decoded, orientation corrected and re-encoded to JPEG up to 960 pixels per edge and 350,000 bytes. |
+| Server: kitchen images and separate item-photo endpoint | JPEG/PNG up to 2 MiB and 32 megapixels, at least 160 × 120; independently decoded, orientation corrected and re-encoded to JPEG up to 1,200 pixels per edge and 1 MiB. |
+
+Both server photo paths remove EXIF/GPS/XMP/IPTC metadata. The server checks file
+signatures, encoding, pixel bounds and single-image content.
+It limits stored photos to 30 MiB per kitchen and removes superseded unreferenced
+images within the save transaction. It authenticates photo reads and rechecks
+session, ownership and version after decoding and before saving. Account changes
+clear private client state and discard delayed replies; clients display a neutral
+fallback if a photo request or image decode fails. Camera permission denial still
+allows choosing a library image. Unsupported HEIC files should be exported as
+JPEG for the website.
 
 Customers can filter by cuisine, kitchen type, kitchen area, open state and order
 option, then sort by name, preparation time or delivery fee. Open kitchens are
@@ -170,6 +215,44 @@ an unaccepted order. An administrator can cancel before collection with a reason
 After collection, this preview requires normal delivery completion; lost food,
 reassignment and exceptional recovery still need an operational support workflow.
 
+## Test vendor images on web and mobile
+
+Use separate owner, customer and staff accounts, and test one approved, open kitchen
+with a dish that has no photo. Keep all menus and orders fictional in this preview.
+
+1. As the vendor, open `/eats/sell` or **Account → My store**. Edit the dish, choose
+   or take a real food photo and inspect the local preview. Save the structured
+   item. Confirm **awaiting review**; an unsaved selection must not change another
+   account's menu. Check that removing the photo and saving keeps the dish intact.
+2. As the customer, search for that dish and open its kitchen menu. The pending or
+   missing photo should show **Photo coming soon**, and a test order should still
+   work. The editorial artwork must not appear as the vendor's individual dish.
+3. As staff, open `/eats?screen=review` → **Photo review**, inspect the image and
+   approve it with a reason. Refresh the customer listing and confirm it appears.
+   Reject another upload with a reason and confirm the owner sees the reason while
+   the customer sees the fallback. Re-reviewing a stale version must not overwrite
+   another staff member's decision.
+4. As the owner, add a logo and cover in **Kitchen images**, save each separately,
+   and have staff approve them. Replace one and confirm the replacement stays
+   hidden until approved. Remove and save it; an absent cover may fall back to an
+   approved photo from this kitchen's available menu, while an absent logo uses the
+   neutral placeholder. Existing orders and the menu must remain intact.
+5. Save a printed-menu reference and refresh the owner workspace. Confirm it remains
+   available only there; it must not create dishes, appear in the customer listing
+   or appear in the staff queue/profile. Remove it and verify it is no longer served.
+6. Try an unsupported/oversized file, deny camera permission, interrupt an upload,
+   sign out while a photo is processing, and change the menu in another session.
+   Expect a clear error or fallback, no other account's preview, and no silent
+   overwrite. A lost server reply uses **Retry the same action** rather than a second
+   upload. Refresh and select again after a stale-version error.
+
+Automated photo tests include server authorization/projection boundaries,
+metadata removal and malformed-image handling, moderation/retry/version checks,
+web fallback and account-switch races, and browser compression/decode timeouts.
+Run `node --experimental-sqlite --test apps/web/test/eats.test.mjs apps/web/test/eats-photos.test.mjs`
+for the targeted web checks. Actual camera behavior, browser layout, accessibility
+and two-phone verification remain manual acceptance work.
+
 ## Behaviour and ownership
 
 - The primary delivery basket combines dishes from up to five kitchens. Individual
@@ -186,10 +269,11 @@ reassignment and exceptional recovery still need an operational support workflow
 - Sold-out items cannot be added to new quotes. Store owners can pause ordering;
   accepted orders remain actionable. Identity/location changes put the store back
   into review. Opening requires current approval and an available menu item.
-- Menu photos are optional JPEG/PNG uploads. The server strips metadata, converts
-  each image to a bounded JPEG and stores it separately from searchable menu data.
-  Owners and staff can preview photos before approval; customers see only photos
-  for available items from approved stores. Sellers can replace or remove a photo.
+- Dish photos, kitchen logos and covers are optional and separately moderated.
+  Customers see approved or retained legacy images only within permitted listings;
+  pending/rejected images stay private to the owner and authorized reviewers.
+  Printed-menu references are owner-only. Sellers can replace or remove images
+  without removing a dish or interrupting existing orders.
 - An approved courier may hold one food delivery, ride or parcel assignment at a
   time. Claiming a food job atomically stops availability. Active food work also
   blocks vehicle changes, Work profile deletion and competing journey actions.
@@ -219,10 +303,13 @@ cannot open the upgraded schema. Orders include private addresses and must be
 treated as private data in backups. Expired quote/command retention and production
 erasure policies still need an explicit cleanup implementation.
 
-Migration **021** adds a separate menu-photo table without changing existing menu
-items. Photos live in the same SQLite backup as stores and orders; production
-storage should later move to object storage with image review, retention and
-delivery caching.
+Migration **021** added a separate menu-photo table without changing existing menu
+items. SQLite migration **042** and PostgreSQL migration **015** add photo purposes,
+review status/version/evidence and kitchen-image attachments, preserve existing
+images as legacy content and consolidate legacy item-only photos. Photos remain
+in database backups with stores and orders. Object storage, a production retention
+policy and image delivery caching remain future infrastructure work; private
+reference access controls must survive any such move.
 
 Both `/api/eats/*` (cookie + CSRF) and `/api/mobile/v1/eats/*` (device bearer) call
 the same service. The composition root injects shared workload and availability

@@ -102,6 +102,11 @@ test('PostgreSQL HTTP: shared sessions, account invalidations, Eats photos and a
       assert.equal((await fetch(replicas[1].base + imagePath, { headers: { Cookie: customer.state.cookie } })).status, 404);
       ({ store } = must(await staff.send(0, `/api/eats/stores/${store.id}/review`, { expectedVersion: store.version, decision: 'approved', reason: 'Fictional integration test kitchen reviewed.', reference: 'PG-TEST' })));
       ({ store } = must(await seller.send(1, `/api/eats/stores/${store.id}/open`, { expectedVersion: store.version, isOpen: true })));
+      assert.equal((await fetch(replicas[1].base + imagePath, { headers: { Cookie: customer.state.cookie } })).status, 404);
+      const queue = must(await staff.send(1, '/api/eats/admin/photos'));
+      assert.equal(queue.photos.length, 1); assert.equal(queue.photos[0].id, photo.menu[0].photoId);
+      must(await staff.send(0, `/api/eats/photos/${photo.menu[0].photoId}/review`, { expectedVersion: photo.menu[0].photoVersion,
+        decision: 'approved', reason: 'Food image checked against the fictional dish description.' }));
       const catalog = must(await customer.send(0, '/api/eats/restaurants?q=jollof'));
       assert.equal(catalog.dishes.length, 1);
       assert.equal((await fetch(replicas[1].base + imagePath, { headers: { Cookie: customer.state.cookie } })).status, 200);

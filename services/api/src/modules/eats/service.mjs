@@ -19,12 +19,26 @@ export function createEatsService({ repository, getAccount, hasOtherWork, availa
   const ownStore = async (user, id) => { check((await member(user, id)), 'FORBIDDEN', 'Only this store’s owner can manage it.'); return (await storeRecord(id)); };
   // Honour privacy in both historical snapshots and the current profile after a seller-type change.
   const privateKitchen = async (kitchen) => isPrivateKitchen(kitchen.sellerType) || isPrivateKitchen((await repository.store(kitchen.id))?.sellerType);
+  const publishedPhoto = (status) => ['approved', 'legacy-approved'].includes(status);
+  const photoMetadata = ({ id, purpose, status, version, reviewNote }) => ({ id, purpose, status, version, reviewNote: reviewNote ?? '' });
   const kitchenView = async (kitchen, reveal = false) => {
-    const hidden = (await privateKitchen(kitchen)) && (!reveal || !kitchen.address);
-    const { dispatchPoint, ...profile } = kitchen;
-    return { ...profile, town: area(kitchen.areaId).name, address: hidden ? '' : kitchen.address, addressHidden: hidden };
+    const current = await repository.store(kitchen.id);
+    const hidden = (isPrivateKitchen(kitchen.sellerType) || isPrivateKitchen(current?.sellerType)) && (!reveal || !kitchen.address);
+    const { dispatchPoint, assets, logoPhotoId, coverPhotoId, ...profile } = kitchen;
+    const visible = (await repository.assets(kitchen.id)).filter((photo) => publishedPhoto(photo.status));
+    return { ...profile, logoPhotoId: visible.find((photo) => photo.purpose === 'logo')?.id ?? null,
+      coverPhotoId: visible.find((photo) => photo.purpose === 'cover')?.id ?? current?.coverPhotoId ?? null,
+      town: area(kitchen.areaId).name, address: hidden ? '' : kitchen.address, addressHidden: hidden };
   };
-  const menuView = (items) => items.map(({ batchId, ...item }) => item);
+  const menuView = (items, managing = false) => items.map(({ batchId, photoStatus, photoReviewNote, ...item }) => {
+    if (!Object.hasOwn(item, 'photoId')) return item;
+    const visible = Boolean(item.photoId && (managing || publishedPhoto(photoStatus)));
+    return { ...item, photoId: visible ? item.photoId : null, photoVersion: visible ? item.photoVersion ?? null : null,
+      ...(managing ? { photoStatus: photoStatus ?? null, photoReviewNote: photoReviewNote ?? '' } : {}) };
+  });
+  async function checkedPhotoStorage(storeId) {
+    check((await repository.photoBytes(storeId)) <= 30 * 1024 * 1024, 'PHOTO_STORAGE_FULL', 'This store has reached its photo storage limit. Remove unused photos before uploading more.');
+  }
   const snapshotView = async (snapshot, reveal = false) => ({ ...snapshot, fulfillment: snapshot.fulfillment ?? 'delivery',
     restaurant: (await kitchenView(snapshot.restaurant, reveal)), lines: menuView(snapshot.lines) });
   // Inventory and order writes share the command transaction, including retries and rollback.
@@ -53,7 +67,11 @@ export function createEatsService({ repository, getAccount, hasOtherWork, availa
   async function storeView(user, id) {
     const store = (await storeRecord(id)), managing = user.role === 'admin' || (await member(user, id));
     check(managing || store.status === 'approved', 'NOT_FOUND', 'Restaurant not found.');
-    return { store: { ...(await kitchenView(store, managing)), ...(managing ? { dispatchPoint: store.dispatchPoint } : {}), reviewNote: managing ? store.reviewNote : undefined }, menu: menuView((await repository.menu(id)).filter((item) => managing || item.available)) };
+    const owned = await member(user, id), assets = await repository.assets(id);
+    const selected = (purpose) => { const photo = assets.find((value) => value.purpose === purpose); return photo ? photoMetadata(photo) : null; };
+    return { store: { ...(await kitchenView(store, managing)), ...(managing ? { dispatchPoint: store.dispatchPoint,
+      assets: { logo: selected('logo'), cover: selected('cover'), ...(owned ? { menuReference: selected('menu_reference') } : {}) } } : {}),
+      reviewNote: managing ? store.reviewNote : undefined }, menu: menuView((await repository.menu(id)).filter((item) => managing || item.available), managing) };
   }
   async function roleFor(user, order) {
     if (user.role === 'admin') return 'admin';
@@ -185,11 +203,15 @@ export function createEatsService({ repository, getAccount, hasOtherWork, availa
           let photoId = requestedPhoto === undefined ? old?.photoId ?? null : requestedPhoto;
           if (photo) {
             check(normalisedPhoto, 'INVALID_PHOTO', 'Upload a valid meal photo.');
-            photoId = tokens.id(); (await repository.savePhoto(photoId, store.id, normalisedPhoto, now));
-          } else if (photoId !== null) check((await repository.photo(identifier(photoId)))?.storeId === store.id, 'NOT_FOUND', 'Meal photo not found.');
+            photoId = tokens.id(); (await repository.savePhoto(photoId, store.id, normalisedPhoto, now, 'dish', store.version + 1));
+          } else if (photoId !== null) {
+            const existing = await repository.photo(identifier(photoId));
+            check(existing?.storeId === store.id && existing.purpose === 'dish' && old?.photoId === photoId, 'NOT_FOUND', 'Meal photo not found.');
+          }
           (await repository.saveMenu(old?.id ?? tokens.id(), store.id, { ...item, photoId, batchId: tokens.id() }));
           if (old && (photo || requestedPhoto !== undefined)) (await repository.removeMenuPhoto(old.id));
           (await repository.prunePhotos(store.id));
+          await checkedPhotoStorage(store.id);
         } else if (action === 'store-open') {
           check(typeof data.isOpen === 'boolean', 'INVALID_STORE', 'Choose open or closed.');
           check(!data.isOpen || store.status === 'approved', 'STORE_UNAVAILABLE', 'The store needs administrator approval before opening.');
@@ -296,17 +318,14 @@ export function createEatsService({ repository, getAccount, hasOtherWork, availa
       const store = (await ownStore(user, id)), item = (await repository.menuItem(itemId));
       version(store, data.expectedVersion);
       check(item?.storeId === store.id, 'NOT_FOUND', 'Menu item not found.');
-      const current = (await repository.menuPhoto(itemId));
-      if (content) {
-        const total = (await repository.photoBytes(store.id)) - (current?.content.length ?? 0) + content.length;
-        check(total <= 30 * 1024 * 1024, 'PHOTO_STORAGE_FULL', 'This store has reached its menu photo limit.');
-        (await repository.saveMenuPhoto(itemId, store.id, content, store.version + 1));
-      } else (await repository.removeMenuPhoto(itemId));
+      // Keep one normalized canonical copy. The item-image route remains compatible.
+      await repository.removeMenuPhoto(itemId);
       const { id: menuId, storeId, ...details } = item;
       const photoId = content ? tokens.id() : null;
-      if (content) (await repository.savePhoto(photoId, store.id, content.toString('base64'), clock()));
+      if (content) (await repository.savePhoto(photoId, store.id, content.toString('base64'), clock(), 'dish', store.version + 1));
       (await repository.saveMenu(menuId, storeId, { ...details, photoId }));
       (await repository.prunePhotos(store.id));
+      await checkedPhotoStorage(store.id);
       store.version++; store.updatedAt = clock(); (await repository.saveStore(store));
       const saved = { storeId: store.id };
       (await audit.record(user.id, content ? 'eats.photo.saved' : 'eats.photo.removed', itemId, store.updatedAt));
@@ -315,18 +334,92 @@ export function createEatsService({ repository, getAccount, hasOtherWork, availa
     }));
     return (await project(user, result, replayed));
   }
-  async function image(user, itemId) {
-    user = (await actor(user));
-    const item = (await repository.menuItem(identifier(itemId)));
-    const canonicalPhoto = item?.photoId ? (await repository.photo(item.photoId)) : null;
-    const photo = canonicalPhoto ? { storeId: canonicalPhoto.storeId, content: Buffer.from(canonicalPhoto.base64, 'base64') } : (await repository.menuPhoto(itemId));
-    check(item && photo && photo.storeId === item.storeId, 'NOT_FOUND', 'Food photo not found.');
-    const store = (await repository.store(item.storeId));
-    check(store && (user.role === 'admin' || (await member(user, store.id)) || store.status === 'approved' && item.available),
-      'NOT_FOUND', 'Food photo not found.');
-    return { content: Buffer.from(photo.content), mimeType: 'image/jpeg' };
+  async function readablePhoto(user, id) {
+    const photo = await repository.photo(identifier(id));
+    check(photo && await repository.attachedPhoto(id), 'NOT_FOUND', 'Photo not found.');
+    const store = await storeRecord(photo.storeId), owned = await member(user, store.id);
+    // A printed menu can contain a home address or phone number. It is an owner-only onboarding aid.
+    if (photo.purpose === 'menu_reference') check(owned, 'NOT_FOUND', 'Photo not found.');
+    else if (!owned && user.role !== 'admin') {
+      check(store.status === 'approved' && publishedPhoto(photo.status), 'NOT_FOUND', 'Photo not found.');
+      if (photo.purpose === 'dish') check((await repository.menu(store.id)).some((item) => item.photoId === id && item.available), 'NOT_FOUND', 'Photo not found.');
+    }
+    return photo;
   }
-  return Object.freeze({ command, photoCommand, image, work, orders: list,
+  async function image(user, itemId) {
+    user = await actor(user);
+    const item = await repository.menuItem(identifier(itemId));
+    check(item?.photoId, 'NOT_FOUND', 'Food photo not found.');
+    const photo = await readablePhoto(user, item.photoId);
+    check(photo.purpose === 'dish' && photo.storeId === item.storeId, 'NOT_FOUND', 'Food photo not found.');
+    return { content: Buffer.from(photo.base64, 'base64'), mimeType: 'image/jpeg' };
+  }
+  async function assetCommand(user, id, data, key, reauthenticate) {
+    check(typeof key === 'string' && /^[A-Za-z0-9_-]{16,128}$/.test(key), 'INVALID_IDEMPOTENCY_KEY', 'A unique request key is required.');
+    fields(data, ['expectedVersion', 'purpose', 'image']);
+    check(['logo', 'cover', 'menu_reference'].includes(data.purpose), 'INVALID_PHOTO', 'Choose a logo, cover photo or private menu reference.');
+    id = identifier(id); user = await actor(user); const owned = await ownStore(user, id);
+    const fingerprint = tokens.digest(canonical({ action: 'asset-save', id, data }));
+    const prior = await repository.command(user.id, key);
+    if (prior) { check(prior.fingerprint === fingerprint, 'KEY_REUSED', 'This key belongs to another action.'); return project(user, prior.result, true); }
+    version(owned, data.expectedVersion);
+    const content = data.image === null ? null : await photoCodec.normalize(data.image);
+    const fresh = await reauthenticate(); check(fresh?.id === user.id, 'UNAUTHENTICATED', 'Sign in again to save the photo.'); user = fresh;
+    let replayed = false;
+    const result = await unitOfWork(async () => {
+      user = await actor(user);
+      const previous = await repository.command(user.id, key);
+      if (previous) { check(previous.fingerprint === fingerprint, 'KEY_REUSED', 'This key belongs to another action.'); replayed = true; return previous.result; }
+      const store = await ownStore(user, id); version(store, data.expectedVersion);
+      const photoId = content ? tokens.id() : null, now = clock();
+      if (content) await repository.savePhoto(photoId, store.id, content.toString('base64'), now, data.purpose, store.version + 1);
+      await repository.saveAsset(store.id, data.purpose, photoId);
+      await repository.prunePhotos(store.id); await checkedPhotoStorage(store.id);
+      store.version++; store.updatedAt = now; await repository.saveStore(store);
+      const result = { storeId: store.id };
+      await audit.record(user.id, content ? 'eats.asset.saved' : 'eats.asset.removed', store.id, now);
+      await repository.saveCommand(user.id, key, fingerprint, result, now);
+      return result;
+    });
+    return project(user, result, replayed);
+  }
+  async function photoReview(user, id, data, key, reauthenticate) {
+    check(typeof key === 'string' && /^[A-Za-z0-9_-]{16,128}$/.test(key), 'INVALID_IDEMPOTENCY_KEY', 'A unique request key is required.');
+    fields(data, ['expectedVersion', 'decision', 'reason']);
+    check(['approved', 'rejected'].includes(data.decision), 'INVALID_REVIEW', 'Approve or reject the photo.');
+    const reason = label(data.reason, 'Photo review reason', 10, 500);
+    id = identifier(id); user = await actor(user); requireRole(user, 'admin');
+    const fresh = await reauthenticate(); check(fresh?.id === user.id, 'UNAUTHENTICATED', 'Sign in again to review the photo.'); user = fresh;
+    const fingerprint = tokens.digest(canonical({ action: 'photo-review', id, data }));
+    let replayed = false;
+    const result = await unitOfWork(async () => {
+      user = await actor(user); requireRole(user, 'admin');
+      const previous = await repository.command(user.id, key);
+      if (previous) { check(previous.fingerprint === fingerprint, 'KEY_REUSED', 'This key belongs to another action.'); replayed = true; return previous.result; }
+      const photo = await repository.photo(id);
+      check(photo && photo.purpose !== 'menu_reference' && await repository.attachedPhoto(id), 'NOT_FOUND', 'Photo not found.');
+      check(!(await member(user, photo.storeId)), 'FORBIDDEN', 'You cannot review your own store’s photo.');
+      version(photo, data.expectedVersion); const now = clock();
+      await repository.reviewPhoto(photo, user.id, data.decision, reason, now);
+      await audit.record(user.id, `eats.photo.${data.decision}`, photo.id, now);
+      const store = await storeRecord(photo.storeId), item = photo.purpose === 'dish' ? (await repository.menu(photo.storeId)).find((value) => value.photoId === photo.id) : null;
+      const result = { photoReview: { ...photoMetadata({ ...photo, status: data.decision, version: photo.version + 1, reviewNote: reason }),
+        storeId: store.id, storeName: store.name, itemId: item?.id ?? null, itemName: item?.name ?? null, createdAt: photo.createdAt } };
+      await repository.saveCommand(user.id, key, fingerprint, result, now);
+      return result;
+    });
+    return { ...result, replayed };
+  }
+  return Object.freeze({ command, photoCommand, assetCommand, photoReview, image, work, orders: list,
+    async photoReviewList(user, query = {}) {
+      user = await actor(user); requireRole(user, 'admin');
+      const status = query.status ?? 'pending';
+      check(['pending', 'approved', 'rejected', 'legacy-approved'].includes(status), 'INVALID_REVIEW', 'Choose a valid photo review status.');
+      const before = query.before ? await repository.photo(identifier(query.before)) : null;
+      if (query.before) check(before && before.status === status && before.purpose !== 'menu_reference', 'INVALID_CURSOR', 'The review queue changed. Refresh the page.');
+      const rows = await repository.photoQueue(status, before);
+      return { photos: rows.slice(0, 50).map((photo) => ({ ...photo, reviewNote: photo.reviewNote ?? '' })), nextBefore: rows.length > 50 ? rows[49].id : null };
+    },
     async foods(user, query = {}) {
       user = (await actor(user)); area(query.areaId);
       const q = label(query.q ?? '', 'Food search', 0, 200), offset = Number(query.offset ?? 0);
@@ -353,9 +446,7 @@ export function createEatsService({ repository, getAccount, hasOtherWork, availa
       return (await command(user, 'menu-save', id, data, key, photo));
     },
     async photo(user, id) {
-      user = (await actor(user)); const photo = (await repository.photo(identifier(id))); check(photo, 'NOT_FOUND', 'Meal photo not found.');
-      const store = (await storeRecord(photo.storeId));
-      check((store.status === 'approved' || (await member(user, store.id)) || user.role === 'admin') && (await asyncSome((await repository.menu(store.id)), async (item) => item.photoId === id && (item.available || (await member(user, store.id)) || user.role === 'admin'))), 'NOT_FOUND', 'Meal photo not found.');
+      user = await actor(user); const photo = await readablePhoto(user, id);
       return { photo: { id, mimeType: 'image/jpeg', base64: photo.base64 } };
     },
     async catalog(user, query = {}) {

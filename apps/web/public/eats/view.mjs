@@ -3,6 +3,9 @@ import { NIGERIAN_STATES, foodAreaId, resolveFoodArea } from '/shared/nigeria-ar
 import { insideNigeria } from '/shared/locations.mjs';
 import { createGeolocation } from '../dashboard/geolocation.mjs';
 import { createMealView } from './meal-view.mjs';
+import { createFoodPhoto, photoStatus } from './photo-view.mjs';
+import { prepareFoodPhoto } from './photo-upload.mjs';
+import { createPhotoManager } from './photo-manager.mjs';
 import { $, element } from '../dashboard/dom.mjs';
 import { EATS_CUISINES, EATS_SYMBOLS, EATS_STATUS, EATS_SELLERS, foodAvailable, foodStock, discoverKitchens, isPrivateKitchen } from '/shared/eats.mjs';
 import { formatNaira } from '/shared/demo-booking.mjs';
@@ -10,18 +13,16 @@ const actionLabels = { accept: 'Accept order', reject: 'Decline order', prepare:
 const field = (id) => $('food-' + id);
 const text = (tag, value, className) => element(tag, value, className);
 const money = (value) => { const n = Number(value); if (!Number.isFinite(n) || n < 0 || !/^\d+(\.\d{1,2})?$/.test(value)) throw new Error('Enter an amount with up to two decimal places.'); return Math.round(n * 100); };
-export function createEatsView(controller, { geolocation = createGeolocation(), sellerPage = () => globalThis.location?.pathname === '/eats/sell', navigate = (screen) => controller.navigate(screen) } = {}) {
+export function createEatsView(controller, { geolocation = createGeolocation(), sellerPage = () => globalThis.location?.pathname === '/eats/sell', navigate = (screen) => controller.navigate(screen), preparePhoto = prepareFoodPhoto } = {}) {
   let state, ownerId = null, storeDirty = false, storeVersion = undefined, menuId = null, menuVersion = null, menuDirty = false, photo = null, photoId = null, photoReading = false, photoEpoch = 0, kitchenLimit = 24;
   let coverage = [], dispatchPoint = null, locating = false, dispatchEpoch = 0, dispatchError = '';
-  const keys = new Map();
-  const locked = () => state.busy || state.uncertain || state.stale || photoReading || locating;
+  const keys = new Map(); let photoManager;
+  const locked = () => state.busy || state.uncertain || state.stale || photoReading || photoManager?.busy() || locating;
   const update = (id, key, build) => { const value = JSON.stringify(key); if (keys.get(id) !== value) { keys.set(id, value); const root = field(id); root.replaceChildren(); build(root); } };
   const button = (label, click, secondary = false) => { const b = text('button', label, `button ${secondary ? 'button-outline' : 'button-primary'}`); b.type = 'button'; b.disabled = locked(); b.addEventListener('click', click); return b; };
-  function mealPhoto(id, label, className = 'food-meal-photo') {
-    const img = text('img'); img.alt = label; img.className = className; img.hidden = true; img.loading = 'lazy';
+  function mealPhoto(id, label, className = 'food-meal-photo', version = null) {
     const owner = ownerId;
-    void controller.photo(id).then((uri) => { if (uri && ownerId === owner) { img.src = uri; img.hidden = false; } });
-    return img;
+    return createFoodPhoto({ id, version, label, className, load: controller.photo, current: () => ownerId === owner });
   }
   const pickupAddress = (restaurant) => restaurant.addressHidden ? `${foodAreaLabel(restaurant.areaId)} · Private collection point shared when food is ready` : restaurant.address;
   async function sellHome() {
@@ -80,6 +81,7 @@ export function createEatsView(controller, { geolocation = createGeolocation(), 
     });
   });
   const mealView = createMealView(controller, { button, mealPhoto, totals });
+  photoManager = createPhotoManager(controller, { prepare: preparePhoto, onChange: () => { if (state) render(state); } });
   const storeLocation = createFoodLocationFields({ state: field('store-state'), town: field('store-town'), onChange: (areaId) => {
     if (locked()) return; storeDirty = true; coverage = areaId ? [areaId] : []; dispatchPoint = null; dispatchEpoch++; dispatchError = ''; renderStoreLocation();
   } });
@@ -140,23 +142,32 @@ export function createEatsView(controller, { geolocation = createGeolocation(), 
     } catch (error) { field('error').textContent = error.message; }
   });
   function fillItem(item = null) {
-    photoEpoch++; photo = null; photoId = item?.photoId ?? null; photoReading = false; field('item-photo').value = ''; field('photo-status').textContent = photoId ? 'A saved meal photo is attached.' : 'No meal photo attached.';
+    photoEpoch++; photo = null; photoId = item?.photoId ?? null; photoReading = false; field('item-photo').value = field('item-camera').value = ''; field('photo-status').textContent = photoStatus(photoId ? { status: item?.photoStatus, reviewNote: item?.photoReviewNote } : null, 'Dish photo');
+    const epoch = photoEpoch, owner = ownerId; field('photo-preview').replaceChildren(createFoodPhoto({ id: photoId, version: item?.photoVersion, label: item?.name || 'Your dish', className: 'food-photo-edit', load: controller.photo, current: () => photoEpoch === epoch && ownerId === owner }));
     field('item-stock').value = item?.portionsRemaining == null ? '' : String(item.portionsRemaining); field('item-allergens').value = item?.allergens ?? '';
     menuId = item?.id ?? null; menuVersion = state.store?.version ?? null; menuDirty = Boolean(item);
     for (const name of ['name','description','category','price']) field('item-' + name).value = String(name === 'price' ? item ? item.priceKobo / 100 : '' : item?.[name] ?? (name === 'category' ? 'Meals' : ''));
     field('item-available').checked = item?.available ?? true; field('menu-form-title').textContent = item ? `Edit ${item.name}` : 'Add a menu item';
   }
-  field('item-photo').addEventListener('change', () => {
+  for (const id of ['item-photo', 'item-camera']) field(id).addEventListener('change', async () => {
     if (locked()) return;
-    const file = field('item-photo').files?.[0]; if (!file) return;
-    if (!['image/jpeg', 'image/png'].includes(file.type) || file.size > 2 * 1024 * 1024) { field('error').textContent = 'Choose a JPEG or PNG meal photo up to 2 MiB.'; field('item-photo').value = ''; return; }
-    if (!menuDirty) menuVersion = state.store?.version; menuDirty = true;
-    const epoch = ++photoEpoch, reader = new FileReader(); photoReading = true; render(state);
-    reader.onload = () => { if (epoch !== photoEpoch) return; photo = { mimeType: file.type, base64: String(reader.result).split(',')[1] }; photoId = null; photoReading = false; field('photo-status').textContent = 'New meal photo selected. Save the menu item to publish it.'; render(state); };
-    reader.onerror = () => { if (epoch !== photoEpoch) return; photoReading = false; render(state); field('error').textContent = 'Could not read that photo. Choose it again.'; };
-    reader.readAsDataURL(file);
+    const input = field(id), file = input.files?.[0]; if (!file) return;
+    const epoch = ++photoEpoch, owner = ownerId; photoReading = true; field('photo-status').textContent = 'Processing your photo…'; render(state);
+    try {
+      const prepared = await preparePhoto(file); if (epoch !== photoEpoch || owner !== ownerId) return;
+      if (!menuDirty) menuVersion = state.store?.version; menuDirty = true;
+      photo = prepared.photo; photoId = null;
+      field('photo-preview').replaceChildren(createFoodPhoto({ uri: prepared.preview, label: 'Selected dish photo', className: 'food-photo-edit', current: () => epoch === photoEpoch && owner === ownerId }));
+      field('photo-status').textContent = 'New dish photo selected. Save the item to submit it for staff review. It will appear to customers after approval.';
+    } catch (error) { if (epoch === photoEpoch && owner === ownerId) field('photo-status').textContent = error?.message || 'Could not process that photo. Choose it again.'; }
+    finally { if (epoch === photoEpoch && owner === ownerId) { photoReading = false; input.value = ''; render(state); } }
   });
-  field('photo-remove').addEventListener('click', () => { if (locked()) return; photoEpoch++; photo = photoId = null; if (!menuDirty) menuVersion = state.store?.version; menuDirty = true; field('item-photo').value = ''; field('photo-status').textContent = 'Photo will be removed when you save.'; });
+  field('photo-remove').addEventListener('click', () => {
+    if (locked()) return; photoEpoch++; photo = photoId = null;
+    if (!menuDirty) menuVersion = state.store?.version; menuDirty = true;
+    field('item-photo').value = field('item-camera').value = ''; field('photo-preview').replaceChildren(mealPhoto(null, 'Your dish', 'food-photo-edit'));
+    field('photo-status').textContent = 'Photo will be removed when you save.';
+  });
   field('item-new').addEventListener('click', () => fillItem());
   field('menu-form').addEventListener('input', () => { if (!menuDirty) menuVersion = state.store?.version; menuDirty = true; });
   field('menu-form').addEventListener('submit', async (event) => {
@@ -175,10 +186,11 @@ export function createEatsView(controller, { geolocation = createGeolocation(), 
     if (ownerId !== state.user?.id) {
       ownerId = state.user?.id; keys.clear(); dispatchEpoch++; dispatchPoint = null; locating = false; coverage = []; dispatchError = ''; deliveryLocation.set(''); storeLocation.set(''); coverageLocation.set(''); photoEpoch++; photo = photoId = null; photoReading = false; kitchenLimit = 24; storeDirty = menuDirty = false; storeVersion = undefined; menuVersion = menuId = null;
       for (const id of ['address','instructions','pin','reason','review-reference','review-reason','search','collection','photo-status','town-filter','state-filter']) field(id).value = '';
-      for (const id of ['restaurants','restaurant-heading','menu-list','cart-lines','quote-totals','orders-list','store-summary','store-menu','store-orders','work-current','work-list','order-detail','order-buttons','review-list','review-profile']) field(id).replaceChildren();
+      for (const id of ['restaurants','restaurant-heading','menu-list','cart-lines','quote-totals','orders-list','store-summary','store-menu','store-orders','work-current','work-list','order-detail','order-buttons','review-list','review-profile','photo-preview']) field(id).replaceChildren();
       field('store-form').reset(); field('menu-form').reset();
     }
     mealView.render(state);
+    photoManager.render(state);
     field('intro').hidden = sellerPage() || Boolean(state.user);
     field('seller-intro').hidden = !sellerPage() && state.screen !== 'store';
     field('seller-sign-in').hidden = Boolean(state.user);
@@ -216,11 +228,10 @@ export function createEatsView(controller, { geolocation = createGeolocation(), 
       field('restaurants-more').hidden = restaurants.length <= kitchenLimit;
       if (!restaurants.length) { const empty = text('div', undefined, 'food-empty'); empty.append(text('h3', state.restaurants.length ? 'Let’s try another craving.' : 'Make room at the table.'), text('p', state.restaurants.length ? 'Try another area, kitchen type or order option.' : 'The first kitchens are on their way. Create a test home kitchen, add a menu and complete staff review to explore the ordering flow.')); if (!admin) empty.append(button('Start a home kitchen', () => void sellHome())); root.append(empty); }
       for (const store of restaurants.slice(0, kitchenLimit)) {
-        const card = text('article', undefined, 'food-card food-restaurant'), cover = text('div', store.coverPhotoId ? '' : EATS_SYMBOLS[store.cuisine], 'food-cover ' + store.cuisine.toLowerCase());
-        if (store.coverPhotoId) cover.append(mealPhoto(store.coverPhotoId, `${store.name} · meal photo supplied by the kitchen`, 'food-cover-photo'));
-        else cover.setAttribute('aria-hidden', 'true');
+        const card = text('article', undefined, 'food-card food-restaurant'), cover = text('div', undefined, 'food-cover');
+        cover.append(mealPhoto(store.coverPhotoId, `${store.name} · image supplied by the kitchen`, 'food-cover-photo'));
         const info = text('div', undefined, 'food-restaurant-info');
-        info.append(text('span', EATS_SELLERS[store.sellerType ?? 'restaurant'], 'food-kitchen-type'), text('h3', store.name), text('span', store.isOpen ? 'OPEN FOR TEST ORDERS' : 'CLOSED', 'food-tag' + (store.isOpen ? '' : ' closed')),
+        info.append(mealPhoto(store.logoPhotoId, `${store.name} logo`, 'food-logo-photo'), text('span', EATS_SELLERS[store.sellerType ?? 'restaurant'], 'food-kitchen-type'), text('h3', store.name), text('span', store.isOpen ? 'OPEN FOR TEST ORDERS' : 'CLOSED', 'food-tag' + (store.isOpen ? '' : ' closed')),
           text('p', store.description, 'small-note'), text('p', `${store.cuisine} · ${foodAreaLabel(store.areaId)}`),
           ...(!isPrivateKitchen(store.sellerType) ? [text('p', store.address, 'small-note')] : []),
           text('p', `${store.prepMinutes} min preparation · ${state.fulfillment === 'pickup' ? 'Pickup · no delivery fee' : formatNaira(store.deliveryFeeKobo) + ' delivery'}`, 'small-note'),
@@ -229,7 +240,7 @@ export function createEatsView(controller, { geolocation = createGeolocation(), 
       }
     });
     field('shopping').hidden = !state.restaurant;
-    update('restaurant-heading', state.restaurant, (root) => { if (state.restaurant) root.append(text('h2', state.restaurant.name), text('p', EATS_SELLERS[state.restaurant.sellerType ?? 'restaurant'], 'food-kitchen-type'), text('p', pickupAddress(state.restaurant)), text('p', `${state.restaurant.prepMinutes} min preparation · Minimum ${formatNaira(state.restaurant.minimumKobo)} · ${state.restaurant.isOpen ? 'Open for test orders' : 'Closed'}`, 'small-note')); });
+    update('restaurant-heading', state.restaurant, (root) => { if (state.restaurant) root.append(mealPhoto(state.restaurant.logoPhotoId, `${state.restaurant.name} logo`, 'food-logo-photo'), text('h2', state.restaurant.name), text('p', EATS_SELLERS[state.restaurant.sellerType ?? 'restaurant'], 'food-kitchen-type'), text('p', pickupAddress(state.restaurant)), text('p', `${state.restaurant.prepMinutes} min preparation · Minimum ${formatNaira(state.restaurant.minimumKobo)} · ${state.restaurant.isOpen ? 'Open for test orders' : 'Closed'}`, 'small-note')); });
     update('menu-list', [state.menu, state.cart, state.restaurant?.isOpen, locked()], (root) => {
       for (const item of state.menu) {
         const row = text('article', undefined, 'food-menu-row'), info = text('div'), quantity = state.cart.find((l) => l.itemId === item.id)?.quantity ?? 0;
@@ -239,7 +250,7 @@ export function createEatsView(controller, { geolocation = createGeolocation(), 
         const less = button('−', () => controller.quantity(item.id, quantity - 1)), more = button('+', () => controller.quantity(item.id, quantity + 1));
         less.setAttribute('aria-label', `Remove one ${item.name}`); more.setAttribute('aria-label', `Add one ${item.name}`);
         less.disabled ||= quantity === 0; more.disabled ||= quantity >= Math.min(20, item.portionsRemaining ?? 20) || !foodAvailable(item) || !state.restaurant?.isOpen;
-        controls.append(less, text('span', String(quantity)), more); row.append(info, controls); if (item.photoId) row.append(mealPhoto(item.photoId, item.name)); root.append(row);
+        controls.append(less, text('span', String(quantity)), more); row.append(info, controls); row.append(mealPhoto(item.photoId, item.name, 'food-meal-photo', item.photoVersion)); root.append(row);
       }
     });
     update('cart-lines', [state.cart, state.menu, locked()], (root) => {
@@ -259,7 +270,7 @@ export function createEatsView(controller, { geolocation = createGeolocation(), 
     field('store-stale').hidden = !storeDirty || storeVersion === (state.store?.version ?? null);
     field('store-reload').hidden = !state.store; field('store-summary').hidden = !state.store; field('menu-editor').hidden = !state.store;
     update('store-summary', [state.store, locked()], (root) => { const s = state.store; if (!s) return; root.append(text('h2', s.name), text('p', EATS_SELLERS[s.sellerType ?? 'restaurant'], 'food-kitchen-type'), text('span', s.status.toUpperCase(), 'food-tag'), text('p', s.reviewNote || 'Add your menu, request staff review, then open for test orders.'), text('p', s.isOpen ? 'Open for new orders' : 'Closed to new orders')); if (s.status === 'approved') root.append(button(s.isOpen ? 'Close to new orders' : 'Open for test orders', () => void controller.storeAction('open', { isOpen: !s.isOpen }))); });
-    update('store-menu', [state.storeMenu, locked()], (root) => { for (const i of state.storeMenu) { const row = text('div', undefined, 'food-menu-row'); row.append(text('p', `${i.name} · ${formatNaira(i.priceKobo)} · ${foodStock(i)}`), button('Edit item', () => { fillItem(i); field('item-name').focus(); }, true)); if (i.photoId) row.append(mealPhoto(i.photoId, i.name)); root.append(row); } });
+    update('store-menu', [state.storeMenu, locked()], (root) => { for (const i of state.storeMenu) { const row = text('div', undefined, 'food-menu-row'); row.append(text('p', `${i.name} · ${formatNaira(i.priceKobo)} · ${foodStock(i)}`), button('Edit item', () => { fillItem(i); field('item-name').focus(); }, true)); row.append(mealPhoto(i.photoId, i.name, 'food-meal-photo', i.photoVersion), text('p', photoStatus(i.photoId ? { status: i.photoStatus, reviewNote: i.photoReviewNote } : null, 'Dish photo'), 'small-note')); root.append(row); } });
     update('store-orders', [state.storeOrders, locked()], (root) => orders(root, state.storeOrders, 'Incoming orders will appear here while your store is open.'));
     field('store-orders-more').hidden = !state.storeNextBefore; field('store-orders-more').disabled = locked() || state.loading;
     field('work-status').textContent = state.work?.current.length ? 'Finish this food delivery before accepting another job.' : !state.work?.eligible ? 'A currently approved motorcycle, car, SUV or van is required.' : !state.work.online ? 'You are offline. Use Your availability above to see ready food orders.' : 'You are online. Choose a pickup below.';
@@ -285,7 +296,7 @@ export function createEatsView(controller, { geolocation = createGeolocation(), 
     update('order-buttons', [state.order?.actions, locked()], (root) => { for (const action of state.order?.actions ?? []) { const b = button(actionLabels[action], () => {}, ['cancel','reject'].includes(action)); b.type = 'submit'; b.value = action; b.formNoValidate = true; root.append(b); } });
     update('review-list', [state.reviewStores, locked()], (root) => { for (const s of state.reviewStores) { const card = text('article', undefined, 'food-card'); card.append(text('h3', s.name), text('p', `${EATS_SELLERS[s.sellerType ?? 'restaurant']} · ${s.status} · ${s.cuisine} · ${pickupAddress(s) || s.areaId}`), button('Review store and menu', () => void controller.reviewStore(s.id), true)); root.append(card); } });
     field('review-detail').hidden = !state.review;
-    update('review-profile', state.review, (root) => { field('review-reference').value = field('review-reason').value = ''; const s = state.review; if (!s) return; root.append(text('h2', s.store.name), text('p', EATS_SELLERS[s.store.sellerType ?? 'restaurant']), text('p', s.store.description), text('p', pickupAddress(s.store) || s.store.areaId), text('p', `Delivery: ${s.store.deliveryEnabled !== false ? 'yes' : 'no'} · Customer pickup: ${s.store.pickupEnabled ? 'yes' : 'no'}`), text('p', `${s.store.prepMinutes} min preparation · ${formatNaira(s.store.deliveryFeeKobo)} delivery`)); for (const i of s.menu) { root.append(text('p', `${i.name} · ${formatNaira(i.priceKobo)} · ${i.description}`)); if (i.photoId) root.append(mealPhoto(i.photoId, i.name)); } });
+    update('review-profile', state.review, (root) => { field('review-reference').value = field('review-reason').value = ''; const s = state.review; if (!s) return; root.append(text('h2', s.store.name), text('p', EATS_SELLERS[s.store.sellerType ?? 'restaurant']), text('p', s.store.description), text('p', pickupAddress(s.store) || s.store.areaId), text('p', `Delivery: ${s.store.deliveryEnabled !== false ? 'yes' : 'no'} · Customer pickup: ${s.store.pickupEnabled ? 'yes' : 'no'}`), text('p', `${s.store.prepMinutes} min preparation · ${formatNaira(s.store.deliveryFeeKobo)} delivery`)); for (const i of s.menu) { root.append(text('p', `${i.name} · ${formatNaira(i.priceKobo)} · ${i.description}`)); root.append(mealPhoto(i.photoId, i.name, 'food-meal-photo', i.photoVersion), text('p', photoStatus(i.photoId ? { status: i.photoStatus, reviewNote: i.photoReviewNote } : null, 'Dish photo'), 'small-note')); } });
   }
   return { render };
 }

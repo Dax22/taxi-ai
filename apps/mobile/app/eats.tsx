@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { Text } from '../src/ui/typography';
 import { router, useLocalSearchParams } from 'expo-router';
-import { EATS_COLOURS, EATS_SYMBOLS, EATS_SELLERS, foodAvailable, foodStock, discoverKitchens, isPrivateKitchen } from '../../../packages/shared/src/eats.mjs';
+import { EATS_SELLERS, foodAvailable, foodStock, discoverKitchens, isPrivateKitchen } from '../../../packages/shared/src/eats.mjs';
 import type { FoodFulfillment } from '../../../packages/shared/src/eats.mjs';
 import { useEatsScreen } from '../src/eats/provider';
 import { FoodFeedback, FoodMoney, FoodOrders, FoodPreview, food } from '../src/eats/components';
@@ -58,7 +58,8 @@ export default function Eats() {
         <Heading title="Find something delicious." subtitle={`${restaurants.length} ${restaurants.length === 1 ? 'kitchen' : 'kitchens'} · ${s.fulfillment === 'pickup' ? 'Customer pickup' : 'Delivery'}`}/>
         {!s.loading && !restaurants.length && <Card><Text style={styles.h2}>{s.restaurants.length ? 'Let’s try another craving.' : 'Make room at the table.'}</Text><Text style={styles.body}>{s.restaurants.length ? 'Try another area, cuisine, kitchen type or order option.' : 'The first kitchens are on their way. Create a test home kitchen, add a menu and complete staff review to explore the full ordering flow.'}</Text>{!admin && <Button title="Start a home kitchen" secondary disabled={navigating} onPress={home}/>}</Card>}
         {restaurants.slice(0, limit).map((r) => <Card key={r.id}>
-          {r.coverPhotoId ? <FoodPhoto id={r.coverPhotoId} controller={c} label={`${r.name} · meal photo supplied by the kitchen`}/> : <View style={[food.cover, { backgroundColor: EATS_COLOURS[r.cuisine] }]}><Text accessible={false} style={food.symbol}>{EATS_SYMBOLS[r.cuisine]}</Text></View>}
+          <FoodPhoto id={r.coverPhotoId} controller={c} label={`${r.name} · photo supplied by the kitchen`}/>
+          {r.logoPhotoId && <FoodPhoto id={r.logoPhotoId} controller={c} label={`${r.name} logo`} compact contain/>}
           <Text style={styles.label}>{EATS_SELLERS[r.sellerType ?? 'restaurant']}</Text><Text style={styles.h2}>{r.name}</Text><Pill>{r.isOpen ? 'OPEN FOR TEST ORDERS' : 'CLOSED'}</Pill><Text style={styles.body}>{r.description}</Text><Text style={styles.small}>{r.cuisine} · {areaName(r.areaId)}</Text>{!isPrivateKitchen(r.sellerType) && !r.addressHidden && <Text style={styles.small}>{r.address}</Text>}<Text style={styles.small}>{r.prepMinutes} min preparation · {s.fulfillment === 'pickup' ? 'Pickup · no delivery fee' : `${fare(r.deliveryFeeKobo)} delivery`}</Text><Button title={`View ${r.name} menu`} disabled={locked} onPress={() => void select(r.id)}/>
         </Card>)}
         {restaurants.length > limit && <Button title="Show more kitchens" secondary onPress={() => setLimit(limit + 24)}/>}
@@ -68,12 +69,14 @@ export default function Eats() {
       {s.replaceRestaurantId && <Card><Text style={styles.h2}>Start a new cart?</Text><Text style={styles.body}>Each order comes from one kitchen. This replaces the items in your current cart.</Text><Button title="Replace cart" disabled={locked} onPress={() => void select(s.replaceRestaurantId!, true)}/><Button title="Keep my cart" secondary disabled={navigating} onPress={c.keepRestaurant}/></Card>}
       {detail && s.restaurant && <>
         <Button title="Back to kitchens" secondary disabled={navigating} onPress={() => setDetail(false)}/>
+        {s.restaurant.coverPhotoId && <FoodPhoto id={s.restaurant.coverPhotoId} controller={c} label={`${s.restaurant.name} cover photo`}/>}
+        {s.restaurant.logoPhotoId && <FoodPhoto id={s.restaurant.logoPhotoId} controller={c} label={`${s.restaurant.name} logo`} compact contain/>}
         <Pill>{EATS_SELLERS[s.restaurant.sellerType ?? 'restaurant'].toUpperCase()}</Pill><Heading title={s.restaurant.name} subtitle={s.restaurant.description}/>
         <Text style={styles.body}>{isPrivateKitchen(s.restaurant.sellerType) || s.restaurant.addressHidden ? `${areaName(s.restaurant.areaId)} · Private collection point shared with the assigned courier or pickup customer when food is ready.` : s.restaurant.address}</Text>
         <Text style={styles.small}>{s.restaurant.prepMinutes} min preparation · Minimum {fare(s.restaurant.minimumKobo)} · {s.restaurant.isOpen ? 'Open for test orders' : 'Closed'}</Text>
         <Text style={styles.small}>Ingredients and allergen information are supplied by the kitchen. Special requests are not guaranteed; confirm dietary requirements before ordering.</Text>
         {s.menu.map((item) => { const quantity = s.cart.find((i) => i.itemId === item.id)?.quantity ?? 0; return <View key={item.id} style={food.menuRow}>
-          {item.photoId && <FoodPhoto id={item.photoId} controller={c} label={item.name} compact/>}<Pill>{item.category.toUpperCase()}</Pill><Text style={styles.h2}>{item.name}</Text><Text style={styles.body}>{item.description}</Text>{!!item.allergens && <Text style={styles.small}>Allergens: {item.allergens}</Text>}<Text style={styles.body}>{fare(item.priceKobo)}</Text><Text style={styles.small}>{foodStock(item)}</Text>
+          <FoodPhoto id={item.photoId} revision={item.photoVersion} controller={c} label={item.name} compact/><Pill>{item.category.toUpperCase()}</Pill><Text style={styles.h2}>{item.name}</Text><Text style={styles.body}>{item.description}</Text>{!!item.allergens && <Text style={styles.small}>Allergens: {item.allergens}</Text>}<Text style={styles.body}>{fare(item.priceKobo)}</Text><Text style={styles.small}>{foodStock(item)}</Text>
           <View style={food.quantity}><Button title={`− ${item.name}`} secondary disabled={locked || quantity === 0} onPress={() => c.quantity(item.id, quantity - 1)}/><Text accessibilityLiveRegion="polite" style={styles.body}>{quantity}</Text><Button title={`+ ${item.name}`} disabled={locked || quantity >= Math.min(20, item.portionsRemaining ?? 20) || !foodAvailable(item) || !s.restaurant?.isOpen} onPress={() => c.quantity(item.id, quantity + 1)}/></View>
         </View>; })}
         <Card><Heading title="Your cart."/>{!s.cart.length && <Text style={styles.body}>Choose something delicious from the menu.</Text>}

@@ -77,6 +77,7 @@ test('the local site serves HTML, modules and artwork with correct content types
       ['/shared/nigeria-map-places.mjs', 'text/javascript'],
       ['/eats', 'text/html'], ['/eats.css', 'text/css'], ['/typography.css', 'text/css'], ['/eats.mjs', 'text/javascript'],
       ['/eats/view.mjs', 'text/javascript'], ['/eats/location-fields.mjs', 'text/javascript'],
+      ...['photo-view', 'photo-upload', 'photo-manager'].map((name) => [`/eats/${name}.mjs`, 'text/javascript']),
       ['/shared/nigeria-areas.mjs', 'text/javascript'], ['/shared/nigeria-boundary.mjs', 'text/javascript'], ['/eats/transport.mjs', 'text/javascript'],
       ...['eats', 'eats-controller', 'eats-contracts'].map((name) => [`/shared/${name}.mjs`, 'text/javascript']),
       ['/trip-share', 'text/html'], ['/trip-share.mjs', 'text/javascript'], ['/shared/safety.mjs', 'text/javascript'],
@@ -121,25 +122,31 @@ test('the local site serves HTML, modules and artwork with correct content types
   });
 });
 
-test('camera and microphone are account-only; explicit work geolocation is also permitted in Eats; only configured tiles can load externally', async () => {
+test('food photo previews and camera access stay scoped to Eats and account work, preserving other page restrictions', async () => {
   for (const mode of ['local', 'off']) await withServer(async (base) => {
-    for (const path of ['/', '/app', '/app?preview=1', '/eats', '/api/session', '/trip-share', '/guest-trip']) {
+    for (const path of ['/', '/app', '/app?preview=1', '/eats', '/eats?view=store', '/eats/sell', '/eats/sell?type=home_kitchen', '/api/session', '/trip-share', '/guest-trip', '/admin']) {
       const result = await fetch(base + path);
-      const policy = result.headers.get('permissions-policy');
-      assert.equal(policy, `camera=${path.startsWith('/app') ? '(self)' : '()'}, microphone=${path.startsWith('/app') ? '(self)' : '()'}, geolocation=${path.startsWith('/app') || path === '/eats' ? '(self)' : '()'}, accelerometer=${path.startsWith('/app') ? '(self)' : '()'}, gyroscope=${path.startsWith('/app') ? '(self)' : '()'}`);
-      assert.match(result.headers.get('content-security-policy'), /media-src 'self' blob:/);
-      assert.match(result.headers.get('content-security-policy'), /img-src 'self' https:\/\/tile.openstreetmap.org/);
-      assert.match(result.headers.get('content-security-policy'), /connect-src 'self'/);
-      assert.equal(result.headers.get('referrer-policy'), path.startsWith('/app') ? 'strict-origin-when-cross-origin' : 'no-referrer');
+      const pathname = new URL(path, base).pathname, account = pathname === '/app', eats = ['/eats', '/eats/sell'].includes(pathname);
+      const policy = result.headers.get('permissions-policy'), csp = result.headers.get('content-security-policy');
+      assert.equal(policy, `camera=${account || eats ? '(self)' : '()'}, microphone=${account ? '(self)' : '()'}, geolocation=${account || eats ? '(self)' : '()'}, accelerometer=${account ? '(self)' : '()'}, gyroscope=${account ? '(self)' : '()'}`, path);
+      const imageSources = csp.split(';').find((directive) => directive.trim().startsWith('img-src')).trim().split(/\s+/).slice(1);
+      assert.deepEqual(imageSources, ["'self'", ...(eats ? ['data:'] : []), 'https://tile.openstreetmap.org'], path);
+      assert.match(csp, /media-src 'self' blob:/); assert.match(csp, /connect-src 'self'/);
+      assert.match(csp, /script-src 'self';/); assert.match(csp, /object-src 'none';/);
+      assert.equal(result.headers.get('cache-control'), 'no-store');
+      assert.equal(result.headers.get('referrer-policy'), account ? 'strict-origin-when-cross-origin' : 'no-referrer');
       await result.text();
     }
   }, mode);
   await withServer(async (base) => {
-    const result = await fetch(base + '/app');
-    assert.ok(!result.headers.get('content-security-policy').includes('tile.openstreetmap.org'));
-    assert.equal(result.headers.get('referrer-policy'), 'no-referrer');
-    assert.match(result.headers.get('permissions-policy'), /geolocation=\(self\)/);
-    await result.text();
+    for (const path of ['/app', '/eats/sell']) {
+      const result = await fetch(base + path), csp = result.headers.get('content-security-policy');
+      assert.ok(!csp.includes('tile.openstreetmap.org'));
+      assert.equal(csp.includes('data:'), path === '/eats/sell');
+      assert.equal(result.headers.get('referrer-policy'), 'no-referrer');
+      assert.match(result.headers.get('permissions-policy'), /geolocation=\(self\)/);
+      await result.text();
+    }
   }, 'off', 'off');
 });
 

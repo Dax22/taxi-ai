@@ -51,7 +51,7 @@ export function createMobileRouter({ devices, accounts, drivers, rides, dispatch
       clock(), auth ? 30 : foodImage ? 600 : 120, auth ? 10 * 60_000 : 60_000));
     let data;
     if (write) {
-      data = await readBody(request, path === '/driver/application/upload' || /^\/eats\/stores\/[a-f0-9-]{36}\/(menu|photo)$/.test(path) || /^\/vehicle-checks\/rides\/[a-f0-9-]{36}$/.test(path) ? 2_800_000 : path === '/auth/google' ? 20_000 : 4096);
+      data = await readBody(request, path === '/driver/application/upload' || /^\/eats\/stores\/[a-f0-9-]{36}\/(menu|photo|assets)$/.test(path) || /^\/vehicle-checks\/rides\/[a-f0-9-]{36}$/.test(path) ? 2_800_000 : path === '/auth/google' ? 20_000 : 4096);
       if (!auth) { session = (await devices.sessionFor(accessToken)); check(session, 'UNAUTHENTICATED', 'Sign in to continue.'); }
     }
     const query = new URL(request.url, origin).searchParams;

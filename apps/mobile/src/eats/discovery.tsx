@@ -4,9 +4,6 @@ import type { EatsController } from '../../../../packages/shared/src/eats-contro
 import { EATS_CUISINES, EATS_SYMBOLS } from '../../../../packages/shared/src/eats.mjs';
 import { Text } from '../ui/typography';
 import hero from '../assets/eats-nigerian-table.jpg';
-import jollof from '../assets/eats-jollof.jpg';
-import egusi from '../assets/eats-egusi.jpg';
-import suya from '../assets/eats-suya.jpg';
 import { colors, styles } from '../ui/components';
 
 export function FoodHero() {
@@ -16,10 +13,19 @@ export function DiscoveryChip({ label, selected = false, expanded, disabled = fa
   return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ selected, expanded, disabled }} disabled={disabled} onPress={onPress}
     style={({ pressed }) => [discovery.control, selected && discovery.selected, { opacity: disabled ? 0.5 : pressed ? 0.75 : 1 }]}><Text style={discovery.controlText}>{label}</Text></Pressable>;
 }
-export function FoodPhoto({ id, controller, label, compact = false }: { id?: string | null; controller: EatsController; label: string; compact?: boolean }) {
-  const [uri, setUri] = useState<string | null>(null);
-  useEffect(() => { let current = true; setUri(null); if (id) void controller.photo(id).then((value) => { if (current) setUri(value); }); return () => { current = false; }; }, [id, controller]);
-  return uri ? <Image source={{ uri }} style={compact ? discovery.mealPhoto : discovery.photo} resizeMode="cover" accessibilityLabel={label}/> : <Image source={/jollof/i.test(label) ? jollof : /egusi|pounded yam/i.test(label) ? egusi : /suya/i.test(label) ? suya : hero} style={compact ? discovery.mealPhoto : discovery.photo} accessibilityLabel={`Illustrative Nigerian dish: ${label}`}/>;
+export function FoodPhoto({ id, revision, controller, label, compact = false, contain = false }: { id?: string | null; revision?: number | null; controller: EatsController; label: string; compact?: boolean; contain?: boolean }) {
+  const user = controller.snapshot().user;
+  const requestKey = `${user?.id ?? ''}:${user?.role ?? ''}:${id ?? ''}:${revision ?? ''}`;
+  const [loaded, setLoaded] = useState<{ key: string; controller: EatsController; uri: string | null } | null>(null);
+  useEffect(() => {
+    let current = true;
+    if (id && user) void controller.photo(id, revision).then((uri) => { if (current) setLoaded({ key: requestKey, controller, uri }); }).catch(() => { if (current) setLoaded({ key: requestKey, controller, uri: null }); });
+    return () => { current = false; };
+  }, [requestKey, controller]);
+  const uri = loaded?.key === requestKey && loaded.controller === controller ? loaded.uri : null, photoStyle = compact ? discovery.mealPhoto : discovery.photo;
+  return uri ? <Image key={requestKey} source={{ uri }} style={photoStyle} resizeMode={contain ? 'contain' : 'cover'} accessibilityLabel={label}
+    onError={() => setLoaded((current) => current?.key === requestKey && current.controller === controller ? { key: requestKey, controller, uri: null } : current)}/>
+    : <View style={photoStyle} accessibilityLabel={`${label}: Photo coming soon`}><Text style={styles.small}>Photo coming soon</Text></View>;
 }
 export function CuisineChips({ value, onChange }: { value: string; onChange(value: string): void }) {
   return <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={discovery.chips}>{['', ...EATS_CUISINES].map((cuisine) => <Pressable key={cuisine} accessibilityRole="button" accessibilityState={{ selected: cuisine === value }} accessibilityLabel={cuisine || 'All food'} onPress={() => onChange(cuisine)} style={[discovery.chip, cuisine === value && discovery.selected]}><Text accessible={false} style={discovery.symbol}>{EATS_SYMBOLS[cuisine] ?? '🍽️'}</Text><Text style={styles.small}>{cuisine || 'All food'}</Text></Pressable>)}</ScrollView>;

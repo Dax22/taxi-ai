@@ -52,7 +52,7 @@ export function createMealView(controller, { button, mealPhoto, totals }) {
       if (!state.foodLoading && !state.foods.length) root.append(element('p', 'No dishes available for this search yet. Try another dish, or change your delivery area.', 'food-empty'));
       for (const food of state.foods) {
         const { store, item } = food, row = element('article', undefined, 'food-dish');
-        if (item.photoId) row.append(mealPhoto(item.photoId, item.name, 'food-dish-photo'));
+        row.append(mealPhoto(item.photoId, item.name, 'food-dish-photo', item.photoVersion));
         const info = element('div', undefined, 'food-dish-info');
         const town = foodAreaLabel(store.areaId);
         info.append(element('span', `${EATS_SELLERS[store.sellerType ?? 'restaurant']} · ${town}`, 'food-kitchen-type'), element('h3', item.name), element('p', store.name, 'food-dish-seller'), element('p', item.description, 'small-note'));

@@ -131,7 +131,19 @@ export function removeAdminWorkspaceFixtureTables(db) {
 
 
 /** Kemmy setup is account preference state; old-schema fixtures may remove it only while empty. */
+export function removeEatsPhotoWorkflowFixtureFields(db) {
+  for (const table of ['eats_photo_reviews','eats_store_assets']) {
+    if (!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(table)) continue;
+    if (db.prepare(`SELECT count(*) AS count FROM ${table}`).get().count) throw new Error(`Cannot downgrade a populated ${table} fixture.`);
+    db.exec(`DROP TABLE ${table}`);
+  }
+  db.exec('DROP INDEX IF EXISTS eats_photo_review_queue');
+  const columns = db.prepare('PRAGMA table_info(eats_photos)').all().map(row => row.name);
+  for (const name of ['purpose','status','version','review_note','size_bytes']) if (columns.includes(name)) db.exec(`ALTER TABLE eats_photos DROP COLUMN ${name}`);
+}
+
 export function removeKemmyFixtureTables(db) {
+  removeEatsPhotoWorkflowFixtureFields(db);
   const googleColumns = db.prepare("PRAGMA table_info(google_auth_attempts)").all().map(row => row.name);
   if (googleColumns.includes('signup_intent')) {
     if (db.prepare('SELECT count(*) AS count FROM google_auth_attempts WHERE signup_intent IS NOT NULL').get().count) {

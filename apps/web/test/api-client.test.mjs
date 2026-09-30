@@ -4,6 +4,20 @@ import { createApiClient } from '../public/dashboard/api-client.mjs';
 
 const response = (status, body) => ({ ok: status < 400, status, json: async () => body });
 
+test('Eats image uploads have a bounded upload window without changing ordinary request deadlines', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  for (const action of ['photo', 'assets', 'menu', 'open']) {
+    let finish, signal;
+    const client = createApiClient({ fetchImpl: (_path, options) => {
+      signal = options.signal; return new Promise((resolve) => { finish = resolve; });
+    } });
+    const pending = client.command(`/api/eats/stores/00000000-0000-4000-a000-000000000001/${action}`, {});
+    t.mock.timers.tick(12_001); assert.equal(signal.aborted, action === 'open');
+    t.mock.timers.tick(23_000); assert.equal(signal.aborted, true);
+    finish(response(200, {})); await pending;
+  }
+});
+
 test('driver face comparison has time for bounded provider processing and still aborts stalled requests', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   let finish, signal;

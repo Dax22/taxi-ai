@@ -27,6 +27,7 @@ migrations.push('038_parcel_tracking.sql');
 migrations.push('039_admin_announcements.sql');
 migrations.push('040_kemmy_setup.sql');
 migrations.push('041_google_registration_intent.sql');
+migrations.push('042_eats_photo_workflow.sql');
 export const SCHEMA_VERSION = migrations.length;
 
 export function transaction(db, run) {

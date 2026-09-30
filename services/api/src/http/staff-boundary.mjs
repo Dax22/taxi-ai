@@ -19,7 +19,7 @@ export function staffPermission(path, user, staff) {
   for (const [section, permission] of [['accounts','accounts.read'], ['trips','trips.read'], ['analytics','analytics.read']]) {
     if (path === `/api/admin/console/${section}` || path.startsWith(`/api/admin/console/${section}/`)) return permission;
   }
-  if (path.startsWith('/api/admin/') || path === '/api/eats/admin/stores' || /^\/api\/eats\/stores\/[^/]+\/review$/.test(path)) return 'legacy.review';
+  if (path.startsWith('/api/admin/') || ['/api/eats/admin/stores', '/api/eats/admin/photos'].includes(path) || /^\/api\/eats\/(stores|photos)\/[^/]+\/review$/.test(path)) return 'legacy.review';
   if (user?.role === 'admin' && (path.startsWith('/api/eats/') || path.startsWith('/api/driver-documents/') || path.startsWith('/api/safety/incidents/'))) return 'legacy.review';
   return null;
 }

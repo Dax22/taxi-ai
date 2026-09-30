@@ -54,14 +54,16 @@ export function finishIntegrationMigration(db) {
       }
     }
   }
-  // Give old item-based photos a canonical ID so combined meal search can render
-  // them too. Original bytes and photo versions remain available to older clients.
-  for (const row of db.prepare('SELECT p.item_id,p.store_id,p.content,m.details_json FROM eats_menu_photos p JOIN eats_menu m ON m.id=p.item_id').all()) {
+  // Consolidate old item-based photos into canonical records; /images still serves
+  // the same original bytes through that record without keeping a duplicate blob.
+  for (const row of db.prepare('SELECT p.item_id,p.store_id,p.content,p.version,m.details_json FROM eats_menu_photos p JOIN eats_menu m ON m.id=p.item_id').all()) {
     const details = JSON.parse(row.details_json);
-    if (details.photoId && db.prepare('SELECT 1 FROM eats_photos WHERE id=? AND store_id=?').get(details.photoId,row.store_id)) continue;
-    const id = randomUUID();
-    db.prepare('INSERT INTO eats_photos(id,store_id,base64,created_at) VALUES (?,?,?,?)').run(id,row.store_id,Buffer.from(row.content).toString('base64'),0);
-    details.photoId = id;
-    db.prepare('UPDATE eats_menu SET details_json=? WHERE id=?').run(JSON.stringify(details),row.item_id);
+    if (!(details.photoId && db.prepare('SELECT 1 FROM eats_photos WHERE id=? AND store_id=?').get(details.photoId,row.store_id))) {
+      const id = randomUUID(), content = Buffer.from(row.content);
+      db.prepare('INSERT INTO eats_photos(id,store_id,base64,created_at,size_bytes,version) VALUES (?,?,?,?,?,?)').run(id,row.store_id,content.toString('base64'),0,content.length,row.version);
+      details.photoId = id;
+      db.prepare('UPDATE eats_menu SET details_json=? WHERE id=?').run(JSON.stringify(details),row.item_id);
+    }
+    db.prepare('DELETE FROM eats_menu_photos WHERE item_id=?').run(row.item_id);
   }
 }
