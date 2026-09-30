@@ -82,3 +82,9 @@ PostgreSQL suite, including intentional multi-pool dispatch conflicts and lease
 fencing. The default `npm test` still permits local database suites to skip, but CI
 runs the dedicated native job on every pull request. See `docs/scalability.md` for
 the separate two-API/two-worker matching benchmark and profiling controls.
+
+The adapter keeps SERIALIZABLE isolation and retries the entire transaction at
+most three times by default for serialization/deadlock errors. Retries release
+the pool client and row locks before a bounded jittered backoff (50–100 ms,
+100–200 ms, then 200–400 ms). This avoids exhausting retries while a regional
+dispatch transaction is still active; non-retryable failures are not retried.

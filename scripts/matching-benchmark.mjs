@@ -199,43 +199,47 @@ export async function runMatchingBenchmark(options) {
     // Bring supply online before arrivals; setup traffic is reported separately.
     for (let i = 0; i < actors.drivers.length; i++) await online(actors.drivers[i], i, currentMetrics);
     const setup = currentMetrics.summary(0);
-    pumping = true;
-    pumps = actors.drivers.map(async (driver, index) => {
-      while (pumping) {
-        const metrics = currentMetrics; let owner;
-        try {
-          if (!driver.availabilityId && Date.now() >= (driver.readyAt ?? 0)) await online(driver, index, metrics);
-          if (driver.availabilityId) {
-            if (Date.now() - driver.heartbeatAt >= 10000) {
-              await request(driver, `/api/availability/${driver.availabilityId}/position`, 'driver_heartbeat', metrics,
-                { sequence: ++driver.sequence, position: fix(index) }); driver.heartbeatAt = Date.now();
+    function startPumps() {
+      pumping = true;
+      pumps = actors.drivers.map(async (driver, index) => {
+        if (driver.disabled) return;
+        while (pumping) {
+          const metrics = currentMetrics; let owner;
+          try {
+            if (!driver.availabilityId && Date.now() >= (driver.readyAt ?? 0)) await online(driver, index, metrics);
+            if (driver.availabilityId) {
+              if (Date.now() - driver.heartbeatAt >= 10000) {
+                await request(driver, `/api/availability/${driver.availabilityId}/position`, 'driver_heartbeat', metrics,
+                  { sequence: ++driver.sequence, position: fix(index) }); driver.heartbeatAt = Date.now();
+              }
+              const offered = (await request(driver, '/api/rides?mode=work', 'driver_work', metrics)).available?.find((ride) => owners.has(ride.id));
+              if (offered) {
+                owner = owners.get(offered.id); let ride = offered;
+                const command = async (actor, action, data = {}) => { ride = (await request(actor, `/api/rides/${ride.id}/${action}`, `ride_${action}`, owner.metrics,
+                  { expectedVersion: ride.version, ...data })).ride; };
+                await command(driver, 'claim', { offerId: offered.offer?.id }); driver.availabilityId = null;
+                owner.metrics.matched(performance.now() - owner.at, offered.offer?.etaSource);
+                await command(driver, 'offers', { amountKobo: 470000 });
+                await command(owner.customer, 'accept', { offerId: ride.negotiation.currentOffer.id });
+                await command(owner.customer, 'confirm'); const pickupPin = ride.trip.pickupPin;
+                await command(driver, 'depart'); await command(driver, 'arrive'); await command(driver, 'start', { pickupPin });
+                await command(driver, 'complete'); owner.metrics.completed(); owner.finish();
+                driver.readyAt = Date.now() + 15000;
+              }
             }
-            const offered = (await request(driver, '/api/rides?mode=work', 'driver_work', metrics)).available?.find((ride) => owners.has(ride.id));
-            if (offered) {
-              owner = owners.get(offered.id); let ride = offered;
-              const command = async (actor, action, data = {}) => { ride = (await request(actor, `/api/rides/${ride.id}/${action}`, `ride_${action}`, owner.metrics,
-                { expectedVersion: ride.version, ...data })).ride; };
-              await command(driver, 'claim', { offerId: offered.offer?.id }); driver.availabilityId = null;
-              owner.metrics.matched(performance.now() - owner.at, offered.offer?.etaSource);
-              await command(driver, 'offers', { amountKobo: 470000 });
-              await command(owner.customer, 'accept', { offerId: ride.negotiation.currentOffer.id });
-              await command(owner.customer, 'confirm'); const pickupPin = ride.trip.pickupPin;
-              await command(driver, 'depart'); await command(driver, 'arrive'); await command(driver, 'start', { pickupPin });
-              await command(driver, 'complete'); owner.metrics.completed(); owner.finish();
-              driver.readyAt = Date.now() + 15000;
-            }
+          } catch (error) {
+            metrics.fail(/^[A-Z0-9_]{1,80}$/.test(error.code ?? '') ? error.code : 'DRIVER_FAILED');
+            if (owner) owner.finish(false);
+            // A failed command must not silently recycle a possibly busy driver.
+            driver.disabled = true; break;
           }
-        } catch (error) {
-          metrics.fail(/^[A-Z0-9_]{1,80}$/.test(error.code ?? '') ? error.code : 'DRIVER_FAILED');
-          if (owner) owner.finish(false);
-          // A failed command must not silently recycle a possibly busy driver.
-          break;
+          await delay(1000);
         }
-        await delay(1000);
-      }
-    });
+      });
+    }
     async function phase(seconds) {
       const metrics = createMeasurements(); currentMetrics = metrics;
+      if (seconds) startPumps();
       const begin = performance.now();
       const arrivals = await runArrivals({ rate: options.rate, seconds, capacity: options.actors, admit: () => {
         const customer = actors.customers.find((a) => !a.busy && !a.disabled && Date.now() >= (a.readyAt ?? 0));
@@ -258,6 +262,7 @@ export async function runMatchingBenchmark(options) {
           finally { if (rideId) owners.delete(rideId); customer.busy = false; customer.readyAt = Date.now() + 15000; }
         })();
       } });
+      pumping = false; await Promise.all(pumps);
       return { ...metrics.summary(performance.now() - begin), arrivals };
     }
     const warmup = await phase(options.warmupSeconds);

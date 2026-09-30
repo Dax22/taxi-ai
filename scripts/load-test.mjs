@@ -57,11 +57,11 @@ export function createMeasurements() {
       const failures = records.filter((r) => r.status < 200 || r.status >= 300).length;
       return { elapsedSeconds: Math.round(elapsedMs / 10) / 100, requests: records.length,
         throughputRequestsPerSecond: elapsedMs ? Math.round(records.length / (elapsedMs / 1000) * 100) / 100 : 0,
-        failedRequests: failures, errorRate: records.length ? failures / records.length : 0, statuses, operationErrors: errors,
+        failedRequests: failures, errorRate: records.length ? failures / records.length : 0, statuses: { ...statuses }, operationErrors: { ...errors },
         latencyMs: distribution(records.map((r) => r.ms)),
         operations: Object.fromEntries([...new Set(records.map((r) => r.operation))].map((operation) => [operation,
           distribution(records.filter((r) => r.operation === operation).map((r) => r.ms))])),
-        journeys: { created, completed, pickupEstimateSources, timeToAcceptedOfferMs: distribution(journeyWaits) } };
+        journeys: { created, completed, pickupEstimateSources: { ...pickupEstimateSources }, timeToAcceptedOfferMs: distribution(journeyWaits) } };
     },
   };
 }
