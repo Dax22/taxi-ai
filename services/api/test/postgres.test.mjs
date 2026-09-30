@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { openPostgresDatabase, migratePostgres } from '../src/infrastructure/postgres.mjs';
+import { floorIntegerSql } from '../src/shared/sql-floor.mjs';
 import { createAvailabilityRepository } from '../src/modules/availability/repository.mjs';
 import { createWorkerCoordinationRepository } from '../src/modules/worker-coordination/repository.mjs';
 
@@ -11,6 +12,9 @@ test('PostgreSQL/PostGIS storage: migrations, domain SQL, scoped triggers, geo i
   const db = await openPostgresDatabase({ connectionString, schema, max: 1, migrate: true });
   try {
     assert.equal(await db.healthy(), true);
+    const bucket = db.prepare(`SELECT ${floorIntegerSql('value')} AS cell FROM (SELECT CAST(? AS double precision) AS value) fixture`);
+    for (const value of [-1.9, -1.1, -0.1, 0, 0.1, 1.1, 1.9, 181.6, 746.23]) assert.equal((await bucket.get(value)).cell, Math.floor(value));
+    assert.equal((await bucket.get(null)).cell, null);
     await migratePostgres(db); // Re-running deploy migrations is idempotent.
     const now = Date.now();
     for (const [id, role] of [['customer', 'customer'], ['driver', 'driver']]) await db.prepare('INSERT INTO users(id,email,name,password_hash,role,created_at) VALUES(?,?,?,?,?,?)').run(id, `${id}@example.test`, id, 'unused-test-hash', role, now);

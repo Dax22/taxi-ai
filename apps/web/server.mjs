@@ -19,6 +19,7 @@ import { createMapProvider } from '../../services/api/src/infrastructure/map-pro
 import { createDispatchConfig } from '../../services/api/src/infrastructure/dispatch-config.mjs';
 import { createRuntimeConfig } from '../../services/api/src/infrastructure/runtime-config.mjs';
 import { createHealth } from '../../services/api/src/infrastructure/health.mjs';
+import { createDispatchProfiler } from '../../services/api/src/infrastructure/dispatch-profiler.mjs';
 import { createTelemetry } from '../../services/api/src/infrastructure/telemetry.mjs';
 import { VEHICLE_COLOURS } from '../../packages/shared/src/vehicle-profile.mjs';
 import { VEHICLE_CATEGORIES } from '../../packages/shared/src/vehicle-categories.mjs';
@@ -184,6 +185,8 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
   dispatchConfig = createDispatchConfig(process.env), workerConfig = createWorkerConfig(process.env), staffMfa = createStaffMfaConfig(process.env),
   ridePilot = createRidePilotConfig(process.env, runtime.mode),
   telemetry = createTelemetry({ enabled: runtime.mode === 'staging' }),
+  dispatchProfiler = createDispatchProfiler({ sampleEvery: Number(process.env.TAXI_AI_DISPATCH_PROFILE_SAMPLE_EVERY ?? 0),
+    report: (value) => telemetry.dispatchProfile?.(value) }),
   accountMail = createAccountMail({ config: createEmailConfig(process.env,runtime) }),
   safetyAlertProvider = createSafetyAlertProvider({env:process.env}),
   pushProvider = createPushProvider({ env: process.env }),
@@ -193,7 +196,7 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
   if (runtime.mode === 'staging' && callConfig.mode === 'local') throw new Error('Staging calls require off or a configured relay.');
   db = asAsyncDatabase(db);
   if (workerConfig.role !== 'all' && db.kind !== 'postgres') throw new Error('Split API/worker deployments require PostgreSQL.');
-  const application = createApplication({ db, clock, callConfig, mapProvider,
+  const application = createApplication({ db, clock, callConfig, mapProvider, dispatchProfiler,
     dispatchConfig: { ...dispatchConfig, requestRefresh: workerConfig.role === 'all' }, workerConfig,
     googleProvider, accountMail, pushProvider, vehicleVisionProvider, driverFaceProvider, safetyAlertProvider, staffMfa, ridePilot,
     allowSimulation: runtime.mode === 'local' });

@@ -37,6 +37,40 @@ jobs:
         run: npm run check
       - name: Run server and web tests
         run: npm test
+  postgres:
+    name: PostgreSQL concurrency and journeys
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgis/postgis:16-3.5
+        env:
+          POSTGRES_USER: taxi_test
+          POSTGRES_PASSWORD: disposable-ci-only
+          POSTGRES_DB: taxi_ai_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U taxi_test -d taxi_ai_test"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      TAXI_AI_TEST_POSTGRES_URL: postgresql://taxi_test:disposable-ci-only@127.0.0.1:5432/taxi_ai_test
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - run: npm ci --ignore-scripts --no-fund --no-audit
+      - name: Require native PostgreSQL and run all database integration tests
+        run: npm run test:postgres
+      - name: Exercise open-arrival matching across two APIs and two workers
+        env:
+          TAXI_AI_LOAD_POSTGRES_URL: ${{ env.TAXI_AI_TEST_POSTGRES_URL }}
+        run: npm run matching:benchmark -- --rate 1 --duration-seconds 4 --warmup-seconds 2 --actors 8 --api-instances 2 --workers 2 --pool-size 5 --max-match-p95-ms 15000
+
   container:
     name: Staging container
     runs-on: ubuntu-latest

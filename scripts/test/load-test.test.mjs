@@ -30,6 +30,9 @@ test('benchmark reports percentiles, HTTP failures, status counts and completed 
   assert.equal(result.throughputRequestsPerSecond, 3); assert.equal(result.failedRequests, 2);
   assert.deepEqual(result.statuses, { 0: 1, 200: 1, 409: 1 }); assert.equal(result.journeys.completed, 1);
   assert.equal(result.operationErrors.OFFER_UNAVAILABLE, 1); assert.equal(result.operations.claim.count, 2);
+  metrics.record('later', 200, 1); metrics.fail('LATER_FAILURE'); metrics.matched(10, 'road');
+  assert.equal(result.statuses[200], 1); assert.equal(result.operationErrors.LATER_FAILURE, undefined);
+  assert.equal(result.journeys.pickupEstimateSources.road, undefined, 'a completed phase report must not change with later traffic');
 });
 
 test('isolated benchmark authenticates synthetic drivers and completes fare/PIN journeys over HTTP', { timeout: 60000 }, async () => {

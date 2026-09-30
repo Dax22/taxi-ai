@@ -16,6 +16,16 @@ export function createTelemetry({ write = (line) => process.stdout.write(line + 
         method: ['GET', 'POST', 'HEAD', 'OPTIONS', 'DELETE', 'PUT', 'PATCH'].includes(request.method) ? request.method : 'OTHER',
         category: category(pathname()), status: response.statusCode, durationMs: Math.round(performance.now() - started) }));
     },
+    dispatchProfile(value) {
+      const number = (n) => Number.isFinite(n) && n >= 0 ? n : 0;
+      emit({ event: 'dispatch_profile', at: new Date().toISOString(),
+        ...Object.fromEntries(['durationMs', 'sampleEvery', 'queryCount', 'queryMs', 'queryErrors', 'transactions', 'retries'].map((key) => [key, number(value[key])])),
+        failed: value.failed === true,
+        phases: Object.fromEntries(['discovery', 'routing', 'commit'].filter((key) => value.phases?.[key] !== undefined).map((key) => [key, number(value.phases[key])])),
+        queries: (Array.isArray(value.queries) ? value.queries : []).slice(0, 65).filter((row) => /^(?:[a-f0-9]{16}|overflow)$/.test(row.fingerprint)).map((row) => ({
+          fingerprint: row.fingerprint, ...Object.fromEntries(['count', 'totalMs', 'maxMs', 'errors'].map((key) => [key, number(row[key])])) })),
+      });
+    },
     event(name) { if (['server_started', 'server_stopping', 'maintenance_failed', 'server_failed', 'shutdown_timeout'].includes(name)) emit({ event: name, at: new Date().toISOString() }); },
   });
 }

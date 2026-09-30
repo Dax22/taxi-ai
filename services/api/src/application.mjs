@@ -96,12 +96,13 @@ import { createAnnouncementsService } from './modules/announcements/service.mjs'
 
 /** Composition root: the only place that wires business modules to adapters. */
 export function createApplication({ db, clock = Date.now, callConfig = createCallConfig(), mapProvider = createMapProvider(), allowSimulation = false,
-  ridePilot = createRidePilotConfig(),
+  ridePilot = createRidePilotConfig(), dispatchProfiler = null,
   dispatchConfig = createDispatchConfig(), workerConfig = createWorkerConfig(), staffMfa = createStaffMfaConfig(),
   driverFaceProvider = createDriverFaceProvider({ config: readDriverFaceConfig({}) }),
   safetyAlertProvider = createSafetyAlertProvider(), accountMail = createAccountMail(), pushProvider = createPushProvider(), vehicleVisionProvider = createVehicleVisionProvider(),
   googleProvider = createGoogleProvider({ config: createGoogleConfig({}), clock }) }) {
   db = asAsyncDatabase(db);
+  if (dispatchProfiler) db = dispatchProfiler.wrap(db);
   const unitOfWork = async (run) => (await db.transaction(run));
   const audit = createAudit(db);
   const realtime = createRealtimeService({ repository: createRealtimeRepository(db), clock });
@@ -151,7 +152,7 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
   const pickupEta = createPickupEtaProvider({ mapProvider, now: clock });
   const dispatch = createDispatchService({ repository: createDispatchRepository(db), getAccount: accounts.profile, coordinator: workerCoordinator,
     candidates: async (now, options) => (await rides.dispatchCandidates(now, options)), candidateFor: async (rideId, driverId, now) => (await rides.dispatchCandidateFor(rideId, driverId, now)),
-    estimateMany: pickupEta.estimateMany, config: dispatchConfig, unitOfWork, tokens, audit, clock,
+    estimateMany: pickupEta.estimateMany, config: dispatchConfig, unitOfWork, tokens, audit, clock, profile: dispatchProfiler,
     onOffer: async (offer) => (await notifications.publish({ userId: offer.driverId, rideId: offer.rideId, kind: 'request',
       mode: 'work', eventKey: `dispatch:${offer.id}`, now: offer.createdAt })) });
   const rides = createRidesService({ repository: rideRepository,

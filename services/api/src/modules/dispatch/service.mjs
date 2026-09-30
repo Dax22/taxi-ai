@@ -6,7 +6,7 @@ import { fields } from '../../shared/validation.mjs';
 
 /** Bounded invitations. Routing happens outside transactions; leases fence writes after routing. */
 export function createDispatchService({ repository, candidates, candidateFor, getAccount, estimateMany,
-  unitOfWork, tokens, audit, clock, onOffer = () => {}, config, coordinator = null }) {
+  unitOfWork, tokens, audit, clock, onOffer = () => {}, config, coordinator = null, profile = null }) {
   const mode = config.mode;
   check(['legacy', 'sequential', 'batch'].includes(mode), 'INVALID_DISPATCH_CONFIG', 'Choose a valid matching policy.');
   const batchWindowMs = config.batchWindowMs ?? 2000;
@@ -29,32 +29,36 @@ export function createDispatchService({ repository, candidates, candidateFor, ge
   async function sweep(region = null) {
     if (enabled && !stopped) await unitOfWork(() => sweepInside(clock(), region));
   }
-  async function run(region, suppliedLease) {
+  const measure = (name, action) => profile ? profile.phase(name, action) : action();
+  const run = (region, lease) => profile ? profile.cycle(() => runCycle(region, lease)) : runCycle(region, lease);
+  async function runCycle(region, suppliedLease) {
     if (suppliedLease && suppliedLease.name !== `dispatch:${region}`) throw new Error('A dispatch lease belongs to a different region.');
     const lease = suppliedLease ?? (coordinator ? await coordinator.acquire(`dispatch:${region}`) : null);
     if (coordinator && !lease) return;
     try {
-      await sweep(region);
-      const now = clock(), pending = await repository.pending(region);
-      const busyDrivers = new Set(pending.map((o) => o.driverId)), busyRides = new Set(pending.map((o) => o.rideId));
-      const candidatesNow = await candidates(now, { region, excludeDriverIds: busyDrivers, excludeRideIds: busyRides,
-        attempted: repository.attempted, minimumAgeMs: mode === 'batch' ? batchWindowMs : 0 });
-      const edges = [];
-      for (const edge of candidatesNow) {
-        if (!busyDrivers.has(edge.driverId) && !busyRides.has(edge.rideId)
-          && !await repository.attempted(edge.rideId, edge.driverId)
-          && (mode !== 'batch' || now >= edge.createdAt + batchWindowMs)) edges.push(edge);
-      }
-      edges.sort((a,b) => a.createdAt-b.createdAt || a.distanceMeters-b.distanceMeters
-        || a.rideId.localeCompare(b.rideId) || a.driverId.localeCompare(b.driverId));
-      const bounded = boundedDispatchCandidates(edges, now);
+      const bounded = await measure('discovery', async () => {
+        await sweep(region);
+        const now = clock(), pending = await repository.pending(region);
+        const busyDrivers = new Set(pending.map((o) => o.driverId)), busyRides = new Set(pending.map((o) => o.rideId));
+        const candidatesNow = await candidates(now, { region, excludeDriverIds: busyDrivers, excludeRideIds: busyRides,
+          attempted: repository.attempted, minimumAgeMs: mode === 'batch' ? batchWindowMs : 0 });
+        const edges = [];
+        for (const edge of candidatesNow) {
+          if (!busyDrivers.has(edge.driverId) && !busyRides.has(edge.rideId)
+            && !await repository.attempted(edge.rideId, edge.driverId)
+            && (mode !== 'batch' || now >= edge.createdAt + batchWindowMs)) edges.push(edge);
+        }
+        edges.sort((a,b) => a.createdAt-b.createdAt || a.distanceMeters-b.distanceMeters
+          || a.rideId.localeCompare(b.rideId) || a.driverId.localeCompare(b.driverId));
+        return boundedDispatchCandidates(edges, now);
+      });
       if (!bounded.length || stopped) return;
       const roadEdges = bounded.filter((edge) => edge.from && edge.to);
       let estimates = [];
-      try { estimates = await estimateMany(roadEdges.map(({ from, to }) => ({ from, to }))); } catch { /* Explicit fallback below. */ }
+      try { estimates = await measure('routing', () => estimateMany(roadEdges.map(({ from, to }) => ({ from, to })))); } catch { /* Explicit fallback below. */ }
       if (stopped) return;
       const withEstimates = new Map(roadEdges.map((edge,i) => [edge, estimates[i]]));
-      await unitOfWork(async () => {
+      await measure('commit', () => unitOfWork(async () => {
         // A resumed, expired worker must not publish stale offers. The guard locks
         // this lease row until commit, so a new holder cannot overtake these writes.
         if (coordinator && !await coordinator.guard(lease)) return;
@@ -84,7 +88,7 @@ export function createDispatchService({ repository, candidates, candidateFor, ge
             await onOffer(offer);
           }
         }
-      });
+      }));
     } finally { if (coordinator && lease && !suppliedLease) await coordinator.release(lease); }
   }
   function refresh({ region = null, lease = null } = {}) {

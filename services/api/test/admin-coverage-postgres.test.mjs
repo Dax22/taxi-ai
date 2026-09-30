@@ -59,6 +59,8 @@ test('PostgreSQL coverage keeps JSON numeric guards, bounded GPS aggregates, cur
     }
     const result = await service.coverage({ id: owner }, { bbox: '7.462301,9.076511,7.462399,9.076599' });
     assert.deepEqual(result.viewport.bounds, { west: 7.46, south: 9.07, east: 7.47, north: 9.08 });
+    assert.equal(result.cells.length, 1);
+    assert.deepEqual(result.cells[0].bounds, result.viewport.bounds, 'GPS cell indices must floor, not round into a neighbouring cell');
     assert.equal(result.historicalTotals.requests, 2); assert.equal(result.currentTotals.waitingRequests, 2);
     assert.equal(result.currentTotals.availableDrivers, 1); assert.equal(result.historicalTotals.pickupWaitObservations, 1);
     assert.equal(result.historicalTotals.meanPickupWaitSeconds, 180);

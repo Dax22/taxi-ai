@@ -23,6 +23,7 @@ x-app-environment: &app-environment
   TAXI_AI_PUSH_ENABLED: 'false'
   TAXI_AI_VEHICLE_VISION_MODE: 'off'
   TAXI_AI_DISPATCH_MODE: ${TAXI_AI_DISPATCH_MODE:-sequential}
+  TAXI_AI_DISPATCH_PROFILE_SAMPLE_EVERY: ${TAXI_AI_DISPATCH_PROFILE_SAMPLE_EVERY:-0}
 
 x-app: &app
   build:

@@ -1,6 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
+import { setTimeout as delay } from 'node:timers/promises';
 import pg from 'pg';
 import { compilePostgresQuery } from './postgres-sql.mjs';
 
@@ -79,6 +80,7 @@ export async function openPostgresDatabase({
     async exec(sql) { return query(sql); },
     async transaction(callback, { retries = 3, isolation = 'SERIALIZABLE' } = {}) {
       if (!['SERIALIZABLE', 'REPEATABLE READ', 'READ COMMITTED'].includes(isolation)) throw new TypeError('Invalid transaction isolation.');
+      if (!Number.isInteger(retries) || retries < 0 || retries > 10) throw new TypeError('Invalid transaction retry limit.');
       const current = activeContext();
       if (current) {
         const name = `taxi_nested_${++savepoint}`;
@@ -103,6 +105,10 @@ export async function openPostgresDatabase({
           try { await client.query('ROLLBACK'); } catch { /* Original error is more useful. */ }
           if (!['40001', '40P01'].includes(error.code) || attempt >= retries) throw error;
         } finally { client.release(); }
+        // Competing dispatch/claim transactions can outlive several immediate
+        // retries. Back off with jitter after releasing the pool client and all
+        // row locks. Keep the same bounded retry count and replay the whole unit.
+        await delay(Math.ceil(Math.min(500, 50 * 2 ** attempt) * (1 + Math.random())));
       }
     },
     async healthy() {
