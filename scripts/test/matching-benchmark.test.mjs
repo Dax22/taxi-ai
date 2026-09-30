@@ -27,3 +27,14 @@ test('benchmark rejects external targets and resource limits, and incomplete wor
   assert.equal(gates.noDroppedArrivals, false); assert.equal(gates.allJourneysComplete, false);
   assert.equal(gates.matchLatency, false); assert.equal(gates.workerProfilesPresent, false);
 });
+
+test('benchmark records the selected matching path and rejects ambiguous switches', () => {
+  assert.equal(parseMatchingOptions([]).fastPath, false);
+  assert.equal(parseMatchingOptions(['--fast-path', 'true']).fastPath, true);
+  assert.equal(parseMatchingOptions(['--fast-path', 'false']).fastPath, false);
+  assert.throws(() => parseMatchingOptions(['--fast-path', '1']));
+  const gate = matchingGates({ arrivals: { dropped: 0, scheduled: 1 }, errorRate: 0, operationErrors: {},
+    journeys: { completed: 1, timeToAcceptedOfferMs: { p95: 1 } } },
+  [{ role: 'worker', profiles: { failed: 1, overflow: 0, phases: { commit: { count: 1 } } } }], parseMatchingOptions([]));
+  assert.equal(gate.workerHealthy, false);
+});

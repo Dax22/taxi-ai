@@ -3,10 +3,12 @@ import { distanceMeters } from '../../../../../packages/shared/src/locations.mjs
 import { check } from '../../shared/errors.mjs';
 import { requireRole, requireEligibleDriver } from '../../shared/policies.mjs';
 import { fields } from '../../shared/validation.mjs';
+import { matchingPairKey } from '../../shared/matching-pair-key.mjs';
 
 /** Bounded invitations. Routing happens outside transactions; leases fence writes after routing. */
 export function createDispatchService({ repository, candidates, candidateFor, getAccount, estimateMany,
-  unitOfWork, tokens, audit, clock, onOffer = () => {}, config, coordinator = null, profile = null }) {
+  unitOfWork, tokens, audit, clock, onOffer = () => {}, config, coordinator = null, profile = null,
+  candidatesFor = null, attemptedMany = null, batchEnabledFor = () => false }) {
   const mode = config.mode;
   check(['legacy', 'sequential', 'batch'].includes(mode), 'INVALID_DISPATCH_CONFIG', 'Choose a valid matching policy.');
   const batchWindowMs = config.batchWindowMs ?? 2000;
@@ -21,9 +23,12 @@ export function createDispatchService({ repository, candidates, candidateFor, ge
     if (await repository.close(offer.id, status, now)) await audit.record(offer.driverId, `dispatch.${status}`, offer.id, now);
   }
   async function sweepInside(now, region = null) {
-    for (const offer of await repository.pending(region)) {
+    const pending = await repository.pending(region);
+    const live = candidatesFor && batchEnabledFor(region) ? await candidatesFor(pending.filter(offer => now < offer.expiresAt), now) : null;
+    for (const offer of pending) {
       if (now >= offer.expiresAt) await close(offer, 'expired', now);
-      else if (!await valid(offer, now)) await close(offer, 'revoked', now);
+      else if (live ? live.get(matchingPairKey(offer.rideId, offer.driverId))?.availabilityId !== offer.availabilityId
+        : !await valid(offer, now)) await close(offer, 'revoked', now);
     }
   }
   async function sweep(region = null) {
@@ -42,10 +47,11 @@ export function createDispatchService({ repository, candidates, candidateFor, ge
         const busyDrivers = new Set(pending.map((o) => o.driverId)), busyRides = new Set(pending.map((o) => o.rideId));
         const candidatesNow = await candidates(now, { region, excludeDriverIds: busyDrivers, excludeRideIds: busyRides,
           attempted: repository.attempted, minimumAgeMs: mode === 'batch' ? batchWindowMs : 0 });
+        const tried = attemptedMany && batchEnabledFor(region) ? await attemptedMany(candidatesNow) : null;
         const edges = [];
         for (const edge of candidatesNow) {
           if (!busyDrivers.has(edge.driverId) && !busyRides.has(edge.rideId)
-            && !await repository.attempted(edge.rideId, edge.driverId)
+            && !(tried ? tried.has(matchingPairKey(edge.rideId, edge.driverId)) : await repository.attempted(edge.rideId, edge.driverId))
             && (mode !== 'batch' || now >= edge.createdAt + batchWindowMs)) edges.push(edge);
         }
         edges.sort((a,b) => a.createdAt-b.createdAt || a.distanceMeters-b.distanceMeters
@@ -64,10 +70,15 @@ export function createDispatchService({ repository, candidates, candidateFor, ge
         if (coordinator && !await coordinator.guard(lease)) return;
         const commitNow = clock(); await sweepInside(commitNow, region);
         const current = await repository.pending(region), driverIds = new Set(current.map((o) => o.driverId)), rideIds = new Set(current.map((o) => o.rideId));
+        const fast = candidatesFor && attemptedMany && batchEnabledFor(region);
+        const tried = fast ? await attemptedMany(bounded) : null;
+        const liveCandidates = fast ? await candidatesFor(bounded, commitNow) : null;
         const eligible = [];
         for (const edge of bounded) {
-          if (driverIds.has(edge.driverId) || rideIds.has(edge.rideId) || await repository.attempted(edge.rideId,edge.driverId)) continue;
-          const live = await candidateFor(edge.rideId, edge.driverId, commitNow);
+          if (driverIds.has(edge.driverId) || rideIds.has(edge.rideId)
+            || (tried ? tried.has(matchingPairKey(edge.rideId, edge.driverId)) : await repository.attempted(edge.rideId,edge.driverId))) continue;
+          const live = liveCandidates ? liveCandidates.get(matchingPairKey(edge.rideId, edge.driverId))
+            : await candidateFor(edge.rideId, edge.driverId, commitNow);
           if (!live || live.availabilityId !== edge.availabilityId || live.version !== edge.version
             || (region !== null && live.region !== region)) continue;
           if (edge.from && (!live.from || distanceMeters(edge.from, live.from) > 100)) continue;

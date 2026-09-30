@@ -17,6 +17,7 @@ import { requestContext, requireStagingAccess, isInternalHealth } from '../../se
 import { createCallConfig } from '../../services/api/src/infrastructure/call-config.mjs';
 import { createMapProvider } from '../../services/api/src/infrastructure/map-provider.mjs';
 import { createDispatchConfig } from '../../services/api/src/infrastructure/dispatch-config.mjs';
+import { readMatchingFastConfig } from '../../services/api/src/infrastructure/matching-fast-config.mjs';
 import { createRuntimeConfig } from '../../services/api/src/infrastructure/runtime-config.mjs';
 import { createHealth } from '../../services/api/src/infrastructure/health.mjs';
 import { createDispatchProfiler } from '../../services/api/src/infrastructure/dispatch-profiler.mjs';
@@ -181,7 +182,9 @@ const routes = new Map([
 
 export function createAppServer({ runtime = createRuntimeConfig({}), db = openDatabase(runtime.mode === 'staging' ? runtime.database : ':memory:'),
   clock = Date.now, callConfig = createCallConfig({ ...process.env, TAXI_AI_CALLS_MODE: process.env.TAXI_AI_CALLS_MODE ?? (runtime.mode === 'staging' ? 'off' : 'local') }),
-  mapProvider = createMapProvider({ env: { ...process.env, TAXI_AI_MAPS_MODE: process.env.TAXI_AI_MAPS_MODE ?? (runtime.mode === 'staging' ? 'off' : 'community') } }),
+  matchingFast = readMatchingFastConfig(process.env),
+  mapProvider = createMapProvider({ compactPickupTables: matchingFast.enabled,
+    env: { ...process.env, TAXI_AI_MAPS_MODE: process.env.TAXI_AI_MAPS_MODE ?? (runtime.mode === 'staging' ? 'off' : 'community') } }),
   dispatchConfig = createDispatchConfig(process.env), workerConfig = createWorkerConfig(process.env), staffMfa = createStaffMfaConfig(process.env),
   ridePilot = createRidePilotConfig(process.env, runtime.mode),
   telemetry = createTelemetry({ enabled: runtime.mode === 'staging' }),
@@ -196,7 +199,7 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
   if (runtime.mode === 'staging' && callConfig.mode === 'local') throw new Error('Staging calls require off or a configured relay.');
   db = asAsyncDatabase(db);
   if (workerConfig.role !== 'all' && db.kind !== 'postgres') throw new Error('Split API/worker deployments require PostgreSQL.');
-  const application = createApplication({ db, clock, callConfig, mapProvider, dispatchProfiler,
+  const application = createApplication({ db, clock, callConfig, mapProvider, dispatchProfiler, matchingFast,
     dispatchConfig: { ...dispatchConfig, requestRefresh: workerConfig.role === 'all' }, workerConfig,
     googleProvider, accountMail, pushProvider, vehicleVisionProvider, driverFaceProvider, safetyAlertProvider, staffMfa, ridePilot,
     allowSimulation: runtime.mode === 'local' });
@@ -205,7 +208,7 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
   const handleMobile = createMobileRouter(httpApplication);
   const handleGoogleCallback = createGoogleCallback(application, runtime.mode === 'staging');
   const health = createHealth(db);
-  const workers = createWorkerRuntime({ coordinator: application.workerCoordinator, config: workerConfig,
+  const workers = createWorkerRuntime({ coordinator: application.workerCoordinator, config: { ...workerConfig, matchingFast }, wakeups: db,
     regions: () => application.dispatch.regions(), dispatch: application.dispatch, onError: (name) => telemetry.event(name),
     maintenance: async ({ lease, active }) => {
       for (const service of [application.rides, application.availability, application.calls, application.locations,

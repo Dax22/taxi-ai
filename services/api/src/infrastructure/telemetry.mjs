@@ -26,6 +26,10 @@ export function createTelemetry({ write = (line) => process.stdout.write(line + 
           fingerprint: row.fingerprint, ...Object.fromEntries(['count', 'totalMs', 'maxMs', 'errors'].map((key) => [key, number(row[key])])) })),
       });
     },
-    event(name) { if (['server_started', 'server_stopping', 'maintenance_failed', 'server_failed', 'shutdown_timeout'].includes(name)) emit({ event: name, at: new Date().toISOString() }); },
+    event(name) {
+      if (['server_started', 'server_stopping', 'maintenance_failed', 'server_failed', 'shutdown_timeout',
+        'worker_lease_renewal_failed', 'worker_job_failed', 'worker_tick_failed',
+        'worker_wakeup_connection_failed', 'worker_wakeup_lookup_failed'].includes(name)) emit({ event: name, at: new Date().toISOString() });
+    },
   });
 }

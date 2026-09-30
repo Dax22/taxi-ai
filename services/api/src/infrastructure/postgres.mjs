@@ -4,8 +4,10 @@ import { createHash } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 import pg from 'pg';
 import { compilePostgresQuery } from './postgres-sql.mjs';
+import { readMatchingFastConfig } from './matching-fast-config.mjs';
+import { createDispatchWakeupSubscription } from './dispatch-wakeups.mjs';
 
-export const POSTGRES_MIGRATIONS = ['001_baseline.sql', '002_scale.sql', '003_family_safety.sql', '004_family_delivery.sql', '005_staff_access.sql', '006_admin_cases.sql', '007_admin_operations.sql', '008_admin_compliance.sql', '009_driver_face_checks.sql', '010_parcel_tracking.sql', '011_admin_announcements.sql', '012_kemmy_setup.sql', '013_google_registration_intent.sql'];
+export const POSTGRES_MIGRATIONS = ['001_baseline.sql', '002_scale.sql', '003_family_safety.sql', '004_family_delivery.sql', '005_staff_access.sql', '006_admin_cases.sql', '007_admin_operations.sql', '008_admin_compliance.sql', '009_driver_face_checks.sql', '010_parcel_tracking.sql', '011_admin_announcements.sql', '012_kemmy_setup.sql', '013_google_registration_intent.sql', '014_dispatch_wakeups.sql'];
 export const POSTGRES_SCHEMA_VERSION = POSTGRES_MIGRATIONS.length;
 const safeNumber = (value) => {
   const result = Number(value);
@@ -35,16 +37,18 @@ export async function openPostgresDatabase({
   migrate = false,
   verify = true,
   onError = () => {},
+  matchingFast = readMatchingFastConfig(process.env),
 } = {}) {
   if (!connectionString) throw new TypeError('TAXI_AI_DATABASE_URL is required for PostgreSQL.');
   schema = schemaName(schema);
   const pool = new pg.Pool({ connectionString, max: integer(max, 10, 1, 100, 'database pool size'),
     connectionTimeoutMillis: 5000, idleTimeoutMillis: 30000,
     statement_timeout: 15000, lock_timeout: 5000, idle_in_transaction_session_timeout: 30000,
-    application_name: 'taxi-ai', options: `-c search_path=${schema},public`, ...(ssl === undefined ? {} : { ssl }) });
+    application_name: 'taxi-ai', options: `-c search_path=${schema},public -c taxi_ai.matching_fast_path=${matchingFast.enabled ? 'on' : 'off'}`, ...(ssl === undefined ? {} : { ssl }) });
   pool.on('error', onError);
   const context = new AsyncLocalStorage(); let closed = false, savepoint = 0;
   const initialized = new WeakSet();
+  const subscriptions = new Set();
   const activeContext = () => context.getStore()?.active ? context.getStore() : null;
   const checkQueue = () => { if (pool.waitingCount >= 1000) throw new Error('Database connection queue is full.'); };
   const acquire = async () => {
@@ -118,7 +122,26 @@ export async function openPostgresDatabase({
       } catch { return false; }
     },
     stats: () => ({ total: pool.totalCount, idle: pool.idleCount, waiting: pool.waitingCount }),
-    async close() { if (!closed) { closed = true; await pool.end(); } },
+    subscribeDispatchWakeups({ onHint, onReconnect, onError: report = onError }) {
+      if (closed) throw new Error('Database is closed.');
+      const subscription = createDispatchWakeupSubscription({ schema, onHint, onReconnect, onError: report,
+        createClient: () => new pg.Client({ connectionString, connectionTimeoutMillis: 5000,
+          statement_timeout: 5000, application_name: 'taxi-ai-dispatch-listener', ...(ssl === undefined ? {} : { ssl }) }) });
+      subscriptions.add(subscription);
+      return Object.freeze({ async stop() { subscriptions.delete(subscription); await subscription.stop(); } });
+    },
+    async activeDispatchRegions(regions, now = Date.now()) {
+      if (!Array.isArray(regions) || regions.length > 512) throw new TypeError('Dispatch region hints exceed their bound.');
+      if (!regions.length) return [];
+      const result = await query(`SELECT DISTINCT dispatch_region AS region FROM rides
+        WHERE status='requested' AND request_expires_at>$2 AND dispatch_region=ANY($1::text[])
+        UNION SELECT DISTINCT r.dispatch_region AS region FROM rides r JOIN dispatch_offers o ON o.ride_id=r.id
+        WHERE o.status='pending' AND r.dispatch_region=ANY($1::text[])`, [regions, now]);
+      return result.rows.map((row) => row.region);
+    },
+    async close() { if (!closed) {
+      closed = true; await Promise.allSettled([...subscriptions].map((subscription) => subscription.stop())); subscriptions.clear(); await pool.end();
+    } },
   };
   try {
     await query('SELECT 1');

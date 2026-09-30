@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { readMatchingFastConfig } from './matching-fast-config.mjs';
 
 function integer(value, fallback, name, minimum, maximum) {
   const parsed = value === undefined ? fallback : Number(value);
@@ -16,7 +17,7 @@ export function createWorkerConfig(env = {}) {
   const regions = regionSetting === 'auto' ? null : regionSetting.split(',').map((value) => value.trim());
   if (regions && (!regions.length || regions.length > 256 || regions.some((id) => !/^(ng:\d{1,3}:\d{1,3}|sample:[a-z0-9-]{1,80})$/.test(id))
     || new Set(regions).size !== regions.length)) throw new Error('TAXI_AI_WORKER_REGIONS needs auto or distinct geographic region identifiers.');
-  return Object.freeze({ role, ownerId, regions: regions && Object.freeze(regions),
+  return Object.freeze({ role, ownerId, matchingFast: readMatchingFastConfig(env), regions: regions && Object.freeze(regions),
     concurrency: integer(env.TAXI_AI_WORKER_CONCURRENCY, 4, 'TAXI_AI_WORKER_CONCURRENCY', 1, 32),
     leaseMs: integer(env.TAXI_AI_WORKER_LEASE_MS, 15_000, 'TAXI_AI_WORKER_LEASE_MS', 5000, 120_000),
     intervalMs: integer(env.TAXI_AI_WORKER_INTERVAL_MS, 2000, 'TAXI_AI_WORKER_INTERVAL_MS', 250, 10_000),

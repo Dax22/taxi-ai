@@ -7,7 +7,31 @@ function endpoint(value) {
     || url.username || url.password || url.search || url.hash) throw new Error('Map API URLs need HTTPS (or loopback HTTP), without credentials, queries or fragments.');
   return url;
 }
-export function createMapProvider({ env = process.env, fetchImpl = globalThis.fetch, now = Date.now } = {}) {
+function pickupTable(pairs, compact) {
+  if (!compact) return { points: pairs.flatMap(({ from, to }) => [from, to]),
+    sources: pairs.map((_, i) => i * 2), destinations: pairs.map((_, i) => i * 2 + 1),
+    cells: pairs.map((_, i) => [i, i]) };
+  const points = [], sources = [], destinations = [], pointIndices = new Map(), sourceRows = new Map(), destinationColumns = new Map();
+  const pointIndex = (point) => {
+    // Exact coordinates only: nearby positions must keep separate routing and
+    // snapping validation. A point may be both a source and a destination.
+    const key = `${point.lng},${point.lat}`;
+    if (!pointIndices.has(key)) { pointIndices.set(key, points.length); points.push(point); }
+    return pointIndices.get(key);
+  };
+  const matrixIndex = (point, indices, positions) => {
+    const index = pointIndex(point);
+    if (!positions.has(index)) { positions.set(index, indices.length); indices.push(index); }
+    return positions.get(index);
+  };
+  const cells = pairs.map(({ from, to }) => [matrixIndex(from, sources, sourceRows), matrixIndex(to, destinations, destinationColumns)]);
+  // Keep the standard OSRM minimum of two supplied locations for coincident
+  // endpoints, while still requesting just one result cell.
+  if (points.length === 1) points.push(points[0]);
+  return { points, sources, destinations, cells };
+}
+export function createMapProvider({ env = process.env, fetchImpl = globalThis.fetch, now = Date.now, compactPickupTables = false } = {}) {
+  if (typeof compactPickupTables !== 'boolean') throw new Error('compactPickupTables must be a boolean.');
   const mode = env.TAXI_AI_MAPS_MODE ?? 'community';
   if (!['community', 'dedicated', 'off'].includes(mode)) throw new Error('TAXI_AI_MAPS_MODE must be community, dedicated or off.');
   const searchUrl = endpoint(env.TAXI_AI_SEARCH_URL ?? 'https://photon.komoot.io/api/');
@@ -117,22 +141,33 @@ export function createMapProvider({ env = process.env, fetchImpl = globalThis.fe
         && Number.isFinite(p.lng) && Math.abs(p.lng) <= 180;
       check(pairs.every((pair) => validPoint(pair?.from) && validPoint(pair?.to)), 'INVALID_ROUTE', 'Pickup routing needs valid coordinates.');
       check(/\/route\/v1\/[^/]+\/?$/.test(routeUrl.pathname), 'MAPS_UNAVAILABLE', 'This route provider does not expose pickup tables.');
-      const points = pairs.flatMap(({ from, to }) => [from, to]);
+      const { points, sources, destinations, cells } = pickupTable(pairs, compactPickupTables);
       const url = new URL(routeUrl);
       url.pathname = `${url.pathname.replace(/\/route\/v1\/([^/]+)\/?$/, '/table/v1/$1')}/${points.map((p) => `${p.lng},${p.lat}`).join(';')}`;
-      for (const [name, value] of Object.entries({ sources: pairs.map((_, i) => i * 2).join(';'),
-        destinations: pairs.map((_, i) => i * 2 + 1).join(';'), annotations: 'duration,distance',
+      for (const [name, value] of Object.entries({ sources: sources.join(';'),
+        destinations: destinations.join(';'), annotations: 'duration,distance',
         radiuses: points.map(() => '250').join(';'), generate_hints: 'false' })) url.searchParams.set(name, value);
       // Shares the route rate limit with previews; no fallback_speed is sent.
       const result = await json(url, 'route', 15_000);
-      check(result?.code === 'Ok' && Array.isArray(result.durations) && Array.isArray(result.distances)
-        && Array.isArray(result.sources) && Array.isArray(result.destinations), 'MAPS_UNAVAILABLE', 'Pickup routing returned an invalid table.');
-      return pairs.map((_, i) => {
-        const durationSeconds = result.durations[i]?.[i], distanceMeters = result.distances[i]?.[i];
-        if (!Number.isFinite(durationSeconds) || !Number.isFinite(distanceMeters)
-          || result.fallback_speed_cells?.some((cell) => Array.isArray(cell) && cell[0] === i && cell[1] === i)) return null;
+      const matrix = (value) => Array.isArray(value) && value.length === sources.length
+        && value.every((row) => Array.isArray(row) && row.length === destinations.length);
+      const fallbackCells = result?.fallback_speed_cells ?? [];
+      check(result?.code === 'Ok' && matrix(result.durations) && matrix(result.distances)
+        && Array.isArray(result.sources) && result.sources.length === sources.length
+        && Array.isArray(result.destinations) && result.destinations.length === destinations.length
+        && Array.isArray(fallbackCells) && fallbackCells.every((cell) => Array.isArray(cell) && cell.length === 2
+          && Number.isSafeInteger(cell[0]) && cell[0] >= 0 && cell[0] < sources.length
+          && Number.isSafeInteger(cell[1]) && cell[1] >= 0 && cell[1] < destinations.length),
+      'MAPS_UNAVAILABLE', 'Pickup routing returned an invalid table.');
+      const fallback = new Set(fallbackCells.map(([row, column]) => `${row}:${column}`));
+      const validLocation = (value) => Array.isArray(value) && value.length === 2 && validPoint({ lng: value[0], lat: value[1] });
+      return cells.map(([row, column]) => {
+        const durationSeconds = result.durations[row][column], distanceMeters = result.distances[row][column];
+        const snappedFrom = result.sources[row]?.location, snappedTo = result.destinations[column]?.location;
+        if (!Number.isFinite(durationSeconds) || durationSeconds < 0 || !Number.isFinite(distanceMeters) || distanceMeters < 0
+          || !validLocation(snappedFrom) || !validLocation(snappedTo) || fallback.has(`${row}:${column}`)) return null;
         return { durationSeconds, distanceMeters, source: 'osrm-table',
-          snappedFrom: result.sources[i]?.location, snappedTo: result.destinations[i]?.location };
+          snappedFrom: [...snappedFrom], snappedTo: [...snappedTo] };
       });
     },
   });

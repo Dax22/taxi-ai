@@ -118,7 +118,7 @@ export function createAvailabilityService({ repository, getAccount, sessionOwner
     return row && !(await invalidReason(row, now)) ? { id: row.id, mode: row.mode, areaId: row.areaId,
       position: row.positionJson ? JSON.parse(row.positionJson) : null } : null;
   }
-  async function nearbyDriverIds({ mode, areaId, position: pickup, radiusMeters, now = clock(), limit = 200, afterId = '' }) {
+  async function nearby({ mode, areaId, position: pickup, radiusMeters, now = clock(), limit = 200, afterId = '' }, validateDrivers) {
     limit = Math.max(1, Math.min(200, Number.isSafeInteger(limit) ? limit : 200));
     if (mode !== 'sample' && (mode !== 'gps' || !Number.isFinite(pickup?.lat) || !Number.isFinite(pickup?.lng)
       || !Number.isFinite(radiusMeters) || radiusMeters <= 0 || radiusMeters > 10_000)) return { driverIds: [], nextCursor: null, scanned: 0 };
@@ -129,9 +129,14 @@ export function createAvailabilityService({ repository, getAccount, sessionOwner
       minLng: pickup.lng - longitudeSpan, maxLng: pickup.lng + longitudeSpan } : null;
     const rows = (await repository.nearby({ mode, areaId, bounds, position: pickup, radiusMeters, now, limit, afterId }));
     return { driverIds: (await asyncFilter(rows, async (row) => (mode === 'sample' || distanceMeters(pickup, JSON.parse(row.positionJson)) <= radiusMeters)
-      && !(await invalidReason(row, now)))).map((row) => row.driverId), nextCursor: rows.length === limit ? rows.at(-1).id : null, scanned: rows.length };
+      && (!validateDrivers || !(await invalidReason(row, now))))).map((row) => row.driverId), nextCursor: rows.length === limit ? rows.at(-1).id : null, scanned: rows.length };
   }
-  return Object.freeze({ get, command, update, sweep, positionFor, nearbyDriverIds,
+  const nearbyDriverIds = (input) => nearby(input, true);
+  // Internal broad-phase candidates only. Matching must apply the complete
+  // batched eligibility projection before an edge is usable; never expose this
+  // port through HTTP or use it for accepting a ride.
+  const nearbyMatchingDriverIds = (input) => nearby(input, false);
+  return Object.freeze({ get, command, update, sweep, positionFor, nearbyDriverIds, nearbyMatchingDriverIds,
     onProfileDeleted: async (driverId, now) => (await close((await repository.current(driverId)), now, 'approval_changed')),
     driverIds: async (afterId = '', limit = 200) => (await asyncFilter((await repository.activePage(afterId, limit)), async (r) => !(await invalidReason(r, clock())))).map((r) => r.driverId),
     onClaim: async (driverId, now) => (await close((await repository.current(driverId)), now, 'claimed')) });

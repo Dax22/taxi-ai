@@ -93,3 +93,93 @@ test('OSRM pickup table bounds work and rejects unsupported endpoints or malform
   await assert.rejects(createMapProvider({ env: { TAXI_AI_ROUTING_URL: 'https://maps.example.test/custom/' },
     fetchImpl: () => assert.fail('unsupported table URL must not be queried') }).pickupEstimates([pair]), { code: 'MAPS_UNAVAILABLE' });
 });
+
+test('compact pickup tables preserve directed pair order across shared endpoints and duplicate pairs', async () => {
+  const a = { lat: 9.08, lng: 7.4 }, b = { lat: 9.081, lng: 7.401 }, c = { lat: 9.085, lng: 7.405 };
+  const nearA = { ...a, lat: a.lat + 0.00000001 };
+  const pairs = [{ from: a, to: c }, { from: b, to: a }, { from: a, to: a },
+    { from: b, to: c }, { from: { ...a }, to: { ...c } }, { from: nearA, to: c }];
+  let request;
+  const provider = createMapProvider({ env: {}, compactPickupTables: true, fetchImpl: async (url) => {
+    request = url;
+    return Response.json({ code: 'Ok', durations: [[10, 11], [20, 21], [30, 31]], distances: [[100, 110], [200, 210], [300, 310]],
+      sources: [a, b, nearA].map((p) => ({ location: [p.lng, p.lat] })),
+      destinations: [c, a].map((p) => ({ location: [p.lng, p.lat] })) });
+  } });
+  const result = await provider.pickupEstimates(pairs);
+  assert.equal(request.pathname.split('/').at(-1), [a, c, b, nearA].map((p) => `${p.lng},${p.lat}`).join(';'));
+  assert.equal(request.searchParams.get('sources'), '0;2;3');
+  assert.equal(request.searchParams.get('destinations'), '1;0');
+  assert.equal(request.searchParams.get('radiuses'), '250;250;250;250');
+  assert.deepEqual(result.map((r) => r.durationSeconds), [10, 21, 11, 20, 10, 30]);
+  assert.deepEqual(result.map((r) => r.distanceMeters), [100, 210, 110, 200, 100, 300]);
+  for (const [index, pair] of pairs.entries()) {
+    assert.deepEqual(result[index].snappedFrom, [pair.from.lng, pair.from.lat]);
+    assert.deepEqual(result[index].snappedTo, [pair.to.lng, pair.to.lat]);
+  }
+  result[0].snappedFrom[0] = 0;
+  assert.equal(result[4].snappedFrom[0], a.lng);
+  assert.throws(() => createMapProvider({ compactPickupTables: 'true' }), /must be a boolean/);
+});
+
+test('compact pickup table requests 32 cells for 32 drivers sharing one pickup while retaining pair budgets', async () => {
+  const to = { lat: 9.085, lng: 7.405 };
+  const pairs = Array.from({ length: 32 }, (_, i) => ({ from: { lat: 9.08 + i * 0.00001, lng: 7.4 }, to }));
+  let calls = 0;
+  const provider = createMapProvider({ compactPickupTables: true, env: { TAXI_AI_MAPS_MODE: 'dedicated',
+    TAXI_AI_SEARCH_URL: 'https://maps.example.test/search/', TAXI_AI_ROUTING_URL: 'https://maps.example.test/route/v1/driving/',
+    TAXI_AI_TILE_URL: 'https://tiles.example.test/{z}/{x}/{y}.png' }, fetchImpl: async (url) => {
+    calls += 1;
+    const points = url.pathname.split('/').at(-1).split(';');
+    const sources = url.searchParams.get('sources').split(';'), destinations = url.searchParams.get('destinations').split(';');
+    assert.equal(points.length, 33); assert.equal(sources.length, 32); assert.deepEqual(destinations, ['1']);
+    assert.equal(sources.length * destinations.length, 32);
+    return Response.json({ code: 'Ok', durations: pairs.map((_, i) => [180 + i]), distances: pairs.map(() => [1200]),
+      sources: pairs.map(({ from }) => ({ location: [from.lng, from.lat] })), destinations: [{ location: [to.lng, to.lat] }] });
+  } });
+  assert.deepEqual((await provider.pickupEstimates(pairs)).map((r) => r.durationSeconds), pairs.map((_, i) => 180 + i));
+  await assert.rejects(provider.pickupEstimates(Array(65).fill(pairs[0])), { code: 'INVALID_ROUTE' });
+  assert.equal(calls, 1);
+});
+
+test('compact pickup tables use matrix positions for null routes and fallback cells, not global coordinate indices', async () => {
+  const a = { lat: 9.08, lng: 7.4 }, b = { lat: 9.081, lng: 7.401 }, c = { lat: 9.085, lng: 7.405 };
+  const pairs = [{ from: a, to: c }, { from: b, to: a }, { from: a, to: a }, { from: b, to: c }];
+  const provider = createMapProvider({ env: {}, compactPickupTables: true, fetchImpl: async () => Response.json({
+    code: 'Ok', durations: [[10, null], [20, 21]], distances: [[100, null], [200, 210]], fallback_speed_cells: [[1, 0]],
+    sources: [a, b].map((p) => ({ location: [p.lng, p.lat] })), destinations: [c, a].map((p) => ({ location: [p.lng, p.lat] })),
+  }) });
+  const result = await provider.pickupEstimates(pairs);
+  assert.deepEqual(result.map((r) => r?.durationSeconds ?? null), [10, 21, null, null]);
+});
+
+test('compact pickup tables reject malformed dimensions and fallback metadata, and never coerce invalid metrics', async () => {
+  const from = { lat: 9.08, lng: 7.4 }, to = { lat: 9.085, lng: 7.405 }, pair = { from, to };
+  const table = { code: 'Ok', durations: [[180]], distances: [[1200]],
+    sources: [{ location: [from.lng, from.lat] }], destinations: [{ location: [to.lng, to.lat] }] };
+  const provider = (patch) => createMapProvider({ env: {}, compactPickupTables: true,
+    fetchImpl: async () => Response.json({ ...table, ...patch }) });
+  for (const patch of [{ durations: [] }, { durations: [{ 0: 180 }] }, { durations: [[180, 1]] },
+    { distances: [[1200], [1200]] }, { sources: [] }, { destinations: [] }, { fallback_speed_cells: {} },
+    { fallback_speed_cells: [[0, 1]] }, { fallback_speed_cells: [[0.5, 0]] }, { fallback_speed_cells: [[0, 0, 0]] }]) {
+    await assert.rejects(provider(patch).pickupEstimates([pair]), { code: 'MAPS_UNAVAILABLE' });
+  }
+  for (const patch of [{ durations: [[null]] }, { durations: [['180']] }, { durations: [[-1]] },
+    { distances: [[null]] }, { distances: [['1200']] }, { distances: [[-1]] },
+    { sources: [{ location: [7.4, 91] }] }, { destinations: [{ location: [7.405, 9.085, 0] }] },
+    { fallback_speed_cells: [[0, 0]] }]) {
+    assert.deepEqual(await provider(patch).pickupEstimates([pair]), [null]);
+  }
+});
+
+test('compact coincident pickup endpoints retain a valid two-location request and zero road metrics', async () => {
+  const point = { lat: 9.08, lng: 7.4 };
+  const provider = createMapProvider({ env: {}, compactPickupTables: true, fetchImpl: async (url) => {
+    assert.equal(url.pathname.split('/').at(-1), '7.4,9.08;7.4,9.08');
+    assert.equal(url.searchParams.get('sources'), '0'); assert.equal(url.searchParams.get('destinations'), '0');
+    return Response.json({ code: 'Ok', durations: [[0]], distances: [[0]],
+      sources: [{ location: [7.4, 9.08] }], destinations: [{ location: [7.4, 9.08] }] });
+  } });
+  const result = await provider.pickupEstimates([{ from: point, to: point }, { from: point, to: point }]);
+  assert.deepEqual(result.map((r) => [r.durationSeconds, r.distanceMeters]), [[0, 0], [0, 0]]);
+});
