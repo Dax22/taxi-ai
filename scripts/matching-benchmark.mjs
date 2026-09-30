@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { monitorEventLoopDelay } from 'node:perf_hooks';
 import { setTimeout as delay } from 'node:timers/promises';
+import { requireNativePostgres } from './postgres-test-server.mjs';
 import { validateLoadPostgresUrl, seedSyntheticActors, fixtureMap, distribution, createMeasurements } from './load-test.mjs';
 
 export function parseMatchingOptions(args) {
@@ -160,6 +161,7 @@ export function matchingGates(measurement, processes, options) {
 
 export async function runMatchingBenchmark(options) {
   const postgresUrl = validateLoadPostgresUrl(process.env.TAXI_AI_LOAD_POSTGRES_URL);
+  await requireNativePostgres(postgresUrl);
   const schema = `taxi_ai_bench_${randomUUID().replaceAll('-', '')}`, children = [];
   async function start(role) {
     const child = fork(fileURLToPath(import.meta.url), ['--child'], { silent: true, execArgv: ['--experimental-sqlite'], env: {

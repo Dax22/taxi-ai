@@ -50,3 +50,8 @@ test('profile telemetry allowlists only bounded operational data', () => {
   assert.ok(!lines[0].includes('private'));
   assert.throws(() => createDispatchProfiler({ sampleEvery: -1 }));
 });
+
+test('a stalled asynchronous reporter cannot hold up matching', { timeout: 1000 }, async () => {
+  const profiler = createDispatchProfiler({ sampleEvery: 1, report: () => new Promise(() => {}) });
+  assert.equal(await profiler.cycle(async () => 'matched'), 'matched');
+});

@@ -24,7 +24,7 @@ const driverWhere = `a.active=1 AND a.expires_at>$now AND d.status='approved' AN
   AND NOT EXISTS (SELECT 1 FROM eats_orders job WHERE job.courier_id=a.driver_id AND job.status IN ('assigned','picked_up','arrived'))
   AND NOT EXISTS (SELECT 1 FROM dispatch_offers offer WHERE offer.driver_id=a.driver_id AND offer.status='pending' AND offer.expires_at>$now)`;
 const driverRegion = `CASE WHEN a.mode='sample' THEN 'sample:' || a.area_id
-  WHEN a.latitude IS NOT NULL AND a.longitude IS NOT NULL THEN 'ng:' || CAST(CAST(a.latitude*20 AS INTEGER) AS TEXT) || ':' || CAST(CAST(a.longitude*20 AS INTEGER) AS TEXT)
+  WHEN a.latitude IS NOT NULL AND a.longitude IS NOT NULL THEN 'ng:' || CAST(CAST(FLOOR(a.latitude*20) AS INTEGER) AS TEXT) || ':' || CAST(CAST(FLOOR(a.longitude*20) AS INTEGER) AS TEXT)
   ELSE '' END`;
 const eatStatus = "e.status IN ('placed','accepted','preparing','ready','assigned','picked_up','arrived')";
 const fulfillment = "COALESCE(json_extract(e.snapshot_json,'$.fulfillment'),'delivery')";

@@ -61,7 +61,7 @@ export function createDispatchProfiler({ sampleEvery = 0, report = () => {}, now
           queryCount: scope.queryCount, queryMs: round(scope.queryMs), queryErrors: scope.queryErrors,
           transactions: scope.transactions, retries: scope.retries, phases: scope.phases,
           queries: [...scope.queries].map(([fingerprint, row]) => ({ fingerprint, ...row, totalMs: round(row.totalMs), maxMs: round(row.maxMs) })) };
-        try { await report(value); } catch { /* Telemetry must not change dispatch outcomes. */ }
+        try { void Promise.resolve(report(value)).catch(() => {}); } catch { /* Telemetry must not change dispatch outcomes. */ }
       }
     },
     async phase(name, action) {

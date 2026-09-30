@@ -109,14 +109,14 @@ test('native PostgreSQL dispatch races across independent pools', { skip: !conne
         ownerId: `routing-${i}`, leaseMs: 1000, clock: () => clock }));
       const region = 'ng:181:148', entered = deferred(), resume = deferred();
       const edge = { rideId: 'ride-1', driverId: 'driver-1', region, availabilityId: 'availability-driver-1', version: 1,
-        createdAt: now, expiresAt: now + 300000, distanceMeters: 100, from: { lat: 9.08, lng: 7.4 }, to: { lat: 9.081, lng: 7.4 } };
+        createdAt: now, expiresAt: now + 300000, distanceMeters: 100, pickupEtaSeconds: null, from: { lat: 9.08, lng: 7.4 }, to: { lat: 9.081, lng: 7.4 } };
       const dispatch = createDispatchService({ config: { mode: 'sequential' }, coordinator: coordinators[0], clock: () => clock,
         repository: createDispatchRepository(first), candidates: async () => [edge], candidateFor: async () => edge,
         unitOfWork: (action) => first.transaction(action), estimateMany: async () => { entered.resolve(); return resume.promise; },
         tokens: { id: randomUUID }, audit: { record: async () => {} } });
       const lease = await coordinators[0].acquire(`dispatch:${region}`), work = dispatch.refresh({ region, lease });
       try {
-        await entered.promise; clock += 1001;
+        await Promise.race([entered.promise, work.then(() => { throw new Error('Dispatch did not reach routing.'); })]); clock += 1001;
         const successor = await coordinators[1].acquire(lease.name);
         assert.equal(successor.token, lease.token + 1);
       } finally { resume.resolve([]); await work; await dispatch.stop(); }
