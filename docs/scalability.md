@@ -344,3 +344,66 @@ expected active riders/drivers, city distribution, historical rides, realtime
 connections, real routing service latency/quotas, and worker/database failure.
 This milestone supplies concurrency evidence and a bounded repeatable benchmark;
 it does not certify one-million-user operation or change the deployed topology.
+
+## Opt-in faster matching
+
+`TAXI_AI_MATCHING_FAST_PATH=true` enables bounded batch eligibility reads, fresh
+batch revalidation within the existing assignment transaction, compact pickup
+routing tables, and PostgreSQL worker wakeups. The default is `false`. Set the
+same configuration on every API and worker. Optionally set
+`TAXI_AI_MATCHING_FAST_REGIONS=ng:181:148` to enable batch reads and wakeups only
+for selected request regions. An empty list selects all regions. Routing matrix
+compaction is process-wide when enabled; it preserves the requested directed
+pairs and does not change fare negotiation or matching policy.
+
+The internal matching projection reads only the fields needed for driver
+eligibility, session validity, current availability, vehicle compatibility,
+parcel recipient exclusions and existing work. It uses the existing driver
+document and vehicle domain policies. It does not cache approvals or busy state
+across cycles. Assignment rereads current records inside the SERIALIZABLE
+transaction after acquiring the lease guard. One pending offer per driver/ride,
+movement checks, location expiry and all claim-time checks remain enforced.
+
+PostgreSQL migration `014_dispatch_wakeups.sql` adds commit-time notification
+triggers. They emit coarse region hints only when the writing connection has
+the flag enabled. Requested rides, offers and availability remain durable in
+their existing tables; notifications are not a work queue. Workers coalesce
+bursts, include neighboring pickup cells, filter empty regions, bound pending
+hints, and retain periodic scans for startup, disconnects and lost hints. Each
+enabled worker uses **one additional database connection** for LISTEN, outside
+its normal pool. API-only processes do not subscribe or acquire worker leases.
+LISTEN requires a direct or session-pooled connection; transaction-mode poolers
+are not supported for this listener. Selected regions filter processing, while
+enabled API connections still emit cheap notifications for other regions.
+SQLite retains periodic scheduling and can exercise the batched matching path.
+
+Deploy the additive database migration and code with the flag off first. Enable
+one selected region and inspect matching query profiles, retries, request-to-offer
+delay and concurrent ride/Eats/courier behavior before widening the region list.
+Set the flag to `false` and restart APIs/workers to restore the original matching
+path without removing tables or changing existing journeys. Keep the current
+release/schema for this configuration rollback; an older binary is not a schema
+downgrade strategy.
+
+### Compare the two paths
+
+Run the same isolated workload twice on the same host, with unique output names:
+
+```sh
+npm run matching:benchmark -- --rate 1 --duration-seconds 60 --warmup-seconds 10 \
+  --actors 40 --api-instances 2 --workers 2 --pool-size 10 \
+  --fast-path false --output matching-before.json
+npm run matching:benchmark -- --rate 1 --duration-seconds 60 --warmup-seconds 10 \
+  --actors 40 --api-instances 2 --workers 2 --pool-size 10 \
+  --fast-path true --output matching-after.json
+node scripts/compare-matching-benchmarks.mjs matching-before.json matching-after.json
+```
+
+The comparison rejects failed runs or mismatched workloads, and reports dispatch
+query totals per completed journey. That avoids making improvements appear larger
+by counting extra idle worker cycles. Query totals cover profiled dispatch work;
+they exclude ordinary HTTP queries and the wakeup region lookup. Accepted-offer
+latency includes the synthetic driver's one-second polling interval and is not a
+pure matching calculation time. CI runs both paths with six measured arrivals,
+two APIs and two workers. Real routing latency, large historical tables and
+sustained saturation still require representative staging tests.

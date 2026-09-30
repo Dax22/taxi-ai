@@ -10,14 +10,15 @@ import { validateLoadPostgresUrl, seedSyntheticActors, fixtureMap, distribution,
 
 export function parseMatchingOptions(args) {
   const options = { rate: 1, durationSeconds: 60, warmupSeconds: 10, actors: 40, apiInstances: 2, workers: 2,
-    poolSize: 10, idleAccounts: 0, maxMatchP95Ms: 10000, output: null };
+    poolSize: 10, idleAccounts: 0, maxMatchP95Ms: 10000, fastPath: false, output: null };
   const flags = { '--rate': 'rate', '--duration-seconds': 'durationSeconds', '--warmup-seconds': 'warmupSeconds',
     '--actors': 'actors', '--api-instances': 'apiInstances', '--workers': 'workers', '--pool-size': 'poolSize',
-    '--idle-accounts': 'idleAccounts', '--max-match-p95-ms': 'maxMatchP95Ms', '--output': 'output' };
+    '--idle-accounts': 'idleAccounts', '--max-match-p95-ms': 'maxMatchP95Ms', '--fast-path': 'fastPath', '--output': 'output' };
   for (let i = 0; i < args.length; i += 2) {
     const key = flags[args[i]], value = args[i + 1];
     if (!key || value === undefined || value.startsWith('--')) throw new Error('Unknown or incomplete matching benchmark option. Use --help.');
-    options[key] = key === 'output' ? value : Number(value);
+    if (key === 'fastPath' && !['true', 'false'].includes(value)) throw new Error('--fast-path must be true or false.');
+    options[key] = key === 'output' ? value : key === 'fastPath' ? value === 'true' : Number(value);
   }
   for (const [key, min, max] of [['rate', 1, 20], ['durationSeconds', 1, 300], ['warmupSeconds', 0, 60], ['actors', 1, 200],
     ['apiInstances', 1, 4], ['workers', 1, 4], ['poolSize', 1, 30], ['idleAccounts', 0, 1000000], ['maxMatchP95Ms', 1, 60000]]) {
@@ -67,6 +68,7 @@ function profileStore() {
     },
     reset() { samples = []; overflow = 0; queryTotals = new Map(); },
     summary() { return { cycles: samples.length, overflow, failed: samples.filter((r) => r.failed).length,
+      queryCount: samples.reduce((n, r) => n + r.queryCount, 0), queryMs: samples.reduce((n, r) => n + r.queryMs, 0),
       durationMs: distribution(samples.map((r) => r.durationMs)), queriesPerCycle: distribution(samples.map((r) => r.queryCount)),
       queryMsPerCycle: distribution(samples.map((r) => r.queryMs)), retries: samples.reduce((n, r) => n + r.retries, 0),
       phases: Object.fromEntries(['discovery', 'routing', 'commit'].map((name) => [name, distribution(samples.filter((r) => r.phases[name] !== undefined).map((r) => r.phases[name]))])),
@@ -100,7 +102,8 @@ async function childMain() {
     db = await openPostgresDatabase({ connectionString: validateLoadPostgresUrl(process.env.TAXI_AI_LOAD_POSTGRES_URL), schema,
       max: role === 'setup' ? 2 : Number(process.env.TAXI_AI_BENCH_POOL), migrate: role === 'setup' });
     const options = { db, mapProvider: fixtureMap, callConfig: createCallConfig({ TAXI_AI_CALLS_MODE: 'off' }),
-      workerConfig: createWorkerConfig({ TAXI_AI_PROCESS_ROLE: role === 'setup' ? 'api' : role }),
+      workerConfig: createWorkerConfig({ TAXI_AI_PROCESS_ROLE: role === 'setup' ? 'api' : role,
+        TAXI_AI_MATCHING_FAST_PATH: process.env.TAXI_AI_MATCHING_FAST_PATH }),
       dispatchConfig: { mode: 'sequential', requestRefresh: false }, allowSimulation: true };
     let actors;
     if (role === 'setup') {
@@ -156,7 +159,8 @@ export function matchingGates(measurement, processes, options) {
     allJourneysComplete: measurement.journeys.completed === measurement.arrivals.scheduled && Object.keys(measurement.operationErrors).length === 0,
     matchLatency: measurement.journeys.timeToAcceptedOfferMs.p95 !== null && measurement.journeys.timeToAcceptedOfferMs.p95 <= options.maxMatchP95Ms,
     workerProfilesPresent: processes.some((p) => p.role === 'worker' && p.profiles.phases.commit.count > 0),
-    profileCapacity: processes.every((p) => p.profiles.overflow === 0) };
+    profileCapacity: processes.every((p) => p.profiles.overflow === 0),
+    workerHealthy: processes.filter((p) => p.role === 'worker').every((p) => p.profiles.failed === 0) };
 }
 
 export async function runMatchingBenchmark(options) {
@@ -167,7 +171,8 @@ export async function runMatchingBenchmark(options) {
     const child = fork(fileURLToPath(import.meta.url), ['--child'], { silent: true, execArgv: ['--experimental-sqlite'], env: {
       PATH: process.env.PATH, TAXI_AI_MODE: 'local', TAXI_AI_BENCH_CHILD: 'isolated', TAXI_AI_BENCH_ROLE: role, TAXI_AI_BENCH_SCHEMA: schema,
       TAXI_AI_LOAD_POSTGRES_URL: postgresUrl, TAXI_AI_BENCH_POOL: String(options.poolSize), TAXI_AI_BENCH_ACTORS: String(options.actors),
-      TAXI_AI_BENCH_IDLE: String(options.idleAccounts), TAXI_AI_MAPS_MODE: 'off', TAXI_AI_CALLS_MODE: 'off', TAXI_AI_EMAIL_MODE: 'off',
+      TAXI_AI_BENCH_IDLE: String(options.idleAccounts), TAXI_AI_MATCHING_FAST_PATH: String(options.fastPath),
+      TAXI_AI_MAPS_MODE: 'off', TAXI_AI_CALLS_MODE: 'off', TAXI_AI_EMAIL_MODE: 'off',
       TAXI_AI_PUSH_ENABLED: 'false', TAXI_AI_VEHICLE_VISION_MODE: 'off' } });
     children.push(child); child.stdout.resume(); child.stderr.resume();
     return { child, ...await message(child, 'ready') };
@@ -286,7 +291,7 @@ export async function runMatchingBenchmark(options) {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   if (process.argv[2] === '--child') await childMain();
-  else if (process.argv.includes('--help')) console.log('Usage: npm run matching:benchmark -- [--rate 1] [--duration-seconds 60] [--warmup-seconds 10] [--actors 40] [--api-instances 2] [--workers 2] [--pool-size 10] [--idle-accounts 0] [--max-match-p95-ms 10000] [--output new-report.json]\nRequires TAXI_AI_LOAD_POSTGRES_URL: an isolated loopback taxi_ai_load* or taxi_ai_test* database. Never targets an existing web deployment.');
+  else if (process.argv.includes('--help')) console.log('Usage: npm run matching:benchmark -- [--rate 1] [--duration-seconds 60] [--warmup-seconds 10] [--actors 40] [--api-instances 2] [--workers 2] [--pool-size 10] [--idle-accounts 0] [--max-match-p95-ms 10000] [--fast-path false] [--output new-report.json]\nRequires TAXI_AI_LOAD_POSTGRES_URL: an isolated loopback taxi_ai_load* or taxi_ai_test* database. Never targets an existing web deployment.');
   else {
     try {
       const options = parseMatchingOptions(process.argv.slice(2)), report = await runMatchingBenchmark(options), json = JSON.stringify(report, null, 2) + '\n';

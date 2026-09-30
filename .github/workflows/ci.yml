@@ -66,10 +66,16 @@ jobs:
       - run: npm ci --ignore-scripts --no-fund --no-audit
       - name: Require native PostgreSQL and run all database integration tests
         run: npm run test:postgres
-      - name: Exercise open-arrival matching across two APIs and two workers
+      - name: Benchmark baseline matching across two APIs and two workers
         env:
           TAXI_AI_LOAD_POSTGRES_URL: ${{ env.TAXI_AI_TEST_POSTGRES_URL }}
-        run: npm run matching:benchmark -- --rate 1 --duration-seconds 4 --warmup-seconds 2 --actors 8 --api-instances 2 --workers 2 --pool-size 5 --max-match-p95-ms 15000
+        run: npm run matching:benchmark -- --rate 1 --duration-seconds 6 --warmup-seconds 2 --actors 12 --api-instances 2 --workers 2 --pool-size 5 --max-match-p95-ms 15000 --fast-path false --output "$RUNNER_TEMP/matching-baseline.json"
+      - name: Benchmark optimized matching with the same workload
+        env:
+          TAXI_AI_LOAD_POSTGRES_URL: ${{ env.TAXI_AI_TEST_POSTGRES_URL }}
+        run: npm run matching:benchmark -- --rate 1 --duration-seconds 6 --warmup-seconds 2 --actors 12 --api-instances 2 --workers 2 --pool-size 5 --max-match-p95-ms 15000 --fast-path true --output "$RUNNER_TEMP/matching-optimized.json"
+      - name: Compare matching query work and latency
+        run: node scripts/compare-matching-benchmarks.mjs "$RUNNER_TEMP/matching-baseline.json" "$RUNNER_TEMP/matching-optimized.json"
 
   container:
     name: Staging container

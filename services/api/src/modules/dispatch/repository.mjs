@@ -58,3 +58,55 @@ export function createDispatchRepository(db) {
     },
   });
 }
+
+/** Bounded read-only dispatch projection; no matching writes bypass their owners. */
+export function createMatchingRepository(db) {
+  const marks = (ids) => ids.map(() => '?').join(',');
+  return Object.freeze({
+    async driverRows(page, now, sessionNow) {
+      const rows = await db.prepare(`SELECT u.id, u.role, d.status, d.vehicle_model AS vehicleModel, d.vehicle_plate AS vehiclePlate,
+        a.status AS applicationStatus, a.details_json AS detailsJson, a.verification_json AS verificationJson,
+        v.id AS availabilityId, v.mode, v.area_id AS areaId, v.position_json AS positionJson, v.seen_at AS seenAt,
+        v.native_session_id AS nativeSessionId,
+        EXISTS(SELECT 1 FROM account_capabilities c WHERE c.user_id=u.id AND c.capability='driver') AS driverCapability,
+        EXISTS(SELECT 1 FROM account_capabilities c WHERE c.user_id=u.id AND c.capability='customer') AS customerCapability,
+        CASE WHEN v.native_session_id IS NOT NULL THEN
+          EXISTS(SELECT 1 FROM device_sessions s WHERE s.id=v.native_session_id AND s.user_id=u.id
+            AND s.revoked_at IS NULL AND s.expires_at>? AND s.idle_expires_at>?)
+          ELSE EXISTS(SELECT 1 FROM sessions s WHERE s.token_hash=v.session_hash AND s.user_id=u.id AND s.expires_at>?) END AS sessionActive,
+        EXISTS(SELECT 1 FROM rides r WHERE r.driver_id=u.id AND (r.status='negotiating'
+          OR EXISTS(SELECT 1 FROM ride_trips t WHERE t.ride_id=r.id AND t.status NOT IN ('completed','cancelled')))) AS driverBusy,
+        EXISTS(SELECT 1 FROM rides r WHERE r.customer_id=u.id AND ((r.status='requested' AND r.request_expires_at>?)
+          OR r.status='negotiating' OR (r.status='agreed' AND (NOT EXISTS(SELECT 1 FROM ride_trips t WHERE t.ride_id=r.id)
+            OR EXISTS(SELECT 1 FROM ride_trips t WHERE t.ride_id=r.id AND t.status NOT IN ('completed','cancelled')))))) AS customerBusy,
+        EXISTS(SELECT 1 FROM eats_orders e WHERE e.courier_id=u.id AND e.status IN ('assigned','picked_up','arrived')) AS eatsBusy
+        FROM users u JOIN drivers d ON d.user_id=u.id
+        LEFT JOIN driver_applications a ON a.driver_id=u.id
+        JOIN driver_availability v ON v.driver_id=u.id AND v.active=1 WHERE u.id IN (${marks(page)})`)
+        .all(sessionNow, sessionNow, sessionNow, now, ...page);
+      return rows;
+    },
+    async documents(page) {
+      const documents = await db.prepare(`SELECT driver_id AS driverId,kind,expires_on AS expiresOn
+        FROM driver_documents WHERE driver_id IN (${marks(page)})`).all(...page);
+      return documents;
+    },
+    async rideRows(page) {
+      const rows = await db.prepare(`SELECT r.id, r.customer_id AS customerId, r.pickup_id AS pickupId,
+        r.dispatch_region AS dispatchRegion, r.vehicle_category AS vehicleCategory, r.status, r.version,
+        r.created_at AS createdAt, r.request_expires_at AS requestExpiresAt,
+        q.route_json AS routeJson, d.details_json AS deliveryJson, p.recipient_id AS recipientId
+        FROM rides r LEFT JOIN location_quotes q ON q.ride_id=r.id
+        LEFT JOIN delivery_orders d ON d.ride_id=r.id
+        LEFT JOIN parcel_tracking_links p ON p.ride_id=r.id AND p.active=1
+        WHERE r.id IN (${marks(page)})`).all(...page);
+      return rows;
+    },
+    async attemptedRows(page) {
+      const rows = await db.prepare(`WITH requested(ride_id,driver_id) AS (VALUES ${page.map(() => '(?,?)').join(',')})
+        SELECT o.ride_id AS rideId,o.driver_id AS driverId FROM dispatch_offers o
+        JOIN requested p ON p.ride_id=o.ride_id AND p.driver_id=o.driver_id`).all(...page.flatMap(e => [e.rideId, e.driverId]));
+      return rows;
+    },
+  });
+}

@@ -13,6 +13,7 @@ import { hasCapability, requireRole, requireEligibleDriver } from '../../shared/
 import { requireParticipant, requireVersion, restoreNegotiation, canonical } from './domain.mjs';
 import { asyncFilter, asyncMap, asyncFlatMap } from '../../shared/async-collections.mjs';
 import { createRidePilotConfig } from '../../../../../packages/shared/src/ride-pilot.mjs';
+import { matchingPairKey } from '../../shared/matching-pair-key.mjs';
 
 
 /**
@@ -21,7 +22,7 @@ import { createRidePilotConfig } from '../../../../../packages/shared/src/ride-p
  */
 export function createRidesService({ repository, deliveries, passengerForRide, savePassenger, getAccount, unitOfWork, audit, tokens, clock, onRideClosed = () => {}, onTripCompleted = () => {},
   routeForRide = () => null, quoteForRide, bindQuote, availabilityFor = () => null, onClaim = () => {}, onEvent = () => {}, availableDriverIds = () => [], nearbyDriverIds = null, hasOtherWork = () => false, allowSimulation = false,
-  dispatch = null, isParcelRecipient = async () => false, ridePilot = createRidePilotConfig() }) {
+  dispatch = null, isParcelRecipient = async () => false, ridePilot = createRidePilotConfig(), matching = null, nearbyMatchingDriverIds = null }) {
   // Expiry commits independently of a command that may fail afterward.
   async function expireRequested(ride, now) {
     if (!ride || ride.status !== 'requested' || now < ride.requestExpiresAt) return;
@@ -160,15 +161,39 @@ export function createRidesService({ repository, deliveries, passengerForRide, s
       distanceMeters: route ? metres : null, pickupEtaSeconds: null,
       from: route ? availability.position : null, to: route?.pickup ?? null };
   }
+  function projectedCandidate(context, driverId, driver, now) {
+    if (!context || !driver) return null;
+    const { ride, route } = context, { availability } = driver;
+    if (ride.status !== 'requested' || now >= ride.requestExpiresAt || !matching.matches(context, driverId, driver.vehicle)) return null;
+    const metres = route ? availability.mode === 'gps' ? distanceMeters(availability.position, route.pickup) : null
+      : availability.mode === 'sample' && availability.areaId === ride.pickupId ? 0 : null;
+    if (metres === null || route && metres > searchRadius(ride.createdAt, now)) return null;
+    return { rideId: ride.id, region: ride.dispatchRegion, driverId, availabilityId: availability.id, version: ride.version,
+      createdAt: ride.createdAt, expiresAt: ride.requestExpiresAt, distanceMeters: route ? metres : null,
+      pickupEtaSeconds: null, from: route ? availability.position : null, to: route?.pickup ?? null };
+  }
+  async function dispatchCandidatesFor(edges, now) {
+    // A separate read on every invocation; never reuses discovery's local cache.
+    // The dispatch caller owns the transaction and regional feature gate.
+    const contexts = await matching.rides(edges.map(edge => edge.rideId));
+    const drivers = await matching.drivers(edges.map(edge => edge.driverId), now);
+    const result = new Map();
+    for (const { rideId, driverId } of edges) {
+      const candidate = projectedCandidate(contexts.get(rideId), driverId, drivers.get(driverId), now);
+      if (candidate) result.set(matchingPairKey(rideId, driverId), candidate);
+    }
+    return result;
+  }
   const regionCursors = new Map(), driverCursors = new Map();
   const CANDIDATE_PAGE = 200, DRIVER_BUDGET = 1600;
   function rememberCursor(map, key, value) {
     if (map.size >= 5000 && !map.has(key)) map.delete(map.keys().next().value);
     if (value) map.set(key, value); else map.delete(key);
   }
-  async function nearbyPage(ride, route, now, limit, afterId = '') {
-    if (!nearbyDriverIds) return { driverIds: (await availableDriverIds()).slice(0, limit), nextCursor: null };
-    return await nearbyDriverIds({ mode: route ? 'gps' : 'sample', areaId: ride.pickupId,
+  async function nearbyPage(ride, route, now, limit, afterId = '', fast = false) {
+    const read = fast && nearbyMatchingDriverIds ? nearbyMatchingDriverIds : nearbyDriverIds;
+    if (!read) return { driverIds: (await availableDriverIds()).slice(0, limit), nextCursor: null };
+    return await read({ mode: route ? 'gps' : 'sample', areaId: ride.pickupId,
       position: route?.pickup, radiusMeters: searchRadius(ride.createdAt, now), now, limit, afterId });
   }
   async function dispatchCandidates(now, { region = null, excludeDriverIds = new Set(), excludeRideIds = new Set(),
@@ -178,6 +203,8 @@ export function createRidesService({ repository, deliveries, passengerForRide, s
     // the same first page forever. Commit validation always reads fresh state.
     const cursorKey = region ?? '*', cursor = regionCursors.get(cursorKey);
     const rides = await repository.listAvailable({ region, after: cursor, limit: CANDIDATE_PAGE, now });
+    const fast = matching?.enabledFor(region) === true;
+    const contexts = fast ? await matching.rides(rides.map(ride => ride.id)) : null;
     const cache = new Map(), result = [];
     let eligibleRides = 0, driverReads = 0, lastRide = null, consumed = 0;
     for (const ride of rides) {
@@ -185,34 +212,48 @@ export function createRidesService({ repository, deliveries, passengerForRide, s
       lastRide = ride; consumed++;
       if (ride.status !== 'requested' || now >= ride.requestExpiresAt || excludeRideIds.has(ride.id)
         || now < ride.createdAt + minimumAgeMs) continue;
-      const route = await routeForRide(ride.id), radius = searchRadius(ride.createdAt, now), edges = [];
+      if (fast && !contexts.has(ride.id)) continue;
+      const route = fast ? contexts.get(ride.id).route : await routeForRide(ride.id), radius = searchRadius(ride.createdAt, now), edges = [];
       const driverCursor = driverCursors.get(ride.id);
       const pageLimit = Math.min(CANDIDATE_PAGE, DRIVER_BUDGET - driverReads);
-      const page = await nearbyPage(ride, route, now, pageLimit, driverCursor?.expiresAt > now ? driverCursor.id : '');
+      const page = await nearbyPage(ride, route, now, pageLimit, driverCursor?.expiresAt > now ? driverCursor.id : '', fast);
       // Charge the fetched page budget even when eligibility removes every row.
       driverReads += Math.max(1, page.scanned ?? (page.nextCursor ? pageLimit : page.driverIds.length));
       rememberCursor(driverCursors, ride.id, page.nextCursor ? { id: page.nextCursor, expiresAt: ride.requestExpiresAt } : null);
-      for (const id of page.driverIds) {
-        if (excludeDriverIds.has(id) || ride.customerId === id || await isParcelRecipient(id, ride.id) || await attempted(ride.id, id)) continue;
-        if (!cache.has(id)) {
-          const user = await getAccount(id);
-          let candidate = null;
-          if (hasCapability(user, 'driver') && user.driver?.status === 'approved' && user.driver.eligibility?.eligible
-            && !await repository.hasNegotiation(id) && !await hasOtherWork(id) && !await repository.hasCustomerWork(id, now)) {
-            const availability = await availabilityFor(id, now);
-            if (availability) candidate = { vehicle: user.driver.vehicle, availability };
-          }
-          cache.set(id, candidate);
+      if (fast) {
+        const ids = page.driverIds.filter(id => !excludeDriverIds.has(id) && ride.customerId !== id && contexts.get(ride.id).recipientId !== id);
+        const tried = await matching.attemptedMany(ids.map(driverId => ({ rideId: ride.id, driverId })));
+        const untried = ids.filter(id => !tried.has(matchingPairKey(ride.id, id)));
+        const missing = untried.filter(id => !cache.has(id));
+        const loaded = await matching.drivers(missing, now);
+        for (const id of missing) cache.set(id, loaded.get(id) ?? null);
+        for (const id of untried) {
+          const candidate = projectedCandidate(contexts.get(ride.id), id, cache.get(id), now);
+          if (candidate) edges.push(candidate);
         }
-        const driver = cache.get(id);
-        if (!driver || !await deliveries.matches(ride, driver.vehicle)) continue;
-        const { availability } = driver;
-        const metres = route ? (availability.mode === 'gps' ? distanceMeters(availability.position, route.pickup) : null)
-          : availability.mode === 'sample' && availability.areaId === ride.pickupId ? 0 : null;
-        if (metres === null || route && metres > radius) continue;
-        edges.push({ rideId: ride.id, region: ride.dispatchRegion, driverId: id, availabilityId: availability.id, version: ride.version,
-          createdAt: ride.createdAt, expiresAt: ride.requestExpiresAt, distanceMeters: route ? metres : null,
-          pickupEtaSeconds: null, from: route ? availability.position : null, to: route?.pickup ?? null });
+      } else {
+        for (const id of page.driverIds) {
+          if (excludeDriverIds.has(id) || ride.customerId === id || await isParcelRecipient(id, ride.id) || await attempted(ride.id, id)) continue;
+          if (!cache.has(id)) {
+            const user = await getAccount(id);
+            let candidate = null;
+            if (hasCapability(user, 'driver') && user.driver?.status === 'approved' && user.driver.eligibility?.eligible
+              && !await repository.hasNegotiation(id) && !await hasOtherWork(id) && !await repository.hasCustomerWork(id, now)) {
+              const availability = await availabilityFor(id, now);
+              if (availability) candidate = { vehicle: user.driver.vehicle, availability };
+            }
+            cache.set(id, candidate);
+          }
+          const driver = cache.get(id);
+          if (!driver || !await deliveries.matches(ride, driver.vehicle)) continue;
+          const { availability } = driver;
+          const metres = route ? (availability.mode === 'gps' ? distanceMeters(availability.position, route.pickup) : null)
+            : availability.mode === 'sample' && availability.areaId === ride.pickupId ? 0 : null;
+          if (metres === null || route && metres > radius) continue;
+          edges.push({ rideId: ride.id, region: ride.dispatchRegion, driverId: id, availabilityId: availability.id, version: ride.version,
+            createdAt: ride.createdAt, expiresAt: ride.requestExpiresAt, distanceMeters: route ? metres : null,
+            pickupEtaSeconds: null, from: route ? availability.position : null, to: route?.pickup ?? null });
+        }
       }
       if (!edges.length) continue;
       edges.sort((a, b) => (a.distanceMeters ?? 0) - (b.distanceMeters ?? 0)
@@ -489,5 +530,5 @@ export function createRidesService({ repository, deliveries, passengerForRide, s
       completedAt: ride.trip?.completedAt ?? null };
   }
   return Object.freeze({ get, list, history, mutate, rate, conversationContext, conversationIds, paymentContext, safetyContext, guestContext, familyContext, sweep,
-    dispatchCandidates, dispatchCandidateFor: async (rideId, driverId, now) => (await dispatchCandidate((await repository.find(rideId)), driverId, now)) });
+    dispatchCandidates, dispatchCandidatesFor, dispatchCandidateFor: async (rideId, driverId, now) => (await dispatchCandidate((await repository.find(rideId)), driverId, now)) });
 }

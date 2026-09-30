@@ -23,7 +23,7 @@ import { createAccountsService } from './modules/accounts/service.mjs';
 import { createDriversRepository } from './modules/drivers/repository.mjs';
 import { createDriversService } from './modules/drivers/service.mjs';
 import { createDriverFaceChecks } from './modules/driver-face-checks/service.mjs';
-import { vehicleDetails } from './modules/drivers/domain.mjs';
+import { vehicleDetails, eligibility } from './modules/drivers/domain.mjs';
 import { createRidesRepository } from './modules/rides/repository.mjs';
 import { createDeliveriesRepository } from './modules/deliveries/repository.mjs';
 import { createDeliveriesService } from './modules/deliveries/service.mjs';
@@ -43,7 +43,9 @@ import { createCallConfig } from './infrastructure/call-config.mjs';
 import { createMapProvider } from './infrastructure/map-provider.mjs';
 import { createPickupEtaProvider } from './infrastructure/pickup-eta.mjs';
 import { createDispatchConfig } from './infrastructure/dispatch-config.mjs';
-import { createDispatchRepository } from './modules/dispatch/repository.mjs';
+import { readMatchingFastConfig } from './infrastructure/matching-fast-config.mjs';
+import { createDispatchRepository, createMatchingRepository } from './modules/dispatch/repository.mjs';
+import { createMatchingReadModel } from './modules/dispatch/matching-read-model.mjs';
 import { createDispatchService } from './modules/dispatch/service.mjs';
 import { createLocationsRepository } from './modules/locations/repository.mjs';
 import { createLocationsService } from './modules/locations/service.mjs';
@@ -96,7 +98,7 @@ import { createAnnouncementsService } from './modules/announcements/service.mjs'
 
 /** Composition root: the only place that wires business modules to adapters. */
 export function createApplication({ db, clock = Date.now, callConfig = createCallConfig(), mapProvider = createMapProvider(), allowSimulation = false,
-  ridePilot = createRidePilotConfig(), dispatchProfiler = null,
+  ridePilot = createRidePilotConfig(), dispatchProfiler = null, matchingFast = readMatchingFastConfig(),
   dispatchConfig = createDispatchConfig(), workerConfig = createWorkerConfig(), staffMfa = createStaffMfaConfig(),
   driverFaceProvider = createDriverFaceProvider({ config: readDriverFaceConfig({}) }),
   safetyAlertProvider = createSafetyAlertProvider(), accountMail = createAccountMail(), pushProvider = createPushProvider(), vehicleVisionProvider = createVehicleVisionProvider(),
@@ -150,13 +152,17 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
     getAccount: accounts.profile, sessionOwner: accounts.sessionOwner, nativeSessionFor: devices.sessionFor, nativeSessionOwner: devices.sessionOwner, isBusy: async (id) => (await rideRepository.hasNegotiation(id)) || (await rideRepository.hasCustomerWork(id, clock())) || (await eatsRepository.hasWork(id)),
     unitOfWork, tokens, audit, clock, allowSimulation });
   const pickupEta = createPickupEtaProvider({ mapProvider, now: clock });
+  const matching = matchingFast.enabled ? createMatchingReadModel({ repository: createMatchingRepository(db),
+    driverEligibility: eligibility, clock, allowSimulation, includesRegion: matchingFast.includesRegion }) : null;
   const dispatch = createDispatchService({ repository: createDispatchRepository(db), getAccount: accounts.profile, coordinator: workerCoordinator,
     candidates: async (now, options) => (await rides.dispatchCandidates(now, options)), candidateFor: async (rideId, driverId, now) => (await rides.dispatchCandidateFor(rideId, driverId, now)),
+    ...(matching ? { candidatesFor: (edges, now) => rides.dispatchCandidatesFor(edges, now),
+      attemptedMany: matching.attemptedMany, batchEnabledFor: matching.enabledFor } : {}),
     estimateMany: pickupEta.estimateMany, config: dispatchConfig, unitOfWork, tokens, audit, clock, profile: dispatchProfiler,
     onOffer: async (offer) => (await notifications.publish({ userId: offer.driverId, rideId: offer.rideId, kind: 'request',
       mode: 'work', eventKey: `dispatch:${offer.id}`, now: offer.createdAt })) });
   const rides = createRidesService({ repository: rideRepository,
-    dispatch,
+    dispatch, matching, nearbyMatchingDriverIds: availability.nearbyMatchingDriverIds,
     isParcelRecipient: async (userId, rideId) => await parcelTracking.isRecipient(userId, rideId),
     passengerForRide: guestRepository.passenger, savePassenger: guestRepository.savePassenger,
     hasOtherWork: eatsRepository.hasWork,

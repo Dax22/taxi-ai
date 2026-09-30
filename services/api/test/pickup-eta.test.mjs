@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createPickupEtaProvider } from '../src/infrastructure/pickup-eta.mjs';
+import { createMapProvider } from '../src/infrastructure/map-provider.mjs';
 
 const from = { lat: 9.08, lng: 7.4 }, to = { lat: 9.085, lng: 7.405 };
 const route = (a = from, b = to) => ({ durationSeconds: 180.1, distanceMeters: 1200.4,
@@ -134,4 +135,24 @@ test('pickup ETA matrix failure and timeout return null for all affected pairs w
     const provider = createPickupEtaProvider({ timeoutMs: 10, mapProvider: { pickupEstimates } });
     assert.deepEqual(await provider.estimateMany([pair, reverse]), [null, null]);
   }
+});
+
+test('compact OSRM matrices retain per-pair snapped endpoint checks before publishing road ETAs', async () => {
+  const otherPickup = { lat: 9.086, lng: 7.406 }, otherDriver = { lat: 9.082, lng: 7.402 };
+  let calls = 0;
+  const mapProvider = createMapProvider({ env: {}, compactPickupTables: true, fetchImpl: async (url) => {
+    calls += 1;
+    assert.equal(url.searchParams.get('sources'), '0;3');
+    assert.equal(url.searchParams.get('destinations'), '1;2');
+    return Response.json({ code: 'Ok', durations: [[180, 180], [180, 180]], distances: [[1200, 1200], [1200, 1200]],
+      sources: [{ location: [from.lng, from.lat] }, { location: [otherDriver.lng, otherDriver.lat + 0.1] }],
+      destinations: [{ location: [to.lng, to.lat] }, { location: [otherPickup.lng, otherPickup.lat + 0.1] }] });
+  } });
+  const provider = createPickupEtaProvider({ now: () => 1000, mapProvider });
+  const result = await provider.estimateMany([pair, { from, to: otherPickup }, { from: otherDriver, to }, pair]);
+  assert.deepEqual(result[0], { durationSeconds: 180, distanceMeters: 1200, source: 'road', trafficAware: false, estimatedAt: 1000 });
+  assert.deepEqual(result.slice(1, 3), [null, null]); assert.deepEqual(result[3], result[0]);
+  assert.equal(calls, 1);
+  assert.deepEqual(await provider.estimate(pair), result[0]);
+  assert.equal(calls, 1);
 });
