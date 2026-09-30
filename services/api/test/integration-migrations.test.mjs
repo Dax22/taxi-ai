@@ -56,8 +56,9 @@ for (const version of [20,21]) test(`checkpoint schema ${version} upgrades witho
   assert.equal(quote.expires_at,123456);
   const item = JSON.parse(db.prepare('SELECT details_json FROM eats_menu').get().details_json);
   if (version === 21) {
-    assert.equal(Buffer.from(db.prepare('SELECT content FROM eats_menu_photos').get().content).toString(),'original-photo-bytes');
-    assert.equal(db.prepare('SELECT version FROM eats_menu_photos').get().version,8);
+    assert.equal(Buffer.from(db.prepare('SELECT base64 FROM eats_photos').get().base64,'base64').toString(),'original-photo-bytes');
+    assert.equal(db.prepare('SELECT count(*) AS n FROM eats_menu_photos').get().n,0);
+    assert.equal(db.prepare('SELECT version FROM eats_photos').get().version,8);
     assert.equal(Buffer.from(db.prepare('SELECT base64 FROM eats_photos WHERE id=?').get(item.photoId).base64,'base64').toString(),'original-photo-bytes');
   }
   assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(),[]);

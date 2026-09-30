@@ -6,6 +6,7 @@ const empty = () => ({ user: null, screen: 'browse', restaurants: [], catalogAre
   address: { line: '', areaId: '' }, instructions: '', fulfillment: 'delivery', quote: null, order: null, orderId: null,
   deliveryConfirmed: false, foodQuery: '', foods: [], foodCount: 0, foodNextOffset: null, foodLoading: false, mealBasket: [], mealCheckout: null,
   orders: [], nextBefore: null, store: null, storeMenu: [], storeOrders: [], storeNextBefore: null, work: null, reviewStores: [], review: null,
+  reviewPhotos: [], photoReviewStatus: 'pending', photoNextBefore: null,
   loading: false, busy: false, uncertain: false, stale: true, error: '', notice: '', replaceRestaurantId: null, now: 0 });
 /** Shared screen state. Requests and credentials stay in each platform's transport. */
 export function createEatsController({ api, makeKey, now = Date.now }) {
@@ -63,11 +64,14 @@ export function createEatsController({ api, makeKey, now = Date.now }) {
           const orders = page(response, state.storeOrders, state.storeNextBefore, before, quiet);
           result = { store: mine.store, storeMenu: mine.menu, areas: mine.areas, storeOrders: orders.orders, storeNextBefore: orders.nextBefore };
         } else if (screen === 'work') result = { work: await read('/work') };
-        else if (screen === 'review') result = { reviewStores: (await read('/admin/stores')).stores, ...(state.review ? { review: await read('/restaurants/' + state.review.store.id) } : {}) };
+        else if (screen === 'review') {
+          const [stores, photos, review] = await Promise.all([read('/admin/stores'), read('/admin/photos?status=' + state.photoReviewStatus), state.review ? read('/restaurants/' + state.review.store.id) : null]);
+          result = { reviewStores: stores.stores, reviewPhotos: photos.photos, photoNextBefore: photos.nextBefore, ...(review ? { review } : {}) };
+        }
         else result = { order: (await read('/orders/' + state.orderId)).order };
         if (fresh(epoch)) { Object.assign(state, result); state.stale = false; state.error = ''; }
       } catch (error) {
-        if (fresh(epoch)) { state.error = error.message; state.stale = true; if ([401,403,404].includes(error.status)) { state.order = state.store = state.work = state.review = null; state.orders = state.storeOrders = state.storeMenu = []; } }
+        if (fresh(epoch)) { state.error = error.message; state.stale = true; if ([401,403,404].includes(error.status)) { state.order = state.store = state.work = state.review = null; state.orders = state.storeOrders = state.storeMenu = state.reviewPhotos = state.reviewStores = []; } }
       } finally { if (polling === task) polling = null; if (fresh(epoch)) { state.loading = false; emit(); } }
     })();
     polling = task; return task;
@@ -105,7 +109,8 @@ export function createEatsController({ api, makeKey, now = Date.now }) {
         if (command.path === '/orders') { state.cart = []; state.quote = null; state.notice = 'Your test order was sent to the kitchen. No money was charged.'; }
         else state.notice = 'Order updated.';
       }
-      if (command.path.endsWith('/review')) state.review = result;
+      if (/^\/stores\/[^/]+\/review$/.test(command.path)) state.review = result;
+      if (result.photoReview) { photos.clear(); state.notice = result.photoReview.status === 'approved' ? 'Photo approved.' : 'Photo rejected. The vendor can replace it.'; }
     } catch (error) {
       if (!fresh(epoch)) return false;
       state.error = error.message; state.uncertain = !error.status || error.status >= 500;
@@ -163,15 +168,20 @@ export function createEatsController({ api, makeKey, now = Date.now }) {
       return run('/checkouts', { groups: mealGroups(state.mealBasket), address: state.address, instructions: state.instructions });
     },
     placeMeal() { return state.mealCheckout && now() < state.mealCheckout.expiresAt ? run('/checkouts/place', { checkoutId: state.mealCheckout.id }) : Promise.resolve(false); },
-    async photo(id) {
+    async photo(id, version = null) {
       if (!state.user || !id) return null;
-      const owner = identity;
-      if (!photos.has(id)) {
+      const owner = identity, key = `${identity}:${id}:${version ?? ''}`;
+      if (photos.get(key)?.expiresAt <= now()) photos.delete(key);
+      if (!photos.has(key)) {
         if (photos.size >= 64) photos.delete(photos.keys().next().value);
-        const request = read('/photos/' + id).then((body) => 'data:image/jpeg;base64,' + body.photo.base64).catch(() => { photos.delete(id); return null; });
-        photos.set(id, request);
+        const entry = { expiresAt: now() + 60_000, request: null };
+        entry.request = read('/photos/' + id).then((body) => {
+          if (body.photo?.id !== id) throw new Error('Photo changed. Refresh and try again.');
+          return 'data:image/jpeg;base64,' + body.photo.base64;
+        }).catch(() => { entry.expiresAt = now() + 5_000; return null; });
+        photos.set(key, entry);
       }
-      const uri = await photos.get(id); return owner === identity && state.user ? uri : null;
+      const uri = await photos.get(key).request; return owner === identity && state.user ? uri : null;
     },
     fulfillment(value) {
       if (locked() || !['delivery', 'pickup'].includes(value) || value === state.fulfillment) return;
@@ -197,6 +207,20 @@ export function createEatsController({ api, makeKey, now = Date.now }) {
     orderAction(order, action, extras = {}) { return run(`/orders/${order.id}/${action}`, { expectedVersion: order.version, ...extras }, action === 'claim'); },
     createStore(details) { return run('/stores', { details }); },
     storeAction(action, data, store = state.store) { return store ? run(`/stores/${store.id}/${action}`, { expectedVersion: store.version, ...data }) : Promise.resolve(false); },
+    reviewPhoto(asset, decision, reason = '') { return state.user?.role === 'admin' ? run(`/photos/${asset.id}/review`, { expectedVersion: asset.version, decision, reason }) : Promise.resolve(false); },
+    async loadPhotoReviews(status = 'pending', before = null) {
+      if (locked() || state.user?.role !== 'admin' || state.screen !== 'review' || !['pending','approved','rejected','legacy-approved'].includes(status)) return false;
+      const epoch = ++generation; polling = null; state.loading = true; state.error = '';
+      if (status !== state.photoReviewStatus || !before) { state.reviewPhotos = []; state.photoNextBefore = null; }
+      state.photoReviewStatus = status; emit();
+      try {
+        const result = await read('/admin/photos?status=' + status + (before ? '&before=' + encodeURIComponent(before) : ''));
+        if (!fresh(epoch)) return false;
+        state.reviewPhotos = before ? [...new Map([...state.reviewPhotos, ...result.photos].map((row) => [row.id, row])).values()].slice(-500) : result.photos;
+        state.photoNextBefore = result.nextBefore; state.stale = false; return true;
+      } catch (error) { if (fresh(epoch)) { state.error = error.message; state.stale = true; } return false; }
+      finally { if (fresh(epoch)) { state.loading = false; emit(); } }
+    },
     async reviewStore(id) {
       if (locked()) return; const epoch = generation;
       try { const result = await read('/restaurants/' + id); if (fresh(epoch)) { state.review = result; emit(); } }

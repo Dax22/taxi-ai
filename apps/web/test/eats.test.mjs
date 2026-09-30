@@ -115,6 +115,9 @@ const locationSource = (await readFile(new URL('../public/eats/location-fields.m
   .replace("'/shared/nigeria-areas.mjs'", `'${new URL('../../../packages/shared/src/nigeria-areas.mjs', import.meta.url)}'`);
 const mealSource = imports(await readFile(new URL('../public/eats/meal-view.mjs', import.meta.url), 'utf8'));
 const viewSource = imports(await readFile(new URL('../public/eats/view.mjs', import.meta.url), 'utf8'))
+  .replace("'./photo-view.mjs'", `'${new URL('../public/eats/photo-view.mjs', import.meta.url)}'`)
+  .replace("'./photo-upload.mjs'", `'${new URL('../public/eats/photo-upload.mjs', import.meta.url)}'`)
+  .replace("'./photo-manager.mjs'", `'${new URL('../public/eats/photo-manager.mjs', import.meta.url)}'`)
   .replace("'./meal-view.mjs'", `'data:text/javascript;base64,${Buffer.from(mealSource).toString('base64')}'`);
 const { createEatsView } = await import(`data:text/javascript;base64,${Buffer.from(viewSource).toString('base64')}`);
 // Uses shipped element IDs; this fixture does not claim browser or device layout coverage.
@@ -125,6 +128,7 @@ function dom(t) {
     append(...children) { this.children.push(...children); if (this.tag === 'select' && !this.value && children[0]) this.value = children[0].value; }
     replaceChildren(...children) { this.children = children; }
     setAttribute(name, value) { this[name] = value; }
+    removeAttribute(name) { delete this[name]; }
     addEventListener(name, handler) { this.handlers[name] = handler; }
     querySelectorAll(tag) { return this.children.flatMap((child) => [ ...(child.tag === tag ? [child] : []), ...child.querySelectorAll(tag) ]); }
     reset() {} focus() {} scrollIntoView() {} reportValidity() { return true; }
@@ -388,4 +392,85 @@ test('kitchen town filtering queries the server and leaves the delivery address 
   assert.match(node('kitchen-filter-status').textContent, /Ikeja, Lagos/);
   node('kitchen-filter-clear').handlers.click(); await flush();
   assert.equal(f.c.snapshot().catalogAreaId, ''); assert.equal(node('state-filter').value, ''); assert.equal(node('town-filter').value, '');
+});
+
+test('dish and kitchen listings use neutral placeholders while editorial illustrations stay labelled', async (t) => {
+  const node = dom(t), f = mealFixture(), view = createEatsView(f.c); f.c.subscribe(() => view.render(f.c.snapshot()));
+  await f.c.navigate('browse'); await f.c.confirmDelivery(quote.address); await f.c.selectRestaurant(store.id);
+  const text = (n) => [n.textContent ?? '', ...n.children.map(text)].join(' ');
+  for (const root of ['meal-results', 'menu-list', 'restaurants', 'restaurant-heading']) {
+    assert.match(text(node(root)), /Photo coming soon/);
+    assert.equal(node(root).querySelectorAll('img').some((image) => image.src?.includes('/assets/eats-')), false);
+  }
+  assert.match(html, /Illustrative Nigerian food artwork/);
+  assert.match(html, /id="food-item-camera"[^>]*capture="environment"/);
+  assert.match(html, /id="food-item-photo"[^>]*accept="image\/jpeg,image\/png,image\/webp"/);
+});
+
+test('a dish photo is prepared privately and only submitted with the saved structured menu item', async (t) => {
+  const node = dom(t), f = fixture(), prepared = { photo: { mimeType: 'image/jpeg', base64: 'aGVsbG8=' }, preview: 'data:image/jpeg;base64,aGVsbG8=' };
+  const originalRead = f.api.request;
+  f.api.request = (path) => path === '/eats/store' ? { store, menu } : path.startsWith('/eats/orders?') ? { orders: [], nextBefore: null } : originalRead(path);
+  f.api.command = async (path, data, key) => { f.writes.push({ path, data, key }); return { store: { ...store, version: 4 }, menu }; };
+  const view = createEatsView(f.c, { preparePhoto: async () => prepared }); f.c.subscribe(() => view.render(f.c.snapshot()));
+  await f.c.navigate('store'); node('store-menu').querySelectorAll('button')[0].handlers.click();
+  node('item-camera').files = [{ type: 'image/jpeg', size: 100 }]; await node('item-camera').handlers.change();
+  assert.equal(f.writes.length, 0); assert.match(node('photo-status').textContent, /after approval/);
+  await node('menu-form').handlers.submit({ preventDefault() {} });
+  assert.equal(f.writes[0].path, `/eats/stores/${store.id}/menu`); assert.deepEqual(f.writes[0].data.item.photo, prepared.photo); assert.equal(f.writes[0].data.item.name, 'Jollof rice');
+});
+
+test('a delayed selected photo cannot populate another account or menu item', async (t) => {
+  const node = dom(t), f = fixture(), waiting = deferred();
+  const view = createEatsView(f.c, { preparePhoto: () => waiting.promise }); f.c.subscribe(() => view.render(f.c.snapshot()));
+  await f.c.navigate('store'); node('item-photo').files = [{ type: 'image/jpeg', size: 100 }];
+  const reading = node('item-photo').handlers.change(); f.c.context({ ...user, id: uuid(901) });
+  waiting.resolve({ photo: { mimeType: 'image/jpeg', base64: 'aGVsbG8=' }, preview: 'data:image/jpeg;base64,aGVsbG8=' }); await reading;
+  assert.equal(node('photo-preview').querySelectorAll('img').length, 0); assert.equal(f.writes.length, 0);
+});
+
+test('store image drafts detect changed versions and private menu references stay separate from sellable dishes', async (t) => {
+  const node = dom(t), f = fixture(), prepared = { photo: { mimeType: 'image/jpeg', base64: 'aGVsbG8=' }, preview: 'data:image/jpeg;base64,aGVsbG8=' };
+  let ownStore = { ...store, assets: { logo: null, cover: null, menuReference: null } };
+  const originalRead = f.api.request;
+  f.api.request = (path) => path === '/eats/store' ? { store: ownStore, menu } : path.startsWith('/eats/orders?') ? { orders: [], nextBefore: null } : originalRead(path);
+  f.api.command = async (path, data, key) => { f.writes.push({ path, data, key }); return { store: ownStore, menu }; };
+  const view = createEatsView(f.c, { preparePhoto: async () => prepared }); f.c.subscribe(() => view.render(f.c.snapshot())); await f.c.navigate('store');
+  const [logo, , reference] = node('store-photos').children;
+  const input = logo.querySelectorAll('input')[0]; input.files = [{ type: 'image/png', size: 100 }]; await input.handlers.change();
+  ownStore = { ...ownStore, version: 4 }; await f.c.refresh({ quiet: true });
+  await logo.handlers.submit({ preventDefault() {} }); assert.equal(f.writes.length, 0);
+  assert.equal(logo.querySelectorAll('p').find((p) => p.className === 'food-error').hidden, false);
+  const referenceInput = reference.querySelectorAll('input')[0]; referenceInput.files = [{ type: 'image/jpeg', size: 100 }]; await referenceInput.handlers.change();
+  await reference.handlers.submit({ preventDefault() {} });
+  assert.equal(f.writes[0].path, `/eats/stores/${store.id}/assets`); assert.equal(f.writes[0].data.purpose, 'menu_reference'); assert.equal(f.writes[0].data.expectedVersion, 4); assert.equal(f.writes[0].data.item, undefined);
+});
+
+test('staff photo review requires a reason, sends the displayed version and reloads stale decisions', async (t) => {
+  const node = dom(t), f = fixture();
+  let asset = { id: uuid(801), storeId: store.id, storeName: store.name, itemId: menu[0].id, itemName: menu[0].name, purpose: 'dish', status: 'pending', version: 1, reviewNote: '', createdAt: 1000 };
+  let stale = true;
+  f.api.request = async (path) => {
+    if (path === '/eats/admin/stores') return { stores: [store] };
+    if (path.startsWith('/eats/admin/photos?')) return { photos: path.includes(`status=${asset.status}`) ? [asset] : [], nextBefore: null };
+    if (path.startsWith('/eats/photos/')) return { photo: { id: asset.id, mimeType: 'image/jpeg', base64: 'aGVsbG8=' } };
+    throw new Error('Unexpected path: ' + path);
+  };
+  f.api.command = async (path, data, key) => {
+    f.writes.push({ path, data, key });
+    if (stale) { stale = false; asset = { ...asset, version: 2 }; throw Object.assign(new Error('Photo changed. Review its current version.'), { status: 409, code: 'STALE_VERSION' }); }
+    asset = { ...asset, status: data.decision, reviewNote: data.reason, version: 3 }; return { photoReview: asset };
+  };
+  const view = createEatsView(f.c); f.c.subscribe(() => view.render(f.c.snapshot())); f.c.context({ ...user, role: 'admin' }); await f.c.navigate('review');
+  assert.equal(node('photo-review-section').hidden, false);
+  let form = node('photo-review-list').querySelectorAll('form')[0], reason = form.querySelectorAll('textarea')[0];
+  reason.value = 'short'; await form.handlers.submit({ preventDefault() {}, submitter: { value: 'rejected' } }); assert.equal(f.writes.length, 0);
+  reason.value = 'The image shows a private home address.'; await form.handlers.submit({ preventDefault() {}, submitter: { value: 'rejected' } });
+  assert.equal(f.writes[0].path, `/eats/photos/${asset.id}/review`); assert.equal(f.writes[0].data.expectedVersion, 1);
+  assert.match(node('error').textContent, /Photo changed/); assert.equal(f.c.snapshot().reviewPhotos[0].version, 2);
+  form = node('photo-review-list').querySelectorAll('form')[0]; reason = form.querySelectorAll('textarea')[0];
+  reason.value = 'The image shows a private home address.'; await form.handlers.submit({ preventDefault() {}, submitter: { value: 'rejected' } });
+  assert.equal(f.writes[1].data.expectedVersion, 2); assert.deepEqual(f.c.snapshot().reviewPhotos, []);
+  node('photo-review-filter').value = 'rejected'; node('photo-review-filter').handlers.change(); await flush();
+  assert.equal(f.c.snapshot().reviewPhotos[0].status, 'rejected'); assert.equal(f.c.snapshot().review, null);
 });

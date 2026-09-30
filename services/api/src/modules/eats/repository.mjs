@@ -2,7 +2,7 @@
 import { asyncMap } from '../../shared/async-collections.mjs';
 const storeColumns = `id, status, version, is_open AS isOpen, details_json AS details, review_note AS reviewNote, created_at AS createdAt, updated_at AS updatedAt,
   (SELECT json_object('lat', p.lat, 'lng', p.lng) FROM eats_store_dispatch_points p WHERE p.store_id=eats_stores.id) AS dispatchPoint,
-  (SELECT json_extract(m.details_json, '$.photoId') FROM eats_menu m WHERE m.store_id=eats_stores.id AND m.available=1 AND json_extract(m.details_json, '$.photoId') IS NOT NULL ORDER BY m.id LIMIT 1) AS coverPhotoId`;
+  (SELECT p.id FROM eats_menu m JOIN eats_photos p ON p.id=json_extract(m.details_json,'$.photoId') AND p.store_id=m.store_id AND p.purpose='dish' AND p.status IN ('approved','legacy-approved') WHERE m.store_id=eats_stores.id AND m.available=1 ORDER BY m.id LIMIT 1) AS coverPhotoId`;
 const orderColumns = `id, store_id AS storeId, customer_id AS customerId, courier_id AS courierId, status, version, snapshot_json AS snapshot,
   courier_json AS courier, pickup_pin AS pickupPin, delivery_pin AS deliveryPin, pin_failures AS pinFailures, pin_blocked_until AS pinBlockedUntil,
   events_json AS events, created_at AS createdAt, updated_at AS updatedAt,
@@ -47,27 +47,52 @@ export function createEatsRepository(db, { deliveryAreas, legacyAreaIds: EATS_LE
       if (dispatchPoint) (await db.prepare('INSERT INTO eats_store_dispatch_points (store_id,lat,lng) VALUES (?,?,?)').run(value.id, dispatchPoint.lat, dispatchPoint.lng));
     },
     async saveStore(value) {
-      const { id, status, version, isOpen, reviewNote, createdAt, updatedAt, details, addressHidden, coverPhotoId, dispatchPoint, ...profile } = value;
+      const { id, status, version, isOpen, reviewNote, createdAt, updatedAt, details, addressHidden, coverPhotoId, logoPhotoId, assets, dispatchPoint, ...profile } = value;
       (await db.prepare('UPDATE eats_stores SET status=?,version=?,is_open=?,details_json=?,review_note=?,updated_at=? WHERE id=?')
         .run(status, version, isOpen ? 1 : 0, JSON.stringify(profile), reviewNote, updatedAt, id));
       if (dispatchPoint) (await db.prepare('INSERT INTO eats_store_dispatch_points (store_id,lat,lng) VALUES (?,?,?) ON CONFLICT(store_id) DO UPDATE SET lat=excluded.lat,lng=excluded.lng').run(id, dispatchPoint.lat, dispatchPoint.lng));
       else (await db.prepare('DELETE FROM eats_store_dispatch_points WHERE store_id=?').run(id));
     },
-    menu: async (storeId) => (await db.prepare(`SELECT m.id,m.details_json AS details,p.version AS photoVersion FROM eats_menu m
-      LEFT JOIN eats_menu_photos p ON p.item_id=m.id WHERE m.store_id=? ORDER BY m.id`).all(storeId))
-      .map((row) => ({ id: row.id, ...JSON.parse(row.details), photoVersion: row.photoVersion ?? null })),
+    menu: async (storeId) => (await db.prepare(`SELECT m.id,m.details_json AS details,p.version AS photoVersion,p.status AS photoStatus,p.review_note AS photoReviewNote FROM eats_menu m
+      LEFT JOIN eats_photos p ON p.id=json_extract(m.details_json,'$.photoId') AND p.store_id=m.store_id AND p.purpose='dish' WHERE m.store_id=? ORDER BY m.id`).all(storeId))
+      .map(({ details, ...row }) => ({ ...JSON.parse(details), ...row, photoVersion: row.photoVersion ?? null, photoStatus: row.photoStatus ?? null, photoReviewNote: row.photoReviewNote ?? null })),
     menuItem: async (id) => { const row = (await db.prepare('SELECT store_id AS storeId,details_json AS details FROM eats_menu WHERE id=?').get(id)); return row ? { id, storeId: row.storeId, ...JSON.parse(row.details) } : null; },
     menuPhoto: async (itemId) => (await db.prepare('SELECT store_id AS storeId,content,version FROM eats_menu_photos WHERE item_id=?').get(itemId)) ?? null,
-    photoBytes: async (storeId) => (await db.prepare('SELECT COALESCE(SUM(size_bytes),0) AS bytes FROM eats_menu_photos WHERE store_id=?').get(storeId)).bytes,
+    photoBytes: async (storeId) => (await db.prepare('SELECT COALESCE(SUM(size_bytes),0) AS bytes FROM eats_photos WHERE store_id=?').get(storeId)).bytes,
     async saveMenuPhoto(itemId, storeId, content, version) { (await db.prepare(`INSERT INTO eats_menu_photos(item_id,store_id,content,size_bytes,version) VALUES (?,?,?,?,?)
       ON CONFLICT(item_id) DO UPDATE SET content=excluded.content,size_bytes=excluded.size_bytes,version=excluded.version`)
       .run(itemId,storeId,content,content.length,version)); },
     removeMenuPhoto: async (itemId) => (await db.prepare('DELETE FROM eats_menu_photos WHERE item_id=?').run(itemId)),
     async saveMenu(id, storeId, item) { (await db.prepare(`INSERT INTO eats_menu (id,store_id,available,details_json) VALUES (?,?,?,?)
       ON CONFLICT(id) DO UPDATE SET available=excluded.available,details_json=excluded.details_json`).run(id, storeId, item.available ? 1 : 0, JSON.stringify(item))); },
-    photo: async (id) => { const row = (await db.prepare('SELECT store_id AS storeId, base64 FROM eats_photos WHERE id=?').get(id)); return row ?? null; },
-    async savePhoto(id, storeId, base64, now) { (await db.prepare('INSERT INTO eats_photos (id,store_id,base64,created_at) VALUES (?,?,?,?)').run(id,storeId,base64,now)); },
-    async prunePhotos(storeId) { (await db.prepare("DELETE FROM eats_photos WHERE store_id=? AND id NOT IN (SELECT json_extract(details_json, '$.photoId') FROM eats_menu WHERE store_id=? AND json_extract(details_json, '$.photoId') IS NOT NULL)").run(storeId,storeId)); },
+    photo: async (id) => (await db.prepare(`SELECT id,store_id AS storeId,base64,purpose,status,version,review_note AS reviewNote,size_bytes AS sizeBytes,created_at AS createdAt FROM eats_photos WHERE id=?`).get(id)) ?? null,
+    async savePhoto(id, storeId, base64, now, purpose = 'dish', version = 1) { (await db.prepare(`INSERT INTO eats_photos (id,store_id,base64,created_at,purpose,status,version,size_bytes) VALUES (?,?,?,?,?,?,?,?)`)
+      .run(id,storeId,base64,now,purpose,purpose === 'menu_reference' ? 'private' : 'pending',version,Buffer.from(base64,'base64').length)); },
+    async prunePhotos(storeId) { (await db.prepare(`DELETE FROM eats_photos WHERE store_id=?
+      AND id NOT IN (SELECT json_extract(details_json,'$.photoId') FROM eats_menu WHERE store_id=? AND json_extract(details_json,'$.photoId') IS NOT NULL)
+      AND id NOT IN (SELECT photo_id FROM eats_store_assets WHERE store_id=?)`).run(storeId,storeId,storeId)); },
+    assets: async (storeId) => (await db.prepare(`SELECT p.id,p.purpose,p.status,p.version,p.review_note AS reviewNote FROM eats_store_assets a
+      JOIN eats_photos p ON p.id=a.photo_id AND p.store_id=a.store_id AND p.purpose=a.purpose WHERE a.store_id=?`).all(storeId)),
+    async saveAsset(storeId,purpose,photoId) {
+      if (photoId) (await db.prepare(`INSERT INTO eats_store_assets (store_id,purpose,photo_id) VALUES (?,?,?) ON CONFLICT(store_id,purpose) DO UPDATE SET photo_id=excluded.photo_id`).run(storeId,purpose,photoId));
+      else (await db.prepare('DELETE FROM eats_store_assets WHERE store_id=? AND purpose=?').run(storeId,purpose));
+    },
+    attachedPhoto: async (id) => (await db.prepare(`SELECT p.id FROM eats_photos p WHERE p.id=? AND (
+      (p.purpose='dish' AND EXISTS(SELECT 1 FROM eats_menu m WHERE m.store_id=p.store_id AND json_extract(m.details_json,'$.photoId')=p.id))
+      OR EXISTS(SELECT 1 FROM eats_store_assets a WHERE a.store_id=p.store_id AND a.purpose=p.purpose AND a.photo_id=p.id))`).get(id)) ?? null,
+    async photoQueue(status,before = null) { return (await db.prepare(`SELECT p.id,p.store_id AS storeId,json_extract(s.details_json,'$.name') AS storeName,
+      (SELECT m.id FROM eats_menu m WHERE m.store_id=p.store_id AND json_extract(m.details_json,'$.photoId')=p.id ORDER BY m.id LIMIT 1) AS itemId,
+      (SELECT json_extract(m.details_json,'$.name') FROM eats_menu m WHERE m.store_id=p.store_id AND json_extract(m.details_json,'$.photoId')=p.id ORDER BY m.id LIMIT 1) AS itemName,
+      p.purpose,p.status,p.version,p.review_note AS reviewNote,p.created_at AS createdAt
+      FROM eats_photos p JOIN eats_stores s ON s.id=p.store_id WHERE p.purpose<>'menu_reference' AND p.status=?
+      AND (? IS NULL OR p.created_at<? OR (p.created_at=? AND p.id<?))
+      AND (EXISTS(SELECT 1 FROM eats_menu m WHERE m.store_id=p.store_id AND json_extract(m.details_json,'$.photoId')=p.id)
+        OR EXISTS(SELECT 1 FROM eats_store_assets a WHERE a.store_id=p.store_id AND a.photo_id=p.id AND a.purpose=p.purpose))
+      ORDER BY p.created_at DESC,p.id DESC LIMIT 51`).all(status,before?.id ?? null,before?.createdAt ?? null,before?.createdAt ?? null,before?.id ?? null)); },
+    async reviewPhoto(photo,reviewerId,decision,reason,now) {
+      (await db.prepare('UPDATE eats_photos SET status=?,review_note=?,version=version+1 WHERE id=? AND version=?').run(decision,reason,photo.id,photo.version));
+      (await db.prepare('INSERT INTO eats_photo_reviews (photo_id,store_id,reviewer_id,decision,reason,created_at) VALUES (?,?,?,?,?,?)').run(photo.id,photo.storeId,reviewerId,decision,reason,now));
+    },
     quote: async (id) => { const row = (await db.prepare('SELECT id,customer_id AS customerId,store_id AS storeId,store_version AS storeVersion,snapshot_json AS snapshot,expires_at AS expiresAt,order_id AS orderId FROM eats_quotes WHERE id=?').get(id)); return row ? { ...row, snapshot: JSON.parse(row.snapshot) } : null; },
     async createQuote(q) { (await db.prepare('INSERT INTO eats_quotes (id,customer_id,store_id,store_version,snapshot_json,expires_at) VALUES (?,?,?,?,?,?)').run(q.id,q.customerId,q.storeId,q.storeVersion,JSON.stringify(q.snapshot),q.expiresAt)); },
     async bindQuote(id, orderId) { (await db.prepare('UPDATE eats_quotes SET order_id=? WHERE id=?').run(orderId,id)); },

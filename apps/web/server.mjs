@@ -62,6 +62,9 @@ const routes = new Map([
   ['/shared/nigeria-areas.mjs', ['../../packages/shared/src/nigeria-areas.mjs', 'text/javascript; charset=utf-8']],
   ['/shared/nigeria-map-places.mjs', ['../../packages/shared/src/nigeria-map-places.mjs', 'text/javascript; charset=utf-8']],
   ['/eats/view.mjs', ['public/eats/view.mjs', 'text/javascript; charset=utf-8']],
+  ['/eats/photo-view.mjs', ['public/eats/photo-view.mjs', 'text/javascript; charset=utf-8']],
+  ['/eats/photo-upload.mjs', ['public/eats/photo-upload.mjs', 'text/javascript; charset=utf-8']],
+  ['/eats/photo-manager.mjs', ['public/eats/photo-manager.mjs', 'text/javascript; charset=utf-8']],
   ['/eats/transport.mjs', ['public/eats/transport.mjs', 'text/javascript; charset=utf-8']],
   ['/typography.css', ['public/typography.css', 'text/css; charset=utf-8']],
   ...['eats', 'eats-contracts', 'eats-controller', 'eats-meals'].map((name) => [`/shared/${name}.mjs`, [`../../packages/shared/src/${name}.mjs`, 'text/javascript; charset=utf-8']]),
@@ -241,11 +244,11 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
     response.setHeader('Cache-Control', 'no-store');
     response.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
     if (runtime.mode === 'staging') response.setHeader('Strict-Transport-Security', 'max-age=86400');
-    response.setHeader('Content-Security-Policy', `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'${pathname === '/eats' ? ' data:' : ''}${mapProvider.mode === 'off' ? '' : ` ${mapProvider.tileOrigin}`}; media-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'`);
     try {
       pathname = new URL(request.url, 'http://localhost').pathname;
+      response.setHeader('Content-Security-Policy', `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'${['/eats', '/eats/sell'].includes(pathname) ? ' data:' : ''}${mapProvider.mode === 'off' ? '' : ` ${mapProvider.tileOrigin}`}; media-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'`);
       if (['/app', '/family', '/parcels'].includes(pathname) && mapProvider.mode !== 'off') response.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-      response.setHeader('Permissions-Policy', `camera=${pathname === '/app' ? '(self)' : '()'}, microphone=${pathname === '/app' ? '(self)' : '()'}, geolocation=${['/app', '/eats'].includes(pathname) ? '(self)' : '()'}, accelerometer=${pathname === '/app' ? '(self)' : '()'}, gyroscope=${pathname === '/app' ? '(self)' : '()'}`);
+      response.setHeader('Permissions-Policy', `camera=${['/app', '/eats', '/eats/sell'].includes(pathname) ? '(self)' : '()'}, microphone=${pathname === '/app' ? '(self)' : '()'}, geolocation=${['/app', '/eats', '/eats/sell'].includes(pathname) ? '(self)' : '()'}, accelerometer=${pathname === '/app' ? '(self)' : '()'}, gyroscope=${pathname === '/app' ? '(self)' : '()'}`);
     } catch {
       response.writeHead(400);
       response.end('Bad request');

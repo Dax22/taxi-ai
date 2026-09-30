@@ -9,6 +9,7 @@ import { SelectField } from '../ui/select-field';
 import { chooseDishPhoto } from './photo';
 import type { MealPhoto } from './photo-file';
 import { FoodPhoto } from './discovery';
+import { FoodPhotoGuidance, FoodPhotoReview, SelectedFoodPhoto } from './photo-fields';
 import { FoodLocationFields, foodLocationLabel } from './location-fields';
 import { changeStoreLocation, storeDraft } from './store-draft';
 import { currentPosition } from '../work/location';
@@ -78,8 +79,11 @@ export function StoreForm({ store, controller: c, locked, initialType = 'restaur
 const itemDraft = (item: FoodMenuItem | null) => ({ stock: item?.portionsRemaining == null ? '' : String(item.portionsRemaining), allergens: item?.allergens ?? '', photoId: item?.photoId ?? null, name: item?.name ?? '', description: item?.description ?? '', category: item?.category ?? 'Meals', price: item ? String(item.priceKobo / 100) : '', available: item?.available ?? true });
 export function MenuForm({ store, items, controller: c, locked }: { store: FoodStore; items: FoodMenuItem[]; controller: EatsController; locked: boolean }) {
   const [photo, setPhoto] = useState<MealPhoto | null>(null), [photoBusy, setPhotoBusy] = useState(false);
+  const photoOperation = useRef(0);
+  useEffect(() => () => { photoOperation.current++; }, []);
   locked = locked || photoBusy;
   const [editing, setEditing] = useState<FoodMenuItem | null>(null), [draft, setDraft] = useState(() => itemDraft(null)), [version, setVersion] = useState(store.version), [dirty, setDirty] = useState(false), [error, setError] = useState('');
+  const savedPhoto = editing ? items.find((item) => item.id === editing.id && item.photoId === draft.photoId) : null;
   useEffect(() => { if (!dirty) setVersion(store.version); }, [store.version, dirty]);
   const change = <K extends keyof typeof draft>(key: K, value: typeof draft[K]) => { if (!dirty) setVersion(store.version); setDirty(true); setDraft((current) => ({ ...current, [key]: value })); };
   const edit = (item: FoodMenuItem | null) => { setPhoto(null); setEditing(item); setDraft(itemDraft(item)); setVersion(store.version); setDirty(Boolean(item)); setError(''); };
@@ -90,12 +94,13 @@ export function MenuForm({ store, items, controller: c, locked }: { store: FoodS
   }
   async function selectPhoto(camera: boolean) {
     if (locked) return;
+    const operation = ++photoOperation.current;
     setPhotoBusy(true); setError('');
-    try { const value = await chooseDishPhoto(camera); if (value) { setPhoto(value); change('photoId', null); } }
-    catch (e) { setError(e instanceof Error ? e.message : 'Could not read that photo.'); }
-    finally { setPhotoBusy(false); }
+    try { const value = await chooseDishPhoto(camera); if (photoOperation.current === operation && value) { setPhoto(value); change('photoId', null); } }
+    catch (e) { if (photoOperation.current === operation) setError(e instanceof Error ? e.message : 'Could not read that photo.'); }
+    finally { if (photoOperation.current === operation) setPhotoBusy(false); }
   }
-  return <Card><Text style={styles.h2}>Your menu</Text>{items.map((item) => <View key={item.id} style={styles.stack}><Text style={styles.body}>{item.name} · {fare(item.priceKobo)} · {foodStock(item)}</Text><Button title={`Edit ${item.name}`} secondary disabled={locked} onPress={() => edit(item)}/></View>)}
+  return <Card><Text style={styles.h2}>Your menu</Text>{items.map((item) => <View key={item.id} style={styles.stack}><Text style={styles.body}>{item.name} · {fare(item.priceKobo)} · {foodStock(item)}</Text>{item.photoId && <FoodPhotoReview status={item.photoStatus} note={item.photoReviewNote}/>}<Button title={`Edit ${item.name}`} secondary disabled={locked} onPress={() => edit(item)}/></View>)}
     <Text style={styles.h2}>{editing ? `Edit ${editing.name}` : 'Add a menu item'}</Text><Notice message={error}/>
     {dirty && version !== store.version && <Notice message="The menu changed. Select the item again or choose New item before saving."/>}
     <Field label="Item name" value={draft.name} onChangeText={(v) => change('name', v)} maxLength={80} editable={!locked}/>
@@ -105,9 +110,9 @@ export function MenuForm({ store, items, controller: c, locked }: { store: FoodS
     <Field label="Allergen information" value={draft.allergens} onChangeText={(v) => change('allergens', v)} maxLength={300} multiline editable={!locked} placeholder="For example: contains milk; nuts handled in this kitchen"/>
     <Field label={store.sellerType === 'home_kitchen' ? 'Portions available in this batch (required)' : 'Portions available (blank for unlimited)'} value={draft.stock} onChangeText={(v) => change('stock', v)} keyboardType="number-pad" maxLength={4} editable={!locked}/>
     <Text style={styles.small}>Set 0–1,000 portions. Orders reserve portions automatically. Saving starts a new batch count; cancellations from an older batch will not increase it.</Text>
-    {draft.photoId && !photo && <FoodPhoto id={draft.photoId} controller={c} label={draft.name} compact/>}
-    <Text style={styles.body}>{photo ? 'New meal photo selected. Save to publish.' : draft.photoId ? 'A saved meal photo is attached.' : 'Add a photo of your food.'}</Text>
-    <Text style={styles.small}>Your own dish, without people or private details. JPEG or PNG, up to 2 MiB. Location metadata is removed.</Text>
+    {photo ? <SelectedFoodPhoto photo={photo} label={draft.name || 'Meal'}/> : savedPhoto?.photoId && <><FoodPhoto id={savedPhoto.photoId} revision={savedPhoto.photoVersion} controller={c} label={draft.name} compact/><FoodPhotoReview status={savedPhoto.photoStatus} note={savedPhoto.photoReviewNote}/></>}
+    <Text style={styles.body}>{photo ? 'New meal photo selected. Save the menu item to submit the photo for review.' : savedPhoto?.photoId ? 'A saved meal photo is attached.' : 'Photo optional · customers see “Photo coming soon” without an approved image.'}</Text>
+    <FoodPhotoGuidance/>
     <Button title="Choose meal photo" secondary busy={photoBusy} disabled={locked} onPress={() => void selectPhoto(false)}/>
     <Button title="Take a dish photo" secondary disabled={locked} onPress={() => void selectPhoto(true)}/>
     {(photo || draft.photoId) && <Button title="Remove photo" secondary disabled={locked} onPress={() => { setPhoto(null); change('photoId', null); }}/>}

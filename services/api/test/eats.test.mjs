@@ -1,4 +1,4 @@
-import { includeExpectedStaffOwners, removeSafetyMonitoringFixtureTables } from './migration-fixtures.mjs';
+import { includeExpectedStaffOwners, removeSafetyMonitoringFixtureTables, removeEatsPhotoWorkflowFixtureFields } from './migration-fixtures.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -26,6 +26,9 @@ test('schema 18 upgrades add empty Eats storage while preserving existing accoun
   assert.equal((await driver.send('/api/session')).body.user.driver.eligibility.eligible, true);
 });
 async function ok(client, path, data) { const result = data === undefined ? await client.send(path) : await client.post(path, data); assert.equal(result.status, 200, JSON.stringify(result.body)); return result.body; }
+async function approvePhoto(f, photoId, photoVersion) {
+  return ok(f.admin, `/api/eats/photos/${photoId}/review`, { expectedVersion: photoVersion, decision: 'approved', reason: 'Photo checked against the vendor dish and portion description.' });
+}
 async function fixture(t, options = {}) {
   const h = await harness(t, options), people = await participants(h, 2), seller = h.client(), stranger = h.client();
   await seller.register('restaurant'); await stranger.register('stranger');
@@ -120,8 +123,10 @@ test('seller dish photos are re-encoded, owner-scoped, published after review, r
   assert.equal(metadata.format, 'jpeg'); assert.equal(metadata.exif, undefined);
   assert.equal((await fetch(f.h.base + imageUrl, { headers: { Cookie: f.customer.cookie } })).status, 404);
   await f.open();
+  assert.equal((await fetch(f.h.base + imageUrl, { headers: { Cookie: f.customer.cookie } })).status, 404);
+  await approvePhoto(f, saved.body.menu[0].photoId, saved.body.menu[0].photoVersion);
   assert.equal((await fetch(f.h.base + imageUrl, { headers: { Cookie: f.customer.cookie } })).status, 200);
-  assert.equal((await ok(f.customer, '/api/eats/restaurants?q=jollof')).dishes[0].photoVersion, saved.body.menu[0].photoVersion);
+  assert.equal((await ok(f.customer, '/api/eats/restaurants?q=jollof')).dishes[0].photoVersion, saved.body.menu[0].photoVersion + 1);
   await f.h.restart();
   assert.equal((await fetch(f.h.base + imageUrl, { headers: { Cookie: f.customer.cookie } })).status, 200);
   const login = await f.seller.send('/api/mobile/v1/auth/login', { method: 'POST', data: { email: f.seller.user.email, password: PASSWORD, deviceName: 'Seller photo phone' }, headers: { Origin: null, Cookie: null, 'X-CSRF-Token': null } });
@@ -359,7 +364,12 @@ test('meal photos are decoded and stripped, private until review, and scoped to 
   assert.equal((await f.customer.send('/api/eats/photos/' + id)).status, 404);
   const own = (await ok(f.seller, '/api/eats/photos/' + id)).photo;
   assert.equal((await sharp(Buffer.from(own.base64, 'base64')).metadata()).exif, undefined);
-  await f.open(); assert.equal((await ok(f.customer, '/api/eats/restaurants')).restaurants[0].coverPhotoId, id);
+  await f.open(); assert.equal((await ok(f.customer, '/api/eats/restaurants')).restaurants[0].coverPhotoId, null);
+  const pendingMenu = await ok(f.customer, `/api/eats/restaurants/${f.store.id}`);
+  assert.equal(pendingMenu.menu[0].photoId, null); assert.equal(pendingMenu.menu[0].photoVersion, null);
+  assert.equal(Object.hasOwn(pendingMenu.menu[0], 'photoStatus'), false); assert.equal(JSON.stringify(pendingMenu).includes(id), false);
+  await approvePhoto(f, id, saved.body.menu[0].photoVersion);
+  assert.equal((await ok(f.customer, '/api/eats/restaurants')).restaurants[0].coverPhotoId, id);
   assert.equal((await ok(f.customer, '/api/eats/photos/' + id)).photo.mimeType, 'image/jpeg');
   assert.equal((await f.stranger.send('/api/eats/photos/' + id, { headers: { Cookie: null } })).status, 401);
   assert.equal((await f.seller.post(`/api/eats/stores/${f.store.id}/menu`, { expectedVersion: f.store.version, itemId: f.menu[0].id, item: { ...item, photo: { mimeType: 'image/jpeg', base64: 'AAAA' } } })).status, 400);
@@ -393,7 +403,10 @@ for (const sellerType of ['home_kitchen', 'food_vendor']) test(`native ${sellerT
   const upload = await native(sellerToken, `/stores/${f.store.id}/menu`, { expectedVersion: f.store.version, itemId: f.menu[0].id, item: { ...item, portionsRemaining: 4, photo: { mimeType: 'image/png', base64: bytes.toString('base64') } } });
   assert.equal(upload.status, 200, JSON.stringify(upload.body)); f.store = upload.body.store;
   const catalog = await native(customerToken, '/restaurants'); assert.equal(catalog.body.restaurants[0].address, ''); assert.equal(catalog.body.restaurants[0].sellerType, sellerType);
-  const id = upload.body.menu[0].photoId; assert.equal((await native(customerToken, '/photos/' + id)).body.photo.id, id);
+  const id = upload.body.menu[0].photoId;
+  assert.equal((await native(customerToken, '/photos/' + id)).status, 404);
+  await approvePhoto(f, id, upload.body.menu[0].photoVersion);
+  assert.equal((await native(customerToken, '/photos/' + id)).body.photo.id, id);
   const quote = (await native(customerToken, '/quotes', { ...f.basket(), fulfillment: 'pickup' })).body.quote;
   assert.equal(quote.restaurant.addressHidden, true); assert.equal(quote.restaurant.address, '');
   let order = (await native(customerToken, '/orders', { quoteId: quote.id })).body.order;
@@ -414,4 +427,87 @@ test('a meal photo cannot be committed after its session is revoked during decod
   const pending = service.saveMenu(user, id, { expectedVersion: 1, itemId: null, item: { ...item, photo: { mimeType: 'image/jpeg', base64: 'fixture' } } }, randomUUID(), () => null);
   await decoding;
   complete('normalised-fixture'); await assert.rejects(pending, (error) => error.code === 'UNAUTHENTICATED'); assert.equal(writes, 0);
+});
+
+
+test('vendor branding and private printed menus have separate scoped access, moderation and cleanup', async (t) => {
+  const f = await fixture(t); await f.open();
+  const image = { mimeType: 'image/png', base64: (await sharp({ create: { width: 400, height: 300, channels: 3, background: '#d99412' } }).png().toBuffer()).toString('base64') };
+  const path = `/api/eats/stores/${f.store.id}/assets`;
+  const upload = async (purpose, content = image) => {
+    const response = await ok(f.seller, path, { expectedVersion: f.store.version, purpose, image: content }); f.store = response.store; return response;
+  };
+  assert.equal((await f.customer.post(path, { expectedVersion: f.store.version, purpose: 'logo', image })).status, 403);
+  let saved = await upload('logo'); const logo = saved.store.assets.logo;
+  assert.equal(logo.status, 'pending'); assert.equal(saved.store.logoPhotoId, null);
+  assert.equal((await ok(f.seller, '/api/eats/photos/' + logo.id)).photo.id, logo.id);
+  assert.equal((await f.customer.send('/api/eats/photos/' + logo.id)).status, 404);
+  assert.equal((await ok(f.customer, `/api/eats/restaurants/${f.store.id}`)).store.logoPhotoId, null);
+  const reviewPath = `/api/eats/photos/${logo.id}/review`, key = randomUUID();
+  const review = { expectedVersion: logo.version, decision: 'approved', reason: 'Restaurant logo checked for inappropriate content.' };
+  assert.equal((await f.seller.post(reviewPath, review)).status, 403);
+  assert.equal((await f.admin.post(reviewPath, review, key)).body.photoReview.status, 'approved');
+  assert.equal((await f.admin.post(reviewPath, review, key)).body.replayed, true);
+  assert.equal((await f.admin.post(reviewPath, review)).body.error.code, 'STALE_VERSION');
+  assert.equal((await ok(f.customer, `/api/eats/restaurants/${f.store.id}`)).store.logoPhotoId, logo.id);
+  assert.equal((await ok(f.customer, '/api/eats/photos/' + logo.id)).photo.id, logo.id);
+  saved = await upload('cover'); const cover = saved.store.assets.cover;
+  saved = await upload('menu_reference'); const reference = saved.store.assets.menuReference;
+  assert.equal(reference.status, 'private'); assert.equal((await ok(f.seller, '/api/eats/photos/' + reference.id)).photo.id, reference.id);
+  for (const person of [f.customer, f.stranger, f.admin]) assert.equal((await person.send('/api/eats/photos/' + reference.id)).status, 404);
+  const publicView = await ok(f.customer, `/api/eats/restaurants/${f.store.id}`);
+  assert.equal(publicView.store.assets, undefined); assert.equal(JSON.stringify(publicView).includes(reference.id), false);
+  const adminStore = await ok(f.admin, `/api/eats/restaurants/${f.store.id}`); assert.equal(adminStore.store.assets.menuReference, undefined);
+  const queue = await ok(f.admin, '/api/eats/admin/photos');
+  assert.deepEqual(queue.photos.map(p => p.id), [cover.id]); assert.equal(queue.photos[0].storeName, details.name);
+  assert.equal((await f.customer.send('/api/eats/admin/photos')).status, 403);
+  assert.equal((await f.admin.post(`/api/eats/photos/${reference.id}/review`, { ...review, expectedVersion: reference.version })).status, 404);
+  assert.equal((await f.seller.post(`/api/eats/stores/${f.store.id}/menu`, { expectedVersion: f.store.version, itemId: f.menu[0].id, item: { ...item, photoId: logo.id } })).status, 404);
+  await ok(f.admin, `/api/eats/photos/${cover.id}/review`, { expectedVersion: cover.version, decision: 'rejected', reason: 'Photo does not clearly represent this restaurant.' });
+  assert.equal((await ok(f.seller, '/api/eats/store')).store.assets.cover.reviewNote, 'Photo does not clearly represent this restaurant.');
+  assert.equal((await f.customer.send('/api/eats/photos/' + cover.id)).status, 404);
+  saved = await upload('cover'); assert.notEqual(saved.store.assets.cover.id, cover.id);
+  assert.equal((await f.admin.send('/api/eats/photos/' + cover.id)).status, 404);
+  assert.equal(f.h.db.prepare('SELECT count(*) AS n FROM eats_photo_reviews WHERE photo_id=?').get(cover.id).n, 1);
+  await upload('menu_reference', null); assert.equal((await f.seller.send('/api/eats/photos/' + reference.id)).status, 404);
+  await upload('logo', null); assert.equal((await f.customer.send('/api/eats/photos/' + logo.id)).status, 404);
+  // Menu items without photos remain orderable throughout photo review.
+  assert.ok((await f.quote()).id);
+});
+
+test('canonical photo quotas cover inline dishes, legacy uploads and assets with atomic rollback', async (t) => {
+  const f = await fixture(t);
+  const image = { mimeType: 'image/jpeg', base64: (await sharp({ create: { width: 240, height: 180, channels: 3, background: '#d99412' } }).jpeg().toBuffer()).toString('base64') };
+  let saved = await ok(f.seller, `/api/eats/stores/${f.store.id}/assets`, { expectedVersion: f.store.version, purpose: 'logo', image }); f.store = saved.store;
+  f.h.db.prepare('UPDATE eats_photos SET size_bytes=? WHERE id=?').run(30 * 1024 * 1024, saved.store.assets.logo.id);
+  const baseline = f.h.db.prepare('SELECT count(*) AS n FROM eats_photos').get().n;
+  for (const [suffix, data] of [
+    ['menu', { itemId: f.menu[0].id, item: { ...item, photo: image } }],
+    ['photo', { itemId: f.menu[0].id, image }],
+    ['assets', { purpose: 'cover', image }],
+  ]) {
+    const response = await f.seller.post(`/api/eats/stores/${f.store.id}/${suffix}`, { expectedVersion: f.store.version, ...data });
+    assert.equal(response.body.error.code, 'PHOTO_STORAGE_FULL');
+    assert.equal(f.h.db.prepare('SELECT count(*) AS n FROM eats_photos').get().n, baseline);
+    assert.equal((await ok(f.seller, '/api/eats/store')).store.version, f.store.version);
+  }
+  assert.equal(f.h.db.prepare('SELECT count(*) AS n FROM eats_menu_photos').get().n, 0);
+  // Replacing a full allocation frees its previous bytes in the same transaction.
+  saved = await ok(f.seller, `/api/eats/stores/${f.store.id}/assets`, { expectedVersion: f.store.version, purpose: 'logo', image });
+  assert.ok(saved.store.assets.logo.id);
+  assert.equal(f.h.db.prepare('SELECT SUM(size_bytes) AS n FROM eats_photos').get().n < 1048576, true);
+});
+
+test('schema 41 migration keeps existing dish images visible as legacy content without invented reviews', async (t) => {
+  const f = await fixture(t, { persistent: true }); await f.open();
+  const bytes = await sharp({ create: { width: 240, height: 180, channels: 3, background: '#d99412' } }).jpeg().toBuffer();
+  const id = randomUUID();
+  f.h.db.prepare('INSERT INTO eats_photos (id,store_id,base64,created_at) VALUES (?,?,?,?)').run(id, f.store.id, bytes.toString('base64'), f.h.now);
+  f.h.db.prepare("UPDATE eats_menu SET details_json=json_set(details_json,'$.photoId',?) WHERE id=?").run(id, f.menu[0].id);
+  removeEatsPhotoWorkflowFixtureFields(f.h.db); f.h.db.exec('PRAGMA user_version=41'); await f.h.restart();
+  const management = await ok(f.seller, '/api/eats/store');
+  assert.equal(management.menu[0].photoStatus, 'legacy-approved'); assert.equal(management.menu[0].photoReviewNote, '');
+  assert.equal((await ok(f.customer, '/api/eats/photos/' + id)).photo.base64, bytes.toString('base64'));
+  assert.equal(f.h.db.prepare('SELECT size_bytes AS n FROM eats_photos WHERE id=?').get(id).n, bytes.length);
+  assert.equal(f.h.db.prepare('SELECT count(*) AS n FROM eats_photo_reviews').get().n, 0);
 });

@@ -402,6 +402,34 @@ test('native face comparison allows provider processing beyond the ordinary time
   t.mock.timers.tick(1); assert.equal(signal.aborted, true); await rejected;
 });
 
+test('native food photo uploads get a bounded 35 seconds while ordinary food reads keep their shorter timeout', async (t) => {
+  const signals = new Map<string, AbortSignal>();
+  const { app } = client(async (url, options) => {
+    if (url.endsWith('/auth/login')) return response(auth());
+    const path = new URL(url).pathname.replace('/api/mobile/v1', '');
+    signals.set(path, options.signal!);
+    return new Promise((_resolve, reject) => options.signal!.addEventListener('abort', () => reject(new Error('Timed out')), { once: true }));
+  });
+  await app.login(user.email, 'Test password', 'Phone');
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const image = { mimeType: 'image/jpeg', base64: 'aGVsbG8=' };
+  const writes: Array<[string, object]> = [
+    [`/eats/stores/${id}/photo`, { expectedVersion: 1, itemId: id, image }],
+    [`/eats/stores/${id}/assets`, { expectedVersion: 1, purpose: 'cover', image }],
+    [`/eats/stores/${id}/menu`, { expectedVersion: 1, itemId: null, item: { name: 'Rice', photo: image } }],
+  ];
+  const rejected = writes.map(([path, data]) => assert.rejects(app.eats(path, data, 'bounded-food-upload'), { code: 'NETWORK' }));
+  const ordinary = assert.rejects(app.eats('/eats/orders'), { code: 'NETWORK' });
+  t.mock.timers.tick(12_000);
+  assert.equal(signals.get('/eats/orders')?.aborted, true); await ordinary;
+  for (const [path] of writes) assert.equal(signals.get(path)?.aborted, false);
+  t.mock.timers.tick(22_999);
+  for (const [path] of writes) assert.equal(signals.get(path)?.aborted, false);
+  t.mock.timers.tick(1);
+  for (const [path] of writes) assert.equal(signals.get(path)?.aborted, true);
+  await Promise.all(rejected);
+});
+
 test('native live updates share one authenticated request and abort on background or logout', async () => {
   const reads: RequestInit[] = [];
   const { app } = client(async (url, options) => {

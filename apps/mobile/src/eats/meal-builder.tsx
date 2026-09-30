@@ -36,7 +36,7 @@ export function MealBuilder({ state: s, controller: c, locked, onMenus, onPlaced
       {s.foods.map((option) => {
         const { item, store } = option, quantity = s.mealBasket.find((l) => l.item.id === item.id)?.quantity ?? 0;
         return <Card key={item.id}>
-          {item.photoId && <FoodPhoto id={item.photoId} controller={c} label={item.name}/>}
+          <FoodPhoto id={item.photoId} revision={item.photoVersion} controller={c} label={item.name}/>
           <Text style={styles.label}>{EATS_SELLERS[store.sellerType ?? 'restaurant']} · {town(store.areaId)}</Text>
           <Text style={styles.h2}>{item.name}</Text><Text style={styles.body}>{store.name}</Text><Text style={styles.small}>{item.description}</Text>
           {!!item.allergens && <Text style={styles.small}>Allergens: {item.allergens}</Text>}

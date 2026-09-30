@@ -61,6 +61,26 @@
 .food-seller-steps span { font-size:13px; line-height:1.4; font-weight:650; }
 .food-seller-copy>p.food-seller-preview { margin:24px 0 0; color:#c2cfc3; font-size:13px; line-height:1.5; }
 .food-card[hidden],.food-editorial[hidden],#food-discovery-content[hidden],#food-shopping[hidden] { display:none; }
+.food-photo-frame { position:relative; display:flex; justify-content:center; align-items:center; overflow:hidden; background:#edf0e9; color:#596254; text-align:center; font-size:12px; line-height:1.45; }
+.food-photo-frame img { display:block; width:100%; height:100%; object-fit:cover; }
+.food-photo-frame img[hidden],.food-photo-placeholder[hidden],.food-photo-editors[hidden] { display:none; }
+.food-photo-placeholder { padding:16px; }
+.food-cover-photo { width:100%; height:200px; }
+.food-logo-photo { width:76px; height:76px; border:1px solid #dfe3dc; border-radius:16px; }
+.food-logo-photo img { object-fit:contain; background:white; }
+.food-logo-photo .food-photo-placeholder { padding:6px; font-size:10px; }
+.food-photo-edit { width:100%; max-width:320px; height:200px; }
+.food-photo-edit img,.food-review-photo img { object-fit:contain; }
+.food-photo-editors,.food-photo-reviews { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:24px; }
+.food-photo-editor { min-width:0; padding:16px; border:1px solid #dfe3dc; border-radius:18px; }
+.food-photo-editor legend { padding-top:8px; }
+.food-photo-editor input[type=file] { font-size:12px; }
+.food-photo-reviews { margin-top:24px; grid-template-columns:repeat(2,minmax(0,1fr)); }
+.food-photo-reviews .food-card { margin:0; }
+.food-review-photo { width:100%; height:260px; border-radius:14px; }
+.food-seller-art { position:relative; }
+.food-seller-art .food-art-note { color:#171a18; }
+@media(max-width:900px) { .food-photo-editors { grid-template-columns:1fr; }.food-photo-editor { display:block; }.food-photo-reviews { grid-template-columns:1fr; } }
 @media(max-width:900px) { .food-seller-intro { grid-template-columns:minmax(0,1fr) 38%; }.food-seller-intro img { object-position:68% center; } }
 @media(max-width:650px) {
   .food-seller-intro { display:flex; flex-direction:column; border-radius:24px; }
