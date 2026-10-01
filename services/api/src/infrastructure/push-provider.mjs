@@ -11,24 +11,30 @@ export function createPushProvider({ env = {}, fetchImpl = fetch } = {}) {
   function error(value) { return { status: value?.details?.error === 'DeviceNotRegistered' ? 'unregistered'
     : value?.details?.error === 'MessageRateExceeded' ? 'retry' : 'error' }; }
   return Object.freeze({ enabled, projectId: enabled ? projectId : null,
-    async send({ token, notificationId, arrivalBody, familyEventId, announcementId, announcementTitle, announcementBody, announcementPriority }) {
+    async send({ token, notificationId, arrivalBody, familyEventId, announcementId, announcementTitle, announcementBody, announcementPriority,
+      deliveryUpdateId, deliveryTitle, deliveryBody }) {
       if (!enabled) return { status: 'error' };
-      const family = familyEventId !== undefined, announcement = announcementId !== undefined;
-      if (announcement) {
+      const family = familyEventId !== undefined, announcement = announcementId !== undefined, delivery = deliveryUpdateId !== undefined;
+      if (delivery) {
+        if (family || announcement || notificationId !== undefined
+          || typeof deliveryUpdateId !== 'string' || !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(deliveryUpdateId)
+          || typeof deliveryTitle !== 'string' || deliveryTitle.length < 2 || deliveryTitle.length > 160
+          || typeof deliveryBody !== 'string' || deliveryBody.length < 2 || deliveryBody.length > 1000) return { status: 'error' };
+      } else if (announcement) {
         if (typeof announcementId !== 'string' || !/^[a-f0-9-]{36}$/.test(announcementId)
           || typeof announcementTitle !== 'string' || announcementTitle.length < 2 || announcementTitle.length > 80
           || typeof announcementBody !== 'string' || announcementBody.length < 2 || announcementBody.length > 500
           || !['normal','important','critical'].includes(announcementPriority)) return { status:'error' };
       } else if (family ? typeof familyEventId !== 'string' || !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(familyEventId)
         : !Number.isSafeInteger(notificationId) || notificationId < 1) return { status:'error' };
-      const arrival = !family && !announcement && typeof arrivalBody === 'string' && arrivalBody.length > 0 && arrivalBody.length <= 500;
+      const arrival = !delivery && !family && !announcement && typeof arrivalBody === 'string' && arrivalBody.length > 0 && arrivalBody.length <= 500;
       const result = await post('send',{ to: token,
-        title: announcement ? `Taxi Ai · ${announcementTitle}` : arrival ? 'Taxi Ai · Driver has arrived' : 'Taxi Ai',
-        body: announcement ? announcementBody : family ? 'You have a Family Safety update. Open Taxi Ai to view it.'
+        title: delivery ? deliveryTitle : announcement ? `Taxi Ai · ${announcementTitle}` : arrival ? 'Taxi Ai · Driver has arrived' : 'Taxi Ai',
+        body: delivery ? deliveryBody : announcement ? announcementBody : family ? 'You have a Family Safety update. Open Taxi Ai to view it.'
           : arrival ? arrivalBody : 'You have a new journey update. Open Taxi Ai to view it.',
-        data: announcement ? {kind:'announcement',announcementId}
+        data: delivery ? { kind: 'delivery', deliveryUpdateId } : announcement ? {kind:'announcement',announcementId}
           : family ? {kind:'family',eventId:familyEventId} : { notificationId },
-        sound: 'default', channelId: announcement ? 'announcements' : 'journeys',
+        sound: 'default', channelId: delivery ? 'deliveries' : announcement ? 'announcements' : 'journeys',
         ttl: announcement ? (announcementPriority==='critical'?86400:3600) : 300 });
       if (!result.data) return { status: result.status ?? 'retry' };
       return result.data.status === 'ok' && typeof result.data.id === 'string' ? { status: 'ticket', ticket: result.data.id } : error(result.data);

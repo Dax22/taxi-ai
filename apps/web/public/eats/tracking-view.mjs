@@ -21,7 +21,7 @@ export function createFoodTrackingView({ onStart, onStop, loadSettings, createMa
       : 'Courier location appears after collection. It may be temporarily hidden to protect a private pickup location. These are device-reported positions and can be inaccurate; an old position is marked as last known.');
     field('device').textContent = courier
       ? 'Keep this page open and visible. Browser tracking can pause when the screen locks or the app goes into the background. Use a supported native app build for continuous background tracking; this website cannot guarantee it.'
-      : 'No position or route is invented when GPS is unavailable. This map does not provide a live arrival-time estimate.';
+      : 'No position or route is invented when GPS is unavailable. Kemmy’s pickup update shows a map-based delivery estimate when one is available; it is not a live traffic countdown.';
     field('status').textContent = next.ending ? 'Stopping location sharing…' : next.pending ? 'Waiting for location permission and a GPS fix…'
       : position ? `${stale ? 'Last known courier location' : 'Courier location'} · ±${Math.round(position.accuracy)} m · ${Math.max(0, Math.floor((next.now - position.capturedAt) / 1000))}s old`
         : !courier && next.order.status === 'assigned' ? 'Courier location will appear after the food is collected.'

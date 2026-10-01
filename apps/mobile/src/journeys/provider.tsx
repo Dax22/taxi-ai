@@ -9,8 +9,9 @@ import { JourneyController } from './controller';
 import { WorkController } from '../work/controller';
 import { currentPosition } from '../work/location';
 import type { Notifications } from '../../../../packages/shared/src/mobile-journeys.mjs';
+import type { DeliveryUpdates } from '../../../../packages/shared/src/delivery-updates.mjs';
 import { listenForPush } from '../notifications/push';
-interface Operations { safety(id:string):SafetyController; work:WorkController; journey(id:string):JourneyController; updates:Notifications|null; refreshUpdates():Promise<void>; pushId:number|null; familyPushId:string|null; announcementPushId:string|null; dismissFamilyPush():void; dismissAnnouncementPush():void; dismissPush():void }
+interface Operations { safety(id:string):SafetyController; work:WorkController; journey(id:string):JourneyController; updates:Notifications|null; deliveryUpdates:DeliveryUpdates|null; refreshUpdates():Promise<void>; pushId:number|null; familyPushId:string|null; announcementPushId:string|null; deliveryPushId:string|null; dismissFamilyPush():void; dismissAnnouncementPush():void; dismissDeliveryPush():void; dismissPush():void }
 const Context=createContext<Operations|null>(null);
 export function OperationsProvider({children}:PropsWithChildren){
   const {client,user,role,blocked}=useSession();
@@ -18,11 +19,18 @@ export function OperationsProvider({children}:PropsWithChildren){
   const safetyControllers=useRef(new Map<string,SafetyController>());
   const controllers=useRef(new Map<string,JourneyController>()),[updates,setUpdates]=useState<Notifications|null>(null),[pushId,setPushId]=useState<number|null>(null);
   const [familyPushId,setFamilyPushId]=useState<string|null>(null),[announcementPushId,setAnnouncementPushId]=useState<string|null>(null);
+  const [deliveryPushId,setDeliveryPushId]=useState<string|null>(null),[deliveryUpdates,setDeliveryUpdates]=useState<DeliveryUpdates|null>(null);
   const updateGeneration=useRef(0),updatesBusy=useRef(false);
   const refreshUpdates=useCallback(async()=>{
     if(!client.account()||AppState.currentState!=='active'||blocked||updatesBusy.current)return;
     const generation=updateGeneration.current;updatesBusy.current=true;
-    try{const result=await client.notifications();if(generation===updateGeneration.current)setUpdates(result);}catch{if(generation===updateGeneration.current)setUpdates(null);}finally{updatesBusy.current=false;}
+    const actor=client.account()?.id;
+    try{
+      const [journeys,deliveries]=await Promise.allSettled([client.notifications(),client.deliveryUpdates()]);
+      if(generation!==updateGeneration.current||client.account()?.id!==actor)return;
+      setUpdates(journeys.status==='fulfilled'?journeys.value:null);
+      setDeliveryUpdates(deliveries.status==='fulfilled'?deliveries.value:null);
+    }finally{updatesBusy.current=false;}
   },[client,blocked]);
   useEffect(()=>{
     if(blocked||!user||!role)return;
@@ -31,14 +39,14 @@ export function OperationsProvider({children}:PropsWithChildren){
     const poll=setInterval(()=>{if(role==='driver'&&user.driver)void work.heartbeat();},10_000);
     const changed=client.subscribeChanges(async()=>{if(role==='driver'&&user.driver)await work.refresh();await refreshUpdates();});
     const tick=setInterval(()=>work.tick(),1000);
-    const state=AppState.addEventListener('change',(next)=>{if(next!=='active'){work.pause();updateGeneration.current++;}else{if(role==='driver'&&user.driver)work.activate();void refreshUpdates();}});
+    const state=AppState.addEventListener('change',(next)=>{if(next!=='active'){work.pause();updateGeneration.current++;setDeliveryUpdates(null);}else{if(role==='driver'&&user.driver)work.activate();void refreshUpdates();}});
     return()=>{work.pause();updateGeneration.current++;clearInterval(poll);changed();clearInterval(tick);state.remove();};
   },[user?.id,Boolean(user?.driver),role,blocked,work,refreshUpdates]);
-  useEffect(()=>{if(user)return listenForPush(setPushId,()=>void refreshUpdates(),setFamilyPushId,setAnnouncementPushId);},[user?.id,refreshUpdates]);
+  useEffect(()=>{if(user)return listenForPush(setPushId,()=>void refreshUpdates(),setFamilyPushId,setAnnouncementPushId,setDeliveryPushId);},[user?.id,refreshUpdates]);
   // Disposal is deferred across Strict Mode's effect replay; account-key changes destroy private controllers.
   const alive=useRef(false);
   useEffect(()=>{alive.current=true;return()=>{alive.current=false;queueMicrotask(()=>{if(!alive.current){work.dispose();for(const c of controllers.current.values())c.dispose();controllers.current.clear();for(const c of safetyControllers.current.values())c.dispose();safetyControllers.current.clear();}});};},[work]);
-  const value:Operations={safety:(id)=>{let c=safetyControllers.current.get(id);if(!c){c=new SafetyController(client,id,randomUUID);safetyControllers.current.set(id,c);}return c;},work,updates,refreshUpdates,pushId,familyPushId,announcementPushId,dismissFamilyPush:()=>setFamilyPushId(null),dismissAnnouncementPush:()=>setAnnouncementPushId(null),dismissPush:()=>setPushId(null),journey:(id)=>{
+  const value:Operations={safety:(id)=>{let c=safetyControllers.current.get(id);if(!c){c=new SafetyController(client,id,randomUUID);safetyControllers.current.set(id,c);}return c;},work,updates,deliveryUpdates,refreshUpdates,pushId,familyPushId,announcementPushId,deliveryPushId,dismissFamilyPush:()=>setFamilyPushId(null),dismissAnnouncementPush:()=>setAnnouncementPushId(null),dismissDeliveryPush:()=>setDeliveryPushId(null),dismissPush:()=>setPushId(null),journey:(id)=>{
     let controller=controllers.current.get(id);if(!controller){controller=new JourneyController(client,id,randomUUID);controllers.current.set(id,controller);}return controller;
   }};
   return <Context.Provider value={value}>{children}</Context.Provider>;

@@ -65,6 +65,7 @@ See [vehicle photo checks](vehicle-photo-checks.md) for configuration and limits
 | Deliveries | Parcel validation, category/capacity eligibility and drop-off verification | `delivery_orders` |
 | Eats | Store membership/review, dish search, menus, combined test checkout, kitchen and courier food handovers | `eats_stores`, `eats_memberships`, `eats_reviews`, `eats_menu`, `eats_quotes`, `eats_orders`, `eats_commands`, `eats_photos`, `eats_checkouts`, `eats_collection_points`, `eats_store_dispatch_points`, `eats_order_dispatch_points` |
 | Notifications | Account-scoped inbox, device opt-in and durable push/receipt retries | `account_notifications`, `push_registrations`, `push_jobs` |
+| Delivery updates | Kemmy pickup, recipient-arrival and handover updates, road ETA enrichment and account-scoped push jobs | `delivery_updates`, `delivery_update_push_jobs` |
 | Vehicle checks | Optional photo observations, comparison, retry reservation and expiry | `vehicle_photo_checks` |
 | Chat | Participant messages, read markers, retries and reports | `chat_messages`, `chat_reads`, `chat_commands`, `chat_reports` |
 | Calls | Audio invitations, session/window ownership, signaling, expiry and history | `voice_calls`, `voice_participants`, `voice_commands` |

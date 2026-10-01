@@ -2,6 +2,9 @@ import { createPaystackConfig } from './infrastructure/paystack-config.mjs';
 import { createPaystackProvider } from './infrastructure/paystack-provider.mjs';
 import { createCheckoutPaymentsRepository } from './modules/checkout-payments/repository.mjs';
 import { createCheckoutPaymentsService } from './modules/checkout-payments/service.mjs';
+import { createDeliveryUpdatesRepository } from './modules/delivery-updates/repository.mjs';
+import { createDeliveryUpdatesService } from './modules/delivery-updates/service.mjs';
+import { createDeliveryEtaProvider } from './infrastructure/delivery-eta.mjs';
 import { createSafetyMonitoringRepository } from './modules/safety-monitoring/repository.mjs';
 import { createSafetyMonitoringService } from './modules/safety-monitoring/service.mjs';
 import { createSafetyAlertProvider } from './infrastructure/safety-alert-provider.mjs';
@@ -130,6 +133,8 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
   const driverRepository = createDriversRepository(db);
   const rideRepository = createRidesRepository(db);
   const guestRepository = createGuestRidesRepository(db);
+  const deliveryRepository = createDeliveriesRepository(db);
+  const parcelRepository = createParcelTrackingRepository(db);
   const eatsRepository = createEatsRepository(db, { deliveryAreas, legacyAreaIds: EATS_LEGACY_AREA_IDS, distanceMeters });
   const hasDriverWork = async (id) => (await rideRepository.hasDriverWork(id)) || (await eatsRepository.hasWork(id));
   let drivers, devices, accountEmail;
@@ -153,7 +158,7 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
   drivers = createDriversService({ repository: driverRepository,
     getAccount: accounts.profile, hasDriverWork, codec: createDriverDocumentCodec(MAX_DRIVER_FILE_BYTES),
     faceProvider: driverFaceProvider, faceChecksFactory: createDriverFaceChecks, tokens, unitOfWork, audit, clock });
-  let calls, locations, foodTracking, payments, checkoutPayments, safety, guestRides, parcelTracking, notifications, family, familyDelivery, adminCases;
+  let calls, locations, foodTracking, payments, checkoutPayments, safety, guestRides, parcelTracking, notifications, deliveryUpdates, family, familyDelivery, adminCases;
   const staffAccess = createStaffAccessService({ repository: createStaffAccessRepository(db), getAccount: accounts.profile,
     getAccountByEmail: async email => {
       const record = await accountRepository.findByEmail(email);
@@ -184,7 +189,7 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
     passengerForRide: guestRepository.passenger, savePassenger: guestRepository.savePassenger,
     hasOtherWork: eatsRepository.hasWork,
     getAccount: accounts.profile, unitOfWork, audit, tokens, clock,
-    deliveries: createDeliveriesService({ repository: createDeliveriesRepository(db), tokens }),
+    deliveries: createDeliveriesService({ repository: deliveryRepository, tokens }),
     routeForRide: async (id) => (await locations.routeForRide(id)),
     quoteForRide: async (userId, id, now) => (await locations.quoteForRide(userId, id, now)),
     bindQuote: async (userId, id, rideId, now) => (await locations.bindQuote(userId, id, rideId, now)),
@@ -194,11 +199,23 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
     availabilityFor: availability.positionFor, onClaim: availability.onClaim, availableDriverIds: availability.driverIds,
     nearbyDriverIds: availability.nearbyDriverIds, allowSimulation, ridePilot,
     onEvent: async ({ kind, ride, actorId, recipients = [], eventKey, now }) => {
-      (await dispatch.observe({ kind, rideId: ride.id, locationMode: (await locations.routeForRide(ride.id)) ? 'gps' : 'sample', now }));
+      if (kind !== 'delivery_arrive') await dispatch.observe({ kind, rideId: ride.id, locationMode: (await locations.routeForRide(ride.id)) ? 'gps' : 'sample', now });
+      const parcel = ['start', 'delivery_arrive', 'complete'].includes(kind) && await deliveryRepository.find(ride.id);
+      if (parcel) {
+        const route = kind === 'start' ? await locations.routeForRide(ride.id) : null;
+        const from = kind === 'start' ? await locations.freshPositionFor(ride.driverId, ride.id, now) : null;
+        await deliveryUpdates.publish({ kind: 'parcel', targetId: ride.id, customerId: ride.customerId,
+          phase: ({ start: 'picked_up', delivery_arrive: 'arrived', complete: 'delivered' })[kind],
+          eventKey: `parcel:${ride.id}:${kind}`, now,
+          route: from && route?.destination ? { from, to: route.destination } : null });
+      }
       const targets = kind === 'request' ? recipients : [ride.customerId,ride.driverId].filter((id) => id && id !== actorId);
-      for (const userId of targets) (await notifications.publish({ userId, rideId: ride.id, kind,
-        mode: userId === ride.customerId ? 'customer' : 'work', eventKey, now }));
-      await family.onRideEvent({ rideId: ride.id, kind, eventKey, now });
+      if (kind !== 'delivery_arrive') for (const userId of targets) {
+        if (parcel && userId === ride.customerId) continue;
+        await notifications.publish({ userId, rideId: ride.id, kind,
+          mode: userId === ride.customerId ? 'customer' : 'work', eventKey, now });
+      }
+      if (kind !== 'delivery_arrive') await family.onRideEvent({ rideId: ride.id, kind, eventKey, now });
     },
     onTripCompleted: async (data) => { if (data.paymentMode !== 'paystack_test') await payments.recordCompletion(data); },
     onRideClosed: async (id, now) => { (await calls.closeRide(id, now)); (await locations.closeRide(id, now)); (await safety.closeRide(id, now)); (await guestRides.closeRide(id, now)); } });
@@ -252,7 +269,7 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
     sessionOwner:accounts.sessionOwner,nativeSessionOwner:devices.sessionOwner,unitOfWork,tokens,audit,clock});
   guestRides = createGuestRidesService({ repository: guestRepository, getAccount: accounts.profile, getTrip: rides.guestContext,
     locationForTrip: locations.safetyPosition, sessionOwner: accounts.sessionOwner, nativeSessionOwner: devices.sessionOwner, unitOfWork, tokens, audit, clock });
-  parcelTracking = createParcelTrackingService({ repository: createParcelTrackingRepository(db), getAccount: accounts.profile,
+  parcelTracking = createParcelTrackingService({ repository: parcelRepository, getAccount: accounts.profile,
     getTrip: async (user, rideId) => {
       const ride = await rides.get(user, rideId);
       return { rideId: ride.id, customerId: ride.customer.id, driverId: ride.driver?.id ?? null,
@@ -296,6 +313,11 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
   const adminDemand = createAdminDemandService({ repository: createAdminDemandRepository(db),
     requirePermission: staffAccess.requirePermission, unitOfWork, clock, allowSimulation });
   const eats = createEatsService({ repository: eatsRepository, paymentsEnabled: paystackProvider.enabled,
+    onDeliveryEvent: async ({ order, phase, eventKey, now }) => {
+      const from = phase === 'picked_up' ? await foodTracking.freshPositionFor(order.courierId, order.id, now) : null;
+      await deliveryUpdates.publish({ kind: 'food', targetId: order.id, customerId: order.customerId, phase, eventKey, now,
+        route: from && order.snapshot.address?.point ? { from, to: order.snapshot.address.point } : null });
+    },
     onPaymentClosed: data => checkoutPayments.close(data), getAccount: accounts.profile, photoCodec: { normalize: normalizeDishPhoto },
     foodTracking: {
       tracking: (...args) => foodTracking.tracking(...args), shareCommand: (...args) => foodTracking.shareCommand(...args),
@@ -313,9 +335,39 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
     getAccount: accounts.profile, sessionOwner: accounts.sessionOwner, nativeAccessOwner: devices.accessOwner, nativeSessionOwner: devices.sessionOwner,
     getRideContext: (user, id) => eats.trackingContext(user, id), canShare: status => ['assigned','picked_up','arrived'].includes(status),
     resourceLabel: 'food delivery', unitOfWork, tokens, audit, clock });
+  const deliveryEta = createDeliveryEtaProvider({ mapProvider, now: clock });
+  deliveryUpdates = createDeliveryUpdatesService({ repository: createDeliveryUpdatesRepository(db), getAccount: accounts.profile,
+    targetIds: async (kind, id, customerId) => {
+      const link = kind === 'parcel' ? await parcelRepository.latest(id) : null;
+      return [...new Set([customerId, ...(link?.active && link.recipientId ? [link.recipientId] : [])])];
+    },
+    access: async (user, kind, id) => {
+      if (kind === 'food') {
+        const order = await eatsRepository.order(id);
+        check(order?.customerId === user.id && order.snapshot.fulfillment !== 'pickup', 'NOT_FOUND', 'Delivery update not found.');
+        return { screen: 'food-order', id };
+      }
+      const ride = await rideRepository.find(id), delivery = await deliveryRepository.find(id);
+      check(ride && delivery, 'NOT_FOUND', 'Delivery update not found.');
+      if (ride.customerId === user.id) return { screen: 'journey', id };
+      check(ride.driverId !== user.id && await accounts.profile(ride.customerId) && await parcelRepository.received(user.id, id),
+        'NOT_FOUND', 'Delivery update not found.');
+      return { screen: 'parcels', id };
+    },
+    phaseFor: async (kind, id) => {
+      if (kind === 'food') {
+        const order = await eatsRepository.order(id);
+        return order && ['picked_up', 'arrived', 'delivered'].includes(order.status) ? order.status : null;
+      }
+      const trip = await rideRepository.findTrip(id), delivery = await deliveryRepository.find(id);
+      return !delivery ? null : trip?.status === 'completed' ? 'delivered'
+        : trip?.status === 'in_progress' ? delivery.arrivedAt ? 'arrived' : 'picked_up' : null;
+    },
+    familyTargets: notifications.familyTargets, validTarget: notifications.validFamilyTarget, disableTarget: notifications.disableFamilyTarget,
+    provider: pushProvider, estimateEta: deliveryEta.estimate, unitOfWork, tokens, clock });
   const backgroundLocations = createBackgroundLocationService({ repository: createBackgroundLocationRepository(db),
     trackerFor: kind => kind === 'food' ? foodTracking : locations, nativeSessionOwner: devices.sessionOwner, unitOfWork, tokens, clock });
   const googleAuth = createGoogleAuthService({ repository: createGoogleAuthRepository(db), provider: googleProvider,
     accounts, devices, tokens, unitOfWork, clock });
-  return Object.freeze({ accounts, devices, drivers, rides, dispatch, eats, chat, calls, locations, foodTracking, backgroundLocations, availability, payments, checkoutPayments, safety, safetyMonitoring, guestRides, parcelTracking, family, familyDelivery, vehicleChecks, adminConsole, staffAccess, adminCases, adminOperations, adminFinance, adminCompliance, adminDemand, announcements, googleAuth, accountEmail, notifications, rateLimiter, realtime, workerCoordinator, clock });
+  return Object.freeze({ accounts, devices, drivers, rides, dispatch, eats, chat, calls, locations, foodTracking, backgroundLocations, availability, payments, checkoutPayments, safety, safetyMonitoring, guestRides, parcelTracking, family, familyDelivery, vehicleChecks, adminConsole, staffAccess, adminCases, adminOperations, adminFinance, adminCompliance, adminDemand, announcements, googleAuth, accountEmail, notifications, deliveryUpdates, rateLimiter, realtime, workerCoordinator, clock });
 }

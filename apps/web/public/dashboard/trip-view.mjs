@@ -13,6 +13,8 @@ export function createTripView({ onCommand, serverNow, onVehicleMismatch = () =>
     const deliveryLocked = Boolean(delivery?.pinBlockedUntil > serverNow());
     $('delivery-pin-fields').disabled = busy || !completing || deliveryLocked;
     $('delivery-complete').dataset.locked = String(!completing || deliveryLocked);
+    $('delivery-arrive').disabled = busy || !controls.deliveryArrive;
+    $('delivery-arrive').dataset.locked = String(!controls.deliveryArrive);
     $('delivery-pin-lock').textContent = deliveryLocked ? `Code verification is paused. Try again in ${Math.ceil((delivery.pinBlockedUntil - serverNow()) / 1000)} seconds.` : '';
     $('trip-confirm').dataset.locked = String(!controls.confirm);
     $('trip-action').dataset.locked = String(!controls.next || controls.next.action === 'start');
@@ -78,6 +80,9 @@ export function createTripView({ onCommand, serverNow, onVehicleMismatch = () =>
     $('delivery-pin-panel').hidden = !ride.delivery?.dropoffPin;
     $('delivery-pin-value').textContent = ride.delivery?.dropoffPin ?? '';
     $('delivery-pin-form').hidden = !ride.delivery || controls.next?.action !== 'complete';
+    $('delivery-arrive').hidden = !controls.deliveryArrive;
+    $('delivery-arrive').onclick = controls.deliveryArrive ? () => onCommand(`/api/rides/${ride.id}/delivery_arrive`,
+      { expectedVersion: ride.version }, 'Recipient arrival saved. Kemmy will notify the sender and linked recipient.') : null;
     if (!ride.delivery || controls.next?.action !== 'complete') $('driver-delivery-pin').value = '';
     $('trip-confirm').hidden = !controls.confirm;
     $('trip-confirm').textContent = ride.negotiation?.agreement
@@ -104,7 +109,7 @@ export function createTripView({ onCommand, serverNow, onVehicleMismatch = () =>
       for (const entry of ride.activity ?? []) {
         const actor = entry.actorId === ride.customer.id ? 'Customer' : 'Driver';
         const item = element('li');
-        item.append(element('strong', `${RIDE_STATUS_LABELS[entry.type]} · ${actor}`));
+        item.append(element('strong', `${entry.type === 'delivery_arrive' ? 'Courier at recipient' : RIDE_STATUS_LABELS[entry.type]} · ${actor}`));
         const time = element('time', new Date(entry.createdAt).toLocaleString());
         time.dateTime = new Date(entry.createdAt).toISOString(); item.append(time);
         if (entry.reason) item.append(element('span', CANCELLATION_REASONS[entry.reason]));
@@ -150,6 +155,7 @@ export function createTripView({ onCommand, serverNow, onVehicleMismatch = () =>
     $('pickup-identity').hidden = true; $('arrival-title').textContent = ''; $('arrival-body').textContent = '';
     $('delivery-pin-value').textContent = ''; $('driver-delivery-pin').value = ''; $('delivery-pin-lock').textContent = '';
     $('delivery-pin-panel').hidden = true; $('delivery-pin-form').hidden = true;
+    $('delivery-arrive').hidden = true; $('delivery-arrive').onclick = null;
     $('pickup-pin-value').textContent = ''; $('driver-pickup-pin').value = '';
     $('pickup-pin-lock').textContent = ''; $('trip-timeline').replaceChildren();
     $('pickup-pin-help').textContent = 'Ask the passenger for their PIN when they are at the vehicle.';

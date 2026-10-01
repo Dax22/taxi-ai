@@ -10,12 +10,14 @@ import { createFoodTracking, foodTrackingOrder } from './eats/tracking.mjs';
 import { createFoodTrackingView } from './eats/tracking-view.mjs';
 import { createCheckoutPayments, foodCheckoutTarget } from './dashboard/checkout-payments.mjs';
 import { createCheckoutPaymentView } from './dashboard/checkout-payment-view.mjs';
+import { createDeliveryUpdates, foodDeliveryTarget, deliveryUpdatePath } from './dashboard/delivery-updates.mjs';
+import { createDeliveryUpdateView } from './dashboard/delivery-update-view.mjs';
 
 let serverTime = { at: Date.now(), received: performance.now() }, sessionKey = null, syncing = false;
 const api = createApiClient({ onServerTime(at) { serverTime = { at, received: performance.now() }; } });
 const liveUpdates = createRealtimeClient({ read: (cursor, signal) => api.request(`/api/events?cursor=${cursor}&wait=25000`, { signal }), refresh: sync });
 const transport = createEatsTransport({ client: api, identity: () => sessionKey,
-  onChanged() { liveUpdates.reset(); api.reset(); availability.reset(); tracking.reset(); checkoutPayment.reset(); controller.reset(); sessionKey = null; } });
+  onChanged() { liveUpdates.reset(); api.reset(); availability.reset(); tracking.reset(); checkoutPayment.reset(); deliveryUpdates.reset(); controller.reset(); sessionKey = null; } });
 const controller = createEatsController({ api: transport, makeKey: () => crypto.randomUUID(), now: () => serverTime.at + performance.now() - serverTime.received });
 const screenPaths = { browse: '/eats', store: '/eats/sell', orders: '/eats?screen=orders', work: '/eats?screen=work', review: '/eats?screen=review' };
 const view = createEatsView(controller, {
@@ -47,6 +49,13 @@ const checkoutPaymentView = createCheckoutPaymentView(document.getElementById('f
   onRetry: () => void checkoutPayment.retry().then(() => controller.refresh({ quiet: true })), onReload: () => void checkoutPayment.poll(),
 });
 const checkoutPayment = createCheckoutPayments({ client: { request: (path, options) => transport.request(path.slice(4), options) }, view: checkoutPaymentView });
+const deliveryView = createDeliveryUpdateView({ root: document.getElementById('delivery-update-card'), banner: document.getElementById('delivery-update-banner'),
+  onOpen: () => void deliveryUpdates.open(), onDismiss: () => deliveryUpdates.dismiss() });
+const deliveryUpdates = createDeliveryUpdates({ client: api, view: deliveryView, onOpen: async target => {
+  if (target.screen !== 'food-order') { location.assign(deliveryUpdatePath(target)); return; }
+  await controller.navigate('order', target.id);
+  if (controller.snapshot().order?.id === target.id) history.pushState({}, '', deliveryUpdatePath(target));
+} });
 function render() {
   const state = controller.snapshot(); view.render(state);
   const working = state.screen === 'work' && state.user?.driver;
@@ -54,6 +63,9 @@ function render() {
   availability.context(working ? { ...state.user, role: 'driver' } : null, Boolean(state.work?.current.length));
   tracking.context(state.user, foodTrackingOrder(state, tracking.snapshot()));
   const order = state.screen === 'order' && state.order?.role === 'customer' ? state.order : null;
+  const deliveryTarget = foodDeliveryTarget(order), oldDelivery = deliveryUpdates.snapshot().target;
+  deliveryUpdates.context(state.user ? sessionKey : null, deliveryTarget);
+  if (deliveryTarget?.targetId !== oldDelivery?.targetId) void deliveryUpdates.poll();
   const target = foodCheckoutTarget(state.user, order);
   const previous = checkoutPayment.snapshot().target?.targetId;
   checkoutPayment.context(state.user, target);
@@ -70,7 +82,7 @@ async function sync() {
   try {
     const session = await api.request('/api/session'), nextKey = session.user ? `${session.user.id}:${session.csrfToken}` : null;
     const changed = nextKey !== sessionKey;
-    if (changed) { liveUpdates.reset(); api.reset(); availability.reset(); tracking.reset(); checkoutPayment.reset(); controller.reset(); sessionKey = nextKey; }
+    if (changed) { liveUpdates.reset(); api.reset(); availability.reset(); tracking.reset(); checkoutPayment.reset(); deliveryUpdates.reset(); controller.reset(); sessionKey = nextKey; }
     api.setCsrf(session.csrfToken); controller.context(session.user);
     if (session.user) {
       liveUpdates.resume();
@@ -78,16 +90,17 @@ async function sync() {
       if (controller.snapshot().screen === 'work') await availability.poll();
       await tracking.poll();
       await checkoutPayment.poll();
+      await deliveryUpdates.poll();
     }
   } catch (error) {
-    if (error.status === 401 || error.code === 'SESSION_CHANGED') { liveUpdates.reset(); tracking.reset(); checkoutPayment.reset(); controller.reset(); sessionKey = null; }
+    if (error.status === 401 || error.code === 'SESSION_CHANGED') { liveUpdates.reset(); tracking.reset(); checkoutPayment.reset(); deliveryUpdates.reset(); controller.reset(); sessionKey = null; }
     document.getElementById('food-error').textContent = error.message;
   } finally { syncing = false; }
 }
 document.addEventListener('visibilitychange', () => { if (document.hidden) { liveUpdates.pause(); availability.shutdown(); } else void sync(); });
-window.addEventListener('pagehide', () => { liveUpdates.reset(); availability.shutdown(); tracking.shutdown(); });
+window.addEventListener('pagehide', () => { liveUpdates.reset(); availability.shutdown(); tracking.shutdown(); deliveryUpdates.reset(); });
 window.addEventListener('popstate', () => void route());
 setInterval(() => { if (!sessionKey) void sync(); }, 30_000);
 setInterval(() => { if (!document.hidden) { controller.tick(); availability.tick(); } tracking.tick(); }, 1000);
-setInterval(() => { if (!document.hidden && sessionKey) void tracking.poll(); }, 10_000);
+setInterval(() => { if (!document.hidden && sessionKey) { void tracking.poll(); void deliveryUpdates.poll(); } }, 10_000);
 render(); void sync();

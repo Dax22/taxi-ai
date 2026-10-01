@@ -11,7 +11,7 @@ import { createEatsPayments, foodPaymentPending, foodPaymentView, FOOD_PAYMENT_R
 
 
 /** Stores and food orders own their state; other work is checked through injected ports. */
-export function createEatsService({ repository, getAccount, hasOtherWork, availabilityFor, onClaim, photoCodec, tokens, unitOfWork, audit, clock, normalisePhoto, resolveDeliveryLocation = async (point) => ({ point, line: '', areaId: null, attribution: '' }), deliveryMapSettings = () => ({ tiles: null, attribution: '' }), foodTracking = null, paymentsEnabled = false, onPaymentClosed = async () => {} }) {
+export function createEatsService({ repository, getAccount, hasOtherWork, availabilityFor, onClaim, photoCodec, tokens, unitOfWork, audit, clock, normalisePhoto, resolveDeliveryLocation = async (point) => ({ point, line: '', areaId: null, attribution: '' }), deliveryMapSettings = () => ({ tiles: null, attribution: '' }), foodTracking = null, paymentsEnabled = false, onPaymentClosed = async () => {}, onDeliveryEvent = async () => {} }) {
   const actor = async (user) => { const fresh = (await getAccount(user?.id)); check(fresh, 'UNAUTHENTICATED', 'Sign in to continue.'); return fresh; };
   const identifier = (id) => { check(typeof id === 'string' && /^[a-f0-9-]{36}$/.test(id), 'INVALID_ID', 'Choose a valid record.'); return id; };
   const storeRecord = async (id) => { const value = (await repository.store(identifier(id))); check(value, 'NOT_FOUND', 'Restaurant not found.'); return value; };
@@ -319,6 +319,9 @@ export function createEatsService({ repository, getAccount, hasOtherWork, availa
           order.events.push(event); order.updatedAt = now; order.version++;
           if (EATS_TERMINAL.includes(order.status)) { order.pickupPin = order.deliveryPin = null; order.pinBlockedUntil = null; }
           (await repository.saveOrder(order));
+          if (order.snapshot.fulfillment !== 'pickup' && ['pickup', 'arrive', 'deliver'].includes(action)) {
+            await onDeliveryEvent({ order, phase: order.status, eventKey: `food:${order.id}:${order.status}`, now });
+          }
           if (EATS_TERMINAL.includes(order.status)) await foodTracking?.closeRide(order.id, now);
           result = { orderId: order.id };
         }

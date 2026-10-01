@@ -1,6 +1,7 @@
 import { safetyMonitoringRoutes } from '../modules/safety-monitoring/routes.mjs';
 import { familyRoutes } from '../modules/family/routes.mjs';
 import { parcelTrackingRoutes } from '../modules/parcel-tracking/routes.mjs';
+import { deliveryUpdateRoutes } from '../modules/delivery-updates/routes.mjs';
 import { MOBILE_API_VERSION } from '../../../../packages/shared/src/mobile-contracts.mjs';
 import { check } from '../shared/errors.mjs';
 import { fields } from '../shared/validation.mjs';
@@ -17,11 +18,12 @@ import { eatsRoutes } from '../modules/eats/routes.mjs';
 import { realtimeResponse, requestAbortSignal } from '../modules/realtime/routes.mjs';
 
 /** Versioned native surface. Cookie identity and browser CSRF are never reused. */
-export function createMobileRouter({ devices, accounts, drivers, rides, dispatch, eats, locations, backgroundLocations, availability, chat, notifications, announcements, safety, safetyMonitoring, guestRides, parcelTracking, family, vehicleChecks, payments, checkoutPayments, clock, rateLimiter, googleAuth, accountEmail, realtime }) {
+export function createMobileRouter({ devices, accounts, drivers, rides, dispatch, eats, locations, backgroundLocations, availability, chat, notifications, deliveryUpdates, announcements, safety, safetyMonitoring, guestRides, parcelTracking, family, vehicleChecks, payments, checkoutPayments, clock, rateLimiter, googleAuth, accountEmail, realtime }) {
   const monitorRoutes = safetyMonitoringRoutes(safetyMonitoring).filter(r=>!r.role);
   const foodRoutes = eatsRoutes(eats);
   const relativesRoutes = familyRoutes(family);
   const parcelRoutes = parcelTrackingRoutes(parcelTracking);
+  const deliveryRoutes = deliveryUpdateRoutes(deliveryUpdates);
   const booking = createMobileBooking({ rides, locations, availability, clock });
   const journeys = createMobileJourneys({ rides, dispatch, availability, chat, clock });
   function summary(ride) {
@@ -118,6 +120,11 @@ export function createMobileRouter({ devices, accounts, drivers, rides, dispatch
       const result = await route.handle({ user: session.user, nativeSessionId: session.id, query, data, key: request.headers['idempotency-key'], match: ('/api' + path).match(route.path), reauthenticate: async () => { const fresh = (await devices.sessionFor(accessToken)); check(fresh, 'UNAUTHENTICATED', 'Sign in to continue.'); return fresh.user; } });
       if (result.image) { response.writeHead(200, { 'Content-Type': result.image.mimeType, 'Content-Length': result.image.content.length }); response.end(result.image.content); return; }
       body = result.body;
+    }
+    else if (path === '/delivery-updates' || path.startsWith('/delivery-updates/')) {
+      const route = deliveryRoutes.find(entry => entry.method === request.method && entry.path.test('/api' + path));
+      check(route, 'NOT_FOUND', 'Delivery updates endpoint not found.');
+      body = (await route.handle({ user: session.user, query, data, match: ('/api' + path).match(route.path) })).body;
     }
     else if (!write && /^\/checkout-payments\/(ride|food)\/[a-f0-9-]{36}$/.test(path)) body = await checkoutPayments.get(session.user.id, path.split('/')[2], path.split('/')[3]);
     else if (write && /^\/checkout-payments\/(ride|food)\/[a-f0-9-]{36}\/(start|refresh)$/.test(path)) body = await checkoutPayments.command({ userId: session.user.id,

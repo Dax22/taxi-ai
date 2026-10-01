@@ -11,6 +11,7 @@ export async function notificationToken(projectId: string): Promise<string> {
   if(Platform.OS==='android')await Promise.all([
     Notifications.setNotificationChannelAsync('journeys',{name:'Journey updates',importance:Notifications.AndroidImportance.DEFAULT}),
     Notifications.setNotificationChannelAsync('announcements',{name:'Taxi Ai announcements',importance:Notifications.AndroidImportance.DEFAULT}),
+    Notifications.setNotificationChannelAsync('deliveries',{name:'Kemmy delivery updates',importance:Notifications.AndroidImportance.DEFAULT}),
   ]);
   let permission=await Notifications.getPermissionsAsync();
   if(!permission.granted)permission=await Notifications.requestPermissionsAsync();
@@ -21,12 +22,13 @@ export async function notificationToken(projectId: string): Promise<string> {
   })])).data;}finally{clearTimeout(timeout);}
 }
 // A tap opens an explicit review prompt. The payload cannot choose an account or authorize a journey.
-export function listenForPush(onUpdate:(id:number)=>void,onReceive:()=>void=()=>{},onFamily:(eventId:string)=>void=()=>{},onAnnouncement:(announcementId:string)=>void=()=>{}){
+export function listenForPush(onUpdate:(id:number)=>void,onReceive:()=>void=()=>{},onFamily:(eventId:string)=>void=()=>{},onAnnouncement:(announcementId:string)=>void=()=>{},onDelivery:(deliveryUpdateId:string)=>void=()=>{}){
   if(!supported())return()=>{};
   const receive=(response:Notifications.NotificationResponse|null)=>{
     const target=pushTarget(response?.notification.request.content.data);
     if(target?.kind==='family')onFamily(target.eventId);
     else if(target?.kind==='announcement')onAnnouncement(target.announcementId);
+    else if(target?.kind==='delivery')onDelivery(target.deliveryUpdateId);
     else if(target?.kind==='journey')onUpdate(target.notificationId);
     Notifications.clearLastNotificationResponse();
   };

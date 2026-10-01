@@ -25,9 +25,9 @@ function ride(r) {
   if (r.delivery != null || transportCategory(r.vehicleCategory).service === 'delivery') {
     expect(record(r.delivery));
     expect(r.passenger?.kind !== 'guest');
-    const { verifiedAt, pinBlockedUntil, dropoffPin, ...details } = r.delivery;
+    const { verifiedAt, arrivedAt, pinBlockedUntil, dropoffPin, ...details } = r.delivery;
     deliveryDetails(r.vehicleCategory, details);
-    expect((verifiedAt === null || number(verifiedAt)) && (pinBlockedUntil === null || number(pinBlockedUntil))
+    expect((verifiedAt === null || number(verifiedAt)) && (arrivedAt === undefined || arrivedAt === null || number(arrivedAt)) && (pinBlockedUntil === null || number(pinBlockedUntil))
       && (dropoffPin === undefined || (r.status === 'in_progress' && /^\d{6}$/.test(dropoffPin))));
   } else expect(r.delivery == null);
   expect(r.service === undefined || r.service === (r.delivery ? 'delivery' : 'ride'));

@@ -17,6 +17,6 @@ export function freshWorkLocation(state: WorkLocation): boolean {
   return Number.isFinite(age) && age >= -5_000 && age < 30_000;
 }
 export function workLocationBlocks(kind: 'ride' | 'food', action: string, state: WorkLocation): boolean {
-  const advancesWork = kind === 'food' ? ['pickup', 'arrive'].includes(action) : ['depart', 'arrive', 'start'].includes(action);
+  const advancesWork = kind === 'food' ? ['pickup', 'arrive'].includes(action) : ['depart', 'arrive', 'start', 'delivery_arrive'].includes(action);
   return advancesWork && workLocationRequired(state) && !freshWorkLocation(state);
 }

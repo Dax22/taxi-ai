@@ -20,7 +20,7 @@ function journey(r,env) {
     && (r.pickupPin === null || r.mode === 'customer' && typeof r.pickupPin === 'string' && /^\d{6}$/.test(r.pickupPin))
     && (r.mode !== 'work' || r.delivery?.dropoffPin === undefined)
     && Array.isArray(r.allowedActions) && r.allowedActions.length <= 9
-    && r.allowedActions.every((a) => ['propose','accept','confirm','depart','arrive','start','complete','cancel'].includes(a)));
+    && r.allowedActions.every((a) => ['propose','accept','confirm','depart','arrive','start','delivery_arrive','complete','cancel'].includes(a)));
   expect(r.offer === null || object(r.offer) && text(r.offer.id,100) && positive(r.offer.amountKobo) && integer(r.offer.expiresAt) && typeof r.offer.fromYou === 'boolean');
   expect(r.rating === undefined || r.rating === null || r.status === 'completed' && Number.isInteger(r.rating) && r.rating >= 1 && r.rating <= 5);
   expect(r.startedAt === undefined || nullableTime(r.startedAt));
