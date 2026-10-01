@@ -12,6 +12,7 @@ import { workLocationBlocks, workLocationRequired } from '../src/journeys/work-l
 import { useTripLocation } from '../src/tracking/provider';
 import { TripLocationCard } from '../src/tracking/view';
 import type { TripLocationState } from '../src/tracking/controller';
+import { CheckoutPaymentCard } from '../src/payments/checkout-card';
 import { NativeMap } from '../src/maps/native-map';
 import { Button, Card, Field, Heading, Pill, Screen, fare, styles } from '../src/ui/components';
 const labels: Record<FoodAction, string> = { accept: 'Accept order', reject: 'Decline order', prepare: 'Start preparing', ready: 'Ready for pickup', claim: 'Accept delivery', pickup: 'Confirm food collected', arrive: 'I’m at the delivery address', deliver: 'Confirm delivered', complete_pickup: 'Confirm customer collected', cancel: 'Cancel order' };
@@ -64,6 +65,11 @@ export default function FoodOrder() {
         {(o.pickupPin || o.deliveryPin) && <><Text style={styles.body}>{o.pickupPin ? 'Kitchen pickup code. Share only when handing the food to the assigned courier.' : o.recipient?.kind === 'other' ? 'Handover code for your recipient. Share it privately with them.' : o.fulfillment === 'pickup' ? 'Your pickup code. Show the kitchen when collecting your food.' : 'Your delivery code. Share only when you receive the food.'}</Text><Text selectable style={food.pin}>{o.pickupPin ?? o.deliveryPin}</Text></>}
         {o.deliveryPin && o.recipient?.kind === 'other' && <Text style={styles.small}>Share this code privately with {o.recipient.name}. Ask them to give it {o.fulfillment === 'pickup' ? 'to the kitchen only when collecting the food' : 'to the courier only when receiving the food'}. No automatic message is sent.</Text>}
       </Card>
+      {o.role === 'customer' && o.payment.method === 'paystack' && <>
+        {o.payment.status === 'pending' && o.payment.expiresAt && <Text style={styles.body}>Food is reserved until {new Date(o.payment.expiresAt).toLocaleString()}. Complete test checkout before preparation can begin.</Text>}
+        {o.payment.status === 'expired' && <Text style={styles.body}>This food reservation has expired. Check any payment already attempted before placing another order.</Text>}
+        {o.payment.targetId ? <CheckoutPaymentCard key={o.payment.targetId} kind="food" targetId={o.payment.targetId} grouped={o.payment.targetId !== o.id}/> : <Text style={styles.body}>Payment details are unavailable. Refresh this order before paying.</Text>}
+      </>}
       {step && (showFoodOrderTracking(o) ? <FoodDeliveryProgress key={o.id} {...step}/> : <OrderStep {...step}/>)}
       <Card><Text style={styles.h2}>Your food</Text>{o.lines.map((i) => <Text key={i.itemId} style={styles.body}>{i.quantity} × {i.name} · {fare(i.priceKobo * i.quantity)}</Text>)}<FoodMoney value={o.totals}/><Text style={styles.small}>Test checkout · no money charged.</Text></Card>
       <Card><Text style={styles.h2}>Order progress</Text>{o.events.map((e, i) => <View key={i} style={food.timeline}><Text style={styles.body}>{EATS_STATUS[e.status]}</Text><Text style={styles.small}>{new Date(e.at).toLocaleString()}</Text>{e.reason && <Text style={styles.body}>{e.reason}</Text>}</View>)}</Card>

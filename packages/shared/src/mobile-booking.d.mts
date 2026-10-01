@@ -9,7 +9,7 @@ export type RequestData = ({ quoteId: string } | { pickupId: string; destination
 export interface DeliveryView extends DeliveryDetails { verifiedAt: number | null; pinBlockedUntil: number | null; dropoffPin?: string }
 export interface BookingPreview { vehicleCategory?: VehicleCategoryId; kind: 'route' | 'sample'; pickup: string; destination: string; suggestedFareKobo: number;
   expiresAt: number | null; request: RequestData; route: RouteGeometry | null }
-export interface BookingRide { vehicleCategory?: VehicleCategoryId; service?: 'ride' | 'delivery'; delivery?: DeliveryView | null; passenger?: PassengerView; id: string; version: number; status: string; pickup: string; destination: string;
+export interface BookingRide { paymentMode?: 'simulation' | 'paystack_test'; vehicleCategory?: VehicleCategoryId; service?: 'ride' | 'delivery'; delivery?: DeliveryView | null; passenger?: PassengerView; id: string; version: number; status: string; pickup: string; destination: string;
   suggestedFareKobo: number; fareKobo: number | null; expiresAt: number | null; canCancel: boolean;
   driver: { name: string; vehicle: Vehicle } | null }
 export interface Booking extends Envelope { online: { enabled: boolean; searchHost: string | null; routeHost: string | null };

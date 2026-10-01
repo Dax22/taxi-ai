@@ -46,6 +46,10 @@ export function createEatsView(controller, { geolocation = createGeolocation(), 
       top.append(text('h3', order.restaurant.name), text('span', EATS_STATUS[order.status], 'food-tag')); card.append(top);
       card.append(text('p', `${order.fulfillment === 'pickup' ? 'Customer pickup' : 'Delivery'} · ${order.lines.reduce((sum, i) => sum + i.quantity, 0)} items · ${formatNaira(order.totals.totalKobo)} · ${new Date(order.createdAt).toLocaleString()}`));
       card.append(button('Open order', () => void controller.navigate('order', order.id), true)); root.append(card);
+      if (order.role === 'customer' && order.payment?.method === 'paystack') {
+        card.append(text('p', `Paystack test payment · ${order.payment.status.replaceAll('_', ' ')}`, 'small-note'),
+          button(order.payment.targetId !== order.id ? 'View combined test payment' : 'View test payment', () => void controller.navigate('order', order.id), true));
+      }
     }
   }
   for (const name of ['cuisine', 'store-cuisine']) for (const cuisine of EATS_CUISINES) { const option = text('option', cuisine); option.value = cuisine; field(name).append(option); }
@@ -288,7 +292,10 @@ export function createEatsView(controller, { geolocation = createGeolocation(), 
       if (o.courier) card.append(text('p', `Courier: ${o.courier.name} · ${o.courier.vehicle.colour ?? ''} ${o.courier.vehicle.model} · ${o.courier.vehicle.plate}`));
       if (o.pickupPin || o.deliveryPin) card.append(text('p', o.pickupPin ? 'Kitchen pickup code · share at handover only' : o.fulfillment === 'pickup' ? 'Your pickup code · show the kitchen when collecting your food' : o.recipient?.kind === 'other' ? 'Delivery code · share this with your recipient privately. They should give it to the courier only when the food arrives. Taxi Ai does not send it automatically.' : 'Your delivery code · share only when you receive the food', 'small-note'), text('p', o.pickupPin ?? o.deliveryPin, 'food-pin'));
       for (const i of o.lines) card.append(text('p', `${i.quantity} × ${i.name} · ${formatNaira(i.priceKobo * i.quantity)}`));
-      card.append(totals(o.totals), text('p', 'Test checkout · no money charged.', 'small-note'));
+      card.append(totals(o.totals), text('p', o.payment?.method === 'paystack'
+        ? `Paystack test checkout · ${o.payment.status.replaceAll('_', ' ')} · no real money collected.` : 'Test checkout · no money charged.', 'small-note'));
+      if (o.payment?.method === 'paystack' && o.payment.status === 'pending') card.append(text('p', 'The order is reserved while the buyer completes test payment. Kitchen preparation starts only after payment is verified.', 'food-notice'));
+      if (o.payment?.method === 'paystack' && o.payment.status === 'expired') card.append(text('p', 'This unpaid reservation expired. Review the order status before trying to order again.', 'food-notice'));
       const timeline = text('ol', undefined, 'food-timeline');
       for (const event of o.events) { const li = text('li'); li.append(text('strong', EATS_STATUS[event.status]), text('small', new Date(event.at).toLocaleString())); if (event.reason) li.append(text('p', event.reason)); timeline.append(li); }
       card.append(timeline); root.append(card);

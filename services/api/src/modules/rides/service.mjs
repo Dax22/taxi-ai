@@ -22,8 +22,12 @@ import { matchingPairKey } from '../../shared/matching-pair-key.mjs';
  */
 export function createRidesService({ repository, deliveries, passengerForRide, savePassenger, getAccount, unitOfWork, audit, tokens, clock, onRideClosed = () => {}, onTripCompleted = () => {},
   requireTripLocation = () => check(false, 'TRIP_LOCATION_REQUIRED', 'Share a fresh location from your working device before progressing this trip.'),
+  checkoutPayments = null,
   routeForRide = () => null, quoteForRide, bindQuote, availabilityFor = () => null, onClaim = () => {}, onEvent = () => {}, availableDriverIds = () => [], nearbyDriverIds = null, hasOtherWork = () => false, allowSimulation = false,
   dispatch = null, isParcelRecipient = async () => false, ridePilot = createRidePilotConfig(), matching = null, nearbyMatchingDriverIds = null }) {
+  const checkoutEnabled = checkoutPayments?.enabled === true;
+  if (checkoutEnabled && (typeof checkoutPayments.requirePaid !== 'function' || typeof checkoutPayments.close !== 'function'))
+    throw new Error('Enabled ride checkout requires verified-payment and cancellation ports.');
   // Expiry commits independently of a command that may fail afterward.
   async function expireRequested(ride, now) {
     if (!ride || ride.status !== 'requested' || now < ride.requestExpiresAt) return;
@@ -48,6 +52,20 @@ export function createRidesService({ repository, deliveries, passengerForRide, s
     const ride = (await repository.find(id));
     check(ride, 'NOT_FOUND', 'Ride request not found.');
     return { ...ride, trip: (await repository.findTrip(id)) };
+  }
+
+  // The confirmed trip row, never a suggested fare or caller-supplied amount,
+  // binds checkout to one immutable booking. Closed rows remain reconciliation evidence.
+  function checkoutContext(ride, status = ride.trip?.status) {
+    const trip = ride.trip;
+    check(trip && trip.rideId === ride.id && trip.customerId === ride.customerId && trip.driverId === ride.driverId
+      && Number.isSafeInteger(trip.fareKobo) && trip.fareKobo > 0
+      && Number.isSafeInteger(trip.bookedAt) && trip.bookedAt >= 0,
+    'PAYMENT_NOT_READY', 'Confirm the agreed booking before paying its saved fare.');
+    const paymentMode = trip.paymentMode ?? 'simulation';
+    return { kind: 'ride', targetId: ride.id, customerId: trip.customerId, driverId: trip.driverId,
+      amountKobo: trip.fareKobo, currency: 'NGN', bookedAt: trip.bookedAt, status,
+      paymentMode, eligible: paymentMode === 'paystack_test' && ['booked', 'on_way', 'arrived', 'in_progress'].includes(status) };
   }
 
   async function negotiationFor(ride) {
@@ -75,7 +93,7 @@ export function createRidesService({ repository, deliveries, passengerForRide, s
       matching: ride.requestExpiresAt ? { expiresAt: ride.requestExpiresAt, expandedAt: ride.createdAt + EXPAND_MS,
         radiusMeters: route ? searchRadius(ride.createdAt, ride.matchedAt ?? (ride.closedReason ? ride.updatedAt : clock())) : null,
         mode: route ? 'gps' : 'sample', reason: ride.closedReason } : null,
-      trip: trip ? { status: trip.status, fareKobo: trip.fareKobo, bookedAt: trip.bookedAt,
+      trip: trip ? { status: trip.status, fareKobo: trip.fareKobo, paymentMode: trip.paymentMode ?? 'simulation', bookedAt: trip.bookedAt,
         departedAt: trip.departedAt, arrivedAt: trip.arrivedAt, startedAt: trip.startedAt, completedAt: trip.completedAt,
         pinBlockedUntil: trip.pinBlockedUntil,
         ...(user.id === ride.customerId && trip.pickupPin ? { pickupPin: trip.pickupPin } : {}) } : null,
@@ -393,7 +411,8 @@ export function createRidesService({ repository, deliveries, passengerForRide, s
       check(!(await availabilityFor(user.id, now)), 'DRIVER_ONLINE', 'Go offline from Work before confirming a personal ride.');
       const agreement = (await negotiationFor(ride)).snapshot().agreement;
       check(agreement, 'INVALID_TRIP_STATE', 'Both participants must agree the fare first.');
-      (await repository.bookTrip({ ride, fareKobo: agreement.amountKobo, pin: tokens.pickupPin(), now }));
+      (await repository.bookTrip({ ride, fareKobo: agreement.amountKobo,
+        paymentMode: checkoutEnabled ? 'paystack_test' : 'simulation', pin: tokens.pickupPin(), now }));
       (await deliveries.confirm(id));
       next = 'booked';
     } else if (action === 'cancel') {
@@ -420,6 +439,12 @@ export function createRidesService({ repository, deliveries, passengerForRide, s
       if (action === 'start') {
         requireEligibleDriver(user);
         check((await deliveries.matches(ride, user.driver.vehicle)), 'VEHICLE_MISMATCH', 'The approved vehicle no longer matches this request.');
+        // This port reads verified local payment state inside this transaction.
+        // A checkout redirect/provider callback alone cannot authorize a start.
+        if (ride.trip.paymentMode === 'paystack_test') {
+          check(typeof checkoutPayments?.requirePaid === 'function', 'PAYMENT_NOT_READY', 'Verified payment is required before this trip can start.');
+          await checkoutPayments.requirePaid(checkoutContext(ride));
+        }
         check(typeof data.pickupPin === 'string' && /^\d{6}$/.test(data.pickupPin), 'INVALID_PIN_FORMAT', 'Enter the customer’s six-digit pickup PIN.');
         const trip = ride.trip;
         check(!trip.pinBlockedUntil || trip.pinBlockedUntil <= now, 'PICKUP_PIN_LOCKED', 'Too many incorrect PINs. Wait five minutes from the last failed attempt before trying again.');
@@ -446,8 +471,14 @@ export function createRidesService({ repository, deliveries, passengerForRide, s
       'STALE_VERSION', 'This trip has changed. Refresh and try again.');
     (await repository.appendActivity(id, user.id, next, now, reason));
     (await audit.record(user.id, `trip.${next}`, id, now));
+    // Closing checkout is atomic with cancellation. A pending provider success
+    // must be reconciled as refund-required evidence, never reopen this booking.
+    if (next === 'cancelled' && ride.trip?.paymentMode === 'paystack_test') {
+      check(typeof checkoutPayments?.close === 'function', 'PAYMENT_NOT_READY', 'Payment cancellation is temporarily unavailable. Try again.');
+      await checkoutPayments.close({ ...checkoutContext(ride, 'cancelled'), closedAt: now });
+    }
     if (next === 'completed') (await onTripCompleted({ rideId: id, customerId: ride.customerId,
-      driverId: ride.driverId, amountKobo: ride.trip.fareKobo, completedAt: now }));
+      driverId: ride.driverId, amountKobo: ride.trip.fareKobo, paymentMode: ride.trip.paymentMode ?? 'simulation', completedAt: now }));
     if (['completed', 'cancelled'].includes(next)) (await onRideClosed(id, now));
     return { rideId: id };
   }
@@ -510,6 +541,14 @@ export function createRidesService({ repository, deliveries, passengerForRide, s
       completedAt: ride.trip?.completedAt ?? null, pickup: route.pickup.name, destination: route.destination.name };
   }
 
+  // Read-only checkout port. The checkout module restricts charging to customerId;
+  // the assigned driver may read a sanitized payment status before starting work.
+  async function checkoutPaymentContext(user, id) {
+    const ride = await record(id);
+    requireParticipant(ride, user);
+    return checkoutContext(ride);
+  }
+
   async function safetyContext(user, id) {
     const ride = (await record(id)); requireParticipant(ride, user);
     const route = (await routeForRide(id)) ?? createDemoQuote(ride.pickupId, ride.destinationId);
@@ -533,6 +572,6 @@ export function createRidesService({ repository, deliveries, passengerForRide, s
       service: (await deliveries.isDelivery(id)) ? 'delivery' : 'ride',
       completedAt: ride.trip?.completedAt ?? null };
   }
-  return Object.freeze({ get, list, history, mutate, rate, conversationContext, conversationIds, paymentContext, safetyContext, guestContext, familyContext, sweep,
+  return Object.freeze({ get, list, history, mutate, rate, conversationContext, conversationIds, paymentContext, checkoutPaymentContext, safetyContext, guestContext, familyContext, sweep,
     dispatchCandidates, dispatchCandidatesFor, dispatchCandidateFor: async (rideId, driverId, now) => (await dispatchCandidate((await repository.find(rideId)), driverId, now)) });
 }

@@ -1,8 +1,11 @@
-# Simulated payments, receipts and earnings
+# Local simulated payments, receipts and earnings
+
+For hosted Paystack **test-mode** checkout before ride/courier start and food preparation,
+see [Paystack integration](paystack.md). This document describes the preserved local simulator.
 
 This milestone runs a complete **local payment simulation** after a test ride.
 No funds are collected, no bank/card details are requested, and driver totals are
-not a wallet or withdrawable balance. Paystack is not connected. The simulator
+not a wallet or withdrawable balance. The simulator is separate from the optional Paystack test integration. It
 works without provider credentials or Alibaba hosting.
 
 ## Try the flow
@@ -48,7 +51,7 @@ same transaction as trip completion and communication/location cleanup. This is
 the accepted booking fare, not the suggestion or any browser-submitted amount.
 Payment state has its own version and does not change the ride's fare or version.
 
-All payment records in this release have `mode: "simulation"`; all attempts have
+All records in the legacy `payments` tables have `mode: "simulation"`; all attempts have
 `provider: "simulator"` and server-generated `SIM-` references. Individual amounts
 are positive safe integer kobo in NGN. Aggregate amounts are **decimal strings of
 kobo** so lifetime totals remain exact beyond JavaScript's safe integer range.

@@ -498,3 +498,43 @@ test('family read cancellation reaches the network and malformed observer payloa
   forbidden = true; await assert.rejects(app.familyDashboard(), /incompatible Family Safety/);
   await assert.rejects(app.familyTrip('../another-user'), /Invalid family trip/);
 });
+
+const checkoutFixture = (kind: 'ride' | 'food' = 'food') => ({
+  settings: { provider: 'paystack', mode: 'test', enabled: true }, canStart: false, isPayer: true,
+  payment: { id, kind, targetId: id, status: 'pending', amountKobo: 125000, currency: 'NGN', version: 1,
+    checkoutUrl: 'https://checkout.paystack.com/test-example', reference: 'taxiai_test_reference', refundRequired: false,
+    createdAt: 1000, updatedAt: 1000, paidAt: null, receipt: null },
+});
+test('Paystack commands retain their target, exact version and idempotency key through account token refresh', async () => {
+  const calls: Array<{ url: string; options: RequestInit }> = [];
+  const { app, storage } = client(async (url, options) => {
+    if (url.endsWith('/auth/login')) return response(auth());
+    if (url.endsWith('/auth/refresh')) return response(auth(2));
+    calls.push({ url, options });
+    return new Headers(options.headers).get('Authorization') === `Bearer ${auth().credentials.accessToken}` ? unauthorized() : ok(checkoutFixture());
+  });
+  await app.login(user.email, 'Test password', 'Phone');
+  await app.checkoutPaymentCommand('food', id, 'start', 0, 'test-checkout-command-key');
+  assert.equal(calls.length, 2); assert.equal(calls[0].url, `https://taxi.example.test/api/mobile/v1/checkout-payments/food/${id}/start`);
+  for (const call of calls) {
+    assert.equal(call.options.body, JSON.stringify({ expectedVersion: 0 }));
+    assert.equal(new Headers(call.options.headers).get('Idempotency-Key'), 'test-checkout-command-key');
+  }
+  assert.equal(storage.value!.includes('checkout.paystack.com'), false); assert.equal(storage.value!.includes('taxiai_test_reference'), false);
+});
+test('late checkout responses cannot expose a previous account link and unsafe provider URLs fail at the native client boundary', async () => {
+  let finish!: (value: Response) => void, unsafe = false;
+  const { app } = client(async url => {
+    if (url.endsWith('/auth/login')) return response(auth());
+    if (url.includes('/checkout-payments/')) {
+      if (unsafe) { const value = checkoutFixture(); value.payment.checkoutUrl = 'https://paystack.example.test/steal'; return ok(value); }
+      return new Promise(resolve => { finish = resolve; });
+    }
+    return ok();
+  });
+  await app.login(user.email, 'Test password', 'Phone');
+  const pending = app.checkoutPayment('food', id), rejected = assert.rejects(pending, { code: 'SESSION_CHANGED' });
+  await settleRequest(); await app.logout(); finish(ok(checkoutFixture())); await rejected;
+  await app.login(user.email, 'Test password', 'Phone'); unsafe = true;
+  await assert.rejects(app.checkoutPayment('food', id), /incompatible test payment/);
+});

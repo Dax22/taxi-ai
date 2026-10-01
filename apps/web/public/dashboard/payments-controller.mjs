@@ -1,7 +1,7 @@
 /** Owns financial requests and discards responses from old accounts/journeys. */
 export function createPaymentsController({ client, view }) {
   const empty = () => ({ user: null, ride: null, payment: null, receipt: null, settings: null,
-    ledger: null, before: null, busy: false, detailError: '', ledgerError: '', message: '' });
+    ledger: null, before: null, busy: false, detailError: '', ledgerError: '', message: '', hostedCheckout: false });
   let state = empty(), generation = 0, detailGeneration = 0, pageGeneration = 0;
   let detailPending = null, ledgerPending = null;
   const render = () => view.render(state);
@@ -20,7 +20,7 @@ export function createPaymentsController({ client, view }) {
     state.ride = next; render();
   }
   async function detail() {
-    if (!state.ride || state.busy || detailPending) return detailPending;
+    if (!state.ride || state.hostedCheckout || state.busy || detailPending) return detailPending;
     const account = generation, selection = detailGeneration, id = state.ride.id;
     const current = () => account === generation && selection === detailGeneration;
     const task = (async () => {
@@ -65,7 +65,7 @@ export function createPaymentsController({ client, view }) {
     try { await task; } finally { if (ledgerPending === task) ledgerPending = null; }
   }
   async function command(action, displayed, outcome) {
-    if (state.busy || state.user?.role !== 'customer' || !state.settings?.canSimulate
+    if (state.busy || state.hostedCheckout || state.user?.role !== 'customer' || !state.settings?.canSimulate
       || !state.payment || state.payment.rideId !== displayed.rideId || state.payment.version !== displayed.version) return;
     const account = generation, selection = ++detailGeneration;
     detailPending = null; state.busy = true; state.detailError = ''; state.message = ''; render();
@@ -97,5 +97,10 @@ export function createPaymentsController({ client, view }) {
     return ledger();
   }
   return Object.freeze({ context, reset, poll: () => Promise.all([detail(), ledger()]),
+    setHostedCheckout(active) {
+      if (state.hostedCheckout === active) return;
+      detailGeneration++; detailPending = null;
+      Object.assign(state, { hostedCheckout: active, payment: null, receipt: null, settings: null, busy: false, detailError: '', message: '' }); render();
+    },
     start: (displayed) => command('start', displayed), simulate: (displayed, outcome) => command('simulate', displayed, outcome), page });
 }

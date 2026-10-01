@@ -17,7 +17,7 @@ import { eatsRoutes } from '../modules/eats/routes.mjs';
 import { realtimeResponse, requestAbortSignal } from '../modules/realtime/routes.mjs';
 
 /** Versioned native surface. Cookie identity and browser CSRF are never reused. */
-export function createMobileRouter({ devices, accounts, drivers, rides, dispatch, eats, locations, backgroundLocations, availability, chat, notifications, announcements, safety, safetyMonitoring, guestRides, parcelTracking, family, vehicleChecks, payments, clock, rateLimiter, googleAuth, accountEmail, realtime }) {
+export function createMobileRouter({ devices, accounts, drivers, rides, dispatch, eats, locations, backgroundLocations, availability, chat, notifications, announcements, safety, safetyMonitoring, guestRides, parcelTracking, family, vehicleChecks, payments, checkoutPayments, clock, rateLimiter, googleAuth, accountEmail, realtime }) {
   const monitorRoutes = safetyMonitoringRoutes(safetyMonitoring).filter(r=>!r.role);
   const foodRoutes = eatsRoutes(eats);
   const relativesRoutes = familyRoutes(family);
@@ -119,6 +119,10 @@ export function createMobileRouter({ devices, accounts, drivers, rides, dispatch
       if (result.image) { response.writeHead(200, { 'Content-Type': result.image.mimeType, 'Content-Length': result.image.content.length }); response.end(result.image.content); return; }
       body = result.body;
     }
+    else if (!write && /^\/checkout-payments\/(ride|food)\/[a-f0-9-]{36}$/.test(path)) body = await checkoutPayments.get(session.user.id, path.split('/')[2], path.split('/')[3]);
+    else if (write && /^\/checkout-payments\/(ride|food)\/[a-f0-9-]{36}\/(start|refresh)$/.test(path)) body = await checkoutPayments.command({ userId: session.user.id,
+      kind: path.split('/')[2], targetId: path.split('/')[3], action: path.split('/')[4], data, key: request.headers['idempotency-key'],
+      reauthenticate: async () => { const fresh = await devices.sessionFor(accessToken); check(fresh, 'UNAUTHENTICATED', 'Sign in to continue.'); return fresh.user; } });
     else if (!write && /^\/payments\/rides\/[a-f0-9-]{36}$/.test(path)) body = (await payments.get(session.user.id, path.split('/')[3]));
     else if (!write && /^\/payments\/rides\/[a-f0-9-]{36}\/receipt$/.test(path)) body = (await payments.receipt(session.user.id, path.split('/')[3]));
     else if (write && /^\/payments\/rides\/[a-f0-9-]{36}\/start$/.test(path)) body = (await payments.command({ userId: session.user.id,

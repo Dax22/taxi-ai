@@ -7,10 +7,11 @@ import { fields, label } from '../../shared/validation.mjs';
 import { check } from '../../shared/errors.mjs';
 import { canonical, version, storeDetails, menuDetails, checkedBasket, area, deliveryAddress, deliveryRecipient, deliveryPoint } from './domain.mjs';
 import { asyncMap, asyncFlatMap, asyncSome, asyncFilter } from '../../shared/async-collections.mjs';
+import { createEatsPayments, foodPaymentPending, foodPaymentView, FOOD_PAYMENT_RESERVATION_MS } from './payments.mjs';
 
 
 /** Stores and food orders own their state; other work is checked through injected ports. */
-export function createEatsService({ repository, getAccount, hasOtherWork, availabilityFor, onClaim, photoCodec, tokens, unitOfWork, audit, clock, normalisePhoto, resolveDeliveryLocation = async (point) => ({ point, line: '', areaId: null, attribution: '' }), deliveryMapSettings = () => ({ tiles: null, attribution: '' }), foodTracking = null }) {
+export function createEatsService({ repository, getAccount, hasOtherWork, availabilityFor, onClaim, photoCodec, tokens, unitOfWork, audit, clock, normalisePhoto, resolveDeliveryLocation = async (point) => ({ point, line: '', areaId: null, attribution: '' }), deliveryMapSettings = () => ({ tiles: null, attribution: '' }), foodTracking = null, paymentsEnabled = false, onPaymentClosed = async () => {} }) {
   const actor = async (user) => { const fresh = (await getAccount(user?.id)); check(fresh, 'UNAUTHENTICATED', 'Sign in to continue.'); return fresh; };
   const identifier = (id) => { check(typeof id === 'string' && /^[a-f0-9-]{36}$/.test(id), 'INVALID_ID', 'Choose a valid record.'); return id; };
   const storeRecord = async (id) => { const value = (await repository.store(identifier(id))); check(value, 'NOT_FOUND', 'Restaurant not found.'); return value; };
@@ -64,6 +65,12 @@ export function createEatsService({ repository, getAccount, hasOtherWork, availa
     }
     if (changed) { const store = (await storeRecord(order.storeId)); store.version++; store.updatedAt = now; (await repository.saveStore(store)); }
   }
+  const paymentOrders = createEatsPayments({ repository, clock, release, onPaymentClosed });
+  async function expireOrder(user, id) {
+    const order = await repository.order(id);
+    if (order && await roleFor(user, order) && order.snapshot.payment?.method === 'paystack' && order.snapshot.payment.status === 'pending'
+      && order.snapshot.payment.expiresAt <= clock()) await unitOfWork(() => paymentOrders.expire(order.snapshot.payment.targetId));
+  }
   async function storeView(user, id) {
     const store = (await storeRecord(id)), managing = user.role === 'admin' || (await member(user, id));
     check(managing || store.status === 'approved', 'NOT_FOUND', 'Restaurant not found.');
@@ -90,7 +97,8 @@ export function createEatsService({ repository, getAccount, hasOtherWork, availa
     const customer = await getAccount(order.customerId), recipient = savedRecipient ?? deliveryRecipient(undefined, customer);
     const contactVisible = role === 'customer' || role === 'admin' || role === 'courier' && active;
     const { point, ...addressWithoutPoint } = address;
-    return { id: order.id, status: order.status, version: order.version, ...snapshot, role, actions: eatsActions(order, role),
+    return { id: order.id, status: order.status, version: order.version, ...snapshot, payment: foodPaymentView(snapshot.payment, role), role,
+      actions: eatsActions(order, role).filter(action => !foodPaymentPending(order) || ['cancel', 'reject'].includes(action)),
       address: role === 'store' ? { areaId: address.areaId } : contactVisible ? address : addressWithoutPoint,
       recipient: contactVisible ? recipient : { kind: recipient.kind, name: recipient.name },
       needsCollectionPoint: role === 'store' && order.status === 'preparing' && (await privateKitchen(order.snapshot.restaurant)) && !order.snapshot.restaurant.address && !order.collectionPoint,
@@ -133,7 +141,10 @@ export function createEatsService({ repository, getAccount, hasOtherWork, availa
   async function project(user, result, replayed) {
     if (result.failure) check(false, result.failure.code, result.failure.message);
     if (result.deliveryProfile) { requireRole(user, 'customer'); return { deliveryProfile: await repository.deliveryProfile(user.id), replayed }; }
-    if (result.orderIds) return { orders: (await asyncMap(result.orderIds, async (id) => (await orderView(user, (await repository.order(id)))))), nextBefore: null, checkoutId: result.checkoutId, replayed };
+    if (result.orderIds) {
+      const orders = await asyncMap(result.orderIds, async id => orderView(user, await repository.order(id)));
+      return { orders, nextBefore: null, checkoutId: result.checkoutId, ...(orders[0]?.payment.method === 'paystack' ? { payment: orders[0].payment } : {}), replayed };
+    }
     if (result.checkoutId) return { checkout: (await checkoutView(user, result.checkoutId)), replayed };
     if (result.orderId) return { order: (await orderView(user, (await repository.order(result.orderId)))), replayed };
     if (result.quoteId) return { quote: (await quoteView(user, result.quoteId)), replayed };
@@ -148,7 +159,9 @@ export function createEatsService({ repository, getAccount, hasOtherWork, availa
   }
   async function checkoutView(user, id) {
     const checkout = (await checkoutRecord(user, id)), quotes = (await asyncMap(checkout.quoteIds, async (quoteId) => (await quoteView(user, quoteId))));
-    return { id, quotes, totals: checkedTotal(quotes), expiresAt: Math.min(...quotes.map((q) => q.expiresAt)) };
+    const placedQuote = await repository.quote(checkout.quoteIds[0]), placed = placedQuote?.orderId ? await repository.order(placedQuote.orderId) : null;
+    return { id, quotes, totals: checkedTotal(quotes), expiresAt: Math.min(...quotes.map((q) => q.expiresAt)),
+      ...(placed?.snapshot.payment?.method === 'paystack' ? { payment: foodPaymentView(placed.snapshot.payment, 'customer') } : {}) };
   }
   async function makeQuote(user, data, now) {
     requireRole(user, 'customer'); const store = (await storeRecord(data?.storeId));
@@ -159,11 +172,12 @@ export function createEatsService({ repository, getAccount, hasOtherWork, availa
     (await repository.createQuote({ id: quoteId, customerId: user.id, storeId: store.id, storeVersion: store.version, snapshot, expiresAt: now + 600_000 }));
     return quoteId;
   }
-  async function placeQuote(user, quoteId, now) {
+  async function placeQuote(user, quoteId, now, paymentTargetId = null) {
     requireRole(user, 'customer'); const q = (await repository.quote(identifier(quoteId)));
     check(q?.customerId === user.id, 'NOT_FOUND', 'Checkout quote not found.');
     check(!q.orderId, 'QUOTE_USED', 'This checkout already created an order. Open My orders.');
     check(q.expiresAt > now, 'QUOTE_EXPIRED', 'This checkout expired. Review your cart again.');
+    if (paymentsEnabled && !paymentTargetId) check(!(await repository.checkoutForQuote(user.id, q.id)), 'PAYMENT_NOT_READY', 'Place this combined checkout together so its kitchens share one payment.');
     const store = (await storeRecord(q.storeId));
     check(store.status === 'approved' && store.isOpen, 'STORE_UNAVAILABLE', 'This kitchen stopped accepting orders.');
     check(q.snapshot.fulfillment === 'pickup' || dispatchReady(store), 'STORE_UNAVAILABLE', 'This kitchen needs a saved pickup location before it can offer courier delivery.');
@@ -171,13 +185,17 @@ export function createEatsService({ repository, getAccount, hasOtherWork, availa
     check(!(await member(user, store.id)), 'FORBIDDEN', 'You cannot order from your own store.');
     (await reserve(q.snapshot, store, now));
     const orderId = tokens.id();
-    (await repository.createOrder({ id: orderId, storeId: store.id, customerId: user.id, snapshot: q.snapshot, dispatchPoint: q.snapshot.fulfillment === 'pickup' ? null : store.dispatchPoint,
+    const snapshot = paymentsEnabled ? { ...q.snapshot, payment: { method: 'paystack', status: 'pending', targetId: paymentTargetId ?? orderId, expiresAt: now + FOOD_PAYMENT_RESERVATION_MS } } : q.snapshot;
+    (await repository.createOrder({ id: orderId, storeId: store.id, customerId: user.id, snapshot, dispatchPoint: q.snapshot.fulfillment === 'pickup' ? null : store.dispatchPoint,
       pickupPin: tokens.pickupPin(), deliveryPin: tokens.pickupPin(), events: [{ status: 'placed', at: now }], createdAt: now, updatedAt: now }));
     (await repository.bindQuote(q.id, orderId)); return orderId;
   }
   async function command(user, action, id, data, key, normalisedPhoto = null) {
     check(typeof key === 'string' && /^[A-Za-z0-9_-]{16,128}$/.test(key), 'INVALID_IDEMPOTENCY_KEY', 'A unique request key is required.');
     const fingerprint = tokens.digest(canonical({ action, id, data }));
+    if (id && ['accept', 'reject', 'prepare', 'ready', 'claim', 'pickup', 'arrive', 'deliver', 'complete_pickup', 'cancel'].includes(action)) {
+      await expireOrder(await actor(user), id);
+    }
     let replayed = false;
     const result = (await unitOfWork(async () => {
       user = (await actor(user));
@@ -253,7 +271,7 @@ export function createEatsService({ repository, getAccount, hasOtherWork, availa
       } else if (action === 'meal-place') {
         requireRole(user, 'customer'); fields(data, ['checkoutId']); const checkout = (await checkoutRecord(user, data.checkoutId));
         // Every kitchen reservation, order, quote binding and retry record commits together.
-        result = { checkoutId: checkout.id, orderIds: (await asyncMap(checkout.quoteIds, async (quoteId) => (await placeQuote(user, quoteId, now)))) };
+        result = { checkoutId: checkout.id, orderIds: (await asyncMap(checkout.quoteIds, async (quoteId) => (await placeQuote(user, quoteId, now, checkout.id)))) };
       } else {
         const order = (await repository.order(id)); check(order, 'NOT_FOUND', 'Order not found.');
         const role = action === 'claim' ? 'courier' : (await roleFor(user, order));
@@ -262,6 +280,7 @@ export function createEatsService({ repository, getAccount, hasOtherWork, availa
         fields(data, [...required, ...(action === 'ready' ? ['collectionPoint'] : [])], required);
         version(order, data.expectedVersion);
         check(eatsActions(order, role).includes(action), 'ORDER_CLOSED', 'This action is no longer available. Refresh your order.');
+        if (!['cancel', 'reject'].includes(action)) check(!foodPaymentPending(order), 'PAYMENT_REQUIRED', 'The customer must complete payment before this order can continue.');
         if (['pickup', 'arrive'].includes(action)) {
           check(await foodTracking?.freshPositionFor(user.id, order.id, now), 'LOCATION_REQUIRED', 'Turn on live delivery location and wait for a fresh GPS fix before continuing.');
         }
@@ -293,7 +312,7 @@ export function createEatsService({ repository, getAccount, hasOtherWork, availa
           } else { order.pinFailures = 0; order.pinBlockedUntil = null; if (action === 'pickup') order.pickupPin = null; }
         }
         if (!result) {
-          if (['cancel', 'reject'].includes(action)) (await release(order, now));
+          if (['cancel', 'reject'].includes(action)) { await release(order, now); await paymentOrders.close(order, now); }
           order.status = ({ accept: 'accepted', prepare: 'preparing', ready: 'ready', claim: 'assigned', pickup: 'picked_up', arrive: 'arrived', deliver: 'delivered', complete_pickup: 'delivered', cancel: 'cancelled', reject: 'rejected' })[action];
           const event = { status: order.status, at: now };
           if (['cancel', 'reject'].includes(action)) event.reason = label(data.reason, 'Reason', 5, 240);
@@ -490,6 +509,14 @@ export function createEatsService({ repository, getAccount, hasOtherWork, availa
       attribution: label(located.attribution ?? '', 'Map attribution', 0, 500) } };
   }
   return Object.freeze({ trackingContext, tracking, trackingCommand, deliveryProfile, saveDeliveryProfile, deliveryLocation, command, photoCommand, assetCommand, photoReview, image, work, orders: list,
+    paymentContext: async (user, targetId) => paymentOrders.context(await actor(user), identifier(targetId)),
+    applyPayment: paymentOrders.apply,
+    async expirePendingPayments() {
+      const targets = await repository.expiredPaymentTargets(clock(), 100);
+      let expired = 0;
+      for (const targetId of targets) if (await unitOfWork(() => paymentOrders.expire(targetId))) expired++;
+      return { expired };
+    },
     async photoReviewList(user, query = {}) {
       user = await actor(user); requireRole(user, 'admin');
       const status = query.status ?? 'pending';
@@ -543,7 +570,7 @@ export function createEatsService({ repository, getAccount, hasOtherWork, availa
       return { restaurants, dishes, areas: LEGACY_FOOD_AREAS, isDemo: true };
     },
     restaurant: async (user, id) => (await storeView((await actor(user)), id)),
-    order: async (user, id) => ({ order: (await orderView((await actor(user)), (await repository.order(id)))) }),
+    order: async (user, id) => { user = await actor(user); await expireOrder(user, id); return { order: await orderView(user, await repository.order(id)) }; },
     async mine(user) { user = (await actor(user)); const membership = (await repository.membership(user.id)); return membership ? { ...(await storeView(user, membership.storeId)), areas: LEGACY_FOOD_AREAS } : { store: null, menu: [], areas: LEGACY_FOOD_AREAS }; },
     async reviewList(user) { user = (await actor(user)); requireRole(user, 'admin'); return { stores: (await repository.stores(true)) }; },
   });

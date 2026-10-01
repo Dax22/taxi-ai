@@ -8,7 +8,7 @@ export function createPaymentsView({ onStart, onSimulate, onPage, onOpenRide, on
   function render(next) {
     state = next;
     const { user, ride, payment, receipt, settings, busy, ledger } = state;
-    $('payment-panel').hidden = !user || !ride;
+    $('payment-panel').hidden = !user || !ride || state.hostedCheckout;
     $('payment-error').textContent = state.detailError;
     $('payment-notice').textContent = state.message;
     $('payment-status').textContent = payment ? PAYMENT_LABELS[payment.status] : 'Loading';

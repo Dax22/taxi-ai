@@ -555,3 +555,25 @@ separate projection/navigation and rendering modules, backed by bundled country
 geometry and sourced city navigation anchors. Historical requests and measured
 pickup waits remain separate from current waiting requests and driver supply;
 see [nationwide coverage](nationwide-coverage-map.md).
+
+
+## Paystack test checkout
+
+`checkout-payments` owns additive schema 46 / PostgreSQL 19, independent of
+historical simulator rows. Its service reserves one immutable reference per
+ride or food checkout, performs injected provider I/O outside transactions, and
+commits verified settlement with domain fulfillment. A durable lease/backoff
+queue reconciles lost notifications after restarts. The composition root supplies
+owned immutable totals, ride start gates, food reservation settlement, and
+cancellation callbacks; the business modules never import each other's internals.
+
+Each confirmed ride stores its payment mode. Paystack food orders store a shared
+payment target and expiring inventory reservation. Configuration changes do not
+rewrite either history or existing payment requirements. A signed raw-body
+webhook alone bypasses tester authentication; the trusted HTTPS gateway still
+applies. Customer routes preserve session/CSRF/native ownership boundaries.
+
+The `eats/payments.mjs` helper owns transaction-local food reservation lifecycle
+through injected ports. Architecture checks allow exactly the service-to-helper
+edge and keep its infrastructure/cross-module imports forbidden. See
+[configuration, test journeys, failure recovery and launch exclusions](paystack.md).

@@ -31,6 +31,7 @@ migrations.push('042_eats_photo_workflow.sql');
 migrations.push('043_eats_delivery_profiles.sql');
 migrations.push('044_eats_live_tracking.sql');
 migrations.push('045_background_location_tokens.sql');
+migrations.push('046_checkout_payments.sql');
 export const SCHEMA_VERSION = migrations.length;
 
 export function transaction(db, run) {

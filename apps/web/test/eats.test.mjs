@@ -644,3 +644,14 @@ test('courier order buttons consult location guidance before collection and stil
   submit('pickup'); submit('arrive'); assert.deepEqual(actions, []);
   submit('deliver'); submit('cancel'); await flush(); assert.deepEqual(actions, ['deliver', 'cancel']); assert.equal(attempts.length, 4);
 });
+
+test('Paystack food orders keep combined payment entry visible and explain reservation before kitchen preparation', async (t) => {
+  const node = dom(t), f = fixture(), targetId = uuid(95);
+  const payable = { ...order, payment: { method: 'paystack', status: 'pending', targetId, expiresAt: 900000 } };
+  f.api.request = async (path) => path === '/eats/orders' ? { orders: [payable], nextBefore: null } : { order: payable };
+  const view = createEatsView(f.c); f.c.subscribe(() => view.render(f.c.snapshot())); await f.c.navigate('orders');
+  const descendants = (root) => [root, ...root.children.flatMap(descendants)];
+  const open = descendants(node('orders-list')).find((item) => item.textContent === 'View combined test payment'); assert.ok(open);
+  open.handlers.click(); await flush(); assert.equal(f.c.snapshot().order.payment.targetId, targetId);
+  assert.ok(descendants(node('order-detail')).some((item) => /reserved while the buyer completes test payment/.test(item.textContent ?? '')));
+});

@@ -82,7 +82,7 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
       node.textContent = seconds > 0 ? `Respond within ${seconds} seconds.` : 'Offer expired. Waiting for the next request.';
     }
     for (const button of document.querySelectorAll('button')) {
-      if (button.closest('#parcel-link-panel, #guest-link-panel, #vehicle-categories-panel, #google-auth, #account-modes, #calls-panel, #location-planner, #location-tracking, #availability-panel, #payment-panel, #earnings-panel, #payments-admin-panel, #onboarding-panel, #trusted-contacts-panel, #safety-panel, #safety-admin-panel')) continue; // Feature controllers own their controls.
+      if (button.closest('#parcel-link-panel, #guest-link-panel, #vehicle-categories-panel, #google-auth, #account-modes, #calls-panel, #location-planner, #location-tracking, #availability-panel, #checkout-payment-panel, #payment-panel, #earnings-panel, #payments-admin-panel, #onboarding-panel, #trusted-contacts-panel, #safety-panel, #safety-admin-panel')) continue; // Feature controllers own their controls.
       button.disabled = busy || button.dataset.locked === 'true';
     }
     $('delivery-details-fields').disabled = busy || state.user?.role !== 'customer' || !isDelivery()

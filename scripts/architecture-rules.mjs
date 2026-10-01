@@ -31,6 +31,8 @@ export function boundaryError(source, target) {
   }
   if (file === 'repository.mjs') return target.startsWith(`${api}shared/`) ? null : 'Repositories cannot import services, routes or other repositories.';
   if (target.startsWith(shared) || target.startsWith(`${api}shared/`)) return null;
+  // Eats' payment lifecycle helper uses only transaction-local injected ports.
+  if (source === `${api}modules/eats/service.mjs` && target === `${api}modules/eats/payments.mjs`) return null;
   if (sameModule && target.endsWith('/domain.mjs') && file === 'service.mjs') return null;
   return 'Business services and domain rules must not import storage, HTTP or composition code.';
 }

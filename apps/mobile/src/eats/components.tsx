@@ -16,7 +16,7 @@ export function FoodFeedback({ state, controller }: { state: EatsState; controll
   return <><Notice message={state.error}/>{!!state.notice && <Text style={styles.body} accessibilityLiveRegion="polite">{state.notice}</Text>}{state.loading && <Loading/>}
     {state.uncertain && <Card><Text style={styles.h2}>Confirm the pending action.</Text><Text style={styles.body}>The connection was interrupted. Retry the same action to check its result before changing this order.</Text><Button title="Retry the same action" busy={state.busy} onPress={() => void retry()}/></Card>}</>;
 }
-export function FoodPreview() { return <Text style={styles.small}>Development preview · fictional menus and test orders. No payment is collected or live delivery dispatched.</Text>; }
+export function FoodPreview() { return <Text style={styles.small}>Development preview · fictional menus and test orders. No real money is collected or live delivery dispatched.</Text>; }
 export function FoodRecipientDetails({ recipient }: { recipient?: FoodOrderRecipient | null }) {
   return recipient ? <View style={styles.stack}><Text style={styles.body}>Recipient · {recipient.name}</Text>{recipient.kind === 'other' && <Text style={styles.small}>Ordered for someone else.</Text>}{!!recipient.phone && <Text selectable style={styles.body}>Contact · {recipient.phone}</Text>}</View> : null;
 }
@@ -24,7 +24,7 @@ export function FoodMoney({ value }: { value: FoodTotals }) {
   return <View style={styles.stack}>{([['Food subtotal', value.subtotalKobo], ['Delivery', value.deliveryFeeKobo], ['Service fee · 5%, capped at ₦1,000', value.serviceFeeKobo], ['Order total', value.totalKobo]] as const).map(([label, amount]) => <View key={label} style={food.money}><Text style={[styles.body, food.moneyLabel]}>{label}</Text><Text style={label === 'Order total' ? styles.h2 : styles.body}>{fare(amount)}</Text></View>)}</View>;
 }
 export function FoodOrders({ orders, empty = 'No food orders yet.' }: { orders: FoodOrder[]; empty?: string }) {
-  return <>{!orders.length && <Text style={styles.body}>{empty}</Text>}{orders.map((o) => <Card key={o.id}><Pill>{EATS_STATUS[o.status].toUpperCase()}</Pill><Text style={styles.h2}>{o.restaurant.name}</Text><Text style={styles.body}>{o.fulfillment === 'pickup' ? 'Customer pickup · ' : 'Delivery · '}{o.lines.reduce((n, i) => n + i.quantity, 0)} items · {fare(o.totals.totalKobo)}</Text><Text style={styles.small}>{new Date(o.createdAt).toLocaleString()}</Text><Button title="Open food order" secondary onPress={() => router.push({ pathname: '/food-order', params: { id: o.id } })}/></Card>)}</>;
+  return <>{!orders.length && <Text style={styles.body}>{empty}</Text>}{orders.map((o) => <Card key={o.id}><Pill>{EATS_STATUS[o.status].toUpperCase()}</Pill><Text style={styles.h2}>{o.restaurant.name}</Text><Text style={styles.body}>{o.fulfillment === 'pickup' ? 'Customer pickup · ' : 'Delivery · '}{o.lines.reduce((n, i) => n + i.quantity, 0)} items · {fare(o.totals.totalKobo)}</Text><Text style={styles.small}>{new Date(o.createdAt).toLocaleString()}</Text>{o.payment.method === 'paystack' && <Text style={styles.body}>Paystack test payment · {o.payment.status.replace('_', ' ')}</Text>}<Button title={o.role === 'customer' && o.payment.method === 'paystack' && o.payment.status === 'pending' ? 'Review test checkout' : 'Open food order'} secondary onPress={() => router.push({ pathname: '/food-order', params: { id: o.id } })}/></Card>)}</>;
 }
 export const food = StyleSheet.create({
   hero: { padding: 24, backgroundColor: colors.yellow, borderRadius: 26, gap: 14 },
