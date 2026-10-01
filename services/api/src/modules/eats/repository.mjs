@@ -106,9 +106,15 @@ export function createEatsRepository(db, { deliveryAreas, legacyAreaIds: EATS_LE
     async createQuote(q) { (await db.prepare('INSERT INTO eats_quotes (id,customer_id,store_id,store_version,snapshot_json,expires_at) VALUES (?,?,?,?,?,?)').run(q.id,q.customerId,q.storeId,q.storeVersion,JSON.stringify(q.snapshot),q.expiresAt)); },
     async bindQuote(id, orderId) { (await db.prepare('UPDATE eats_quotes SET order_id=? WHERE id=?').run(orderId,id)); },
     checkout: async (id) => { const row = (await db.prepare('SELECT id,customer_id AS customerId,quote_ids_json AS quoteIds FROM eats_checkouts WHERE id=?').get(id)); return row ? { ...row, quoteIds: JSON.parse(row.quoteIds) } : null; },
+    checkoutForQuote: async (customerId, quoteId) => (await db.prepare(`SELECT id FROM eats_checkouts WHERE customer_id=?
+      AND EXISTS(SELECT 1 FROM json_each(quote_ids_json) WHERE value=?) LIMIT 1`).get(customerId, quoteId)) ?? null,
     async createCheckout(id, customerId, quoteIds, now) { (await db.prepare('INSERT INTO eats_checkouts (id,customer_id,quote_ids_json,created_at) VALUES (?,?,?,?)').run(id,customerId,JSON.stringify(quoteIds),now)); },
     async saveCollectionPoint(orderId, location) { (await db.prepare('INSERT INTO eats_collection_points (order_id,location) VALUES (?,?) ON CONFLICT(order_id) DO UPDATE SET location=excluded.location').run(orderId,location)); },
     order: async (id) => order((await db.prepare(`SELECT ${orderColumns} FROM eats_orders WHERE id=?`).get(id))),
+    expiredPaymentTargets: async (now, limit = 100) => (await db.prepare(`SELECT DISTINCT json_extract(snapshot_json,'$.payment.targetId') AS targetId
+      FROM eats_orders WHERE status='placed' AND json_extract(snapshot_json,'$.payment.method')='paystack'
+      AND json_extract(snapshot_json,'$.payment.status')='pending' AND json_extract(snapshot_json,'$.payment.expiresAt')<=?
+      ORDER BY targetId LIMIT ?`).all(now, limit)).map(row => row.targetId),
     async orders(userId, scope, before = null) {
       const column = { customer: 'customer_id', store: 'store_id', courier: 'courier_id' }[scope];
       if (scope === 'store') {
@@ -122,7 +128,7 @@ export function createEatsRepository(db, { deliveryAreas, legacyAreaIds: EATS_LE
         .all(userId,before?.id ?? null,before?.createdAt ?? null,before?.createdAt ?? null,before?.id ?? null)).map(order);
     },
     async ready(position, radius, userId) {
-      const eligibility = "status='ready' AND COALESCE(json_extract(snapshot_json, '$.fulfillment'), 'delivery')='delivery' AND customer_id<>? AND store_id NOT IN (SELECT store_id FROM eats_memberships WHERE user_id=?)";
+      const eligibility = "status='ready' AND (COALESCE(json_extract(snapshot_json,'$.payment.method'),'test')<>'paystack' OR json_extract(snapshot_json,'$.payment.status')='paid') AND COALESCE(json_extract(snapshot_json, '$.fulfillment'), 'delivery')='delivery' AND customer_id<>? AND store_id NOT IN (SELECT store_id FROM eats_memberships WHERE user_id=?)";
       if (position.mode === 'sample') return (await db.prepare(`SELECT ${orderColumns} FROM eats_orders WHERE ${eligibility}
         AND json_extract(snapshot_json,'$.restaurant.areaId')=? ORDER BY created_at,id LIMIT 100`).all(userId, userId, position.areaId)).map(order);
 
@@ -156,8 +162,8 @@ export function createEatsRepository(db, { deliveryAreas, legacyAreaIds: EATS_LE
       VALUES (?,?,?,'placed',?,?,?,?,?,?)`).run(o.id,o.storeId,o.customerId,JSON.stringify(o.snapshot),o.pickupPin,o.deliveryPin,JSON.stringify(o.events),o.createdAt,o.updatedAt));
       if (o.dispatchPoint) (await db.prepare('INSERT INTO eats_order_dispatch_points (order_id,lat,lng) VALUES (?,?,?)').run(o.id,o.dispatchPoint.lat,o.dispatchPoint.lng));
     },
-    async saveOrder(o) { (await db.prepare(`UPDATE eats_orders SET courier_id=?,courier_json=?,status=?,version=?,pickup_pin=?,delivery_pin=?,pin_failures=?,pin_blocked_until=?,events_json=?,updated_at=? WHERE id=?`)
-      .run(o.courierId,o.courier ? JSON.stringify(o.courier) : null,o.status,o.version,o.pickupPin,o.deliveryPin,o.pinFailures,o.pinBlockedUntil,JSON.stringify(o.events),o.updatedAt,o.id)); },
+    async saveOrder(o) { (await db.prepare(`UPDATE eats_orders SET courier_id=?,courier_json=?,status=?,version=?,pickup_pin=?,delivery_pin=?,pin_failures=?,pin_blocked_until=?,events_json=?,snapshot_json=?,updated_at=? WHERE id=?`)
+      .run(o.courierId,o.courier ? JSON.stringify(o.courier) : null,o.status,o.version,o.pickupPin,o.deliveryPin,o.pinFailures,o.pinBlockedUntil,JSON.stringify(o.events),JSON.stringify(o.snapshot),o.updatedAt,o.id)); },
     command: async (id,key) => { const row = (await db.prepare('SELECT fingerprint,result_json AS result FROM eats_commands WHERE actor_id=? AND key=?').get(id,key)); return row ? { ...row, result: JSON.parse(row.result) } : null; },
     async saveCommand(id,key,fingerprint,result,now) { (await db.prepare('INSERT INTO eats_commands (actor_id,key,fingerprint,result_json,created_at) VALUES (?,?,?,?,?)').run(id,key,fingerprint,JSON.stringify(result),now)); },
   });

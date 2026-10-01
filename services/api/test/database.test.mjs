@@ -13,6 +13,7 @@ import { canonical } from '../src/modules/rides/domain.mjs';
 function legacyRows(db, table) {
   return db.prepare(`SELECT * FROM ${table}`).all().map((row) => {
     if (table === 'rides') { delete row.request_expires_at; delete row.closed_reason; delete row.driver_snapshot_json; delete row.vehicle_category; assert.equal(row.dispatch_region, `sample:${row.pickup_id}`); delete row.dispatch_region; }
+    if (table === 'ride_trips') { assert.equal(row.payment_mode, 'simulation'); delete row.payment_mode; }
     return row;
   });
 }

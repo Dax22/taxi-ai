@@ -132,6 +132,7 @@ export function removeAdminWorkspaceFixtureTables(db) {
 
 /** Kemmy setup is account preference state; old-schema fixtures may remove it only while empty. */
 export function removeEatsTrackingFixtureTables(db) {
+  removeCheckoutPaymentFixtureTables(db);
   if (db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='background_location_tokens'").get()) {
     if (db.prepare('SELECT count(*) AS n FROM background_location_tokens').get().n) throw new Error('Cannot downgrade a populated background location fixture.');
     db.exec('DROP TRIGGER IF EXISTS background_location_revoke; DROP TABLE background_location_tokens');
@@ -198,5 +199,19 @@ export function removeAdminExpansionFixtureTables(db) {
   for (const table of present) db.exec(`DROP TABLE ${table}`);
   for (const index of ['admin_compliance_due', 'admin_compliance_history', 'admin_compliance_documents', 'admin_compliance_applications']) {
     db.exec(`DROP INDEX IF EXISTS ${index}`);
+  }
+}
+
+/** Reconstruct pre-payment schemas only when no provider checkout could be lost. */
+export function removeCheckoutPaymentFixtureTables(db) {
+  for (const table of ['checkout_payment_closures', 'checkout_payment_commands', 'checkout_payments']) {
+    if (!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(table)) continue;
+    if (db.prepare(`SELECT count(*) AS n FROM ${table}`).get().n) throw new Error(`Cannot downgrade a populated ${table} fixture.`);
+    db.exec(`DROP TABLE ${table}`);
+  }
+  db.exec('DROP INDEX IF EXISTS eats_pending_payment_expiry');
+  if (db.prepare('PRAGMA table_info(ride_trips)').all().some(row => row.name === 'payment_mode')) {
+    if (db.prepare("SELECT count(*) AS n FROM ride_trips WHERE payment_mode<>'simulation'").get().n) throw new Error('Cannot downgrade a Paystack booking fixture.');
+    db.exec('ALTER TABLE ride_trips DROP COLUMN payment_mode');
   }
 }

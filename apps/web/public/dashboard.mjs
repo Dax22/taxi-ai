@@ -19,6 +19,8 @@ import { createAvailabilityController } from './dashboard/availability-controlle
 import { createAvailabilityView } from './dashboard/availability-view.mjs';
 import { createPaymentsController } from './dashboard/payments-controller.mjs';
 import { createPaymentsView } from './dashboard/payments-view.mjs';
+import { createCheckoutPayments, combineRidePayments } from './dashboard/checkout-payments.mjs';
+import { createCheckoutPaymentView } from './dashboard/checkout-payment-view.mjs';
 import { createGeolocation } from './dashboard/geolocation.mjs';
 import { createPageController } from './dashboard/page-controller.mjs';
 import { createSafetyController } from './dashboard/safety-controller.mjs';
@@ -72,7 +74,13 @@ const paymentsView = createPaymentsView({ onStart: (payment) => payments.start(p
     if (await page.openRide(id)) $('payment-panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, onPrint: () => { document.body.classList.add('print-receipt'); window.print(); },
 });
-const payments = createPaymentsController({ client, view: paymentsView });
+const checkoutView = createCheckoutPaymentView($('checkout-payment-panel'), {
+  onStart: (version) => void checkout.start(version).then(() => page.poll()),
+  onRefresh: (version) => void checkout.refresh(version).then(() => page.poll()),
+  onRetry: () => void checkout.retry().then(() => page.poll()), onReload: () => void checkout.poll(),
+});
+const checkout = createCheckoutPayments({ client, view: checkoutView });
+const payments = combineRidePayments({ simulation: createPaymentsController({ client, view: paymentsView }), checkout });
 const conversationView = createConversationView({
   serverNow: () => serverTime.now + performance.now() - serverTime.received,
   onAccept: (...args) => page.rideCommand(...args),

@@ -1,3 +1,6 @@
+import { createPaystackConfig } from '../../services/api/src/infrastructure/paystack-config.mjs';
+import { createPaystackProvider } from '../../services/api/src/infrastructure/paystack-provider.mjs';
+import { createPaystackWebhook, PAYSTACK_WEBHOOK_PATH } from '../../services/api/src/http/paystack-webhook.mjs';
 import { createSafetyAlertProvider } from '../../services/api/src/infrastructure/safety-alert-provider.mjs';
 import { readDriverFaceConfig } from '../../services/api/src/infrastructure/driver-face-config.mjs';
 import { createDriverFaceProvider } from '../../services/api/src/infrastructure/driver-face-provider.mjs';
@@ -143,6 +146,10 @@ const routes = new Map([
   ['/dashboard/location-sharing.mjs', ['public/dashboard/location-sharing.mjs', 'text/javascript; charset=utf-8']],
   ['/dashboard/availability-controller.mjs', ['public/dashboard/availability-controller.mjs', 'text/javascript; charset=utf-8']],
   ['/dashboard/availability-view.mjs', ['public/dashboard/availability-view.mjs', 'text/javascript; charset=utf-8']],
+  ['/dashboard/checkout-payments.mjs', ['public/dashboard/checkout-payments.mjs', 'text/javascript; charset=utf-8']],
+  ['/dashboard/checkout-payment-view.mjs', ['public/dashboard/checkout-payment-view.mjs', 'text/javascript; charset=utf-8']],
+  ['/shared/checkout-payments.mjs', ['../../packages/shared/src/checkout-payments.mjs', 'text/javascript; charset=utf-8']],
+  ['/payment-return', ['public/payment-return.html', 'text/html; charset=utf-8']],
   ['/dashboard/payments-controller.mjs', ['public/dashboard/payments-controller.mjs', 'text/javascript; charset=utf-8']],
   ['/dashboard/payments-view.mjs', ['public/dashboard/payments-view.mjs', 'text/javascript; charset=utf-8']],
   ['/dashboard/geolocation.mjs', ['public/dashboard/geolocation.mjs', 'text/javascript; charset=utf-8']],
@@ -208,18 +215,20 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
   pushProvider = createPushProvider({ env: process.env }),
   vehicleVisionProvider = createVehicleVisionProvider({ env:process.env }),
   driverFaceProvider = createDriverFaceProvider({ config: readDriverFaceConfig(process.env) }),
+  paystackProvider = createPaystackProvider({ config: createPaystackConfig(process.env, runtime) }),
   googleProvider = createGoogleProvider({ config: createGoogleConfig(process.env, runtime), clock }) } = {}) {
   if (runtime.mode === 'staging' && callConfig.mode === 'local') throw new Error('Staging calls require off or a configured relay.');
   db = asAsyncDatabase(db);
   if (workerConfig.role !== 'all' && db.kind !== 'postgres') throw new Error('Split API/worker deployments require PostgreSQL.');
   const application = createApplication({ db, clock, callConfig, mapProvider, resolveDeliveryLocation, deliveryMapSettings, dispatchProfiler, matchingFast,
     dispatchConfig: { ...dispatchConfig, requestRefresh: workerConfig.role === 'all' }, workerConfig,
-    googleProvider, accountMail, pushProvider, vehicleVisionProvider, driverFaceProvider, safetyAlertProvider, staffMfa, ridePilot,
+    paystackProvider, googleProvider, accountMail, pushProvider, vehicleVisionProvider, driverFaceProvider, safetyAlertProvider, staffMfa, ridePilot,
     allowSimulation: runtime.mode === 'local' });
   const httpApplication = workerConfig.role === 'api' ? { ...application, dispatch: { ...application.dispatch, refresh: async () => {} } } : application;
   const handleApi = createApiRouter(httpApplication, { secure: runtime.mode === 'staging' });
   const handleMobile = createMobileRouter(httpApplication);
   const handleGoogleCallback = createGoogleCallback(application, runtime.mode === 'staging');
+  const handlePaystackWebhook = createPaystackWebhook({ provider: paystackProvider, checkoutPayments: application.checkoutPayments, rateLimiter: application.rateLimiter, clock });
   const health = createHealth(db);
   const workers = createWorkerRuntime({ coordinator: application.workerCoordinator, config: { ...workerConfig, matchingFast }, wakeups: db,
     regions: () => application.dispatch.regions(), dispatch: application.dispatch, onError: (name) => telemetry.event(name),
@@ -234,6 +243,12 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
         });
         if (!held) return;
       }
+      if (!active()) return;
+      await db.transaction(async () => {
+        if (await application.workerCoordinator.guard(lease)) await application.eats.expirePendingPayments();
+      });
+      if (!active() || !await application.workerCoordinator.guard(lease)) return;
+      await application.checkoutPayments.reconcileDue({ limit: 5 });
       if (!active()) return;
       await db.transaction(async () => {
         if (await application.workerCoordinator.guard(lease)) await application.rateLimiter.sweep(clock());
@@ -268,7 +283,8 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
       let context;
       if (!isInternalHealth(request, pathname)) {
         context = requestContext(request, runtime);
-        requireStagingAccess(request, response, runtime, pathname);
+        // Provider signatures protect this exact webhook; the HTTPS gateway remains mandatory.
+        if (pathname !== PAYSTACK_WEBHOOK_PATH || request.method !== 'POST' || !(paystackProvider.configured ?? paystackProvider.enabled)) requireStagingAccess(request, response, runtime, pathname);
       }
       if (['/health/live', '/health/ready'].includes(pathname)) {
         check(['GET', 'HEAD'].includes(request.method), 'METHOD_NOT_ALLOWED', 'Use GET or HEAD.');
@@ -279,6 +295,9 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
       }
       check(workerConfig.role !== 'worker', 'SERVER_DRAINING', 'This process handles background work.');
       check(!health.draining(), 'SERVER_DRAINING', 'Taxi Ai is restarting. Please retry shortly.');
+      if (pathname === PAYSTACK_WEBHOOK_PATH) {
+        await handlePaystackWebhook({ request, response, ...context }); return;
+      }
       if (pathname === '/auth/google/callback') {
         await handleGoogleCallback({ request, response, ...context }); return;
       }

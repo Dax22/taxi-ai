@@ -33,7 +33,11 @@ export default function Eats() {
     <View style={styles.row}><Button title="Discover" secondary disabled={navigating} onPress={() => { setDetail(false); setMenusOpen(false); router.setParams({ section: 'browse' }); if (screen === 'browse') void c.navigate('browse'); }}/><Button title="My food orders" secondary disabled={navigating} onPress={() => router.setParams({ section: 'orders' })}/></View>
     <FoodFeedback state={s} controller={c}/>
     {screen === 'orders' ? <><Heading title="Good food, on its way." subtitle="Current orders and your food history."/><FoodOrders orders={s.orders}/>{s.nextBefore && <Button title="Load older orders" secondary disabled={locked || s.loading} onPress={() => void c.refresh({ before: s.nextBefore })}/>}</> : <>
-      {!menusOpen || !s.deliveryConfirmed ? <MealBuilder key={s.user?.id} state={s} controller={c} locked={locked} onMenus={() => { setMenusOpen(true); setDetail(false); setArea(s.catalogAreaId); setFilterKey((value) => value + 1); }} onPlaced={() => router.setParams({ section: 'orders' })}/> : <>
+      {!menusOpen || !s.deliveryConfirmed ? <MealBuilder key={s.user?.id} state={s} controller={c} locked={locked} onMenus={() => { setMenusOpen(true); setDetail(false); setArea(s.catalogAreaId); setFilterKey((value) => value + 1); }} onPlaced={() => {
+        const reserved = c.snapshot().orders.find(order => order.role === 'customer' && order.payment.method === 'paystack' && order.payment.targetId);
+        if (reserved) router.push({ pathname: '/food-order', params: { id: reserved.id } });
+        else router.setParams({ section: 'orders' });
+      }}/> : <>
       <Button title="Back to building my meal" secondary disabled={navigating} onPress={() => setMenusOpen(false)}/>
       {!detail && <>
         <View style={styles.row}><DiscoveryChip label="Delivery" selected={s.fulfillment === 'delivery'} disabled={navigating} onPress={() => { c.fulfillment('delivery'); setLimit(24); }}/><DiscoveryChip label="Pickup" selected={s.fulfillment === 'pickup'} disabled={navigating} onPress={() => { c.fulfillment('pickup'); setLimit(24); }}/>{!admin && <DiscoveryChip label="Sell from home" disabled={navigating} onPress={home}/>}</View>

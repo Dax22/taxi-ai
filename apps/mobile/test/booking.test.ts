@@ -200,6 +200,8 @@ test('booking contracts reject malformed fares, foreign coordinates and unsafe c
         pricing: { baseKobo: 50000, distanceKobo: -1, timeKobo: 60000, minimumKobo: 100000, incrementKobo: 5000 } } }])
     assert.throws(() => parsePreview({ ...envelope, preview: invalid }));
   assert.throws(() => parseBookingRide({ ...envelope, ride: { ...ride, status: 'unknown' } }));
+  for (const paymentMode of ['simulation', 'paystack_test']) assert.equal(parseBookingRide({ ...envelope, ride: { ...ride, paymentMode } }).ride.paymentMode, paymentMode);
+  assert.throws(() => parseBookingRide({ ...envelope, ride: { ...ride, paymentMode: 'paystack_live' } }));
   assert.throws(() => parseBookingRide({ ...envelope, ride: { ...ride, status: 'in_progress', canCancel: true } }));
 });
 

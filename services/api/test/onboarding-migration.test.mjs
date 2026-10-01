@@ -47,7 +47,7 @@ test('schema seven preserves paid receipts and active trips, snapshots vehicles 
   try {
     assert.ok(SCHEMA_VERSION >= 9);
     for (const name of names) {
-      const rows = db.prepare(`SELECT * FROM ${name}`).all().map((row) => { if (name === 'rides') { assert.equal(row.vehicle_category, 'standard'); delete row.driver_snapshot_json; delete row.vehicle_category; assert.equal(row.dispatch_region, `sample:${row.pickup_id}`); delete row.dispatch_region; } return row; });
+      const rows = db.prepare(`SELECT * FROM ${name}`).all().map((row) => { if (name === 'ride_trips') { assert.equal(row.payment_mode, 'simulation'); delete row.payment_mode; } if (name === 'rides') { assert.equal(row.vehicle_category, 'standard'); delete row.driver_snapshot_json; delete row.vehicle_category; assert.equal(row.dispatch_region, `sample:${row.pickup_id}`); delete row.dispatch_region; } return row; });
       assert.equal(JSON.stringify(rows), before.get(name), name);
     }
     const app = createApplication({ db, clock: () => 2000, allowSimulation: true }), user = (await app.accounts.sessionFor('legacy-session')).user;

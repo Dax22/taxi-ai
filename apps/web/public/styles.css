@@ -272,3 +272,14 @@
     *, *::before, *::after { transition: none !important; animation: none !important; }
   }
 }
+
+/* Server-verified Paystack test checkout, shared by rides and Eats. */
+.checkout-payment { overflow-wrap:anywhere; }
+.checkout-payment > h2 { font-size:26px; margin:0 0 12px; }
+.checkout-payment > p { margin:12px 0; }
+.checkout-payment-status { font-weight:700; }
+.checkout-payment-test-note { padding:12px 14px; background:#fff3ce; border-left:3px solid #f4b400; font-size:12px; font-weight:650; }
+.checkout-payment-total { font-size:22px; font-weight:750; }
+.checkout-payment-actions { display:flex; flex-wrap:wrap; gap:10px; margin-top:20px; }
+.checkout-payment .error-text:empty { display:none; }
+@media(max-width:480px) { .checkout-payment-actions > .button { width:100%; justify-content:center; } }

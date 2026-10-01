@@ -3,6 +3,8 @@ import type { FamilyAction } from '../../../../packages/shared/src/family.mjs';
 import { createRealtimeClient } from '../../../../packages/shared/src/realtime-client.mjs';
 import { readContacts, readSafety, readSafetyResult } from '../safety/contracts.ts';
 import { readPayment, readReceipt, readEarnings } from '../payments/contracts.ts';
+import { readCheckoutPaymentResponse } from '../../../../packages/shared/src/checkout-payments.mjs';
+import type { CheckoutPaymentKind } from '../../../../packages/shared/src/checkout-payments.mjs';
 import { readTracking, readTrackingResult } from '../tracking/contracts.ts';
 import type { Tracking, TrackingResult, LocationShare } from '../tracking/contracts.ts';
 import type { BackgroundGrant, TrackingKind, BackgroundConnection } from '../tracking/background-contracts.ts';
@@ -280,6 +282,12 @@ export class MobileClient {
   async journey(id: string) { return parseJourney(await this.request(`/journeys/${id}`)); }
   async rateDriver(id: string, stars: number) { return parseJourney(await this.request(`/journeys/${id}/rating`, { stars })); }
   async payment(id: string) { return readPayment(await this.request(`/payments/rides/${id}`)); }
+  async checkoutPayment(kind: CheckoutPaymentKind, targetId: string) {
+    return readCheckoutPaymentResponse(await this.request(`/checkout-payments/${kind}/${targetId}`), { kind, targetId });
+  }
+  async checkoutPaymentCommand(kind: CheckoutPaymentKind, targetId: string, action: 'start' | 'refresh', expectedVersion: number, key: string) {
+    return readCheckoutPaymentResponse(await this.request(`/checkout-payments/${kind}/${targetId}/${action}`, { expectedVersion }, key), { kind, targetId });
+  }
   async receipt(id: string) { return readReceipt(await this.request(`/payments/rides/${id}/receipt`)); }
   async paymentCommand(id: string, action: 'start' | 'simulate', expectedVersion: number, key: string, attemptId?: string, outcome?: 'success' | 'failure') {
     const path = action === 'start' ? `/payments/rides/${id}/start` : `/payments/rides/${id}/attempts/${attemptId}/simulate`;

@@ -49,7 +49,14 @@ function snapshot(o) {
   if (o.address.point != null) { try { normalizeFoodPoint(o.address.point); } catch { valid(false); } }
   if (o.recipient !== undefined) recipient(o.recipient);
   valid(!Object.hasOwn(o, 'deliveryProfile'));
-  valid(o.isDemo === true && o.payment?.method === 'test' && o.payment.status === 'not_charged');
+  valid(o.isDemo === true && object(o.payment));
+  if (o.payment.method === 'paystack') {
+    valid(['pending', 'paid', 'expired', 'refund_required'].includes(o.payment.status));
+    valid(Object.keys(o.payment).every(key => ['method', 'status', 'targetId', 'expiresAt'].includes(key)));
+    valid(o.payment.targetId === undefined || id(o.payment.targetId));
+    valid(o.payment.expiresAt === undefined || integer(o.payment.expiresAt));
+    valid(['customer', 'admin'].includes(o.role) ? id(o.payment.targetId) && integer(o.payment.expiresAt) : o.payment.targetId === undefined && o.payment.expiresAt === undefined);
+  } else valid(o.payment.method === 'test' && o.payment.status === 'not_charged');
   valid(Array.isArray(o.lines) && o.lines.every((l) => object(l) && id(l.itemId) && string(l.name) && string(l.description)));
   const totals = eatsTotals(o.lines, o.totals?.deliveryFeeKobo);
   valid(o.fulfillment !== 'pickup' || totals.deliveryFeeKobo === 0);

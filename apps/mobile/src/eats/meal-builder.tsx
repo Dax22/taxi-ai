@@ -60,7 +60,7 @@ export function MealBuilder({ state: s, controller: c, locked, onMenus, onPlaced
         {s.mealCheckout.quotes[0]?.recipient?.kind === 'other' && <Text style={styles.small}>After placing the order, share the delivery code privately with the recipient. They should give it to the courier only when receiving the food. No automatic message is sent.</Text>}
         {s.mealCheckout.quotes.map((quote) => <View key={quote.id} style={food.menuRow}><Text style={styles.h2}>{quote.restaurant.name}</Text>{quote.lines.map((line) => <Text key={line.itemId} style={styles.body}>{line.quantity} × {line.name} · {fare(line.quantity * line.priceKobo)}</Text>)}<FoodMoney value={quote.totals}/></View>)}
         <Text style={styles.h2}>Combined total · {fare(s.mealCheckout.totals.totalKobo)}</Text>
-        <Text style={styles.small}>Total held until {new Date(s.mealCheckout.expiresAt).toLocaleTimeString()}. Separate deliveries from each kitchen. Test checkout · no payment is collected.</Text>
+        <Text style={styles.small}>Total held until {new Date(s.mealCheckout.expiresAt).toLocaleTimeString()}. Separate deliveries from each kitchen. Test checkout · no real money is collected.</Text>
         <Button title={`Place ${s.mealCheckout.quotes.length === 1 ? 'test order' : `${s.mealCheckout.quotes.length} test orders`}`} disabled={locked || s.now >= s.mealCheckout.expiresAt} onPress={() => void c.placeMeal().then((ok) => { if (ok) onPlaced(); })}/>
       </Card>}
       <Button title="Kitchen menus & customer pickup" secondary disabled={s.busy || s.uncertain} onPress={onMenus}/>

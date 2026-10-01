@@ -105,13 +105,16 @@ export function createEatsController({ api, makeKey, now = Date.now }) {
       if (result.deliveryProfile) { state.deliveryProfile = result.deliveryProfile; state.deliveryProfileError = ''; state.notice = 'Your saved delivery addresses were updated.'; }
       if (result.checkoutId && result.orders) {
         state.mealBasket = []; state.mealCheckout = null; state.orders = result.orders; state.nextBefore = null; state.screen = 'orders';
-        state.notice = `${result.orders.length} kitchen order${result.orders.length === 1 ? '' : 's'} placed. Each kitchen prepares and delivers separately. No money was charged.`;
+        state.notice = result.orders.some((order) => order.payment?.method === 'paystack')
+          ? `${result.orders.length} kitchen order${result.orders.length === 1 ? '' : 's'} reserved. Open an order to review the combined Paystack test checkout before kitchen preparation. Pay once for this checkout; no real money is collected.`
+          : `${result.orders.length} kitchen order${result.orders.length === 1 ? '' : 's'} placed. Each kitchen prepares and delivers separately. No money was charged.`;
       }
       if (Object.hasOwn(result, 'store')) { state.store = result.store; state.storeMenu = result.menu; state.notice = 'Store changes saved.'; }
       if (result.order) {
         state.order = result.order; state.orderId = result.order.id;
         if (command.goToOrder) state.screen = 'order';
-        if (command.path === '/orders') { state.cart = []; state.quote = null; state.notice = 'Your test order was sent to the kitchen. No money was charged.'; }
+        if (command.path === '/orders') { state.cart = []; state.quote = null; state.notice = result.order.payment?.method === 'paystack'
+          ? 'Your order is reserved. Complete Paystack test checkout before the kitchen can prepare it. No real money is collected.' : 'Your test order was sent to the kitchen. No money was charged.'; }
         else state.notice = 'Order updated.';
       }
       if (/^\/stores\/[^/]+\/review$/.test(command.path)) state.review = result;

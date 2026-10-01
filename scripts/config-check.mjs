@@ -1,3 +1,4 @@
+import { createPaystackConfig } from '../services/api/src/infrastructure/paystack-config.mjs';
 import { createRuntimeConfig } from '../services/api/src/infrastructure/runtime-config.mjs';
 import { createCallConfig } from '../services/api/src/infrastructure/call-config.mjs';
 import { createMapProvider } from '../services/api/src/infrastructure/map-provider.mjs';
@@ -14,6 +15,7 @@ import { createRidePilotConfig } from '../packages/shared/src/ride-pilot.mjs';
 try {
   const runtime = createRuntimeConfig();
   const workers = createWorkerConfig(process.env);
+  const paystack = createPaystackConfig(process.env, runtime);
   if (workers.role !== 'all' && !process.env.TAXI_AI_DATABASE_URL) throw new Error('Split API/worker deployments require TAXI_AI_DATABASE_URL.');
   if (process.env.TAXI_AI_DATABASE_URL) {
     const url = new URL(process.env.TAXI_AI_DATABASE_URL);
@@ -38,5 +40,6 @@ try {
   console.log(`Driver face comparison: ${driverFace.provider}; this does not validate credentials, licence records or liveness.`);
   console.log(`Ride matching: ${dispatch.mode}; pickup road estimates ${maps.mode === 'off' ? 'unavailable (distance fallback)' : 'use the configured router'}.`);
   console.log(`Passenger ride requests: ${ridePilot.paused ? 'paused' : ridePilot.bounds ? 'test-only within configured area' : 'local development only'}.`);
+  console.log(`Payments: ${paystack.enabled ? 'Paystack test checkout; live money disabled' : 'Paystack off'}.`);
   console.log('This checks configuration only, not TLS, network providers, disk persistence or a deployed server.');
 } catch (error) { console.error(error.message); process.exitCode = 1; }

@@ -5,7 +5,7 @@ const columns = `id, customer_id AS customerId, driver_id AS driverId,
   driver_snapshot_json AS driverSnapshotJson, request_expires_at AS requestExpiresAt, closed_reason AS closedReason`;
 
 const tripColumns = `ride_id AS rideId, customer_id AS customerId, driver_id AS driverId, status,
-  fare_kobo AS fareKobo, booked_at AS bookedAt, departed_at AS departedAt, arrived_at AS arrivedAt,
+  fare_kobo AS fareKobo, payment_mode AS paymentMode, booked_at AS bookedAt, departed_at AS departedAt, arrived_at AS arrivedAt,
   started_at AS startedAt, completed_at AS completedAt, pickup_pin AS pickupPin,
   pin_failures AS pinFailures, pin_blocked_until AS pinBlockedUntil`;
 const activeTrip = "SELECT 1 FROM ride_trips t WHERE t.ride_id = rides.id AND t.status NOT IN ('completed', 'cancelled')";
@@ -77,9 +77,9 @@ export function createRidesRepository(db) {
       return (await db.prepare('INSERT OR IGNORE INTO ride_driver_ratings (ride_id, customer_id, driver_id, stars, created_at) VALUES (?, ?, ?, ?, ?)')
         .run(ride.id, ride.customerId, ride.driverId, stars, now)).changes === 1;
     },
-    async bookTrip({ ride, fareKobo, pin, now }) {
-      (await db.prepare(`INSERT INTO ride_trips (ride_id, customer_id, driver_id, status, fare_kobo, booked_at, pickup_pin)
-        VALUES (?, ?, ?, 'booked', ?, ?, ?)`).run(ride.id, ride.customerId, ride.driverId, fareKobo, now, pin));
+    async bookTrip({ ride, fareKobo, paymentMode = 'simulation', pin, now }) {
+      (await db.prepare(`INSERT INTO ride_trips (ride_id, customer_id, driver_id, status, fare_kobo, payment_mode, booked_at, pickup_pin)
+        VALUES (?, ?, ?, 'booked', ?, ?, ?, ?)`).run(ride.id, ride.customerId, ride.driverId, fareKobo, paymentMode, now, pin));
     },
     async updateTrip(id, status, now) {
       // Column names are fixed by the transition vocabulary, never supplied by HTTP.

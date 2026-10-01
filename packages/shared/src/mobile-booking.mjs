@@ -19,6 +19,7 @@ function ride(r) {
     && text(r.pickup) && text(r.destination) && positive(r.suggestedFareKobo) && (r.fareKobo === null || positive(r.fareKobo))
     && (r.expiresAt === null || number(r.expiresAt)) && r.canCancel === canCancelRide(r.status));
   expect(r.driver === null || (record(r.driver) && text(r.driver.name)));
+  expect(r.paymentMode === undefined || ['simulation', 'paystack_test'].includes(r.paymentMode));
   expect(transportCategory(r.vehicleCategory));
   readPassenger(r.passenger, r.vehicleCategory);
   if (r.delivery != null || transportCategory(r.vehicleCategory).service === 'delivery') {

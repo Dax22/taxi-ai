@@ -12,6 +12,8 @@ import { VehicleCard } from '../src/ui/vehicle-card';
 import { PickupIdentity } from '../src/ui/pickup-identity';
 import { KemmyCard } from '../src/journeys/kemmy';
 import { PaymentCard } from '../src/payments/payment-card';
+import { CheckoutPaymentCard } from '../src/payments/checkout-card';
+import { showJourneyCheckout } from '../src/payments/checkout-eligibility';
 import { useSession } from '../src/session/provider';
 import { GuestRideLink } from '../src/guest-rides/link-panel';
 import { PassengerSummary } from '../src/guest-rides/passenger-summary';
@@ -52,6 +54,7 @@ function JourneyScreen({id}:{id:string}){
         {r.status==='agreed'&&r.mode==='work'&&<Text style={styles.body}>{r.passenger?.kind==='guest'?'The person who booked':'The customer'} accepted the fare and must now confirm the ride before you depart.</Text>}
       </Card>
       {r.mode==='customer'&&r.passenger?.kind==='guest'&&['booked','on_way','arrived','in_progress'].includes(r.status)&&<GuestRideLink rideId={r.id}/>}
+      {showJourneyCheckout(r)&&<CheckoutPaymentCard key={r.id} kind="ride" targetId={r.id} fallback={r.status==='completed' ? <PaymentCard rideId={r.id}/> : null}/>}
       <PickupIdentity ride={r}/>
       {r.mode === 'customer' && r.delivery && <ParcelRecipientLink rideId={r.id}/>}
       {r.delivery&&<Card><Text style={styles.h2}>Delivery details</Text><Text style={styles.body}>{r.delivery.description} · {r.delivery.weightKg} kg</Text><Text style={styles.body}>Recipient · {r.delivery.recipientName}</Text>
@@ -67,7 +70,6 @@ function JourneyScreen({id}:{id:string}){
         {r.allowedActions.filter((a)=>labels[a]).map((a)=><Button key={a} title={labels[a]!} disabled={locked || workLocationBlocks('ride', a, location)} onPress={()=>confirm(a,labels[a]!,a==='complete'?'Confirm that the journey and handover are complete.':'Update this journey to the next stage?')}/>)}
       </Card>}
       {r.status==='completed'&&<Card><Text style={styles.h2}>{r.delivery?'Delivery complete.':r.passenger?.kind==='guest'?'Passenger’s trip complete.':'You have arrived.'}</Text><Text style={styles.body}>Your journey is saved in Activity.</Text></Card>}
-      {r.status==='completed'&&<PaymentCard rideId={r.id}/>}
       {r.mode!=='work'&&<TripLocationCard id={r.id} ride={r}/>}
       {r.status!=='negotiating'&&<JourneyChat state={s} controller={c}/>} 
       {r.allowedActions.includes('cancel')&&<Button title="Cancel journey" secondary disabled={locked} onPress={()=>confirm('cancel','Cancel journey','Cancel this request or booking?')}/>}

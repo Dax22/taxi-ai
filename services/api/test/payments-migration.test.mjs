@@ -43,7 +43,7 @@ test('schema six preserves existing records and backfills only completed trips a
   const db = openDatabase(filename);
   try {
     assert.equal(db.prepare('PRAGMA user_version').get().user_version, SCHEMA_VERSION);
-    for (const table of tables) assert.equal(JSON.stringify(db.prepare(`SELECT * FROM ${table}`).all().map((row) => { if (table === 'rides') { assert.equal(row.vehicle_category, 'standard'); delete row.driver_snapshot_json; delete row.vehicle_category; assert.equal(row.dispatch_region, `sample:${row.pickup_id}`); delete row.dispatch_region; } return row; })), snapshot.get(table), table);
+    for (const table of tables) assert.equal(JSON.stringify(db.prepare(`SELECT * FROM ${table}`).all().map((row) => { if (table === 'ride_trips') { assert.equal(row.payment_mode, 'simulation'); delete row.payment_mode; } if (table === 'rides') { assert.equal(row.vehicle_category, 'standard'); delete row.driver_snapshot_json; delete row.vehicle_category; assert.equal(row.dispatch_region, `sample:${row.pickup_id}`); delete row.dispatch_region; } return row; })), snapshot.get(table), table);
     assert.equal(db.prepare('SELECT count(*) AS n FROM payments').get().n, 2);
     assert.equal(db.prepare('SELECT count(*) AS n FROM payment_attempts').get().n, 0);
     assert.equal(db.prepare('SELECT count(*) AS n FROM payment_receipts').get().n, 0);
