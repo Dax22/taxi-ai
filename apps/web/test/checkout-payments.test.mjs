@@ -86,6 +86,8 @@ test('ride simulator remains available only for disabled legacy targets without 
   f.response = { ...absent, canStart: false, settings: { ...settings, enabled: false } }; await payments.poll(); assert.equal(legacyReads, 1); assert.equal(simState.hostedCheckout, false);
   f.response = saved({ ...paid, kind: 'ride' }, { settings: { ...settings, enabled: false } }); await payments.poll(); assert.equal(simState.hostedCheckout, true); assert.equal(legacyReads, 1);
   assert.equal(rideCheckoutTarget(user, { ...ride, status: 'booked', delivery: {} }).title, 'Courier test checkout');
+  assert.equal(rideCheckoutTarget(user, { ...ride, status: 'cancelled', trip: null }), null, 'An unbooked cancellation has no payable trip.');
+  assert.equal(rideCheckoutTarget(user, { ...ride, status: 'cancelled', trip: { paymentMode: 'paystack_test' } }).targetId, ride.id, 'Cancelled booked payments remain reviewable.');
 });
 
 test('food targets preserve one combined checkout and never expose seller, courier or legacy payment actions', () => {

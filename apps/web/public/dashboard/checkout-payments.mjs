@@ -84,7 +84,7 @@ export function createCheckoutPayments({ client, view, makeKey = () => crypto.ra
 }
 
 export function rideCheckoutTarget(user, ride) {
-  return user && ['customer', 'driver'].includes(user.role) && ride && ['booked', 'on_way', 'arrived', 'in_progress', 'completed', 'cancelled'].includes(ride.status)
+  return user && ['customer', 'driver'].includes(user.role) && ride && (ride.status !== 'cancelled' || ride.trip) && ['booked', 'on_way', 'arrived', 'in_progress', 'completed', 'cancelled'].includes(ride.status)
     ? { kind: 'ride', targetId: ride.id, title: ride.delivery ? 'Courier test checkout' : 'Ride test checkout' } : null;
 }
 

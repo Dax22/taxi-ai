@@ -11,6 +11,7 @@ const geometry = (route) => route ? { distanceMeters: route.distanceMeters, dura
     minimumKobo: route.pricing.minimumKobo, incrementKobo: route.pricing.incrementKobo } : undefined } : null;
 export function bookingProjection(ride) {
   return { id: ride.id, version: ride.version, status: ride.status, vehicleCategory: ride.vehicleCategory, service: ride.service, delivery: ride.delivery, passenger: ride.passenger, pickup: ride.pickup.name, destination: ride.destination.name,
+    paymentMode: ride.trip ? ride.trip.paymentMode ?? 'simulation' : undefined,
     suggestedFareKobo: ride.suggestedFareKobo, fareKobo: ride.trip?.fareKobo ?? ride.negotiation?.agreement?.amountKobo ?? null,
     expiresAt: ride.status === 'requested' ? ride.matching.expiresAt : null, canCancel: canCancelRide(ride.status),
     driver: ride.driver ? { name: ride.driver.name, vehicle: ride.driver.vehicle } : null };

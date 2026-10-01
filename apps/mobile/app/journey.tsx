@@ -13,6 +13,7 @@ import { PickupIdentity } from '../src/ui/pickup-identity';
 import { KemmyCard } from '../src/journeys/kemmy';
 import { PaymentCard } from '../src/payments/payment-card';
 import { CheckoutPaymentCard } from '../src/payments/checkout-card';
+import { showJourneyCheckout } from '../src/payments/checkout-eligibility';
 import { useSession } from '../src/session/provider';
 import { GuestRideLink } from '../src/guest-rides/link-panel';
 import { PassengerSummary } from '../src/guest-rides/passenger-summary';
@@ -53,7 +54,7 @@ function JourneyScreen({id}:{id:string}){
         {r.status==='agreed'&&r.mode==='work'&&<Text style={styles.body}>{r.passenger?.kind==='guest'?'The person who booked':'The customer'} accepted the fare and must now confirm the ride before you depart.</Text>}
       </Card>
       {r.mode==='customer'&&r.passenger?.kind==='guest'&&['booked','on_way','arrived','in_progress'].includes(r.status)&&<GuestRideLink rideId={r.id}/>}
-      {['booked','on_way','arrived','in_progress','completed','cancelled'].includes(r.status)&&<CheckoutPaymentCard key={r.id} kind="ride" targetId={r.id} fallback={r.status==='completed' ? <PaymentCard rideId={r.id}/> : null}/>}
+      {showJourneyCheckout(r)&&<CheckoutPaymentCard key={r.id} kind="ride" targetId={r.id} fallback={r.status==='completed' ? <PaymentCard rideId={r.id}/> : null}/>}
       <PickupIdentity ride={r}/>
       {r.mode === 'customer' && r.delivery && <ParcelRecipientLink rideId={r.id}/>}
       {r.delivery&&<Card><Text style={styles.h2}>Delivery details</Text><Text style={styles.body}>{r.delivery.description} · {r.delivery.weightKg} kg</Text><Text style={styles.body}>Recipient · {r.delivery.recipientName}</Text>

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { CheckoutPaymentController } from '../src/payments/checkout-controller.ts';
+import { showJourneyCheckout } from '../src/payments/checkout-eligibility.ts';
 import type { CheckoutPaymentDetail, CheckoutPayment } from '../../../packages/shared/src/checkout-payments.mjs';
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const tick = () => new Promise<void>(resolve => setImmediate(resolve));
@@ -9,6 +10,11 @@ const payment: CheckoutPayment = { id: id(2), kind: 'food', targetId: id(1), sta
   checkoutUrl: 'https://checkout.paystack.com/test-example', reference: 'taxiai_test_example', refundRequired: false,
   createdAt: 1000, updatedAt: 1000, paidAt: null, receipt: null };
 const detail = (value: CheckoutPayment | null = null): CheckoutPaymentDetail => ({ settings: { provider: 'paystack', mode: 'test', enabled: true }, payment: value, isPayer: true, canStart: value === null });
+test('cancelled requests expose checkout only when a confirmed trip payment mode was projected', () => {
+  for (const status of ['requested', 'negotiating', 'agreed', 'cancelled', 'expired']) assert.equal(showJourneyCheckout({ status }), false);
+  for (const paymentMode of ['simulation', 'paystack_test'] as const) assert.equal(showJourneyCheckout({ status: 'cancelled', paymentMode }), true);
+  for (const status of ['booked', 'on_way', 'arrived', 'in_progress', 'completed']) assert.equal(showJourneyCheckout({ status }), true);
+});
 function fixture() {
   const calls: unknown[][] = [];
   const f = { next: detail(), read: null as null | (() => Promise<CheckoutPaymentDetail>), command: null as null | (() => Promise<CheckoutPaymentDetail>), calls, reads: 0, keys: 0 };

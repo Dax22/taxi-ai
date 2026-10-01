@@ -42,9 +42,14 @@ test('real ride HTTP checkout verifies through native and unlocks only the saved
 
 test('a real cancelled ride retains verified money as refund review and never starts',async t=>{
   const paystackProvider=fixtureProvider(),h=await harness(t,{paystackProvider}),{customer,driver}=await participants(h);
+  const credentials=ok(await customer.send('/api/mobile/v1/auth/login',{method:'POST',data:{email:customer.user.email,password:PASSWORD,deviceName:'Cancellation review phone'},headers:{Origin:null,Cookie:null,'X-CSRF-Token':null}})).credentials;
+  const nativeJourney=async id=>ok(await customer.send(`/api/mobile/v1/journeys/${id}`,{headers:{Origin:null,Cookie:null,'X-CSRF-Token':null,Authorization:`Bearer ${credentials.accessToken}`}})).ride;
   let ride=await booked(customer,driver);const path=`/api/checkout-payments/ride/${ride.id}`;
   ok(await customer.post(path+'/start',{expectedVersion:0}));ride=await step(customer,ride,'cancel');assert.equal(ride.status,'cancelled');
+  assert.equal((await nativeJourney(ride.id)).paymentMode,'paystack_test','A cancelled confirmed trip retains its checkout entry point.');
   const pending=ok(await customer.send(path));const paid=ok(await customer.post(path+'/refresh',{expectedVersion:pending.payment.version}));
   assert.equal(paid.payment.status,'refund_required');assert.equal(paid.payment.refundAmountKobo,470001);
   assert.ok(readCheckoutPaymentResponse(paid,{kind:'ride',targetId:ride.id}));
+  const unbooked=await step(customer,await requestRide(customer),'cancel');
+  assert.equal((await nativeJourney(unbooked.id)).paymentMode,undefined,'A cancelled request without a trip has no checkout entry point.');
 });
