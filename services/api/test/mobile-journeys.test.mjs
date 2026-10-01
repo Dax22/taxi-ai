@@ -51,6 +51,8 @@ test('native passenger and delivery journeys complete across all vehicle categor
     assert.equal(ok(await d.send(`/journeys/${r.id}/chat/read`,{throughSequence:sent.sequence})).unread,0);
     ok(await d.send(`/journeys/${r.id}/chat/messages/${sent.id}/report`,{reason:'other'}));
     assert.equal(parseThread(ok(await d.send(`/journeys/${r.id}/chat`))).reportedMessageIds[0],sent.id);
+    const share=ok(await d.send(`/tracking/rides/${r.id}/start?clientId=${d.clientId}`,{})).share;
+    ok(await d.send(`/tracking/shares/${share.id}/position?clientId=${d.clientId}`,{sequence:1,lat:9.08,lng:7.4,accuracy:10,capturedAt:h.now}));
     r=await act(d,r,'depart');assert.equal(r.pickupPin,null);r=await act(d,r,'arrive');
     const arrival=parseNotifications(ok(await c.send('/notifications'))).notifications.find((n)=>n.rideId===r.id&&n.kind==='arrive');
     assert.equal(arrival.arrivalActive,true);assert.match(arrival.body,/TEST-DRIVER/);assert.match(arrival.body,/Toyota Corolla/);assert.match(arrival.body,/Yellow/);

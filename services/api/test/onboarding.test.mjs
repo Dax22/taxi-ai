@@ -46,6 +46,7 @@ test('the server enforces 2000 through its calendar year on save, legacy submiss
 });
 
 async function rideStep(who, ride, action, data = {}) {
+  if (['depart', 'arrive', 'start'].includes(action)) await who.shareTripLocation(ride.id);
   const result = await who.post(`/api/rides/${ride.id}/${action}`, { expectedVersion: ride.version, ...data });
   assert.equal(result.status, 200, JSON.stringify(result.body)); return result.body.ride;
 }

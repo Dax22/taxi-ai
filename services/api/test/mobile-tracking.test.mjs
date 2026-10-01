@@ -59,10 +59,11 @@ test('native tracking is private, explicitly enabled by the assigned approved dr
   assert.equal((await d.send(`${route}/start`, { nativeSessionId: c.credentials.sessionId })).status, 400);
   const share = ok(await d.send(`${route}/start`, {})).share;
   for (const action of ['stop', 'position']) {
-    assert.equal((await c.send(`/shares/${share.id}/${action}`, action === 'position' ? position(h) : {})).status, 403);
+    assert.equal((await c.send(`/shares/${share.id}/${action}`, action === 'position' ? position(h) : {})).status, action === 'stop' ? 404 : 403);
   }
   assert.deepEqual(Object.keys(share).sort(), ['active', 'id', 'owned', 'position', 'rideId', 'sequence', 'stale', 'startedAt', 'updatedAt']);
   h.db.prepare("UPDATE drivers SET status = 'rejected' WHERE user_id = ?").run(driver.user.id);
+  ok(await d.send(`/shares/${share.id}/stop`, {}));
   const rejected = ok(await d.send(route));
   assert.equal(rejected.isDriver, true); assert.equal(rejected.canShare, false); assert.equal(rejected.share, null);
   assert.equal((await d.send(`${route}/start`, {})).body.error.code, 'DRIVER_NOT_APPROVED');

@@ -186,6 +186,7 @@ test('a complete customer, restaurant and courier order preserves totals and ver
   ({ order } = await ok(f.driver, `/api/eats/orders/${id}/claim`, { expectedVersion: order.version }));
   assert.equal(order.pickupPin, undefined); assert.equal(order.deliveryPin, undefined);
   assert.equal(order.address.line, quote.address.line); assert.equal(order.courier.name, f.driver.user.name);
+  await f.driver.shareFoodLocation(id);
   const badKey = randomUUID(), badData = { expectedVersion: order.version, pin: pickupPin === '000000' ? '111111' : '000000' };
   assert.equal((await f.driver.post(`/api/eats/orders/${id}/pickup`, badData, badKey)).body.error.code, 'INVALID_PIN');
   assert.equal((await f.driver.post(`/api/eats/orders/${id}/pickup`, badData, badKey)).body.error.code, 'INVALID_PIN');
@@ -243,12 +244,14 @@ test('five wrong codes persist a lockout and command persistence failure rolls b
   assert.equal((await ok(f.driver, '/api/eats/work')).online, true);
   f.h.db.exec('DROP TRIGGER fail_food_command');
   ({ order } = await ok(f.driver, `/api/eats/orders/${order.id}/claim`, { expectedVersion: order.version }));
+  await f.driver.shareFoodLocation(order.id);
   for (let i = 0; i < 5; i++) {
     const response = await f.driver.post(`/api/eats/orders/${order.id}/pickup`, { expectedVersion: order.version, pin: pin === '000000' ? '111111' : '000000' });
     assert.equal(response.body.error.code, 'INVALID_PIN'); ({ order } = await ok(f.driver, `/api/eats/orders/${order.id}`));
   }
   assert.equal((await f.driver.post(`/api/eats/orders/${order.id}/pickup`, { expectedVersion: order.version, pin })).body.error.code, 'DELIVERY_PIN_LOCKED');
   f.h.advance(300_001);
+  await f.driver.shareFoodLocation(order.id);
   assert.equal((await ok(f.driver, `/api/eats/orders/${order.id}/pickup`, { expectedVersion: order.version, pin })).order.status, 'picked_up');
 });
 

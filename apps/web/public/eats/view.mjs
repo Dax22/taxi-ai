@@ -13,7 +13,7 @@ const actionLabels = { accept: 'Accept order', reject: 'Decline order', prepare:
 const field = (id) => $('food-' + id);
 const text = (tag, value, className) => element(tag, value, className);
 const money = (value) => { const n = Number(value); if (!Number.isFinite(n) || n < 0 || !/^\d+(\.\d{1,2})?$/.test(value)) throw new Error('Enter an amount with up to two decimal places.'); return Math.round(n * 100); };
-export function createEatsView(controller, { geolocation = createGeolocation(), sellerPage = () => globalThis.location?.pathname === '/eats/sell', navigate = (screen) => controller.navigate(screen), preparePhoto = prepareFoodPhoto, createMap } = {}) {
+export function createEatsView(controller, { geolocation = createGeolocation(), sellerPage = () => globalThis.location?.pathname === '/eats/sell', navigate = (screen) => controller.navigate(screen), preparePhoto = prepareFoodPhoto, createMap, beforeOrderAction = () => true } = {}) {
   let state, ownerId = null, storeDirty = false, storeVersion = undefined, menuId = null, menuVersion = null, menuDirty = false, photo = null, photoId = null, photoReading = false, photoEpoch = 0, kitchenLimit = 24;
   let coverage = [], dispatchPoint = null, locating = false, dispatchEpoch = 0, dispatchError = '';
   const keys = new Map(); let photoManager;
@@ -72,6 +72,7 @@ export function createEatsView(controller, { geolocation = createGeolocation(), 
   field('order-action-form').addEventListener('submit', (event) => {
     event.preventDefault(); const action = event.submitter?.value;
     if (!state.order || !state.order.actions.includes(action) || locked()) return;
+    if (!beforeOrderAction(state.order, action)) return;
     const pin = ['pickup','deliver','complete_pickup'].includes(action), reason = ['reject','cancel'].includes(action);
     field('pin').required = pin; field('reason').required = reason;
     const collection = action === 'ready' && state.order.needsCollectionPoint; field('collection').required = Boolean(collection);

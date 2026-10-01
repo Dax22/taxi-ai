@@ -13,6 +13,7 @@ import { noteText } from '../src/modules/safety/domain.mjs';
 import { vehicleMismatchReport } from '../../../packages/shared/src/pickup-identity.mjs';
 
 async function step(who, ride, action, extra = {}) {
+  if (['depart', 'arrive', 'start'].includes(action)) await who.shareTripLocation(ride.id);
   const result = await who.post(`/api/rides/${ride.id}/${action}`, { expectedVersion: ride.version, ...extra });
   assert.equal(result.status, 200, JSON.stringify(result.body)); return result.body.ride;
 }

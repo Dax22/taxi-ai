@@ -16,3 +16,11 @@ export const secureVault: Vault = {
   write: (value) => SecureStore.setItemAsync(KEY, value, options),
   clear: () => SecureStore.deleteItemAsync(KEY, options),
 };
+// A task receives only a short-lived job-scoped publishing grant, never the account vault.
+const backgroundKey = 'taxi-ai.background-location.v1';
+const backgroundOptions = { keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY };
+export const backgroundLocationVault: Vault = {
+  read: () => SecureStore.getItemAsync(backgroundKey, backgroundOptions),
+  write: value => SecureStore.setItemAsync(backgroundKey, value, backgroundOptions),
+  clear: () => SecureStore.deleteItemAsync(backgroundKey, backgroundOptions),
+};

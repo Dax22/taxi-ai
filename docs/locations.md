@@ -4,8 +4,7 @@ The account dashboard can search Nigerian addresses, select map pins, save a roa
 route quote and share the assigned driver's browser-reported location during a
 confirmed test trip. Fare negotiation, chat, voice controls and pickup PINs use
 their existing rules. This milestone does not dispatch a vehicle, take payment,
-verify physical arrival or provide background tracking. The native app now also
-supports explicit [foreground trip location sharing](mobile-trip-location.md).
+verify physical arrival. Native installed builds support explicit [foreground and background work location sharing](mobile-trip-location.md).
 
 ## Try it locally
 
@@ -26,8 +25,8 @@ are required for the default public mapping services.
 4. Click **Request this test ride** within 15 minutes. The server owns the quote
    and permits its use for one ride. A driver claims the request, both people
    negotiate, and the customer confirms the agreed fare as before.
-5. During the booked/on-way/arrived/in-progress trip, the driver can click
-   **Share my location** and grant browser permission. The customer sees the
+5. During the booked/on-way/arrived/in-progress trip, the driver must click
+   **Share my location** before departing, arriving or starting the trip, and grant browser permission. The customer sees the
    latest reported position, accuracy and age. Click **Stop sharing** to stop
    the device watcher immediately and ask the server to clear the saved point.
 
@@ -244,3 +243,23 @@ lease to find nearby requests. It does not reuse trip-sharing consent. Claiming 
 request clears availability location; post-booking tracking still starts only when
 the assigned driver chooses Share my location. Local sample-area matching uses no
 GPS and cannot claim routed requests.
+
+
+## Mandatory active-work location
+
+Ride and parcel drivers must share a fresh job location before the server accepts
+`depart`, `arrive` or `start`. This applies in local previews as well as hosted
+operation. A valid sharing lease alone is insufficient: the assigned approved
+driver must have published a GPS report less than thirty seconds old from its
+owning authenticated session. Tests explicitly publish fixture GPS through the
+real endpoints; there is no production bypass for sample bookings.
+
+Booking, price negotiation and customer address entry do not request or require
+customer GPS. Going online for matching does not itself share a trip position.
+The driver sees why permission is needed and initiates sharing explicitly.
+Stopping or revoking permission remains possible; progress is then blocked until
+tracking is restored. Cancellation, completion and safety/help controls remain
+available. Successful command retries do not re-run the GPS prerequisite.
+Native background operation and its OS limits are documented in
+[mobile-trip-location.md](mobile-trip-location.md); browser background delivery
+cannot be guaranteed.

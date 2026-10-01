@@ -29,6 +29,7 @@ async function fixture(t, roles = ['operations', 'support', 'safety', 'finance']
 }
 
 async function step(actor, ride, action, data = {}) {
+  if (['depart', 'arrive', 'start'].includes(action)) await actor.shareTripLocation(ride.id);
   return must(await actor.post(`/api/rides/${ride.id}/${action}`, { expectedVersion: ride.version, ...data })).ride;
 }
 async function complete(f, fare = 470001) {

@@ -438,9 +438,8 @@ remains outstanding.
 
 Further product work includes a real payment provider, refunds/payouts, verified
 merchant onboarding, item modifiers and scheduled opening hours,
-tax policy, food chat and push notifications, live delivery routing/ETA/tracking,
-customer support and reassignment. The initial order timeline polls while open;
-it is not a live courier map or a phone alert. No food recommendation or autonomous
+tax policy, food chat and push notifications, traffic-aware delivery routing/ETA,
+customer support and reassignment. The order timeline refreshes while open. Assigned couriers can publish their live job location; this does not send a phone alert or promise a traffic-aware ETA. No food recommendation or autonomous
 dispatch agent is claimed in this release.
 
 ## Update the existing photo preview
@@ -479,3 +478,50 @@ npm run mobile:start
 Use the existing mobile setup guide to set the backend URL reachable by the phone.
 A physical phone cannot use the computer's `localhost` address. Local commands do
 not deploy the private backend or publish a native app-store build.
+
+
+## Required courier tracking
+
+Delivery couriers must explicitly enable **Share my location** and send a fresh,
+accurate Nigerian GPS fix before **Confirm food collected** or **I'm at the
+delivery address**. The API enforces this requirement even for older clients.
+A selected delivery pin or online matching position does not satisfy it. Customer
+pickup, buying food, kitchen preparation, cancellation and completing a handover
+remain usable without customer GPS. Couriers can always stop sharing or revoke
+OS permission; the next gated progression requires restoring a recent fix.
+
+The buyer and assigned courier have an order tracking panel on web and native.
+Buyers receive live courier positions only after collection. For private kitchens
+and vendors, positions within 250 metres of the private dispatch point are hidden;
+without a stored private dispatch point, buyer positions remain unavailable. This
+keeps a kitchen's private pickup location out of the buyer's tracking response.
+The courier can see their own position while travelling to collect the food.
+Kitchens, unassigned couriers, unrelated accounts and general staff screens cannot
+read this live stream. Ordering for another person still does not create a food
+recipient tracking invitation.
+
+The panel reports location age and stale/unavailable states; it never simulates
+courier movement. GPS aims for ten-second updates, becomes stale at thirty seconds,
+and an abandoned sharing lease expires after sixty seconds. The latest point is
+kept instead of a travel history. Completion, cancellation, reassignment, logout
+and native session revocation invalidate sharing and clear the active position.
+Native background updates require an installed build and explicit foreground plus
+background permission; see [native tracking](mobile-trip-location.md). Browser
+updates depend on an open page and browser scheduling.
+
+| Method and web endpoint | Purpose |
+| --- | --- |
+| `GET /api/eats/orders/:id/tracking` | Authorized buyer/courier tracking projection. |
+| `POST /api/eats/orders/:id/tracking/start` | Assigned courier starts a consented sharing session. |
+| `POST /api/eats/tracking/shares/:id/position` | Owning browser/device publishes a fresh, increasing-sequence GPS report. |
+| `POST /api/eats/tracking/shares/:id/stop` | Courier stops the session and clears its position. |
+
+Browser requests retain CSRF and `X-Location-Client` ownership. Native requests
+use `/api/mobile/v1/eats/...`, bearer authentication and `?clientId=...`.
+Start and stop retain idempotency keys. SQLite migrations 044–045 and PostgreSQL
+017–018 are additive; upgrade the server before deploying the matching clients.
+
+Automated checks cover source ownership, client isolation, stale fixes, terminal
+cleanup, revocation, privacy projections, retries and concurrent publishers.
+Physical iOS/Android background/locked-screen acceptance and hosted deployment
+remain separate release requirements.

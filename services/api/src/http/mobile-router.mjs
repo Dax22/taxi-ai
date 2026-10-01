@@ -17,7 +17,7 @@ import { eatsRoutes } from '../modules/eats/routes.mjs';
 import { realtimeResponse, requestAbortSignal } from '../modules/realtime/routes.mjs';
 
 /** Versioned native surface. Cookie identity and browser CSRF are never reused. */
-export function createMobileRouter({ devices, accounts, drivers, rides, dispatch, eats, locations, availability, chat, notifications, announcements, safety, safetyMonitoring, guestRides, parcelTracking, family, vehicleChecks, payments, clock, rateLimiter, googleAuth, accountEmail, realtime }) {
+export function createMobileRouter({ devices, accounts, drivers, rides, dispatch, eats, locations, backgroundLocations, availability, chat, notifications, announcements, safety, safetyMonitoring, guestRides, parcelTracking, family, vehicleChecks, payments, clock, rateLimiter, googleAuth, accountEmail, realtime }) {
   const monitorRoutes = safetyMonitoringRoutes(safetyMonitoring).filter(r=>!r.role);
   const foodRoutes = eatsRoutes(eats);
   const relativesRoutes = familyRoutes(family);
@@ -44,6 +44,15 @@ export function createMobileRouter({ devices, accounts, drivers, rides, dispatch
     const path = pathname.slice('/api/mobile/v1'.length), write = request.method === 'POST';
     const auth = (!write && ['/auth/providers','/auth/email-settings'].includes(path)) || (write && ['/auth/register','/auth/login','/auth/refresh','/auth/logout','/auth/google/challenge','/auth/google','/auth/password/request'].includes(path));
     const accessToken = request.headers.authorization?.match(/^Bearer ([a-f0-9]{64})$/)?.[1];
+    if (['/tracking/background/position','/tracking/background/stop'].includes(path)) {
+      check(write, 'METHOD_NOT_ALLOWED', 'Use POST for background location updates.');
+      check(!new URL(request.url, origin).search, 'INVALID_FIELDS', 'Background location does not accept query parameters.');
+      const owner = await backgroundLocations.owner(accessToken);
+      await rateLimiter.consume(`background-location:${owner}`, clock(), 120, 60_000);
+      const data = await readBody(request, 4096);
+      const body = await backgroundLocations[path.endsWith('/stop') ? 'stop' : 'position'](accessToken, data);
+      json(response, 200, { ...body, apiVersion: MOBILE_API_VERSION, serverNow: clock() }); return;
+    }
     let session = auth ? null : (await devices.sessionFor(accessToken));
     if (!auth) check(session, 'UNAUTHENTICATED', 'Sign in to continue.');
     const foodImage = !write && /^\/eats\/images\/[a-f0-9-]{36}$/.test(path);
@@ -106,7 +115,7 @@ export function createMobileRouter({ devices, accounts, drivers, rides, dispatch
     else if (path.startsWith('/eats/')) {
       const route = foodRoutes.find((entry) => entry.method === request.method && entry.path.test('/api' + path));
       check(route, 'NOT_FOUND', 'Eats endpoint not found.');
-      const result = await route.handle({ user: session.user, query, data, key: request.headers['idempotency-key'], match: ('/api' + path).match(route.path), reauthenticate: async () => { const fresh = (await devices.sessionFor(accessToken)); check(fresh, 'UNAUTHENTICATED', 'Sign in to continue.'); return fresh.user; } });
+      const result = await route.handle({ user: session.user, nativeSessionId: session.id, query, data, key: request.headers['idempotency-key'], match: ('/api' + path).match(route.path), reauthenticate: async () => { const fresh = (await devices.sessionFor(accessToken)); check(fresh, 'UNAUTHENTICATED', 'Sign in to continue.'); return fresh.user; } });
       if (result.image) { response.writeHead(200, { 'Content-Type': result.image.mimeType, 'Content-Length': result.image.content.length }); response.end(result.image.content); return; }
       body = result.body;
     }
@@ -131,6 +140,7 @@ export function createMobileRouter({ devices, accounts, drivers, rides, dispatch
     }
     else if (path.startsWith('/safety/')) body = (await mobileSafety({ safety, session, path, write, data, key: request.headers['idempotency-key'] }));
     else if (path.startsWith('/guest-rides/')) body = (await mobileGuestRides({ guestRides, session, path, write, data, key: request.headers['idempotency-key'] }));
+    else if (write && path === '/tracking/background/start') body = await backgroundLocations.issue({ userId: session.user.id, nativeSessionId: session.id }, data);
     else if (path.startsWith('/tracking/')) body = (await mobileTracking({ locations, session, path, write, query, data, key: request.headers['idempotency-key'] }));
     else if (path === '/notifications' || path.startsWith('/notifications/')) {
       body = (await mobileNotifications({ notifications, user: session.user, sessionId: session.id, path, write, query, data }));

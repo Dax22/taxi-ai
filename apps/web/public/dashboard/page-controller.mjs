@@ -9,7 +9,7 @@ const identity = (session) => session.user ? `${session.user.id}:${session.user.
 
 /** Session identity owns media. A separate, per-window mode owns workspace data. */
 export function createPageController({ client, activityClient = client, view, modeView, preferences, initialMode = null,
-  conversation, conversationView, calls, sharing, availability, planner, payments, onboarding, safety, vehicleCheck, guests, parcels, authForm, feedback, onAccount = () => {} }) {
+  conversation, conversationView, calls, sharing, availability, planner, payments, onboarding, safety, vehicleCheck, guests, parcels, authForm, feedback, onAccount = () => {}, onLocationRequired = () => {}, serverNow = Date.now }) {
   let state = emptyState(), sessionKey = null, generation = 0, refreshing = null, busy = false;
   let entryMode = initialMode;
   const workspace = [conversation, planner, payments, ...[onboarding, safety, vehicleCheck, guests, parcels].filter(Boolean)];
@@ -168,7 +168,19 @@ export function createPageController({ client, activityClient = client, view, mo
   function rideCommand(path, data, message) {
     if (/^\/api\/dispatch\/offers\/[^/]+\/decline$/.test(path)) return runAction(() => client.command(path, data), message);
     return runAction(async () => {
-      const result = await client.rideCommand(path, data); view.select(result.ride.id);
+      const progress = /^\/api\/rides\/([^/]+)\/(depart|arrive|start)$/.exec(path);
+      if (progress && state.user?.role === 'driver' && state.user.driver?.status === 'approved') {
+        await sharing.poll();
+        const tracking = sharing.snapshot?.(), position = tracking?.share?.position;
+        if (tracking?.ride?.id !== progress[1] || !tracking?.share?.active || tracking.share.stale || !position || serverNow() - position.capturedAt >= 30_000) {
+          onLocationRequired();
+          throw new Error('Share my location is required before heading out, confirming arrival or starting this job. Allow location access and wait for a fresh update, then try again.');
+        }
+      }
+      let result;
+      try { result = await client.rideCommand(path, data); }
+      catch (error) { if (error.code === 'TRIP_LOCATION_REQUIRED') onLocationRequired(); throw error; }
+      view.select(result.ride.id);
       if (path === '/api/rides') view.rideCreated?.(result.ride);
       if (closed(result.ride)) state.historyLoaded = false;
       return result;

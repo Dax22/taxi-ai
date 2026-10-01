@@ -4,6 +4,10 @@ import { createRealtimeClient } from '../../../../packages/shared/src/realtime-c
 import { readContacts, readSafety, readSafetyResult } from '../safety/contracts.ts';
 import { readPayment, readReceipt, readEarnings } from '../payments/contracts.ts';
 import { readTracking, readTrackingResult } from '../tracking/contracts.ts';
+import type { Tracking, TrackingResult, LocationShare } from '../tracking/contracts.ts';
+import type { BackgroundGrant, TrackingKind, BackgroundConnection } from '../tracking/background-contracts.ts';
+import { readFoodTracking, readFoodTrackingResult } from '../../../../packages/shared/src/food-tracking.mjs';
+import type { FoodLocationShare } from '../../../../packages/shared/src/food-tracking.mjs';
 import { readVehicleCheck,readVehicleChecks } from '../../../../packages/shared/src/vehicle-checks.mjs';
 import type { VehiclePhoto } from '../../../../packages/shared/src/vehicle-checks.mjs';
 import { envelope, parseAccount, parseSignIn, parseActivity, parseDevices, parseOnboarding, parseEmailStatus } from '../../../../packages/shared/src/mobile-contracts.mjs';
@@ -65,6 +69,7 @@ export class MobileClient {
   }
   subscribe(listener: (user: Account | null) => void) { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; }
   account() { return this.user; }
+  backgroundConnection(): BackgroundConnection { return { origin: this.origin, previewAccess: this.saved?.previewAccess ?? '' }; }
   private publish(user: Account | null) { if (this.user?.id !== user?.id) this.updates.reset(); this.user = user; for (const listener of this.listeners) listener(user); }
   private store(run: () => Promise<void>) {
     const job = this.storageQueue.catch(() => {}).then(run); this.storageQueue = job; return job;
@@ -242,6 +247,33 @@ export class MobileClient {
   async trackingPosition(id: string, clientId: string, sequence: number, position: Position) {
     return readTrackingResult(await this.request(`/tracking/shares/${id}/position?clientId=${clientId}`, { sequence, ...position }), { shareId: id });
   }
+  async foodTracking(id: string, clientId: string): Promise<Tracking> {
+    const result = readFoodTracking(await this.request(`/eats/orders/${id}/tracking?clientId=${clientId}`), id);
+    return { rideId: result.orderId, isDriver: result.isCourier, canShare: result.canShare, required: result.required,
+      share: result.share ? foodShare(result.share) : null, serverNow: result.serverNow };
+  }
+  async startFoodTracking(id: string, clientId: string, key: string): Promise<TrackingResult> {
+    const result = readFoodTrackingResult(await this.request(`/eats/orders/${id}/tracking/start?clientId=${clientId}`, {}, key), { orderId: id });
+    return { ...result, share: foodShare(result.share) };
+  }
+  async stopFoodTracking(id: string, clientId: string, key: string): Promise<TrackingResult> {
+    const result = readFoodTrackingResult(await this.request(`/eats/tracking/shares/${id}/stop?clientId=${clientId}`, {}, key), { shareId: id, stopped: true });
+    return { ...result, share: foodShare(result.share) };
+  }
+  async foodTrackingPosition(id: string, clientId: string, sequence: number, position: Position): Promise<TrackingResult> {
+    const result = readFoodTrackingResult(await this.request(`/eats/tracking/shares/${id}/position?clientId=${clientId}`, { sequence, ...position }), { shareId: id });
+    return { ...result, share: foodShare(result.share) };
+  }
+  async enableBackgroundTracking(kind: TrackingKind, jobId: string, shareId: string, clientId: string, key: string): Promise<{ background: BackgroundGrant; serverNow: number }> {
+    const result = await this.request('/tracking/background/start', { kind, jobId, shareId, clientId }, key);
+    const v = result.background as Partial<BackgroundGrant> | undefined, now = result.serverNow;
+    if (!v || typeof v.token !== 'string' || !/^[a-f0-9]{64}$/.test(v.token) || v.kind !== kind || v.jobId !== jobId
+      || v.shareId !== shareId || v.clientId !== clientId || !Number.isSafeInteger(v.sequence) || v.sequence! < 0
+      || !Number.isSafeInteger(v.expiresAt) || typeof now !== 'number' || v.expiresAt! <= now || v.expiresAt! > now + 12 * 60 * 60_000) {
+      throw new ApiError('Background location permission could not be confirmed. Start sharing again.', 'INVALID_RESPONSE');
+    }
+    return { background: { token: v.token, kind, jobId, shareId, clientId, expiresAt: v.expiresAt!, sequence: v.sequence! }, serverNow: now };
+  }
   async safetyTrip(id: string) { return readSafety(await this.request(`/safety/rides/${id}`)); }
   async safetyCommand(path: string, data: Record<string, unknown>, key: string) { return readSafetyResult(await this.request(`/safety/${path}`, data, key),path); }
   safetyLink(token: string) { if (!/^[a-f0-9]{64}$/.test(token)) throw new Error('Invalid share link.'); return `${this.origin}/trip-share#${token}`; }
@@ -334,4 +366,31 @@ export class MobileClient {
     catch { warning = 'Signed out here. Server confirmation failed; revoke this device from your web account.'; }
     return warning;
   }
+}
+
+function foodShare(value: FoodLocationShare): LocationShare { const { orderId, ...rest } = value; return { ...rest, rideId: orderId }; }
+
+/** Headless transport has no account vault or refresh path; its credential only publishes/stops an existing job. */
+export function createBackgroundTrackingApi({ origin, previewAccess = '', development = false, fetchImpl = fetch }:
+  BackgroundConnection & { development?: boolean; fetchImpl?: typeof fetch }) {
+  const base = apiOrigin(origin, development);
+  async function send(action: 'position' | 'stop', token: string, data: unknown) {
+    if (!/^[a-f0-9]{64}$/.test(token)) throw new ApiError('Background location access has ended.', 'UNAUTHENTICATED', 401);
+    const abort = new AbortController(), timer = setTimeout(() => abort.abort(), 12_000);
+    try {
+      const response = await fetchImpl(`${base}/api/mobile/v1/tracking/background/${action}`, {
+        method: 'POST', credentials: 'omit', redirect: 'error', signal: abort.signal,
+        headers: { Accept: 'application/json', 'Content-Type': 'application/json', Authorization: `Bearer ${token}`,
+          ...(previewAccess ? { 'X-Taxi-Ai-Preview-Access': previewAccess } : {}) }, body: JSON.stringify(data),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new ApiError(body?.error?.message ?? 'Background location update failed.', body?.error?.code ?? 'REQUEST_FAILED', response.status);
+      return envelope(body);
+    } catch (error) { if (error instanceof ApiError) throw error; throw new ApiError('Background location connection interrupted.'); }
+    finally { clearTimeout(timer); }
+  }
+  return {
+    async position(token: string, sequence: number, position: Position) { return readTrackingResult(await send('position', token, { sequence, ...position }), {}); },
+    async stop(token: string) { const result = await send('stop', token, {}); if (result.stopped !== true) throw new ApiError('Location stop was not confirmed.', 'INVALID_RESPONSE'); },
+  };
 }

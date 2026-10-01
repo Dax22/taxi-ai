@@ -1,9 +1,12 @@
+import { useEffect } from 'react';
 import { Alert } from 'react-native';
 import { Text } from '../src/ui/typography';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useJourney } from '../src/journeys/provider';
 import { JourneyChat } from '../src/journeys/chat';
 import { TripLocationCard } from '../src/tracking/view';
+import { useTripLocation } from '../src/tracking/provider';
+import { workLocationBlocks, workLocationRequired } from '../src/journeys/work-location';
 import { Button, Card, Field, Heading, Loading, Notice, Pill, Screen, fare, styles } from '../src/ui/components';
 import { VehicleCard } from '../src/ui/vehicle-card';
 import { PickupIdentity } from '../src/ui/pickup-identity';
@@ -18,7 +21,14 @@ import { vehicleCategory } from '../../../packages/shared/src/vehicle-categories
 import type { JourneyAction } from '../../../packages/shared/src/mobile-journeys.mjs';
 function JourneyScreen({id}:{id:string}){
   const {state:s,controller:c}=useJourney(id),r=s.ride,locked=s.busy||s.uncertain||s.stale;
+  const { state: location, controller: locationController } = useTripLocation(id);
   const { mode } = useSession();
+  const terminalWork = r?.mode === 'work' && ['completed', 'cancelled', 'expired'].includes(r.status);
+  useEffect(() => {
+    if (!terminalWork) return;
+    const local = locationController.snapshot();
+    if (local.sharing || local.background || local.busy) void locationController.stop();
+  }, [locationController, terminalWork]);
   function confirm(action:JourneyAction,title:string,detail:string){const shown=r!;Alert.alert(title,detail,[{text:'Back',style:'cancel'},{text:title,onPress:()=>void c.act(action,shown)}]);}
   const labels:Partial<Record<JourneyAction,string>>={depart:'On my way',arrive:'I have arrived',start:r?.delivery?'Verify pickup and collect parcel':'Verify pickup and start trip',complete:r?.delivery?'Verify drop-off and complete delivery':'Complete trip'};
   if (r && r.mode !== mode) return <Screen><Notice message="This journey belongs to a different app experience. Open it from your web account."/></Screen>;
@@ -49,14 +59,16 @@ function JourneyScreen({id}:{id:string}){
         {r.delivery.dropoffPin&&<><Text style={styles.label}>RECIPIENT’S DROP-OFF CODE</Text><Text selectable style={styles.title}>{r.delivery.dropoffPin}</Text><Text style={styles.small}>Share privately with your recipient. They give this code to the driver only after receiving the parcel.</Text></>}
       </Card>}
       {r.pickupPin&&<Card><Text style={styles.label}>{r.passenger?.kind==='guest'?'PASSENGER’S PICKUP PIN':'YOUR PICKUP PIN'}</Text><Text selectable style={styles.title}>{r.pickupPin}</Text><Text style={styles.body}>{r.passenger?.kind==='guest'?'Share privately with your passenger. They give the PIN to the driver only at pickup after checking the driver and vehicle’s number plate, make, model and colour.':`Share this only when the correct driver and vehicle arrive${r.delivery?' to collect your parcel':' and you are ready to start'}.`}</Text></Card>}
+      {r.mode==='work'&&<TripLocationCard id={r.id} ride={r}/>}
       {r.mode==='work'&&r.allowedActions.some((a)=>labels[a])&&<Card><Text style={styles.h2}>{r.delivery?'Delivery progress':'Trip progress'}</Text>
+        {workLocationRequired(location) && r.allowedActions.some(a => ['depart', 'arrive', 'start'].includes(a)) && <Text style={styles.body}>Live location sharing is required before you depart, confirm arrival or start this {r.delivery ? 'delivery' : 'ride'}. Start sharing above and keep your location up to date.</Text>}
         {(r.allowedActions.includes('start')||r.allowedActions.includes('complete')&&r.delivery)&&<><Field label={r.status==='arrived'?(r.passenger?.kind==='guest'?'Passenger’s six-digit pickup PIN':'Customer’s six-digit pickup PIN'):'Recipient’s six-digit drop-off code'} value={s.pin} onChangeText={(v)=>c.edit('pin',v.replace(/[^0-9]/g,''))} keyboardType="number-pad" maxLength={6} secureTextEntry editable={!locked}/>
           {(r.status==='arrived'?r.pinBlockedUntil:r.delivery?.pinBlockedUntil)!>s.now&&<Text style={styles.body}>Verification paused until {new Date((r.status==='arrived'?r.pinBlockedUntil:r.delivery?.pinBlockedUntil)!).toLocaleTimeString()}.</Text>}</>}
-        {r.allowedActions.filter((a)=>labels[a]).map((a)=><Button key={a} title={labels[a]!} disabled={locked} onPress={()=>confirm(a,labels[a]!,a==='complete'?'Confirm that the journey and handover are complete.':'Update this journey to the next stage?')}/>)}
+        {r.allowedActions.filter((a)=>labels[a]).map((a)=><Button key={a} title={labels[a]!} disabled={locked || workLocationBlocks('ride', a, location)} onPress={()=>confirm(a,labels[a]!,a==='complete'?'Confirm that the journey and handover are complete.':'Update this journey to the next stage?')}/>)}
       </Card>}
       {r.status==='completed'&&<Card><Text style={styles.h2}>{r.delivery?'Delivery complete.':r.passenger?.kind==='guest'?'Passenger’s trip complete.':'You have arrived.'}</Text><Text style={styles.body}>Your journey is saved in Activity.</Text></Card>}
       {r.status==='completed'&&<PaymentCard rideId={r.id}/>}
-      <TripLocationCard id={r.id} ride={r}/>
+      {r.mode!=='work'&&<TripLocationCard id={r.id} ride={r}/>}
       {r.status!=='negotiating'&&<JourneyChat state={s} controller={c}/>} 
       {r.allowedActions.includes('cancel')&&<Button title="Cancel journey" secondary disabled={locked} onPress={()=>confirm('cancel','Cancel journey','Cancel this request or booking?')}/>}
       <Text style={styles.small}>Development preview · no live transport or real payment.</Text>

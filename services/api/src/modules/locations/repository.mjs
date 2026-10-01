@@ -1,7 +1,5 @@
 const pageLimit = (value = 200) => Math.max(1, Math.min(200, Number.isSafeInteger(value) ? value : 200));
 const quotes = 'id, customer_id AS customerId, created_at AS createdAt, expires_at AS expiresAt, route_json AS routeJson, ride_id AS rideId';
-const shares = `id, ride_id AS rideId, driver_id AS driverId, active, session_hash AS sessionHash, client_hash AS clientHash,
-  started_at AS startedAt, seen_at AS seenAt, stopped_at AS stoppedAt, sequence, position_json AS positionJson`;
 const parseQuote = (row) => row ? { ...row, route: JSON.parse(row.routeJson) } : null;
 export function createLocationsRepository(db) {
   return Object.freeze({
@@ -19,24 +17,40 @@ export function createLocationsRepository(db) {
     },
     async pruneQuotes(now, limit = 200) { (await db.prepare(`DELETE FROM location_quotes WHERE id IN
       (SELECT id FROM location_quotes WHERE ride_id IS NULL AND expires_at < ? ORDER BY expires_at, id LIMIT ?)`).run(now - 60 * 60_000, pageLimit(limit))); },
-    share: async (id) => (await db.prepare(`SELECT ${shares} FROM location_shares WHERE id = ?`).get(id)) ?? null,
-    currentShare: async (rideId) => (await db.prepare(`SELECT ${shares} FROM location_shares WHERE ride_id = ? AND active = 1`).get(rideId)) ?? null,
-    currentForDriver: async (driverId) => (await db.prepare(`SELECT ${shares} FROM location_shares WHERE driver_id = ? AND active = 1`).get(driverId)) ?? null,
-    activePage: async (afterId = '', limit = 200) => (await db.prepare(`SELECT ${shares} FROM location_shares WHERE active = 1 AND id > ? ORDER BY id LIMIT ?`).all(afterId, pageLimit(limit))),
-    expired: async (cutoff, limit = 200) => (await db.prepare(`SELECT ${shares} FROM location_shares WHERE active = 1 AND seen_at <= ? ORDER BY seen_at, id LIMIT ?`).all(cutoff, pageLimit(limit))),
+    ...trackingRepository(db, false),
+  });
+}
+
+/** Both job types use the same storage contract and lease engine; table names are
+ * fixed here, never supplied by requests. */
+function trackingRepository(db, food) {
+  const table = food ? 'eats_location_shares' : 'location_shares';
+  const commands = food ? 'eats_location_commands' : 'location_share_commands';
+  const resourceColumn = food ? 'order_id' : 'ride_id';
+  const shares = `id, ${resourceColumn} AS rideId, driver_id AS driverId, active, session_hash AS sessionHash, client_hash AS clientHash,
+    started_at AS startedAt, seen_at AS seenAt, stopped_at AS stoppedAt, sequence, position_json AS positionJson`;
+  return {
+    share: async (id) => (await db.prepare(`SELECT ${shares} FROM ${table} WHERE id = ?`).get(id)) ?? null,
+    currentShare: async (rideId) => (await db.prepare(`SELECT ${shares} FROM ${table} WHERE ${resourceColumn} = ? AND active = 1`).get(rideId)) ?? null,
+    currentForDriver: async (driverId) => (await db.prepare(`SELECT ${shares} FROM ${table} WHERE driver_id = ? AND active = 1`).get(driverId)) ?? null,
+    activePage: async (afterId = '', limit = 200) => (await db.prepare(`SELECT ${shares} FROM ${table} WHERE active = 1 AND id > ? ORDER BY id LIMIT ?`).all(afterId, pageLimit(limit))),
+    expired: async (cutoff, limit = 200) => (await db.prepare(`SELECT ${shares} FROM ${table} WHERE active = 1 AND seen_at <= ? ORDER BY seen_at, id LIMIT ?`).all(cutoff, pageLimit(limit))),
     async saveShare({ id, rideId, driverId, sessionHash, clientHash, now }) {
-      (await db.prepare(`INSERT INTO location_shares (id, ride_id, driver_id, active, session_hash, client_hash, started_at, seen_at)
-        VALUES (?, ?, ?, 1, ?, ?, ?, ?)`).run(id, rideId, driverId, sessionHash, clientHash, now, now));
+      return (await db.prepare(`INSERT INTO ${table} (id, ${resourceColumn}, driver_id, active, session_hash, client_hash, started_at, seen_at)
+        VALUES (?, ?, ?, 1, ?, ?, ?, ?) ON CONFLICT DO NOTHING`).run(id, rideId, driverId, sessionHash, clientHash, now, now)).changes === 1;
     },
     async stop(id, now) {
-      (await db.prepare(`UPDATE location_shares SET active = 0, position_json = NULL, session_hash = NULL, client_hash = NULL, stopped_at = ? WHERE id = ? AND active = 1`).run(now, id));
+      (await db.prepare(`UPDATE ${table} SET active = 0, position_json = NULL, session_hash = NULL, client_hash = NULL, stopped_at = ? WHERE id = ? AND active = 1`).run(now, id));
     },
     async update(id, sequence, value, now) {
-      (await db.prepare('UPDATE location_shares SET sequence = ?, position_json = ?, seen_at = ? WHERE id = ?').run(sequence, JSON.stringify(value), now, id));
+      (await db.prepare(`UPDATE ${table} SET sequence = ?, position_json = ?, seen_at = ? WHERE id = ?`).run(sequence, JSON.stringify(value), now, id));
     },
-    shareCommand: async (actorId, key) => (await db.prepare('SELECT fingerprint, share_id AS id FROM location_share_commands WHERE actor_id = ? AND key = ?').get(actorId, key)),
+    shareCommand: async (actorId, key) => (await db.prepare(`SELECT fingerprint, share_id AS id FROM ${commands} WHERE actor_id = ? AND key = ?`).get(actorId, key)),
     async saveShareCommand(actorId, key, fingerprint, id) {
-      (await db.prepare('INSERT INTO location_share_commands (actor_id, key, fingerprint, share_id) VALUES (?, ?, ?, ?)').run(actorId, key, fingerprint, id));
+      (await db.prepare(`INSERT INTO ${commands} (actor_id, key, fingerprint, share_id) VALUES (?, ?, ?, ?)`).run(actorId, key, fingerprint, id));
     },
-  });
+  };
+}
+export function createFoodTrackingRepository(db) {
+  return Object.freeze({ ...trackingRepository(db, true), pruneQuotes: async () => {} });
 }

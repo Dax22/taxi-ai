@@ -49,8 +49,11 @@ import { readMatchingFastConfig } from './infrastructure/matching-fast-config.mj
 import { createDispatchRepository, createMatchingRepository } from './modules/dispatch/repository.mjs';
 import { createMatchingReadModel } from './modules/dispatch/matching-read-model.mjs';
 import { createDispatchService } from './modules/dispatch/service.mjs';
-import { createLocationsRepository } from './modules/locations/repository.mjs';
+import { createLocationsRepository, createFoodTrackingRepository } from './modules/locations/repository.mjs';
 import { createLocationsService } from './modules/locations/service.mjs';
+import { createBackgroundLocationRepository } from './modules/background-locations/repository.mjs';
+import { createBackgroundLocationService } from './modules/background-locations/service.mjs';
+import { check } from './shared/errors.mjs';
 import { createAvailabilityRepository } from './modules/availability/repository.mjs';
 import { createAvailabilityService } from './modules/availability/service.mjs';
 import { createPaymentsRepository } from './modules/payments/repository.mjs';
@@ -145,7 +148,7 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
   drivers = createDriversService({ repository: driverRepository,
     getAccount: accounts.profile, hasDriverWork, codec: createDriverDocumentCodec(MAX_DRIVER_FILE_BYTES),
     faceProvider: driverFaceProvider, faceChecksFactory: createDriverFaceChecks, tokens, unitOfWork, audit, clock });
-  let calls, locations, payments, safety, guestRides, parcelTracking, notifications, family, familyDelivery, adminCases;
+  let calls, locations, foodTracking, payments, safety, guestRides, parcelTracking, notifications, family, familyDelivery, adminCases;
   const staffAccess = createStaffAccessService({ repository: createStaffAccessRepository(db), getAccount: accounts.profile,
     getAccountByEmail: async email => {
       const record = await accountRepository.findByEmail(email);
@@ -179,6 +182,9 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
     routeForRide: async (id) => (await locations.routeForRide(id)),
     quoteForRide: async (userId, id, now) => (await locations.quoteForRide(userId, id, now)),
     bindQuote: async (userId, id, rideId, now) => (await locations.bindQuote(userId, id, rideId, now)),
+    requireTripLocation: async (driverId, rideId) => {
+      check(await locations.freshPositionFor(driverId, rideId, clock()), 'TRIP_LOCATION_REQUIRED', 'Share a recent location before continuing this job. Open Share my location and keep tracking active.');
+    },
     availabilityFor: availability.positionFor, onClaim: availability.onClaim, availableDriverIds: availability.driverIds,
     nearbyDriverIds: availability.nearbyDriverIds, allowSimulation, ridePilot,
     onEvent: async ({ kind, ride, actorId, recipients = [], eventKey, now }) => {
@@ -284,10 +290,21 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
   const adminDemand = createAdminDemandService({ repository: createAdminDemandRepository(db),
     requirePermission: staffAccess.requirePermission, unitOfWork, clock, allowSimulation });
   const eats = createEatsService({ repository: eatsRepository, getAccount: accounts.profile, photoCodec: { normalize: normalizeDishPhoto },
+    foodTracking: {
+      tracking: (...args) => foodTracking.tracking(...args), shareCommand: (...args) => foodTracking.shareCommand(...args),
+      update: (...args) => foodTracking.update(...args), freshPositionFor: (...args) => foodTracking.freshPositionFor(...args),
+      closeRide: (...args) => foodTracking.closeRide(...args),
+    },
     resolveDeliveryLocation, deliveryMapSettings,
     hasOtherWork: async (id) => (await rideRepository.hasDriverWork(id)) || (await rideRepository.hasCustomerWork(id, clock())),
     availabilityFor: availability.positionFor, onClaim: availability.onClaim, tokens, unitOfWork, audit, clock, normalisePhoto: normaliseFoodPhoto });
+  foodTracking = createLocationsService({ repository: createFoodTrackingRepository(db), provider: mapProvider,
+    getAccount: accounts.profile, sessionOwner: accounts.sessionOwner, nativeAccessOwner: devices.accessOwner, nativeSessionOwner: devices.sessionOwner,
+    getRideContext: (user, id) => eats.trackingContext(user, id), canShare: status => ['assigned','picked_up','arrived'].includes(status),
+    resourceLabel: 'food delivery', unitOfWork, tokens, audit, clock });
+  const backgroundLocations = createBackgroundLocationService({ repository: createBackgroundLocationRepository(db),
+    trackerFor: kind => kind === 'food' ? foodTracking : locations, nativeSessionOwner: devices.sessionOwner, unitOfWork, tokens, clock });
   const googleAuth = createGoogleAuthService({ repository: createGoogleAuthRepository(db), provider: googleProvider,
     accounts, devices, tokens, unitOfWork, clock });
-  return Object.freeze({ accounts, devices, drivers, rides, dispatch, eats, chat, calls, locations, availability, payments, safety, safetyMonitoring, guestRides, parcelTracking, family, familyDelivery, vehicleChecks, adminConsole, staffAccess, adminCases, adminOperations, adminFinance, adminCompliance, adminDemand, announcements, googleAuth, accountEmail, notifications, rateLimiter, realtime, workerCoordinator, clock });
+  return Object.freeze({ accounts, devices, drivers, rides, dispatch, eats, chat, calls, locations, foodTracking, backgroundLocations, availability, payments, safety, safetyMonitoring, guestRides, parcelTracking, family, familyDelivery, vehicleChecks, adminConsole, staffAccess, adminCases, adminOperations, adminFinance, adminCompliance, adminDemand, announcements, googleAuth, accountEmail, notifications, rateLimiter, realtime, workerCoordinator, clock });
 }

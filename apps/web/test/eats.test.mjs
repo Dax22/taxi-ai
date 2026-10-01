@@ -632,3 +632,15 @@ test('an edited saved-address draft cannot overwrite a profile changed by anothe
   assert.equal(node('meal-address').value, '40 Address updated on another phone'); assert.equal(node('meal-saved-stale').hidden, true);
   await node('meal-save-home').handlers.click(); assert.equal(f.writes[0].data.expectedVersion, 2);
 });
+
+test('courier order buttons consult location guidance before collection and still allow final delivery confirmation', async (t) => {
+  const node = dom(t), f = fixture(), attempts = [], actions = [];
+  const delivery = { ...order, fulfillment: 'delivery', status: 'picked_up', role: 'courier', actions: ['pickup', 'arrive', 'deliver', 'cancel'] };
+  f.api.request = async () => ({ order: delivery });
+  const controller = { ...f.c, async orderAction(value, action) { actions.push(action); return true; } };
+  const view = createEatsView(controller, { beforeOrderAction(value, action) { attempts.push([value.id, action]); return !['pickup', 'arrive'].includes(action); } });
+  f.c.subscribe(() => view.render(f.c.snapshot())); await f.c.navigate('order', delivery.id);
+  const submit = (value) => node('order-action-form').handlers.submit({ preventDefault() {}, submitter: { value } });
+  submit('pickup'); submit('arrive'); assert.deepEqual(actions, []);
+  submit('deliver'); submit('cancel'); await flush(); assert.deepEqual(actions, ['deliver', 'cancel']); assert.equal(attempts.length, 4);
+});

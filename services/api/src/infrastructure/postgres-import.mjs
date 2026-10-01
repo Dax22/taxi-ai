@@ -56,6 +56,12 @@ export async function importSqliteToPostgres(db, sourcePath, { onProgress = () =
               let value = column === '_insert_order' ? row.__taxi_rowid : row[column];
               // A database transfer never transfers ownership of a live worker lease.
               if (table === 'worker_leases' && column === 'expires_at') value = 0;
+              if (table === 'background_location_tokens' && column === 'expires_at') value = 0;
+              if (table === 'eats_location_shares') {
+                if (column === 'active') value = 0;
+                if (['position_json','session_hash','client_hash'].includes(column)) value = null;
+                if (column === 'stopped_at') value ??= Date.now();
+              }
               if (ArrayBuffer.isView(value)) value = Buffer.from(value.buffer, value.byteOffset, value.byteLength);
               values.push(value); return `$${values.length}`;
             });

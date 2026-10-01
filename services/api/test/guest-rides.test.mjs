@@ -19,6 +19,7 @@ const createLink = (actor, ride, expectedLinkId = null, key = randomUUID()) => a
 const publicView = (h, token, extra = {}) => h.client().post('/api/guest-trip/view', { token, ...extra });
 const metadata = async (actor, ride) => ok(await actor.send(basePath(ride))).guest;
 async function step(actor, ride, action, extra = {}, key) {
+  if (['depart', 'arrive', 'start'].includes(action)) await actor.shareTripLocation(ride.id);
   return ok(await actor.post(`/api/rides/${ride.id}/${action}`, { expectedVersion: ride.version, ...extra }, key)).ride;
 }
 async function request(actor, data = {}, key) {

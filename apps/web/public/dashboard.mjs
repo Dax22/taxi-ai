@@ -137,6 +137,8 @@ const liveUpdates = createRealtimeClient({
   refresh: async () => { await page.poll(); await Promise.all([calls.poll(), sharing.poll(), announcements.poll()]); },
 });
 const page = createPageController({ client, activityClient, view, modeView, preferences: modePreferences(storage),
+  serverNow: () => serverTime.now + performance.now() - serverTime.received,
+  onLocationRequired() { $('location-tracking').scrollIntoView({ block: 'center' }); const start = $('tracking-start'); if (!start.hidden && !start.disabled) start.focus(); },
   initialMode: new URLSearchParams(location.search).get('service') === 'courier' ? 'customer' : null,
   conversation, conversationView, calls, sharing, availability,
   planner, payments, onboarding, safety, vehicleCheck, guests, parcels, authForm,

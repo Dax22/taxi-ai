@@ -12,10 +12,7 @@
       "bundleIdentifier": "com.taxiai.app"
     },
     "android": {
-      "package": "com.taxiai.app",
-      "blockedPermissions": [
-        "android.permission.ACCESS_BACKGROUND_LOCATION"
-      ]
+      "package": "com.taxiai.app"
     },
     "plugins": [
       "expo-router",
@@ -28,10 +25,11 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Allow Taxi Ai to find nearby jobs and, when you choose to share, show your trip location while the app is open.",
-          "isIosBackgroundLocationEnabled": false,
-          "isAndroidBackgroundLocationEnabled": false,
-          "isAndroidForegroundServiceEnabled": false
+          "locationWhenInUsePermission": "Allow Taxi Ai to find nearby jobs and share your location when you choose to start active work tracking.",
+          "locationAlwaysAndWhenInUsePermission": "Allow Taxi Ai to share your location during an active ride or delivery, including when your screen is locked. Sharing starts only when you choose and can be stopped at any time.",
+          "isIosBackgroundLocationEnabled": true,
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
         }
       ],
       "expo-notifications",

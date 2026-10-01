@@ -6,7 +6,7 @@ export interface LocationShare {
   id: string; rideId: string; active: boolean; owned: boolean; sequence: number;
   startedAt: number; updatedAt: number | null; stale: boolean; position: Position | null;
 }
-export interface Tracking { rideId: string; canShare: boolean; isDriver: boolean; share: LocationShare | null; serverNow: number }
+export interface Tracking { rideId: string; canShare: boolean; isDriver: boolean; required?: boolean; share: LocationShare | null; serverNow: number }
 export interface TrackingResult { share: LocationShare; replayed: boolean; serverNow: number }
 const object = (v: any) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const id = (v: any) => typeof v === 'string' && /^[a-f0-9-]{36}$/.test(v);
@@ -27,6 +27,7 @@ function share(v: any) {
 export function readTracking(v: any, rideId: string): Tracking {
   envelope(v);
   check(v.rideId === rideId && typeof v.canShare === 'boolean' && typeof v.isDriver === 'boolean');
+  check(v.required === undefined || typeof v.required === 'boolean');
   check(!v.canShare || v.isDriver);
   if (v.share !== null) { share(v.share); check(v.share.rideId === rideId); }
   return v;

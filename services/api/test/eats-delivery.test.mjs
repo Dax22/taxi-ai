@@ -88,6 +88,7 @@ test('recipient contact and delivery pin coordinates are visible only to authori
   ({ order } = await ok(f.driver, `/orders/${order.id}/claim`, { expectedVersion: order.version }));
   assert.deepEqual(order.recipient, recipient); assert.deepEqual(order.address, address);
   const adminOrder = (await ok(f.admin, `/orders/${order.id}`)).order; assert.deepEqual(adminOrder.recipient, recipient);
+  await f.driver.shareFoodLocation(order.id);
   ({ order } = await ok(f.driver, `/orders/${order.id}/pickup`, { expectedVersion: order.version, pin: pickupPin }));
   const deliveryPin = (await ok(f.customer, `/orders/${order.id}`)).order.deliveryPin;
   ({ order } = await ok(f.driver, `/orders/${order.id}/arrive`, { expectedVersion: order.version }));

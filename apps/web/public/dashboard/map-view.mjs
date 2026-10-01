@@ -91,7 +91,7 @@ export function createMapView(root, { onPick } = {}) {
   return Object.freeze({
     render(next) {
       state = next;
-      if (focusKey !== next.focusKey) { focusKey = next.focusKey; const points = [next.pickup, next.destination].filter(Boolean); fit(points.length ? points : [next.driver].filter(Boolean)); }
+      if (focusKey !== next.focusKey) { focusKey = next.focusKey; const points = next.fitPoints ?? [next.pickup, next.destination].filter(Boolean); fit(points.length ? points : [next.driver].filter(Boolean)); }
       render();
     },
     reset() { state = { enabled: false }; center = { ...NIGERIA_CENTER }; zoom = 6; focusKey = null; render(); },

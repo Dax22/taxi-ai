@@ -17,6 +17,7 @@ async function courier(h, admin, category, payloadKg = null) {
   return driver;
 }
 async function action(actor, ride, name, extra = {}, key) {
+  if (['depart', 'arrive', 'start'].includes(name)) await actor.shareTripLocation(ride.id);
   return ok(await actor.post(`/api/rides/${ride.id}/${name}`, { expectedVersion: ride.version, ...extra }, key)).ride;
 }
 async function agreed(customer, driver, ride) {

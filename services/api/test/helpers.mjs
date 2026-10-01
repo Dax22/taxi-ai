@@ -58,6 +58,7 @@ export async function harness(t, { persistent = false, callConfig = createCallCo
     client() {
       const client = { cookie: '', csrf: '', user: null };
       const availabilityClient = randomUUID();
+      const locationClient = randomUUID();
       client.send = async (path, { method = 'GET', data, headers = {}, rawBody } = {}) => {
         const requestHeaders = { ...gatewayHeaders, ...(client.cookie ? { Cookie: client.cookie } : {}),
           ...(method === 'POST' ? { Origin: runtime?.publicOrigin ?? base, 'Content-Type': 'application/json', 'X-CSRF-Token': client.csrf } : {}), ...headers };
@@ -74,6 +75,41 @@ export async function harness(t, { persistent = false, callConfig = createCallCo
       client.post = (path, data, key = randomUUID()) => client.send(path, { method: 'POST', data, headers: { 'Idempotency-Key': key } });
       client.availability = (path, data = {}, key = randomUUID()) => client.send(path, { method: 'POST', data,
         headers: { 'X-Availability-Client': availabilityClient, 'Idempotency-Key': key } });
+      // Explicit fixture GPS: exercise the authenticated trip-sharing endpoints.
+      // Nothing starts automatically when a client claims or confirms a booking.
+      client.shareTripLocation = async (rideId, point = {}) => {
+        const headers = { 'X-Location-Client': locationClient };
+        const current = await client.send(`/api/rides/${rideId}/location`, { headers });
+        assert.equal(current.status, 200, JSON.stringify(current.body));
+        let share = current.body.share;
+        if (!share?.active) {
+          const started = await client.send(`/api/rides/${rideId}/location/start`, { method: 'POST', data: {},
+            headers: { ...headers, 'Idempotency-Key': randomUUID() } });
+          assert.equal(started.status, 200, JSON.stringify(started.body));
+          share = started.body.share;
+        }
+        assert.equal(share.owned, true, 'Use the existing sharing fixture to update a different location window.');
+        if (!Object.keys(point).length && share.position && !share.stale && now - share.position.capturedAt < 30_000) return share;
+        const updated = await client.send(`/api/location-shares/${share.id}/position`, { method: 'POST', headers,
+          data: { sequence: share.sequence + 1, lat: 9.08, lng: 7.4, accuracy: 10, capturedAt: now, ...point } });
+        assert.equal(updated.status, 200, JSON.stringify(updated.body));
+        return updated.body.share;
+      };
+      // Explicit food fixture GPS uses the same authenticated sharing boundary.
+      client.shareFoodLocation = async (orderId, point = {}) => {
+        const headers = { 'X-Location-Client': locationClient };
+        const current = await client.send(`/api/eats/orders/${orderId}/tracking`, { headers });
+        assert.equal(current.status, 200, JSON.stringify(current.body));
+        let share = current.body.share;
+        if (!share?.active) {
+          const started = await client.send(`/api/eats/orders/${orderId}/tracking/start`, { method: 'POST', data: {}, headers: { ...headers, 'Idempotency-Key': randomUUID() } });
+          assert.equal(started.status, 200, JSON.stringify(started.body)); share = started.body.share;
+        }
+        assert.equal(share.owned, true);
+        const updated = await client.send(`/api/eats/tracking/shares/${share.id}/position`, { method: 'POST', headers,
+          data: { sequence: share.sequence + 1, lat: 9.08, lng: 7.4, accuracy: 10, capturedAt: now, ...point } });
+        assert.equal(updated.status, 200, JSON.stringify(updated.body)); return updated.body.share;
+      };
       // Explicit setup for legacy ride tests; availability tests use the raw API.
       client.online = async (choice = null) => {
         const status = await client.send('/api/availability', { headers: { 'X-Availability-Client': availabilityClient } });

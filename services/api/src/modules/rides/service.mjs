@@ -21,6 +21,7 @@ import { matchingPairKey } from '../../shared/matching-pair-key.mjs';
  * or HTTP objects. unitOfWork must encompass state, fare, audit and retry writes.
  */
 export function createRidesService({ repository, deliveries, passengerForRide, savePassenger, getAccount, unitOfWork, audit, tokens, clock, onRideClosed = () => {}, onTripCompleted = () => {},
+  requireTripLocation = () => check(false, 'TRIP_LOCATION_REQUIRED', 'Share a fresh location from your working device before progressing this trip.'),
   routeForRide = () => null, quoteForRide, bindQuote, availabilityFor = () => null, onClaim = () => {}, onEvent = () => {}, availableDriverIds = () => [], nearbyDriverIds = null, hasOtherWork = () => false, allowSimulation = false,
   dispatch = null, isParcelRecipient = async () => false, ridePilot = createRidePilotConfig(), matching = null, nearbyMatchingDriverIds = null }) {
   // Expiry commits independently of a command that may fail afterward.
@@ -413,6 +414,9 @@ export function createRidesService({ repository, deliveries, passengerForRide, s
       check(ride.driverId === user.id, 'FORBIDDEN', 'Only the assigned driver can operate this trip.');
       const transition = TRIP_TRANSITIONS[action];
       check(transition && status === transition.from, 'INVALID_TRIP_STATE', 'This trip action is not available at the current stage.');
+      // Fail before PIN attempts or lifecycle writes. Completion and cancellation
+      // remain available when a working device loses GPS or connectivity.
+      if (['depart', 'arrive', 'start'].includes(action)) await requireTripLocation(user.id, id);
       if (action === 'start') {
         requireEligibleDriver(user);
         check((await deliveries.matches(ride, user.driver.vehicle)), 'VEHICLE_MISMATCH', 'The approved vehicle no longer matches this request.');

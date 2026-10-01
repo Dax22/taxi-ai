@@ -67,8 +67,10 @@ const routes = new Map([
   ['/eats/photo-upload.mjs', ['public/eats/photo-upload.mjs', 'text/javascript; charset=utf-8']],
   ['/eats/photo-manager.mjs', ['public/eats/photo-manager.mjs', 'text/javascript; charset=utf-8']],
   ['/eats/transport.mjs', ['public/eats/transport.mjs', 'text/javascript; charset=utf-8']],
+  ['/eats/tracking.mjs', ['public/eats/tracking.mjs', 'text/javascript; charset=utf-8']],
+  ['/eats/tracking-view.mjs', ['public/eats/tracking-view.mjs', 'text/javascript; charset=utf-8']],
   ['/typography.css', ['public/typography.css', 'text/css; charset=utf-8']],
-  ...['eats', 'eats-contracts', 'eats-controller', 'eats-meals', 'eats-delivery'].map((name) => [`/shared/${name}.mjs`, [`../../packages/shared/src/${name}.mjs`, 'text/javascript; charset=utf-8']]),
+  ...['eats', 'eats-contracts', 'eats-controller', 'eats-meals', 'eats-delivery', 'food-tracking'].map((name) => [`/shared/${name}.mjs`, [`../../packages/shared/src/${name}.mjs`, 'text/javascript; charset=utf-8']]),
   ['/account-access', ['public/account-access.html', 'text/html; charset=utf-8']],
   ['/account-access.mjs', ['public/account-access.mjs', 'text/javascript; charset=utf-8']],
   ['/account-recovery', ['public/account-recovery.html', 'text/html; charset=utf-8']],
@@ -216,7 +218,7 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
   const workers = createWorkerRuntime({ coordinator: application.workerCoordinator, config: { ...workerConfig, matchingFast }, wakeups: db,
     regions: () => application.dispatch.regions(), dispatch: application.dispatch, onError: (name) => telemetry.event(name),
     maintenance: async ({ lease, active }) => {
-      for (const service of [application.rides, application.availability, application.calls, application.locations,
+      for (const service of [application.rides, application.availability, application.calls, application.locations, application.foodTracking, application.backgroundLocations,
         application.safety, application.guestRides, application.family, application.vehicleChecks, application.devices, application.googleAuth]) {
         if (!active()) return;
         const held = await db.transaction(async () => {
