@@ -17,7 +17,11 @@ function fixture(t,{enabled=true,registered=true,recipients=1}={}) {
     CREATE TABLE account_revisions(user_id TEXT PRIMARY KEY,revision INTEGER NOT NULL,updated_at INTEGER NOT NULL);`);
   raw.exec(readFileSync(new URL('../migrations/047_delivery_updates.sql',import.meta.url),'utf8'));
   t.after(()=>raw.close());
-  const db=asAsyncDatabase(raw),repository=createDeliveryUpdatesRepository(db);
+  let transactionDepth=0;
+  const database=asAsyncDatabase(raw),db={...database,transaction:run=>database.transaction(async()=>{
+    transactionDepth++;
+    try {return await run();} finally {transactionDepth--;}
+  })},repository=createDeliveryUpdatesRepository(db);
   const customerId=randomUUID(),recipientId=randomUUID(),targetId=randomUUID(),sessionId=randomUUID();
   raw.prepare('INSERT INTO users(id) VALUES(?)').run(customerId);raw.prepare('INSERT INTO users(id) VALUES(?)').run(recipientId);
   raw.prepare('INSERT INTO device_sessions(id) VALUES(?)').run(sessionId);
@@ -29,7 +33,7 @@ function fixture(t,{enabled=true,registered=true,recipients=1}={}) {
     access:async(user,kind,id)=>{check(allowed && id===targetId && users.has(user.id),'NOT_FOUND','No access.');return {screen:kind==='food'?'food-order':user.id===customerId?'journey':'parcels',id};},
     phaseFor:async()=>currentPhase,familyTargets:async()=>currentToken?[{sessionId,token:currentToken}]:[],
     validTarget:async job=>job.sessionId===sessionId && job.token===currentToken,disableTarget:async()=>{currentToken=null;},
-    provider,estimateEta:async()=>{estimates++;assert.equal(raw.isTransaction,false,'routing cannot hold a database transaction');return {durationSeconds:601,source:'road'};},
+    provider,estimateEta:async()=>{estimates++;assert.equal(transactionDepth,0,'routing cannot hold a database transaction');return {durationSeconds:601,source:'road'};},
     unitOfWork:run=>db.transaction(run),tokens:{id:randomUUID},clock:()=>now,onChanged:async ids=>changed.push(...ids)};
   const service=createDeliveryUpdatesService(args),route={from:{lat:9.08,lng:7.4,name:'private kitchen'},to:{lat:9.085,lng:7.405,address:'private recipient'}};
   const publish=overrides=>db.transaction(()=>service.publish({kind:'food',targetId,phase:currentPhase,customerId,eventKey:`food:${targetId}:${currentPhase}`,now,route,...overrides}));
