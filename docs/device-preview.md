@@ -26,6 +26,13 @@ before starting it; it validates enabled push configuration without sending aler
 
 ## Prepare the signed build
 
+Background/locked-screen work tracking needs a **new installed development or
+release build**. The current native configuration enables iOS background
+location, Android background location/foreground-service permissions and Expo
+TaskManager. An older binary or JavaScript-only update is insufficient; Expo Go
+does not verify this behavior. See [Expo SDK 57 Location](https://docs.expo.dev/versions/v57.0.0/sdk/location/)
+and [TaskManager](https://docs.expo.dev/versions/v57.0.0/sdk/task-manager/).
+
 Native maps use Google Maps on Android and Apple Maps on iOS. Configure the
 restricted Android SDK key as `GOOGLE_MAPS_ANDROID_API_KEY` in EAS preview before
 building; follow [mobile-maps.md](mobile-maps.md). This is separate from Firebase
@@ -88,10 +95,12 @@ passed based on JavaScript bundle exports or mocked provider tests.
 | Small phone/tablet layout, large text, keyboard, screen reader | Controls readable and reachable; no clipped fare or verification fields | Not run on devices |
 | All five category journeys | Eligible driver, explicit fare acceptance, customer confirmation, completion and saved history | API tests only |
 | Delivery codes, cancellation, stale offers | Wrong codes cannot complete; invalid transitions rejected | API tests only |
-| Background, permission denial, reconnect, account switch | No hidden tracking, private data cleared, uncertain commands retry unchanged | Controller tests only |
+| Background, permission denial, reconnect, account switch | No tracking without explicit consent; Stop/account changes end collection; uncertain commands retry unchanged | Controller tests only |
 | Native trip GPS and private trip link | Driver explicitly shares; customer and authorized link viewer see matching position/age; stopping removes it | API/controller fixtures only |
 | Platform street maps | Google Maps on Android, Apple Maps on iOS; route/driver pins fit, stale labels and attribution remain visible | Configuration/type/bundle checks only; real tiles unverified |
-| GPS interruption and session lifecycle | Navigation keeps foreground sharing; background stops it; no auto-resume; revoked/closed/expired trips cannot publish | API/controller fixtures only |
+| GPS interruption and session lifecycle | Explicit sharing survives background/lock when permitted; Stop/logout/revocation/closed jobs end it; login never implicitly starts it | API/controller fixtures only; physical tests outstanding |
+| Food courier GPS and work requirements | Buyer sees GPS after collection, with private-pickup masking; ride depart/arrive/start and food pickup/arrive need fresh sharing | API/controller fixtures only |
+| Background permission and indicators | Android foreground notification and iOS location indicator; denial respected and Stop always available | Config/type/bundle checks only; physical tests outstanding |
 | Push opt-in and opt-out | Correct project registers; opt-out stops future delivery | Mocked provider tests only |
 | Foreground/background/closed-app alert tap | Own update opens for review without automatic booking actions | Not run on devices |
 | Cross-account and revoked-device alerts | No private content leak or unauthorized journey access | API tests only |
@@ -108,14 +117,57 @@ each test phone. Generate an ordinary test offer/message from the other account
 and verify inbox, receipt and visible phone delivery. Keep push off until the
 matching project and provider credentials are configured.
 
-For trip GPS acceptance, use two physical phones within Nigeria.
-Book and confirm a trip, then choose **Share my location** on the driver's
-Journey screen. Confirm an actual moving GPS fix and its timestamp on the customer
-phone and private trip link. Navigate to Safety and back without stopping updates.
-Test denied/approximate permission, Stop during permission or GPS acquisition,
-network loss, background/lock and return, opening the OS trip-link share sheet
-and returning (restart sharing explicitly if the app lost foreground), another driver's-device Stop, device
-revocation, completion and cancellation. Confirm old fixes become stale at 30
-seconds and unavailable by the 60-second lease deadline if server cleanup cannot
-be delivered. Record actual device/build evidence; mock coordinates do not pass
-the real-GPS row. See [mobile-trip-location.md](mobile-trip-location.md).
+## Two-phone work-tracking acceptance
+
+Use new signed builds on Android and iOS, a driver/courier phone inside Nigeria
+and a separate buyer/customer account. Viewers can be outside Nigeria and need
+not grant GPS permission. Use fictional jobs; a passenger or stationary tester
+should operate the controls rather than a moving driver.
+
+1. **No automatic collection:** sign in, go online, accept work and open a map.
+   Sharing stays off until **Share my location** is confirmed. Ride/parcel
+   depart, arrive and start and food pickup and arrive require fresh sharing.
+   Stop, completion/handover, cancel and safety remain available.
+2. **Permissions:** confirm the viewer/background explanation, allow foreground
+   then background access (Always on iOS; Android may open settings), and check
+   the OS notification/indicator. Test denial, approximate access and iOS Allow
+   Once: no hidden fallback or repeated background prompts. Test Stop during
+   permission handoff and initial GPS acquisition; late results cannot start it.
+3. **Real location:** verify the moving point, accuracy and capture time on the
+   viewer phone. Navigate between app screens without ending sharing. Check
+   authorized ride links and accepted parcel invitations after collection. Food
+   buyers see GPS only after collection, and private kitchen proximity can mask
+   it. No food-recipient link or alert is automatically sent.
+4. **Background/lock:** switch apps for at least two minutes, then lock the driver
+   phone for at least two minutes while safely changing position. Check updates
+   continue when permitted and record cadence/interruption. Ten seconds is
+   requested, not guaranteed. Return to the same explicitly consented share
+   without a second publisher. Test the OS trip-link share sheet as well.
+5. **Network loss:** disable networking while sharing. The viewer marks a point
+   stale after 30 seconds and removes it after the 60-second share lease expires.
+   The failed send stops collection. Reconnect: no old fixes replay, and the
+   driver reviews the job and explicitly starts again.
+6. **Stop/logout/revocation:** separately Stop locally, Stop from another
+   authorized driver device, sign out, revoke the device remotely and revoke OS
+   background permission. No new authorized point is accepted; native collection
+   ends when notified/next executed. Reopening/login never implicitly restarts it.
+   Without network, allow server lease expiry rather than claiming immediate
+   remote removal. Verify private state clears across account changes.
+7. **Terminal jobs:** complete/cancel ride and parcel trips and deliver/cancel
+   food orders while sharing. The active point disappears and later callbacks
+   cannot restore it. Food keeps ordinary handover-code checks; the buyer shares
+   the code with any recipient manually.
+8. **OS limits/deadline:** force-quit and exercise battery restrictions. Missing
+   updates must become stale/unavailable; continuous tracking after force-quit is
+   not supported. Validate capability expiry using a shortened deadline in a
+   controlled fixture: its maximum life is 12 hours and it must neither refresh
+   account credentials nor authorize another job. Restart requires explicit
+   consent after tracking ends.
+
+The task stores only a scoped publishing/Stop capability and binding metadata in
+a separate secure record, not account refresh tokens or GPS history. A silent OS
+task cannot promise an immediate local shutdown time; closed/expired server
+authorization must still reject later points. Record commit, build, OS/device and
+observed results for every step. Mock GPS, passing tests and successful bundle
+exports do not pass this physical-device acceptance gate. See
+[mobile-trip-location.md](mobile-trip-location.md) for lifecycle and API details.

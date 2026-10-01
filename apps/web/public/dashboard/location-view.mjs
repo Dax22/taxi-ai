@@ -152,10 +152,14 @@ export function createLocationView({ onEnable, onUsePickup, onSearch, onFindRide
     $('tracking-status').textContent = state.ending ? 'Stopping location sharing…' : state.pending ? 'Waiting for location permission and a GPS fix…'
       : state.share?.active ? position ? `${stale ? 'Last known location' : 'Driver location'} · ±${position.accuracy} m · ${Math.max(0, Math.floor((state.now - position.capturedAt) / 1000))}s old`
         : 'Sharing enabled · waiting for a GPS fix' : activeTrip ? 'Driver location is not being shared.' : 'Location sharing is available during a confirmed trip.';
-    $('tracking-guidance').textContent = isDriver ? !state.supported ? 'Location sharing needs browser geolocation and a secure connection.'
-      : state.share?.active && !state.sharing ? 'Another window owns this sharing session. Stop it here before starting a new one.'
-        : state.ride.delivery ? 'Share only when you choose. The sender can see your latest position; after collection, the accepted parcel recipient can also see it until delivery. Use Stop sharing to end GPS updates.' : 'Share only when you choose. Your assigned customer can see your latest position. Use Stop sharing to end GPS updates. Switching account modes keeps active trip sharing running.'
-      : 'The driver chooses when to share. Positions are browser-reported and may be inaccurate. Stale positions are marked as last known.';
+    $('tracking-guidance').textContent = isDriver && activeTrip
+      ? 'Live location is required during this active job. Choose Share my location before heading out, confirming arrival or starting. Stopping sharing pauses those steps; completion, cancellation and support remain available. '
+        + (!state.supported ? 'Location access needs browser geolocation on HTTPS or localhost. '
+          : state.share?.active && !state.sharing ? 'Another window or device owns this session. Stop it here before sharing on this device. ' : '')
+        + (state.ride.delivery ? 'Your sender can see your location; after collection, the accepted parcel recipient can also see it. ' : 'Your assigned customer can see your location. ')
+        + 'Keep this page visible. Browser updates may pause when the screen locks or the app enters the background; use a supported native app build for continuous background tracking.'
+      : activeTrip ? 'Your assigned driver must share live location during this job. Positions are device-reported and may be inaccurate. Stale positions are marked as last known.'
+        : 'Location sharing is available only during an active assigned job.';
     const route = state.ride.route;
     $('tracking-route-summary').textContent = `Journey ${state.ride.id.slice(0, 8).toUpperCase()} · ${state.ride.pickup?.name ?? 'Pickup'} → ${state.ride.destination?.name ?? 'Destination'} · ` + (route?.distanceKind === 'straight_line' ? `${(route.distanceMeters / 1000).toFixed(1)} km in a straight line · no driving route or ETA` : route ? `${(route.distanceMeters / 1000).toFixed(1)} km · ${update?.tripMinutes ?? Math.ceil(route.durationSeconds / 60)} min ${state.ride.status === 'completed' ? 'planned driving time' : 'estimated driving'} · excludes live traffic and pickup arrival time`
       : 'Sample-area journey; no saved road route.');

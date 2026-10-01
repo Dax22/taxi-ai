@@ -1,7 +1,13 @@
 /** Both authenticated transports call these adapters; authorization stays in Eats. */
 export function eatsRoutes(eats) {
   const root = '/api/eats', uuid = '([a-f0-9-]{36})';
+  const trackingIdentity = (ctx) => ({ userId: ctx.user.id, ...(ctx.nativeSessionId
+    ? { nativeSessionId: ctx.nativeSessionId, clientId: ctx.query.get('clientId') }
+    : { sessionToken: ctx.token, clientId: ctx.locationClient }) });
   return [
+    { method: 'GET', path: new RegExp(`^${root}/orders/${uuid}/tracking$`), handle: async (ctx) => ({ body: await eats.tracking(trackingIdentity(ctx), ctx.match[1]) }) },
+    { method: 'POST', path: new RegExp(`^${root}/orders/${uuid}/tracking/start$`), handle: async (ctx) => ({ body: await eats.trackingCommand(trackingIdentity(ctx), 'start', ctx.match[1], ctx.data, ctx.key) }) },
+    { method: 'POST', path: new RegExp(`^${root}/tracking/shares/${uuid}/(position|stop)$`), handle: async (ctx) => ({ body: await eats.trackingCommand(trackingIdentity(ctx), ctx.match[2], ctx.match[1], ctx.data, ctx.key) }) },
     { method: 'GET', path: /^\/api\/eats\/delivery-profile$/, handle: async ({ user }) => ({ body: await eats.deliveryProfile(user) }) },
     { method: 'POST', path: /^\/api\/eats\/delivery-profile$/, handle: async ({ user, data, key, reauthenticate }) => ({ body: await eats.saveDeliveryProfile(user, data, key, reauthenticate) }) },
     { method: 'POST', path: /^\/api\/eats\/delivery-location$/, handle: async ({ user, data, reauthenticate }) => ({ body: await eats.deliveryLocation(user, data, reauthenticate) }) },

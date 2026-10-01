@@ -7,6 +7,8 @@ import { useSession } from '../session/provider';
 import { TripLocationController } from './controller';
 import { tripPosition } from './location';
 import type { MobileClient } from '../api/client';
+import type { TrackingKind } from './background-contracts';
+import { controllerBackground } from './background-task';
 
 class Registry {
   private entries = new Map<string, { controller: TripLocationController; observers: number }>();
@@ -17,13 +19,23 @@ class Registry {
   constructor(client: MobileClient) { this.client = client; }
   snapshot = () => this.controllers;
   subscribe = (fn: () => void) => { this.listeners.add(fn); return () => { this.listeners.delete(fn); }; };
-  get(id: string) {
-    let entry = this.entries.get(id);
-    if (!entry) { entry = { controller: new TripLocationController(this.client, id, randomUUID, tripPosition), observers: 0 }; this.entries.set(id, entry); }
+  get(id: string, kind: TrackingKind = 'ride') {
+    const identity = `${kind}:${id}`;
+    let entry = this.entries.get(identity);
+    if (!entry) {
+      const clientId = randomUUID();
+      const api = kind === 'ride' ? this.client : {
+        tracking: this.client.foodTracking.bind(this.client), startTracking: this.client.startFoodTracking.bind(this.client),
+        stopTracking: this.client.stopFoodTracking.bind(this.client), trackingPosition: this.client.foodTrackingPosition.bind(this.client),
+      };
+      entry = { controller: new TripLocationController(api, id, randomUUID, tripPosition, undefined, undefined,
+        { kind, clientId, background: controllerBackground(this.client, kind, id, clientId) }), observers: 0 };
+      this.entries.set(identity, entry);
+    }
     return entry.controller;
   }
-  observe(id: string) {
-    this.get(id); const entry = this.entries.get(id)!; entry.observers++;
+  observe(id: string, kind: TrackingKind = 'ride') {
+    this.get(id, kind); const entry = this.entries.get(`${kind}:${id}`)!; entry.observers++;
     this.controllers = [...this.entries.values()].map(e => e.controller);
     for (const fn of this.listeners) fn();
     if (this.active) entry.controller.activate();
@@ -35,6 +47,7 @@ class Registry {
   }
   activate() { this.active = true; for (const entry of this.entries.values()) if (this.needed(entry)) entry.controller.activate(); }
   pause() { this.active = false; for (const entry of this.entries.values()) entry.controller.pause(); }
+  suspend() { this.active = false; for (const entry of this.entries.values()) entry.controller.suspend(); }
   tick() { if (this.active) for (const entry of this.entries.values()) entry.controller.tick(); }
   poll() {
     if (!this.active) return;
@@ -49,24 +62,29 @@ class Registry {
 const Context = createContext<Registry | null>(null);
 export function TripLocationProvider({ children }: PropsWithChildren) {
   const { client, blocked, user } = useSession();
-  const registry = useMemo(() => new Registry(client), [client]);
+  const registry = useMemo(() => new Registry(client), [client, user?.id]);
   useEffect(() => {
-    if (blocked || !user) { registry.pause(); return; }
+    if (!user) { registry.pause(); return; }
+    if (blocked) { registry.suspend(); return; }
     if (AppState.currentState === 'active') registry.activate();
-    const state = AppState.addEventListener('change', next => { if (next !== 'active') registry.pause(); });
+    const state = AppState.addEventListener('change', next => { if (next !== 'active') registry.suspend(); });
     const changed = client.subscribeChanges(() => registry.refresh());
     const poll = setInterval(() => registry.poll(), 10_000), tick = setInterval(() => registry.tick(), 1000);
-    return () => { registry.pause(); state.remove(); changed(); clearInterval(poll); clearInterval(tick); };
+    return () => { registry.suspend(); state.remove(); changed(); clearInterval(poll); clearInterval(tick); };
   }, [registry, blocked, user?.id]);
   const alive = useRef(false);
-  useEffect(() => { alive.current = true; return () => { alive.current = false; queueMicrotask(() => { if (!alive.current) registry.dispose(); }); }; }, [registry]);
+  const latestRegistry = useRef(registry);
+  useEffect(() => {
+    alive.current = true; latestRegistry.current = registry;
+    return () => { alive.current = false; queueMicrotask(() => { if (!alive.current || latestRegistry.current !== registry) registry.dispose(); }); };
+  }, [registry]);
   return <Context.Provider value={registry}>{children}</Context.Provider>;
 }
 function useRegistry() { const registry = useContext(Context); if (!registry) throw new Error('Trip location controls are unavailable.'); return registry; }
-export function useTripLocation(id: string) {
-  const registry = useRegistry(), controller = registry.get(id);
+export function useTripLocation(id: string, kind: TrackingKind = 'ride') {
+  const registry = useRegistry(), controller = registry.get(id, kind);
   const state = useSyncExternalStore(controller.subscribe, controller.snapshot);
-  useFocusEffect(useCallback(() => registry.observe(id), [registry, id]));
+  useFocusEffect(useCallback(() => registry.observe(id, kind), [registry, id, kind]));
   return { controller, state };
 }
 export function useTripLocationControllers() { const registry = useRegistry(); return useSyncExternalStore(registry.subscribe, registry.snapshot); }

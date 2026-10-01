@@ -2,26 +2,30 @@ import type { MobileClient } from '../api/client.ts';
 import type { Position } from '../../../../packages/shared/src/mobile-journeys.mjs';
 import type { LocationShare, Tracking } from './contracts.ts';
 import { definiteFailure } from '../journeys/controller.ts';
+import type { ControllerBackground, TrackingKind } from './background-contracts.ts';
 
 type Api = Pick<MobileClient, 'tracking' | 'startTracking' | 'stopTracking' | 'trackingPosition'>;
 type Command = { kind: 'start'; key: string } | { kind: 'stop'; shareId: string; key: string };
 type Locate = (ask: boolean, isCurrent?: () => boolean) => Promise<Position>;
 export interface TripLocationState {
   data: Tracking | null; busy: boolean; loading: boolean; stale: boolean;
-  uncertain: boolean; error: string; sharing: boolean; now: number;
+  uncertain: boolean; error: string; sharing: boolean; background: boolean; now: number;
 }
 const FRESH_MS = 30_000, LEASE_MS = 60_000;
 const message = (e: unknown) => e instanceof Error ? e.message : 'Location sharing could not connect. Try again.';
 
-/** Explicit foreground consent is local to this controller, never inferred from a server lease. */
+/** Sharing requires explicit local consent; a server lease alone can never start collection. */
 export class TripLocationController {
   readonly id: string;
   readonly clientId: string;
+  readonly kind: TrackingKind;
   private api: Api;
   private key: () => string;
   private locate: Locate;
   private clock: () => number;
   private wallClock: () => number;
+  private background?: ControllerBackground;
+  private preparing = false;
   private active = false;
   private disposed = false;
   private intent = false;
@@ -36,11 +40,13 @@ export class TripLocationController {
   private contactedAt = 0;
   private listeners = new Set<() => void>();
   private state: TripLocationState = { data: null, busy: false, loading: false, stale: true,
-    uncertain: false, error: '', sharing: false, now: 0 };
+    uncertain: false, error: '', sharing: false, background: false, now: 0 };
 
   constructor(api: Api, id: string, key: () => string, locate: Locate,
-    clock = () => performance.now(), wallClock = () => Date.now()) {
+    clock = () => performance.now(), wallClock = () => Date.now(),
+    options: { kind?: TrackingKind; background?: ControllerBackground; clientId?: string } = {}) {
     this.api = api; this.id = id; this.key = key; this.clientId = key();
+    this.clientId = options.clientId ?? this.clientId; this.kind = options.kind ?? 'ride'; this.background = options.background;
     this.locate = locate; this.clock = clock; this.wallClock = wallClock;
   }
   snapshot = () => this.state;
@@ -57,7 +63,7 @@ export class TripLocationController {
   }
   private now() { return this.anchor.server + Math.max(0, this.clock() - this.anchor.local); }
   private current(generation: number) {
-    return this.active && !this.disposed && this.intent && generation === this.generation;
+    return (this.active || this.preparing || this.state.background) && !this.disposed && this.intent && generation === this.generation;
   }
   private show(share: LocationShare, serverNow: number) {
     if (!this.active || this.disposed || !this.state.data) return;
@@ -74,17 +80,25 @@ export class TripLocationController {
     this.patch({ stale: true, loading: false });
     void this.cleanup();
   }
+  /** An OS permission sheet or an explicitly enabled background task may outlive visible UI. */
+  suspend() {
+    if (!this.preparing && !this.state.background) { this.pause(); return; }
+    this.active = false;
+    this.patch({ stale: true, loading: false });
+  }
   dispose() {
     this.pause();
     this.disposed = true;
-    this.state = { ...this.state, data: null, busy: false, loading: false, sharing: false, error: '', uncertain: false };
+    this.state = { ...this.state, data: null, busy: false, loading: false, sharing: false, background: false, error: '', uncertain: false };
     this.listeners.clear();
   }
   private halt() {
     this.intent = false;
+    this.preparing = false;
     this.generation++;
     this.cleanupWanted = true;
-    this.patch({ sharing: false });
+    void this.background?.stop().catch(() => {});
+    this.patch({ sharing: false, background: false });
   }
   tick() {
     if (!this.active || this.disposed || !this.state.data) return;
@@ -93,7 +107,7 @@ export class TripLocationController {
     const stale = !share?.position || now >= share.position.capturedAt + FRESH_MS;
     this.patch({ now, stale: this.state.stale || this.clock() - this.contactedAt >= FRESH_MS,
       ...(share ? { data: { ...this.state.data, share: { ...share, stale: share.stale || stale, active: share.active && !expired } } } : {}) });
-    if (expired && this.intent) { this.halt(); void this.cleanup(); }
+    if (expired && this.intent && !this.state.background) { this.halt(); void this.cleanup(); }
   }
   async refresh() {
     if (!this.active || this.disposed || this.running || this.readRunning) return;
@@ -125,23 +139,27 @@ export class TripLocationController {
       !this.state.data?.canShare || this.state.data.share?.active) return;
     const generation = ++this.generation;
     this.intent = true;
+    this.preparing = Boolean(this.background);
     this.cleanupWanted = false;
     this.stopAny = false;
     this.running = true;
     this.patch({ busy: true, error: '' });
     let fix: Position | undefined;
     try {
+      if (this.background) await this.background.prepare(() => this.current(generation));
+      if (!this.current(generation)) return;
       fix = await this.locate(true, () => this.current(generation));
       if (!this.current(generation)) return;
       this.pending = { kind: 'start', key: this.key() };
     } catch (e) {
-      if (this.current(generation)) { this.intent = false; this.patch({ error: message(e) }); }
+      if (this.current(generation)) { this.halt(); this.patch({ error: message(e) }); }
     } finally {
       this.running = false;
       this.patch({ busy: false });
     }
     if (this.pending?.kind === 'start' && this.current(generation)) await this.run(fix, generation);
     else await this.cleanup();
+    this.preparing = false;
   }
   async stop() {
     if (this.disposed) return;
@@ -204,7 +222,14 @@ export class TripLocationController {
       this.patch({ uncertain: false });
       if (this.active && !this.disposed && generation === this.generation) this.show(result.share, result.serverNow);
       if (command.kind === 'start') {
-        if (fix && this.current(generation) && result.share.active && result.share.owned) await this.publish(fix, generation);
+        if (fix && this.current(generation) && result.share.active && result.share.owned) {
+          await this.publish(fix, generation);
+          if (this.background && this.current(generation) && this.state.sharing && this.lease) {
+            await this.background.start(this.lease, this.now(), () => this.current(generation));
+            if (this.current(generation)) this.patch({ background: true });
+            else await this.background.stop();
+          }
+        }
         else {
           this.intent = false;
           this.cleanupWanted = true;
@@ -215,9 +240,12 @@ export class TripLocationController {
       const definite = definiteFailure(e);
       if (definite) this.pending = null;
       this.intent = false;
+      this.preparing = false;
+      void this.background?.stop().catch(() => {});
       this.cleanupWanted = command.kind === 'start';
-      this.patch({ sharing: false, stale: true, uncertain: !definite,
-        error: definite ? message(e) : 'Location confirmation was interrupted. Collection has stopped. Retry to resolve the same action.' });
+      const uncertain = this.pending !== null && !definite;
+      this.patch({ sharing: false, background: false, stale: true, uncertain,
+        error: uncertain ? 'Location confirmation was interrupted. Collection has stopped. Retry to resolve the same action.' : message(e) });
     } finally {
       this.running = false;
       this.patch({ busy: false });
@@ -225,6 +253,16 @@ export class TripLocationController {
     }
   }
   async heartbeat() {
+    if (this.state.background && this.active && this.background && !this.disposed) {
+      const generation = this.generation;
+      try {
+        const active = await this.background.active();
+        if (!this.current(generation)) return;
+        if (!active) { this.halt(); this.patch({ error: 'Work location sharing ended. Review permissions and start again.' }); await this.cleanup(); }
+        else await this.refresh();
+      } catch { if (this.current(generation)) { this.halt(); await this.cleanup(); } }
+      return;
+    }
     const lease = this.lease;
     if (!this.active || this.disposed || !this.intent || !lease?.active || !lease.owned ||
       this.running || this.readRunning || this.pending) return;

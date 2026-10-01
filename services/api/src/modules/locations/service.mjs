@@ -6,7 +6,7 @@ import { NIGERIA_BOUNDS, insideNigeria, canShareLocation } from '../../../../../
 import { key, clientIdentity, endpoints, point, checkedRoute, directQuote, position, QUOTE_MS, FRESH_MS, SHARE_MS } from './domain.mjs';
 import { createRidePilotConfig } from '../../../../../packages/shared/src/ride-pilot.mjs';
 
-export function createLocationsService({ repository, provider, getAccount, sessionOwner, nativeAccessOwner = () => null, nativeSessionOwner = () => null, getRideContext, unitOfWork, tokens, audit, clock, onChange = async () => {}, ridePilot = createRidePilotConfig() }) {
+export function createLocationsService({ repository, provider, getAccount, sessionOwner, nativeAccessOwner = () => null, nativeSessionOwner = () => null, getRideContext, unitOfWork, tokens, audit, clock, onChange = async () => {}, ridePilot = createRidePilotConfig(), canShare = canShareLocation, resourceLabel = 'ride' }) {
   async function context(input, clientRequired = false, planning = false) {
     const user = (await getAccount(input.userId));
     check(user, 'UNAUTHENTICATED', 'Sign in to use locations.');
@@ -99,11 +99,15 @@ export function createLocationsService({ repository, provider, getAccount, sessi
   async function closeRide(id, now) { (await close((await repository.currentShare(id)), now)); }
   const shareOwner = async (binding) => binding?.startsWith('native:') ? (await nativeSessionOwner(binding.slice(7))) : (await sessionOwner(binding));
   let maintenanceCursor = '';
+  async function shareAllowed(driver, share) {
+    if (driver?.driver?.status !== 'approved') return false;
+    try { const resource = await getRideContext(driver, share.rideId); return resource.driverId === share.driverId && canShare(resource.status); }
+    catch (error) { if (['FORBIDDEN', 'NOT_FOUND', 'UNAUTHENTICATED'].includes(error.code)) return false; throw error; }
+  }
   async function validate(share, now) {
     if (!share?.active) return share;
-    const driver = (await getAccount(share.driverId));
-    if (driver?.driver?.status !== 'approved' || (await shareOwner(share.sessionHash)) !== share.driverId
-      || now >= share.seenAt + SHARE_MS || !canShareLocation((await getRideContext(driver, share.rideId)).status)) {
+    if (now >= share.seenAt + SHARE_MS || (await shareOwner(share.sessionHash)) !== share.driverId
+      || !await shareAllowed(await getAccount(share.driverId), share)) {
       (await close(share, now)); return null;
     }
     return share;
@@ -131,38 +135,38 @@ export function createLocationsService({ repository, provider, getAccount, sessi
     const isDriver = ride.driverId === ctx.userId;
     if (isDriver && !input.nativeSessionId) requireRole(ctx.user, 'driver');
     (await unitOfWork(async () => (await validate((await repository.currentShare(rideId)), clock()))));
-    return { rideId, isDriver, canShare: isDriver && ctx.user.driver?.status === 'approved' && canShareLocation(ride.status),
+    return { rideId, isDriver, required: isDriver && canShare(ride.status), canShare: isDriver && ctx.user.driver?.status === 'approved' && canShare(ride.status),
       share: shareView((await repository.currentShare(rideId)), ctx) };
   }
-  async function driverShare(ctx, id) {
+  async function driverShare(ctx, id, requireContext = true) {
     const share = (await repository.share(id));
     check(share?.driverId === ctx.userId, 'NOT_FOUND', 'Location sharing not found.');
-    (await getRideContext(ctx.user, share.rideId));
+    if (requireContext) (await getRideContext(ctx.user, share.rideId));
     return share;
   }
   async function shareCommand(input, action, id, data, commandKey) {
-    const ctx = (await context(input, true)); requireRole(ctx.user, 'driver'); fields(data, []); key(commandKey);
+    const ctx = (await context(input, true)); if (action !== 'stop') requireRole(ctx.user, 'driver'); fields(data, []); key(commandKey);
     const fingerprint = tokens.digest(JSON.stringify([action, id, ctx.clientHash]));
     (await unitOfWork(async () => (await validate((await repository.currentForDriver(ctx.userId)), clock()))));
     return (await unitOfWork(async () => {
-      requireRole((await context(input, true)).user, 'driver');
+      const fresh = await context(input, true); if (action !== 'stop') requireRole(fresh.user, 'driver');
       const saved = (await repository.shareCommand(ctx.userId, commandKey));
       if (saved) {
         check(saved.fingerprint === fingerprint, 'KEY_REUSED', 'This key belongs to another location action.');
-        return { share: shareView((await driverShare(ctx, saved.id)), ctx), replayed: true };
+        return { share: shareView((await driverShare(ctx, saved.id, action !== 'stop')), ctx), replayed: true };
       }
       const now = clock(); let share;
       if (action === 'start') {
         const ride = (await getRideContext(ctx.user, id));
-        check(ride.driverId === ctx.userId && canShareLocation(ride.status), 'LOCATION_CLOSED', 'Location sharing opens for the assigned driver after booking confirmation.');
+        check(ride.driverId === ctx.userId && canShare(ride.status), 'LOCATION_CLOSED', `Location sharing opens for the assigned driver during an active ${resourceLabel}.`);
         check(!(await repository.currentShare(id)), 'LOCATION_BUSY', 'Location is already being shared. Stop that session before starting here.');
         const shareId = tokens.id();
-        (await repository.saveShare({ id: shareId, rideId: id, driverId: ctx.userId, sessionHash: ctx.sessionHash, clientHash: ctx.clientHash, now }));
+        check(await repository.saveShare({ id: shareId, rideId: id, driverId: ctx.userId, sessionHash: ctx.sessionHash, clientHash: ctx.clientHash, now }), 'LOCATION_BUSY', 'Location is already being shared. Stop that session before starting here.');
         (await audit.record(ctx.userId, 'location.started', shareId, now));
         await onChange(id, now);
         share = (await repository.share(shareId));
       } else {
-        share = (await driverShare(ctx, id)); (await close(share, now)); share = (await repository.share(id));
+        share = (await driverShare(ctx, id, false)); (await close(share, now)); share = (await repository.share(id));
       }
       (await repository.saveShareCommand(ctx.userId, commandKey, fingerprint, share.id));
       return { share: shareView(share, ctx), replayed: false };
@@ -188,16 +192,22 @@ export function createLocationsService({ repository, provider, getAccount, sessi
       return { share: shareView((await repository.share(id)), ctx), replayed: false };
     }));
   }
-  // Read-only port: the safety use case already checked ride access. No nested writes.
+  // Read-only ports: command callers already hold their domain transaction.
+  async function freshPositionFor(driverId, resourceId, now = clock()) {
+    const share = await repository.currentShare(resourceId);
+    if (!share?.positionJson || share.driverId !== driverId || now >= share.seenAt + SHARE_MS
+      || await shareOwner(share.sessionHash) !== driverId || !await shareAllowed(await getAccount(driverId), share)) return null;
+    const value = JSON.parse(share.positionJson);
+    return now - value.capturedAt < FRESH_MS ? { ...value, source: 'driver_shared', stale: false } : null;
+  }
   async function safetyPosition(rideId) {
-    const share = (await repository.currentShare(rideId)), now = clock();
-    if (!share?.positionJson || now >= share.seenAt + SHARE_MS || (await shareOwner(share.sessionHash)) !== share.driverId
-      || (await getAccount(share.driverId))?.driver?.status !== 'approved'
-      || !canShareLocation((await getRideContext((await getAccount(share.driverId)), rideId)).status)) return null;
-    const point = JSON.parse(share.positionJson);
-    return { ...point, source: 'driver_shared', stale: now - point.capturedAt >= FRESH_MS };
+    const share = await repository.currentShare(rideId), now = clock();
+    if (!share?.positionJson || now >= share.seenAt + SHARE_MS || await shareOwner(share.sessionHash) !== share.driverId
+      || !await shareAllowed(await getAccount(share.driverId), share)) return null;
+    const value = JSON.parse(share.positionJson);
+    return { ...value, source: 'driver_shared', stale: now - value.capturedAt >= FRESH_MS };
   }
   return Object.freeze({ settings, search, quote, quoteForRide, bindQuote,
     routeForRide: async (rideId) => { const route = await repository.rideRoute(rideId); return route && publicRoute(route); },
-    tracking, shareCommand, update, sweep, closeRide, safetyPosition });
+    tracking, shareCommand, update, sweep, closeRide, safetyPosition, freshPositionFor });
 }

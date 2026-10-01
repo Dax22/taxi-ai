@@ -8,6 +8,7 @@ const endpoint = '/api/account/driver-profile/delete';
 const app = async (client) => (await client.send('/api/driver/application')).body.application;
 const confirmation = (application) => ({ expectedVersion: application.version, confirmation: 'DELETE' });
 const changeRide = async (client, ride, action, extra = {}) => {
+  if (['depart', 'arrive', 'start'].includes(action)) await client.shareTripLocation(ride.id);
   const result = await client.post(`/api/rides/${ride.id}/${action}`, { expectedVersion: ride.version, ...extra });
   assert.equal(result.status, 200, JSON.stringify(result.body)); return result.body.ride;
 };

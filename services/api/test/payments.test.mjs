@@ -14,6 +14,7 @@ import { saveSnapshot } from '../src/infrastructure/database-snapshot.mjs';
 
 const path = (ride) => `/api/payments/rides/${ride.id ?? ride.rideId}`;
 async function step(actor, ride, action, extra = {}, key) {
+  if (['depart', 'arrive', 'start'].includes(action)) await actor.shareTripLocation(ride.id);
   const result = await actor.post(`/api/rides/${ride.id}/${action}`, { expectedVersion: ride.version, ...extra }, key);
   assert.equal(result.status, 200, JSON.stringify(result.body)); return result.body.ride;
 }

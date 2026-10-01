@@ -196,6 +196,9 @@ test('tracking distinguishes last-known GPS and exposes a stop control during pe
     supported: true, now: 100000, error: '', pending: true, share: null };
   view.renderTracking(state);
   assert.equal(node('tracking-start').hidden, true); assert.equal(node('tracking-stop').hidden, false);
+  assert.match(node('tracking-guidance').textContent, /required during this active job/);
+  assert.match(node('tracking-guidance').textContent, /completion, cancellation and support remain available/);
+  assert.match(node('tracking-guidance').textContent, /Browser updates may pause/);
   node('tracking-stop').fire('click'); assert.equal(actions.pop()[0], 'Stop');
   view.renderTracking({ ...state, pending: false, sharing: true,
     share: { active: true, stale: false, position: { ...pickup, accuracy: 12, capturedAt: 70000 } } });

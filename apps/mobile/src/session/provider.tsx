@@ -3,6 +3,8 @@ import type { PropsWithChildren } from 'react';
 import { AppState } from 'react-native';
 import { MobileClient, ApiError } from '../api/client.ts';
 import { secureVault, savedAppRole, saveAppRole } from './secure-vault';
+import { stopAllBackgroundTracking } from '../tracking/background-task';
+import { restoreSession } from './restore';
 import type { AppRole } from './secure-vault';
 import type { Account, Mode } from '../../../../packages/shared/src/mobile-contracts.mjs';
 
@@ -23,7 +25,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
   const [startupError, setStartupError] = useState(''), [notice, setNotice] = useState('');
   const restore = useCallback(async () => {
     setReady(false); setStartupError('');
-    try { await client.restore(); }
+    try { await restoreSession(client, stopAllBackgroundTracking); }
     catch (error) {
       if (error instanceof ApiError && error.code === 'UNAUTHENTICATED') setNotice('Your session ended. Please sign in again.');
       else setStartupError(error instanceof Error ? error.message : 'Could not restore this device.');
@@ -34,6 +36,8 @@ export function SessionProvider({ children }: PropsWithChildren) {
     return client.subscribe((next) => {
       setUser(next);
       if (accountId.current === (next?.id ?? null)) return;
+      // Kill the publishing generation immediately on an account change, before vault or network cleanup finishes.
+      void stopAllBackgroundTracking().catch(() => {});
       accountId.current = next?.id ?? null;
       const epoch = ++generation;
       setRole(null); setStartingExperience(null);
@@ -73,6 +77,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
   }, [client, user?.id, ready, blocked]);
   const logout = useCallback(async () => {
     setStartupError(''); setNotice('');
+    await stopAllBackgroundTracking().catch(() => {});
     const warning = await client.logout(); if (warning) setNotice(warning);
   }, [client]);
   const chooseRole = async (next: AppRole) => {

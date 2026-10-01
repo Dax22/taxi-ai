@@ -19,6 +19,7 @@ async function fixture(t){
   return{h,customer,driver,admin,app,credentials,provider,ride,sent,receipts};
 }
 async function step(who, ride, action, data = {}, key = randomUUID()) {
+  if (['depart', 'arrive', 'start'].includes(action)) await who.shareTripLocation(ride.id);
   const result = await who.post(`/api/rides/${ride.id}/${action}`, { expectedVersion: ride.version, ...data }, key);
   assert.equal(result.status, 200, JSON.stringify(result.body)); return result.body.ride;
 }

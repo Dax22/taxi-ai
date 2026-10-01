@@ -303,6 +303,9 @@ test('native car courier booking and work contracts retain delivery details thro
   await action(courier, 'claim'); await action(sender, 'propose', { amountKobo: ride.suggestedFareKobo + 1 });
   await action(courier, 'accept', { offerId: ride.offer.id }); await action(sender, 'confirm');
   const pickupPin = ride.pickupPin;
+  const share = ok(await native(h, `/tracking/rides/${ride.id}/start?clientId=${clientId}`, courier.accessToken, {})).share;
+  ok(await native(h, `/tracking/shares/${share.id}/position?clientId=${clientId}`, courier.accessToken,
+    { sequence: 1, lat: 9.08, lng: 7.4, accuracy: 10, capturedAt: h.now }));
   await action(courier, 'depart'); await action(courier, 'arrive'); await action(courier, 'start', { pickupPin });
   const parcel = ok(await native(h, `/parcels/received/${ride.id}`, receiver.accessToken)).parcel;
   assert.match(parcel.dropoffPin, /^\d{6}$/); assert.equal(ride.delivery.dropoffPin, undefined);

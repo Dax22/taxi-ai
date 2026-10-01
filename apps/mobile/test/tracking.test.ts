@@ -3,10 +3,11 @@ import assert from 'node:assert/strict';
 import { setImmediate as settle } from 'node:timers/promises';
 import { TripLocationController } from '../src/tracking/controller.ts';
 import type { LocationShare, TrackingResult, Position } from '../src/tracking/contracts.ts';
+import type { ControllerBackground } from '../src/tracking/background-contracts.ts';
 
 const rideId = '00000000-0000-4000-8000-000000000001';
 function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>(r => { resolve = r; }); return { promise, resolve }; }
-function fixture() {
+function fixture(options: ConstructorParameters<typeof TripLocationController>[6] = {}) {
   let n = 10, mono = 0, wall = 1_000_000_000, canShare = true, share: LocationShare | null = null;
   const starts: Array<{ rideId: string; clientId: string; key: string }> = [];
   const stops: Array<{ id: string; clientId: string; key: string }> = [];
@@ -48,7 +49,7 @@ function fixture() {
     close: () => { canShare = false; if (share) share.active = false; },
     c: null as unknown as TripLocationController };
   f.c = new TripLocationController(api, rideId, () => `00000000-0000-4000-8000-${String(++n).padStart(12, '0')}`,
-    (ask, current) => f.locate(ask, current), () => mono, () => wall);
+    (ask, current) => f.locate(ask, current), () => mono, () => wall, options);
   return f;
 }
 async function activate(f: ReturnType<typeof fixture>) { f.c.activate(); await settle(); }
@@ -211,4 +212,98 @@ test('viewing another sharing device does not acquire GPS or stop its session', 
     share: { ...result.share, owned: false } });
   await activate(f); await f.c.heartbeat(); f.c.pause(); await settle();
   assert.equal(f.locations.length, 0); assert.equal(f.stops.length, 0);
+});
+
+function backgroundFixture() {
+  const prepared: Array<() => boolean> = [], started: Array<{ share: LocationShare; serverNow: number; current: () => boolean }> = [];
+  let enabled = false, stopped = 0;
+  const background: ControllerBackground = {
+    prepare: async current => { prepared.push(current); },
+    start: async (share, serverNow, current) => { started.push({ share: structuredClone(share), serverNow, current }); enabled = true; },
+    stop: async () => { stopped++; enabled = false; },
+    active: async () => enabled,
+  };
+  const f = fixture({ kind: 'ride', background });
+  return Object.assign(f, { background, prepared, started, backgroundStops: () => stopped, loseBackground: () => { enabled = false; } });
+}
+
+test('explicit background sharing prepares once, preserves consent while suspended, and has no foreground GPS publisher', async () => {
+  const f = backgroundFixture(); await activate(f); await f.c.heartbeat();
+  assert.equal(f.prepared.length, 0); assert.equal(f.started.length, 0);
+  await f.c.start(); assert.equal(f.c.snapshot().background, true);
+  assert.equal(f.prepared.length, 1); assert.equal(f.started.length, 1);
+  assert.equal(f.started[0].share.sequence, 1); assert.equal(f.positions.length, 1);
+  await f.c.heartbeat(); f.c.suspend(); await f.c.heartbeat();
+  assert.equal(f.backgroundStops(), 0); assert.equal(f.c.snapshot().sharing, true);
+  await activate(f); await f.c.heartbeat();
+  assert.equal(f.locations.length, 1); assert.equal(f.positions.length, 1); assert.equal(f.started.length, 1);
+});
+
+test('the background permission settings handoff preserves only its explicitly pending consent', async () => {
+  const f = backgroundFixture(), permission = deferred<void>(); let current!: () => boolean;
+  f.background.prepare = async guard => { current = guard; await permission.promise; };
+  await activate(f); const starting = f.c.start(); await settle(); f.c.suspend();
+  assert.equal(current(), true); permission.resolve(); await starting;
+  assert.equal(f.starts.length, 1); assert.equal(f.started.length, 1); assert.equal(f.c.snapshot().background, true);
+});
+
+test('Stop during a background permission handoff discards its late grant without starting GPS or sharing', async () => {
+  const f = backgroundFixture(), permission = deferred<void>(); let current!: () => boolean;
+  f.background.prepare = async guard => { current = guard; await permission.promise; };
+  await activate(f); const starting = f.c.start(); await settle(); f.c.suspend(); await f.c.stop();
+  assert.equal(current(), false); permission.resolve(); await starting;
+  assert.equal(f.starts.length, 0); assert.equal(f.started.length, 0); assert.equal(f.locations.length, 0);
+  assert.equal(f.c.snapshot().background, false); assert.equal(f.c.snapshot().sharing, false);
+});
+
+test('account teardown closes background sharing and later activation never resumes it implicitly', async () => {
+  const f = backgroundFixture(); await sharing(f); f.c.pause(); await settle();
+  assert.equal(f.c.snapshot().background, false); assert.equal(f.c.snapshot().sharing, false);
+  assert.equal(f.stops.length, 1); assert.ok(f.backgroundStops() >= 1);
+  await activate(f); await f.c.heartbeat(); assert.equal(f.started.length, 1); assert.equal(f.locations.length, 1);
+});
+
+test('disposal during background registration discards its late completion and clears the share', async () => {
+  const f = backgroundFixture(), registered = deferred<void>(); let current!: () => boolean;
+  f.background.start = async (_share, _serverNow, guard) => { current = guard; await registered.promise; };
+  await activate(f); const starting = f.c.start(); await settle(); f.c.dispose();
+  assert.equal(current(), false); registered.resolve(); await starting;
+  assert.equal(f.c.snapshot().data, null); assert.equal(f.c.snapshot().background, false);
+  assert.equal(f.stops.length, 1); assert.ok(f.backgroundStops() >= 1);
+});
+
+test('failed background registration closes the confirmed foreground share without starting an offline retry loop', async () => {
+  const f = backgroundFixture(); f.background.start = async () => { throw new Error('native task unavailable'); };
+  await activate(f); await f.c.start();
+  assert.equal(f.c.snapshot().sharing, false); assert.equal(f.c.snapshot().background, false);
+  assert.equal(f.c.snapshot().uncertain, false); assert.equal(f.stops.length, 1);
+  await f.c.heartbeat(); assert.equal(f.locations.length, 1); assert.equal(f.starts.length, 1);
+});
+
+test('an inactive background publisher or terminal job stops sharing when the UI checks it', async () => {
+  for (const ended of ['publisher', 'trip']) {
+    const f = backgroundFixture(); await sharing(f);
+    if (ended === 'publisher') f.loseBackground(); else f.close();
+    await f.c.heartbeat();
+    assert.equal(f.c.snapshot().background, false); assert.equal(f.c.snapshot().sharing, false);
+    assert.ok(f.backgroundStops() >= 1); assert.equal(f.locations.length, 1);
+  }
+});
+
+test('a stale background-health response cannot stop a newer explicitly started sharing session', async () => {
+  for (const failure of ['inactive', 'rejected']) {
+    const f = backgroundFixture(); await sharing(f); const health = deferred<boolean>();
+    f.background.active = async () => { const result = await health.promise; if (failure === 'rejected') throw new Error('old check failed'); return result; };
+    const checking = f.c.heartbeat(); await f.c.stop(); await f.c.refresh(); await f.c.start();
+    assert.equal(f.c.snapshot().background, true); assert.equal(f.starts.length, 2);
+    health.resolve(false); await checking;
+    assert.equal(f.c.snapshot().background, true); assert.equal(f.c.snapshot().sharing, true);
+    assert.equal(f.stops.length, 1);
+  }
+});
+
+test('suspending without an explicitly enabled background port retains the foreground stop behavior', async () => {
+  const f = fixture(); await sharing(f); f.c.suspend(); await settle();
+  assert.equal(f.c.snapshot().sharing, false); assert.equal(f.stops.length, 1);
+  await activate(f); await f.c.heartbeat(); assert.equal(f.locations.length, 1);
 });

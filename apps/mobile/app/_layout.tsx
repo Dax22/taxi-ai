@@ -1,3 +1,4 @@
+import '../src/tracking/background-task';
 import { useEffect } from 'react';
 import { OperationsProvider, useOperations } from '../src/journeys/provider';
 import { TripLocationProvider } from '../src/tracking/provider';

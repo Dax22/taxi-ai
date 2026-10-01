@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { harness, participants, requestRide, claimRide } from './helpers.mjs';
 
 async function command(client, ride, action, extra = {}, key) {
+  if (['depart', 'arrive', 'start'].includes(action)) await client.shareTripLocation(ride.id);
   const result = await client.post(`/api/rides/${ride.id}/${action}`, { expectedVersion: ride.version, ...extra }, key);
   assert.equal(result.status, 200, JSON.stringify(result.body));
   return result.body.ride;
@@ -135,6 +136,7 @@ test('incorrect pickup PINs are counted once per command, survive restart, and l
   assert.ok(!JSON.stringify(locked.body).includes(pin));
   await h.restart();
   h.advance(5 * 60_000 - 1);
+  await driver.shareTripLocation(ride.id);
   assert.equal((await driver.post(path, { ...data, pickupPin: pin })).body.error.code, 'PICKUP_PIN_LOCKED');
   h.advance(1);
   assert.equal((await command(driver, ride, 'start', { pickupPin: pin })).status, 'in_progress');

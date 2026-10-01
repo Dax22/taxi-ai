@@ -313,3 +313,19 @@ test('an unavailable mode cannot be selected and an enrolled driver profile does
   assert.equal(h.page.snapshot().user.id, customer.id);
   assert.ok(!h.resets.includes('activityClient'));
 });
+
+test('ride and parcel progress require a fresh shared position and guide the driver without blocking completion or cancellation', async () => {
+  let focused = 0, now = 1_000_000;
+  const h = setup({ serverNow: () => now, onLocationRequired: () => { focused++; } });
+  h.session(session(driver)); await h.page.refresh(); await h.page.switchMode('work');
+  const active = { ...ride, status: 'booked' }; let tracking = { ride: active, share: null };
+  h.sharing.snapshot = () => tracking;
+  for (const action of ['depart', 'arrive', 'start']) await h.page.rideCommand(`/api/rides/${ride.id}/${action}`, {});
+  assert.equal(h.commands.length, 0); assert.equal(focused, 3); assert.match(h.feedback.at(-1)[1], /Share my location is required/);
+  tracking = { ride: active, share: { active: true, stale: false, position: { capturedAt: now - 30_000 } } };
+  await h.page.rideCommand(`/api/rides/${ride.id}/depart`, {}); assert.equal(h.commands.length, 0);
+  tracking.share.position.capturedAt = now; await h.page.rideCommand(`/api/rides/${ride.id}/depart`, {}); assert.equal(h.commands.length, 1);
+  tracking.share = null;
+  await h.page.rideCommand(`/api/rides/${ride.id}/complete`, {}); await h.page.rideCommand(`/api/rides/${ride.id}/cancel`, {});
+  assert.equal(h.commands.length, 3); assert.equal(focused, 4);
+});

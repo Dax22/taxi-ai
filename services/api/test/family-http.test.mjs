@@ -20,6 +20,7 @@ const mapProvider = { mode: 'community', tileOrigin: 'https://tile.openstreetmap
   route: async (a, b) => ({ distanceMeters: 7000, durationSeconds: 1200, coordinates: [[a.lng, a.lat], [7.42, 9.08], [b.lng, b.lat]] }),
 };
 async function step(actor, ride, action, extra = {}) {
+  if (['depart', 'arrive', 'start'].includes(action)) await actor.shareTripLocation(ride.id);
   return ok(await actor.post(`/api/rides/${ride.id}/${action}`, { expectedVersion: ride.version, ...extra })).ride;
 }
 async function booked(h, actors, { routed = false, guest = false, delivery = false } = {}) {

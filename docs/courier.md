@@ -29,4 +29,20 @@ Browser endpoints use cookie authentication, same-origin checks and CSRF protect
 
 Only a successful fresh creation returns its raw token. Retrying the same creation key returns current invitation state without redisclosing a token; replace the invitation if the initial response was lost. Only token hashes are persisted. A command key cannot be reused for different input. Updates and audit/retry records share a transaction. Indexes bound recipient reads and per-delivery link history without a global invitation sweep. Each parcel allows at most 30 invitation creations.
 
-SQLite migration 038 and PostgreSQL migration 010 add recipient grants and command records. The feature uses the existing database adapters and requires the usual PostgreSQL migration command before a production release. Payment settlement, SMS delivery, independent proof of recipient identity and background GPS availability remain separate operational integrations.
+SQLite migration 038 and PostgreSQL migration 010 add recipient grants and command records. The feature uses the existing database adapters and requires the usual PostgreSQL migration command before a production release. Payment settlement, SMS delivery, independent proof of recipient identity and physical-device background GPS acceptance remain separate operational integrations.
+
+
+## Required work location
+
+The assigned courier must explicitly enable location sharing and publish a fresh
+fix before departure, arrival at pickup or starting the delivery. The server
+rejects those progress actions if tracking is missing, stopped or stale. The
+sender and recipient do not need to share their own GPS. Completion, cancellation
+and safety remain available if permission or connectivity is lost; stopping GPS
+does not silently cancel or complete a delivery.
+
+Installed native builds support background publishing with explicit OS permission,
+a visible Android foreground-service notification and the iOS location indicator.
+Updates remain subject to OS scheduling and permission/network availability;
+force-quitting cannot promise continuous tracking. See
+[mobile-trip-location.md](mobile-trip-location.md) for setup and device testing.

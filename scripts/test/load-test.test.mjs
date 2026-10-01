@@ -43,6 +43,8 @@ test('isolated benchmark authenticates synthetic drivers and completes fare/PIN 
   assert.equal(result.measurement.journeys.created, 2); assert.equal(result.measurement.journeys.completed, 2);
   assert.equal(result.measurement.journeys.pickupEstimateSources.road, 2);
   assert.equal(result.measurement.operations.driver_heartbeat.count, 2);
+  assert.equal(result.measurement.operations.trip_location_start.count, 2);
+  assert.equal(result.measurement.operations.trip_location_position.count, 6);
   assert.equal(result.measurement.operations.ride_start.count, 2);
   assert.equal(result.measurement.operations.ride_complete.count, 2);
   assert.ok(result.serverEventLoopLagMs.p99 > 0);

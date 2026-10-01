@@ -29,7 +29,7 @@ export function createLocationSharing({ client, device, view, makeId = () => cry
     if (!Number.isFinite(fix.timestamp) || now() - fix.timestamp >= 30_000) throw new Error('GPS returned an old location. Request a fresh fix.');
     return value;
   }
-  const message = (cause) => cause.code === 1 ? 'Location permission was denied. You can continue using chat.'
+  const message = (cause) => cause.code === 1 ? 'Location permission was denied. Allow location access in browser settings, then try Share my location again.'
     : cause.code === 2 ? 'Your device could not determine its location.' : cause.code === 3 ? 'Location lookup timed out. Try again.'
       : cause.message ?? 'Location sharing is unavailable.';
   async function start() {

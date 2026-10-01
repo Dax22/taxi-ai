@@ -194,7 +194,7 @@ export async function runLoad(options) {
     const begin = performance.now(); let status = 0;
     try {
       const response = await fetch(base + path, { method: data === undefined ? 'GET' : 'POST', redirect: 'error',
-        signal: AbortSignal.timeout(operation === 'event_wait' ? 35000 : 10000), headers: { Cookie: actor.cookie, 'X-Availability-Client': actor.clientId,
+        signal: AbortSignal.timeout(operation === 'event_wait' ? 35000 : 10000), headers: { Cookie: actor.cookie, 'X-Availability-Client': actor.clientId, 'X-Location-Client': actor.clientId,
           ...(data === undefined ? {} : { Origin: base, 'Content-Type': 'application/json', 'X-CSRF-Token': actor.csrf, 'Idempotency-Key': randomUUID() }) },
         ...(data === undefined ? {} : { body: JSON.stringify(data) }) });
       status = response.status;
@@ -276,7 +276,13 @@ export async function runLoad(options) {
             await command(driver, 'offers', { amountKobo: 470000 });
             await command(owner.customer, 'accept', { offerId: ride.negotiation.currentOffer.id });
             await command(owner.customer, 'confirm'); const pickupPin = ride.trip.pickupPin;
-            await command(driver, 'depart'); await command(driver, 'arrive'); await command(driver, 'start', { pickupPin });
+            const { share } = await request(driver, `/api/rides/${ride.id}/location/start`, 'trip_location_start', metrics, {});
+            let sequence = share.sequence;
+            for (const action of ['depart', 'arrive', 'start']) {
+              await request(driver, `/api/location-shares/${share.id}/position`, 'trip_location_position', metrics,
+                { sequence: ++sequence, ...fix(index * 0.00001) });
+              await command(driver, action, action === 'start' ? { pickupPin } : {});
+            }
             await command(driver, 'complete'); metrics.completed();
           } catch (error) { metrics.fail(error.code ?? 'JOURNEY_FAILED'); }
         }));

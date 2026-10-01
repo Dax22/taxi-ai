@@ -10,6 +10,7 @@ async function mobile(h, path, { token, data, key } = {}) {
   return { status: response.status, body: await response.json() };
 }
 async function webStep(actor, ride, action, data = {}) {
+  if (['depart', 'arrive', 'start'].includes(action)) await actor.shareTripLocation(ride.id);
   const result = await actor.post(`/api/rides/${ride.id}/${action}`, { expectedVersion: ride.version, ...data });
   assert.equal(result.status, 200, JSON.stringify(result.body)); return result.body.ride;
 }

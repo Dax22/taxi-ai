@@ -131,7 +131,20 @@ export function removeAdminWorkspaceFixtureTables(db) {
 
 
 /** Kemmy setup is account preference state; old-schema fixtures may remove it only while empty. */
+export function removeEatsTrackingFixtureTables(db) {
+  if (db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='background_location_tokens'").get()) {
+    if (db.prepare('SELECT count(*) AS n FROM background_location_tokens').get().n) throw new Error('Cannot downgrade a populated background location fixture.');
+    db.exec('DROP TRIGGER IF EXISTS background_location_revoke; DROP TABLE background_location_tokens');
+  }
+  for (const { name } of db.prepare("SELECT name FROM sqlite_master WHERE type='trigger' AND (name LIKE 'eats_tracking_%' OR name LIKE 'realtime_eats_tracking_%')").all()) db.exec(`DROP TRIGGER ${name}`);
+  for (const table of ['eats_location_commands','eats_location_shares']) {
+    if (!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(table)) continue;
+    if (db.prepare(`SELECT count(*) AS n FROM ${table}`).get().n) throw new Error(`Cannot downgrade a populated ${table} fixture.`);
+    db.exec(`DROP TABLE ${table}`);
+  }
+}
 export function removeEatsDeliveryProfileFixtureTable(db) {
+  removeEatsTrackingFixtureTables(db);
   if (!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='eats_delivery_profiles'").get()) return;
   if (db.prepare('SELECT count(*) AS n FROM eats_delivery_profiles').get().n) throw new Error('Cannot downgrade a populated delivery profile fixture.');
   db.exec('DROP TABLE eats_delivery_profiles');

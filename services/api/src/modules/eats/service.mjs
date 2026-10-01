@@ -10,7 +10,7 @@ import { asyncMap, asyncFlatMap, asyncSome, asyncFilter } from '../../shared/asy
 
 
 /** Stores and food orders own their state; other work is checked through injected ports. */
-export function createEatsService({ repository, getAccount, hasOtherWork, availabilityFor, onClaim, photoCodec, tokens, unitOfWork, audit, clock, normalisePhoto, resolveDeliveryLocation = async (point) => ({ point, line: '', areaId: null, attribution: '' }), deliveryMapSettings = () => ({ tiles: null, attribution: '' }) }) {
+export function createEatsService({ repository, getAccount, hasOtherWork, availabilityFor, onClaim, photoCodec, tokens, unitOfWork, audit, clock, normalisePhoto, resolveDeliveryLocation = async (point) => ({ point, line: '', areaId: null, attribution: '' }), deliveryMapSettings = () => ({ tiles: null, attribution: '' }), foodTracking = null }) {
   const actor = async (user) => { const fresh = (await getAccount(user?.id)); check(fresh, 'UNAUTHENTICATED', 'Sign in to continue.'); return fresh; };
   const identifier = (id) => { check(typeof id === 'string' && /^[a-f0-9-]{36}$/.test(id), 'INVALID_ID', 'Choose a valid record.'); return id; };
   const storeRecord = async (id) => { const value = (await repository.store(identifier(id))); check(value, 'NOT_FOUND', 'Restaurant not found.'); return value; };
@@ -262,6 +262,9 @@ export function createEatsService({ repository, getAccount, hasOtherWork, availa
         fields(data, [...required, ...(action === 'ready' ? ['collectionPoint'] : [])], required);
         version(order, data.expectedVersion);
         check(eatsActions(order, role).includes(action), 'ORDER_CLOSED', 'This action is no longer available. Refresh your order.');
+        if (['pickup', 'arrive'].includes(action)) {
+          check(await foodTracking?.freshPositionFor(user.id, order.id, now), 'LOCATION_REQUIRED', 'Turn on live delivery location and wait for a fresh GPS fix before continuing.');
+        }
         if (action === 'ready' && (await privateKitchen(order.snapshot.restaurant))) {
           const point = data.collectionPoint ?? order.collectionPoint ?? order.snapshot.restaurant.address;
           (await repository.saveCollectionPoint(order.id, label(point, 'Private collection point for this order', 8, 240)));
@@ -296,7 +299,9 @@ export function createEatsService({ repository, getAccount, hasOtherWork, availa
           if (['cancel', 'reject'].includes(action)) event.reason = label(data.reason, 'Reason', 5, 240);
           order.events.push(event); order.updatedAt = now; order.version++;
           if (EATS_TERMINAL.includes(order.status)) { order.pickupPin = order.deliveryPin = null; order.pinBlockedUntil = null; }
-          (await repository.saveOrder(order)); result = { orderId: order.id };
+          (await repository.saveOrder(order));
+          if (EATS_TERMINAL.includes(order.status)) await foodTracking?.closeRide(order.id, now);
+          result = { orderId: order.id };
         }
       }
       (await audit.record(user.id, `eats.${action}`, result.orderId ?? result.storeId ?? result.quoteId ?? result.checkoutId ?? id, now));
@@ -415,6 +420,38 @@ export function createEatsService({ repository, getAccount, hasOtherWork, availa
     });
     return { ...result, replayed };
   }
+  async function trackingContext(user, id) {
+    user = await actor(user); const order = await repository.order(identifier(id));
+    check(user.role !== 'admin' && order && (order.customerId === user.id || order.courierId === user.id), 'NOT_FOUND', 'Delivery tracking not found.');
+    return { id: order.id, customerId: order.customerId, driverId: order.courierId, status: order.status };
+  }
+  const foodShare = (share) => {
+    if (!share) return null;
+    const { rideId, ...value } = share; return { ...value, orderId: rideId };
+  };
+  async function tracking(input, id) {
+    check(foodTracking, 'LOCATION_CLOSED', 'Delivery tracking is unavailable.');
+    const result = await foodTracking.tracking(input, identifier(id));
+    const order = await repository.order(id);
+    let share = foodShare(result.share);
+    if (!result.isDriver && share?.position) {
+      let visible = ['picked_up', 'arrived'].includes(order.status);
+      if (visible && await privateKitchen(order.snapshot.restaurant)) {
+        const pickup = await repository.orderDispatchPoint(id);
+        visible = Boolean(pickup && distanceMeters(pickup, share.position) > 250);
+      }
+      // A live courier marker must not reveal a private kitchen's collection point.
+      if (!visible) share = { ...share, position: null, updatedAt: null, stale: true };
+    }
+    return { orderId: result.rideId, isCourier: result.isDriver, canShare: result.canShare,
+      required: result.isDriver && ['assigned', 'picked_up', 'arrived'].includes(order.status), share };
+  }
+  async function trackingCommand(input, action, id, data, key) {
+    check(foodTracking, 'LOCATION_CLOSED', 'Delivery tracking is unavailable.');
+    const result = action === 'position' ? await foodTracking.update(input, identifier(id), data)
+      : await foodTracking.shareCommand(input, action, identifier(id), data, key);
+    return { share: foodShare(result.share), replayed: result.replayed };
+  }
   async function deliveryProfile(user) {
     user = await actor(user); requireRole(user, 'customer');
     return { deliveryProfile: await repository.deliveryProfile(user.id), deliverySettings: await deliveryMapSettings() };
@@ -452,7 +489,7 @@ export function createEatsService({ repository, getAccount, hasOtherWork, availa
     return { deliveryLocation: { point, line: label(located.line ?? '', 'Suggested delivery address', 0, 240), areaId: located.areaId ?? null,
       attribution: label(located.attribution ?? '', 'Map attribution', 0, 500) } };
   }
-  return Object.freeze({ deliveryProfile, saveDeliveryProfile, deliveryLocation, command, photoCommand, assetCommand, photoReview, image, work, orders: list,
+  return Object.freeze({ trackingContext, tracking, trackingCommand, deliveryProfile, saveDeliveryProfile, deliveryLocation, command, photoCommand, assetCommand, photoReview, image, work, orders: list,
     async photoReviewList(user, query = {}) {
       user = await actor(user); requireRole(user, 'admin');
       const status = query.status ?? 'pending';
