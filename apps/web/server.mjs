@@ -153,6 +153,12 @@ const routes = new Map([
   ['/styles.css', ['public/styles.css', 'text/css; charset=utf-8']],
   ['/homepage.css', ['public/homepage.css', 'text/css; charset=utf-8']],
   ['/homepage-carousel.mjs', ['public/homepage-carousel.mjs', 'text/javascript; charset=utf-8']],
+  ['/page-scenes.mjs', ['public/page-scenes.mjs', 'text/javascript; charset=utf-8']],
+  ['/page-scenes.css', ['public/page-scenes.css', 'text/css; charset=utf-8']],
+  ['/companion-pages.css', ['public/companion-pages.css', 'text/css; charset=utf-8']],
+  ['/dashboard-scene.mjs', ['public/dashboard-scene.mjs', 'text/javascript; charset=utf-8']],
+  ...['ride-city', 'eats-table', 'courier-handoff', 'kitchen'].flatMap((name) =>
+    ['', '-small'].map((size) => [`/assets/scenes/${name}${size}.webp`, [`public/assets/scenes/${name}${size}.webp`, 'image/webp']])),
   ['/app.mjs', ['public/app.mjs', 'text/javascript; charset=utf-8']],
   ['/assets/fonts/manrope-latin-wght-normal.woff2', ['public/assets/fonts/manrope-latin-wght-normal.woff2', 'font/woff2']],
   ['/assets/fonts/manrope-latin-ext-wght-normal.woff2', ['public/assets/fonts/manrope-latin-ext-wght-normal.woff2', 'font/woff2']],

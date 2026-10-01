@@ -5,12 +5,18 @@
   <title>Taxi Ai — Your guest ride</title>
   <link rel="icon" href="/favicon.svg?v=amber" type="image/svg+xml"><link rel="stylesheet" href="/styles.css"><link rel="stylesheet" href="/dashboard.css">
   <script type="module" src="/guest-trip.mjs"></script>
+  <link rel="stylesheet" href="/companion-pages.css">
+<link rel="stylesheet" href="/page-scenes.css"><script type="module" src="/page-scenes.mjs"></script>
 </head>
-<body class="account-page">
+<body class="companion-photo-page account-page">
   <a class="skip-link" href="#guest-main">Skip to your trip</a>
   <header class="site-header shell"><a class="brand" href="/" aria-label="Taxi Ai home"><img class="brand-mark" src="/assets/taxi-ai-mark.svg" width="48" height="36" alt=""><span>Taxi Ai</span></a><span class="status-badge">PRIVATE GUEST LINK</span></header>
   <main id="guest-main" class="shell account-shell trip-share-shell">
-    <p class="eyebrow">TAXI AI / NIGERIA</p><h1>A ride booked for you.</h1>
+    <section class="page-scene companion-scene" data-page-scene="rides">
+      <img class="page-scene-image" src="/assets/scenes/ride-city.webp" alt="" width="1536" height="1024">
+      <div class="companion-scene-copy"><p class="eyebrow">TAXI AI / NIGERIA</p><h1>A ride booked for you.</h1></div>
+      <p class="companion-scene-credit">AI-generated scene</p>
+    </section>
     <p class="safety-preview-note"><strong>Development preview.</strong> This is a test trip. No real vehicle or payment is arranged, and no SMS is sent automatically.</p>
     <p class="supporting-copy">Keep this link private. The person who booked manages the fare, payment and messages with the driver. Contact them directly if your plans change.</p>
     <p id="guest-message" class="supporting-copy" role="status">Checking your private trip…</p>

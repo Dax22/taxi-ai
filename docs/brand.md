@@ -47,18 +47,9 @@ service names in text, maintaining the common yellow/graphite palette.
 
 ## Applied in this version
 
-The header and footer, favicon, browser theme colour, booking buttons, service-tab
-selection, preview-role selection, step badges and confirmation accents use the
-selected identity. The homepage uses a centered graphite headline and dark pill
-CTA above an original white 3D city illustration. Small yellow vehicles and route
-pin accents connect it to Taxi Ai's identity; muted sage parks soften the scene.
-The original large sedan photograph is removed. The fare preview sits below the
-illustration and stacks its fields on mobile. The hero's styles live in
-`apps/web/public/homepage.css`, separate from the account/dashboard presentation.
+The header and footer, favicon, booking buttons and service controls retain the selected identity. The website now pairs warm white operational cards with dark photographic headers, amber accents and locally bundled scenes for city rides, Nigerian food, local kitchens and courier deliveries. The homepage cycles through four service scenes and retains its phone artwork and booking actions. Account, Eats, seller and supporting journey pages have their own photo themes and accessible pause/previous/next controls.
 
-The city scene is conceptual artwork, not a live or geographically accurate map.
-Keep the illustration label and preview/coming-soon service states. See
-[the artwork notes](design/city-route-hero.md) for the source prompt and exported assets.
+These are AI-generated illustrative scenes, not photographs of actual operators, vendor dishes or live service availability. Keep the image captions and development/coming-soon states. Merchant-uploaded menu photographs remain a separate feature. See [the photographic layout and artwork notes](design/photographic-pages.md) for source prompts, asset paths and motion behavior. The earlier [city concept notes](design/city-route-hero.md) document the previous homepage artwork.
 
 The autonomous section continues the light 3D theme. Its compact robotaxi uses
 yellow panels and sensor accents, with a man beside it using the app on an iPhone.

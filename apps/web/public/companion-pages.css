@@ -1,0 +1,131 @@
+/* Photo headers for supporting account and journey pages only. */
+body.companion-photo-page {
+  background: #f7f5ef;
+  color: #272a25;
+}
+
+.companion-photo-page .site-header {
+  border-bottom-color: #dddcd2;
+}
+
+.companion-photo-page .account-shell,
+.companion-photo-page .account-main {
+  padding-block: 26px 64px;
+  min-height: calc(100dvh - 175px);
+}
+
+.companion-photo-page .companion-account-shell { max-width: 880px; }
+
+.companion-photo-page .companion-scene {
+  position: relative;
+  isolation: isolate;
+  min-height: 240px;
+  overflow: hidden;
+  margin-bottom: 24px;
+  border: 1px solid #30372b1a;
+  border-radius: 24px;
+  background: #2c3b34;
+  color: #fff;
+  box-shadow: 0 12px 32px #2933220c;
+}
+
+.companion-photo-page .companion-scene > .page-scene-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 55%;
+  z-index: 0;
+}
+
+.companion-photo-page .companion-scene::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(90deg, #0d1c18dc 0%, #102019a3 52%, #15231d20 100%),
+    linear-gradient(0deg, #0c17196b, transparent 60%);
+}
+
+.companion-photo-page .companion-scene-copy {
+  position: relative;
+  z-index: 2;
+  max-width: 740px;
+  padding: 36px 36px 78px;
+}
+
+.companion-photo-page .companion-scene .eyebrow {
+  margin: 0 0 15px;
+  color: #ffe9ab;
+  font-size: 10px;
+  line-height: 1.4;
+  letter-spacing: .15em;
+}
+
+.companion-photo-page .companion-scene h1 {
+  margin: 0;
+  color: #fff;
+  font-size: clamp(32px, 4.4vw, 48px);
+  line-height: 1.05;
+  letter-spacing: -.045em;
+  text-wrap: balance;
+}
+
+.companion-photo-page .companion-scene-credit {
+  position: absolute;
+  bottom: 19px;
+  left: 36px;
+  z-index: 2;
+  margin: 0;
+  color: #ffffffe0;
+  font-size: 10px;
+  line-height: 1.4;
+  letter-spacing: .025em;
+}
+
+.companion-photo-page .account-card {
+  border: 1px solid #dedfd3;
+  border-radius: 20px;
+  background: #fffefa;
+  box-shadow: 0 5px 20px #353b2905;
+}
+
+.companion-photo-page main > .account-card { margin-block: 18px; }
+.companion-photo-page .access-card { max-width: none; }
+.companion-photo-page .account-card > .supporting-copy:first-child { margin-top: 0; }
+
+.companion-photo-page .companion-intro-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 20px;
+}
+
+.companion-photo-page .companion-intro-row .supporting-copy {
+  max-width: 620px;
+  margin: 0;
+  line-height: 1.6;
+}
+
+.companion-photo-page .companion-intro-row .button { flex-shrink: 0; }
+.companion-photo-page .account-footer { color: #626959; }
+
+@media (max-width: 580px) {
+  .companion-photo-page .account-shell,
+  .companion-photo-page .account-main { padding-block: 18px 40px; }
+  .companion-photo-page .companion-scene {
+    min-height: 200px;
+    margin-bottom: 20px;
+    border-radius: 20px;
+  }
+  .companion-photo-page .companion-scene-copy { padding: 25px 22px 76px; }
+  .companion-photo-page .companion-scene .eyebrow { margin-bottom: 12px; font-size: 9px; }
+  .companion-photo-page .companion-scene h1 { font-size: clamp(27px, 7vw, 34px); line-height: 1.08; }
+  .companion-photo-page .companion-scene-credit { left: 22px; bottom: 24px; max-width: calc(100% - 202px); font-size: 9px; }
+  .companion-photo-page .account-card { border-radius: 17px; }
+  .companion-photo-page .companion-intro-row { align-items: flex-start; gap: 12px; }
+  .companion-photo-page .companion-intro-row .supporting-copy { font-size: 13px; }
+}

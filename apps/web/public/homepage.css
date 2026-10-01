@@ -200,3 +200,65 @@
 .ai-feature-planned { display: inline-block; border: 1px solid #dce2d7; border-radius: 999px; padding: 3px 8px; font-size: 10px; font-weight: 600; color: #626c5d; background: #f3f5ef; letter-spacing: 0; }
 @media (max-width: 900px) { .ai-features-section { grid-template-columns: minmax(0, 1fr); gap: 32px; padding-block: 24px 56px; }.ai-features-visual { max-width: 680px; width: 100%; margin-inline: auto; }.ai-features-copy { max-width: 680px; margin-inline: auto; width: 100%; } }
 @media (max-width: 580px) { .ai-features-visual { border-radius: 20px; }.ai-feature-list { gap: 22px; }.ai-feature-list li { gap: 12px; }.ai-feature-list h3 { font-size: 15px; } }
+
+/* Photographic edition: the scene changes, while service actions stay in place. */
+@layer components {
+  .landing-page { --paper: #faf8f3; --line: #e7e2d8; }
+  .landing-page .site-header { height: 86px; }
+  .hero-slide-viewport { min-height: clamp(540px, 42vw, 660px); background: #18251f; }
+  .hero-service-slide::after { background: linear-gradient(90deg, rgba(13,24,19,.88), rgba(13,24,19,.64) 35%, rgba(13,24,19,.12) 72%), linear-gradient(0deg, rgba(13,24,19,.4), transparent 35%); }
+  .hero-service-slide:has(.hero-slide-copy-right)::after { background: linear-gradient(270deg, rgba(13,24,19,.88), rgba(13,24,19,.64) 35%, rgba(13,24,19,.1) 75%); }
+  .hero-slide-copy { gap: 20px; padding-bottom: 54px; }
+  .hero-slide-copy h1, .hero-slide-copy h2 { color: #fffdf7; font-size: clamp(48px,5.5vw,82px); font-weight: 650; line-height: 1.02; letter-spacing: -.055em; text-shadow: none; }
+  .hero-slide-kicker { color: #ffda78; text-shadow: none; letter-spacing: .19em; }
+  .hero-slide-text { color: #f3f0e8; text-shadow: none; font-size: 17px; max-width: 365px; }
+  .hero-slide-cta { margin-top: 10px; box-shadow: 0 8px 28px #0003; }
+  #hero-scene-ride .hero-image { object-position: center 28%; }
+  #hero-scene-courier .hero-image { object-position: center 45%; }
+  .hero-phone-preview { top: auto; bottom: 54px; right: 3%; width: 23%; height: 48%; max-width: 310px; filter: drop-shadow(0 14px 18px #0005); }
+  .hero-carousel-controls { left: max(24px,calc((100% - 1280px)/2)); right: max(24px,calc((100% - 1280px)/2)); bottom: 20px; }
+  .hero-carousel-controls button { border-color: #fff5; background: #fffefa; }
+  .hero-carousel-progress { border-color: #fff3; background: #12231ec9; backdrop-filter: blur(12px); }
+  .hero-carousel-progress button { color: #e0e9e3; }
+  .hero-carousel-progress button[aria-current="true"] { color: #17271f; background: #f4b400; }
+  .hero-carousel-progress button[aria-current="true"]::after { background: #17271f; }
+  .hero-art-note { color: #62685f; letter-spacing: .12em; font-size: 9px; margin-block: 14px 22px; }
+  .booking-card { border-radius: 26px; padding-top: 30px; box-shadow: 0 15px 45px #15282009; border-color: #e7e2d8; }
+  .landing-page .service-photo-card { position: relative; overflow: hidden; padding-top: 240px; border-radius: 24px; border: 1px solid #e7e2d8; box-shadow: 0 8px 25px #20222504; }
+  .service-photo { position: absolute; top: 0; left: 0; width: 100%; height: 205px; object-fit: cover; object-position: center 40%; }
+  .landing-page .service-photo-card:hover { background: #fff; border-color: #c1b594; }
+  .landing-page .service-card h3 { font-size: 32px; font-weight: 650; }
+  .landing-page .steps-grid article { border-radius: 22px; background: #fff; border: 1px solid #e7e2d8; padding: 30px; }
+  .landing-page .step-number { color: #926900; }
+  .landing-page .how-section { padding-block: 72px; }
+}
+@layer responsive {
+  @media (max-width: 800px) {
+    .hero-slide-viewport { min-height: 560px; }
+    .hero-slide-copy { padding: 48px 28px 160px; gap: 16px; justify-content: flex-start; }
+    .hero-slide-copy h1, .hero-slide-copy h2 { font-size: clamp(44px,8vw,64px); }
+    .hero-slide-text { font-size: 15px; max-width: 320px; }
+    .hero-service-slide::after, .hero-service-slide:has(.hero-slide-copy-right)::after { background: linear-gradient(90deg, #0d1813e0, #0d181398 48%, #0d18131a), linear-gradient(0deg, #0d1813a6, transparent 40%); }
+    .hero-slide-copy-right { text-align: left; align-items: flex-start; }
+    .hero-phone-preview { top: auto; left: auto; transform: none; right: 14px; bottom: 74px; width: 34%; height: 36%; }
+    .hero-carousel-controls { left: 16px; right: 16px; }
+  }
+  @media (max-width: 580px) {
+    .landing-page .site-header { height: 76px; }
+    .hero-slide-copy { padding: 38px 22px 190px; }
+    .hero-slide-copy h1, .hero-slide-copy h2 { font-size: clamp(42px,12vw,58px); }
+    .hero-slide-copy .hero-slide-text { max-width: 260px; }
+    .hero-slide-kicker { font-size: 9px; }
+    .hero-slide-viewport { min-height: 565px; }
+    .hero-carousel-controls { bottom: 16px; }
+    .hero-art-note { font-size: 8px; }
+    .hero-phone-preview { right: 16px; bottom: 75px; width: 37%; height: 30%; }
+    .hero-carousel-controls button { width: 44px; height: 44px; }
+    .hero-carousel-progress button { width: 28px; height: 32px; }
+    .hero-carousel-progress { gap: 0; padding: 4px; }
+    .hero-carousel-progress button:hover { color: #17271f; }
+    .landing-page .service-photo-card { padding-top: 232px; }
+    .landing-page .how-section { padding-block: 48px; }
+    .landing-page .steps-grid article { padding: 25px; }
+  }
+}
