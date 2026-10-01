@@ -58,6 +58,7 @@ const routes = new Map([
   ['/assets/eats-hero.png', ['public/assets/eats-hero.png', 'image/png']],
   ['/eats.css', ['public/eats.css', 'text/css; charset=utf-8']],
   ['/eats/meal-view.mjs', ['public/eats/meal-view.mjs', 'text/javascript; charset=utf-8']],
+  ['/eats/delivery-form.mjs', ['public/eats/delivery-form.mjs', 'text/javascript; charset=utf-8']],
   ['/eats/location-fields.mjs', ['public/eats/location-fields.mjs', 'text/javascript; charset=utf-8']],
   ['/shared/nigeria-areas.mjs', ['../../packages/shared/src/nigeria-areas.mjs', 'text/javascript; charset=utf-8']],
   ['/shared/nigeria-map-places.mjs', ['../../packages/shared/src/nigeria-map-places.mjs', 'text/javascript; charset=utf-8']],
@@ -67,7 +68,7 @@ const routes = new Map([
   ['/eats/photo-manager.mjs', ['public/eats/photo-manager.mjs', 'text/javascript; charset=utf-8']],
   ['/eats/transport.mjs', ['public/eats/transport.mjs', 'text/javascript; charset=utf-8']],
   ['/typography.css', ['public/typography.css', 'text/css; charset=utf-8']],
-  ...['eats', 'eats-contracts', 'eats-controller', 'eats-meals'].map((name) => [`/shared/${name}.mjs`, [`../../packages/shared/src/${name}.mjs`, 'text/javascript; charset=utf-8']]),
+  ...['eats', 'eats-contracts', 'eats-controller', 'eats-meals', 'eats-delivery'].map((name) => [`/shared/${name}.mjs`, [`../../packages/shared/src/${name}.mjs`, 'text/javascript; charset=utf-8']]),
   ['/account-access', ['public/account-access.html', 'text/html; charset=utf-8']],
   ['/account-access.mjs', ['public/account-access.mjs', 'text/javascript; charset=utf-8']],
   ['/account-recovery', ['public/account-recovery.html', 'text/html; charset=utf-8']],
@@ -188,6 +189,7 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
   matchingFast = readMatchingFastConfig(process.env),
   mapProvider = createMapProvider({ compactPickupTables: matchingFast.enabled,
     env: { ...process.env, TAXI_AI_MAPS_MODE: process.env.TAXI_AI_MAPS_MODE ?? (runtime.mode === 'staging' ? 'off' : 'community') } }),
+  resolveDeliveryLocation, deliveryMapSettings,
   dispatchConfig = createDispatchConfig(process.env), workerConfig = createWorkerConfig(process.env), staffMfa = createStaffMfaConfig(process.env),
   ridePilot = createRidePilotConfig(process.env, runtime.mode),
   telemetry = createTelemetry({ enabled: runtime.mode === 'staging' }),
@@ -202,7 +204,7 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
   if (runtime.mode === 'staging' && callConfig.mode === 'local') throw new Error('Staging calls require off or a configured relay.');
   db = asAsyncDatabase(db);
   if (workerConfig.role !== 'all' && db.kind !== 'postgres') throw new Error('Split API/worker deployments require PostgreSQL.');
-  const application = createApplication({ db, clock, callConfig, mapProvider, dispatchProfiler, matchingFast,
+  const application = createApplication({ db, clock, callConfig, mapProvider, resolveDeliveryLocation, deliveryMapSettings, dispatchProfiler, matchingFast,
     dispatchConfig: { ...dispatchConfig, requestRefresh: workerConfig.role === 'all' }, workerConfig,
     googleProvider, accountMail, pushProvider, vehicleVisionProvider, driverFaceProvider, safetyAlertProvider, staffMfa, ridePilot,
     allowSimulation: runtime.mode === 'local' });
@@ -247,7 +249,7 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
     try {
       pathname = new URL(request.url, 'http://localhost').pathname;
       response.setHeader('Content-Security-Policy', `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'${['/eats', '/eats/sell'].includes(pathname) ? ' data:' : ''}${mapProvider.mode === 'off' ? '' : ` ${mapProvider.tileOrigin}`}; media-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'`);
-      if (['/app', '/family', '/parcels'].includes(pathname) && mapProvider.mode !== 'off') response.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+      if (['/app', '/family', '/parcels', '/eats', '/eats/sell'].includes(pathname) && mapProvider.mode !== 'off') response.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
       response.setHeader('Permissions-Policy', `camera=${['/app', '/eats', '/eats/sell'].includes(pathname) ? '(self)' : '()'}, microphone=${pathname === '/app' ? '(self)' : '()'}, geolocation=${['/app', '/eats', '/eats/sell'].includes(pathname) ? '(self)' : '()'}, accelerometer=${pathname === '/app' ? '(self)' : '()'}, gyroscope=${pathname === '/app' ? '(self)' : '()'}`);
     } catch {
       response.writeHead(400);

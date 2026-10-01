@@ -6,7 +6,8 @@ import { useLocalSearchParams, router } from 'expo-router';
 import { EATS_STATUS } from '../../../packages/shared/src/eats.mjs';
 import type { FoodAction } from '../../../packages/shared/src/eats.mjs';
 import { useEatsScreen } from '../src/eats/provider';
-import { FoodFeedback, FoodMoney, FoodPreview, food } from '../src/eats/components';
+import { FoodFeedback, FoodMoney, FoodPreview, FoodRecipientDetails, food } from '../src/eats/components';
+import { NativeMap } from '../src/maps/native-map';
 import { Button, Card, Field, Heading, Pill, Screen, fare, styles } from '../src/ui/components';
 const labels: Record<FoodAction, string> = { accept: 'Accept order', reject: 'Decline order', prepare: 'Start preparing', ready: 'Ready for pickup', claim: 'Accept delivery', pickup: 'Confirm food collected', arrive: 'I’m at the delivery address', deliver: 'Confirm delivered', complete_pickup: 'Confirm customer collected', cancel: 'Cancel order' };
 export default function FoodOrder() {
@@ -21,8 +22,11 @@ export default function FoodOrder() {
   return <Screen><FoodPreview/><FoodFeedback state={s} controller={c}/>
     {o && <><Pill>{`FOOD ORDER · ${o.id.slice(0,8).toUpperCase()}`}</Pill><Heading title={EATS_STATUS[o.status]} subtitle={o.restaurant.name}/>
       <Card><Text style={styles.h2}>Order details</Text><Text style={styles.body}>{o.fulfillment === 'pickup' ? 'Customer pickup · collect from the kitchen' : 'Delivery'}</Text><Text style={styles.body}>Customer · {o.customerName}</Text><Text style={styles.body}>{o.restaurant.addressHidden ? `Kitchen area · ${foodLocationLabel(o.restaurant.areaId)}. A private collection point is shared when food is ready.` : `Collect from · ${o.restaurant.address}`}</Text>{o.address.line && <Text style={styles.body}>Deliver to · {o.address.line} · {foodLocationLabel(o.address.areaId)}</Text>}{!!o.instructions && <Text style={styles.body}>Instructions · {o.instructions}</Text>}
+        <FoodRecipientDetails recipient={o.recipient}/>
+        {o.address.point && <NativeMap pins={[{ ...o.address.point, id: 'delivery', title: 'Food delivery point' }]} summary="Food delivery point selected by the customer"/>}
         {o.courier && <><Text style={styles.h2}>Your courier · {o.courier.name}</Text><Text style={styles.body}>{o.courier.vehicle.colour} {o.courier.vehicle.model} · {o.courier.vehicle.plate}</Text></>}
-        {(o.pickupPin || o.deliveryPin) && <><Text style={styles.body}>{o.pickupPin ? 'Kitchen pickup code. Share only when handing the food to the assigned courier.' : o.fulfillment === 'pickup' ? 'Your pickup code. Show the kitchen when collecting your food.' : 'Your delivery code. Share only when you receive the food.'}</Text><Text selectable style={food.pin}>{o.pickupPin ?? o.deliveryPin}</Text></>}
+        {(o.pickupPin || o.deliveryPin) && <><Text style={styles.body}>{o.pickupPin ? 'Kitchen pickup code. Share only when handing the food to the assigned courier.' : o.recipient?.kind === 'other' ? 'Handover code for your recipient. Share it privately with them.' : o.fulfillment === 'pickup' ? 'Your pickup code. Show the kitchen when collecting your food.' : 'Your delivery code. Share only when you receive the food.'}</Text><Text selectable style={food.pin}>{o.pickupPin ?? o.deliveryPin}</Text></>}
+        {o.deliveryPin && o.recipient?.kind === 'other' && <Text style={styles.small}>Share this code privately with {o.recipient.name}. Ask them to give it {o.fulfillment === 'pickup' ? 'to the kitchen only when collecting the food' : 'to the courier only when receiving the food'}. No automatic message is sent.</Text>}
       </Card>
       {!!o.actions.length && <Card><Text style={styles.h2}>Next step</Text>
         {o.actions.some((a) => ['pickup','deliver','complete_pickup'].includes(a)) && <><Field label="Six-digit handover code" value={pin} onChangeText={setPin} maxLength={6} keyboardType="number-pad" editable={!locked}/><Text style={styles.small}>Get the code from the person handing over or receiving the food, in person.</Text></>}

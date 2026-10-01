@@ -6,7 +6,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { EATS_SELLERS, foodAvailable, foodStock, discoverKitchens, isPrivateKitchen } from '../../../packages/shared/src/eats.mjs';
 import type { FoodFulfillment } from '../../../packages/shared/src/eats.mjs';
 import { useEatsScreen } from '../src/eats/provider';
-import { FoodFeedback, FoodMoney, FoodOrders, FoodPreview, food } from '../src/eats/components';
+import { FoodFeedback, FoodMoney, FoodOrders, FoodPreview, FoodRecipientDetails, food } from '../src/eats/components';
 import { CuisineChips, DiscoveryChip, FoodHero, FoodPhoto, discovery } from '../src/eats/discovery';
 import { Button, Card, Field, Heading, Pill, Screen, fare, styles } from '../src/ui/components';
 import { SelectField } from '../src/ui/select-field';
@@ -39,7 +39,7 @@ export default function Eats() {
         <View style={styles.row}><DiscoveryChip label="Delivery" selected={s.fulfillment === 'delivery'} disabled={navigating} onPress={() => { c.fulfillment('delivery'); setLimit(24); }}/><DiscoveryChip label="Pickup" selected={s.fulfillment === 'pickup'} disabled={navigating} onPress={() => { c.fulfillment('pickup'); setLimit(24); }}/>{!admin && <DiscoveryChip label="Sell from home" disabled={navigating} onPress={home}/>}</View>
         {s.fulfillment === 'delivery' && <>
           <DiscoveryChip label={s.address.line ? `Deliver to: ${s.address.line}` : 'Add a delivery address'} expanded={addressOpen} disabled={navigating} onPress={() => setAddressOpen(!addressOpen)}/>
-          {addressOpen && <><Field label="Where are we eating?" value={s.address.line} onChangeText={(line) => c.delivery({ ...s.address, line }, s.instructions)} placeholder="Delivery address and landmark" maxLength={240} editable={!navigating}/><Text style={styles.body}>{areaName(s.address.areaId)}</Text><Button title="Change delivery location" secondary disabled={navigating} onPress={() => { c.editDelivery(); setMenusOpen(false); setDetail(false); }}/></>}
+          {addressOpen && <><Field label="Where are we eating?" value={s.address.line} onChangeText={(line) => c.delivery({ ...s.address, line, point: null }, s.instructions)} placeholder="Delivery address and landmark" maxLength={240} editable={!navigating}/><Text style={styles.body}>{areaName(s.address.areaId)}</Text><Button title="Change recipient or delivery location" secondary disabled={navigating} onPress={() => { c.editDelivery(); setMenusOpen(false); setDetail(false); }}/></>}
         </>}
         <Field label="Find your next favourite" value={query} onChangeText={(v) => { setQuery(v); setLimit(24); }} placeholder="Kitchen or cuisine" maxLength={100}/>
         <CuisineChips value={cuisine} onChange={(v) => { setCuisine(v); setLimit(24); }}/>
@@ -74,6 +74,7 @@ export default function Eats() {
         <Pill>{EATS_SELLERS[s.restaurant.sellerType ?? 'restaurant'].toUpperCase()}</Pill><Heading title={s.restaurant.name} subtitle={s.restaurant.description}/>
         <Text style={styles.body}>{isPrivateKitchen(s.restaurant.sellerType) || s.restaurant.addressHidden ? `${areaName(s.restaurant.areaId)} · Private collection point shared with the assigned courier or pickup customer when food is ready.` : s.restaurant.address}</Text>
         <Text style={styles.small}>{s.restaurant.prepMinutes} min preparation · Minimum {fare(s.restaurant.minimumKobo)} · {s.restaurant.isOpen ? 'Open for test orders' : 'Closed'}</Text>
+        <FoodRecipientDetails recipient={s.fulfillment === 'pickup' ? { kind: 'self', name: s.user?.name ?? 'Me' } : s.recipient}/>{s.fulfillment === 'pickup' && s.recipient.kind === 'other' && <Text style={styles.small}>Pickup is booked in your name. Choose Delivery to send food to someone else.</Text>}
         <Text style={styles.small}>Ingredients and allergen information are supplied by the kitchen. Special requests are not guaranteed; confirm dietary requirements before ordering.</Text>
         {s.menu.map((item) => { const quantity = s.cart.find((i) => i.itemId === item.id)?.quantity ?? 0; return <View key={item.id} style={food.menuRow}>
           <FoodPhoto id={item.photoId} revision={item.photoVersion} controller={c} label={item.name} compact/><Pill>{item.category.toUpperCase()}</Pill><Text style={styles.h2}>{item.name}</Text><Text style={styles.body}>{item.description}</Text>{!!item.allergens && <Text style={styles.small}>Allergens: {item.allergens}</Text>}<Text style={styles.body}>{fare(item.priceKobo)}</Text><Text style={styles.small}>{foodStock(item)}</Text>
@@ -84,14 +85,14 @@ export default function Eats() {
           <SelectField label="How would you like your food?" value={s.fulfillment} onChange={(v) => c.fulfillment(v as FoodFulfillment)} disabled={navigating} options={[{ value: 'delivery', label: 'Delivery', disabled: s.restaurant.deliveryEnabled === false }, { value: 'pickup', label: 'Customer pickup · no delivery fee', disabled: !s.restaurant.pickupEnabled }]}/>
           {!modeAvailable && <Text style={styles.body}>Choose an order option offered by this kitchen.</Text>}
           {s.fulfillment === 'pickup' ? <Text style={styles.body}>Collect your food yourself. Food vendors and home kitchens share a private collection point when your food is ready.</Text> : <>
-            <Field label="Delivery address and landmark" value={s.address.line} editable={!navigating} onChangeText={(line) => c.delivery({ ...s.address, line }, s.instructions)} maxLength={240} placeholder="Street, building and nearby landmark"/>
+            <Field label="Delivery address and landmark" value={s.address.line} editable={!navigating} onChangeText={(line) => c.delivery({ ...s.address, line, point: null }, s.instructions)} maxLength={240} placeholder="Street, building and nearby landmark"/>
             <Text style={styles.body}>{areaName(s.address.areaId)}</Text>
-            <Button title="Change delivery location" secondary disabled={navigating} onPress={() => { c.editDelivery(); setMenusOpen(false); setDetail(false); }}/>
+            <Button title="Change recipient or delivery location" secondary disabled={navigating} onPress={() => { c.editDelivery(); setMenusOpen(false); setDetail(false); }}/>
           </>}
           <Field label="Kitchen or handover instructions (optional)" value={s.instructions} onChangeText={(value) => c.delivery(s.address, value)} editable={!navigating} multiline maxLength={240}/>
           <Button title="Review total" busy={s.busy} disabled={locked || !s.cart.length || (s.fulfillment !== 'pickup' && (s.address.line.trim().length < 8 || !s.address.areaId)) || !modeAvailable || !s.restaurant.isOpen} onPress={() => void c.checkout()}/>
         </Card>
-        {s.quote && <Card><Text style={styles.h2}>Review your order</Text><Text style={styles.body}>{s.quote.fulfillment === 'pickup' ? 'Customer pickup · collect your food yourself.' : `Delivery to ${s.quote.address.line} · ${areaName(s.quote.address.areaId)}`}</Text><FoodMoney value={s.quote.totals}/><Text style={styles.small}>Total held until {new Date(s.quote.expiresAt).toLocaleTimeString()}. Test checkout · no charge. Preparation time excludes delivery.</Text><Button title="Place test order" disabled={locked || s.now >= s.quote.expiresAt} onPress={() => void c.place().then((ok) => { const id = c.snapshot().orderId; if (ok && id) router.push({ pathname: '/food-order', params: { id } }); })}/></Card>}
+        {s.quote && <Card><Text style={styles.h2}>Review your order</Text><Text style={styles.body}>{s.quote.fulfillment === 'pickup' ? 'Customer pickup · collect your food yourself.' : `Delivery to ${s.quote.address.line} · ${areaName(s.quote.address.areaId)}`}</Text><FoodRecipientDetails recipient={s.quote.recipient}/>{s.quote.recipient?.kind === 'other' && <Text style={styles.small}>Share the handover code privately with the recipient after ordering. They should share it only when receiving or collecting the food. No automatic message is sent.</Text>}<FoodMoney value={s.quote.totals}/><Text style={styles.small}>Total held until {new Date(s.quote.expiresAt).toLocaleTimeString()}. Test checkout · no charge. Preparation time excludes delivery.</Text><Button title="Place test order" disabled={locked || s.now >= s.quote.expiresAt} onPress={() => void c.place().then((ok) => { const id = c.snapshot().orderId; if (ok && id) router.push({ pathname: '/food-order', params: { id } }); })}/></Card>}
       </>}
       </>}
     </>}

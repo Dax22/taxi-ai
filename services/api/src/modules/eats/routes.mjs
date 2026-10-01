@@ -2,6 +2,9 @@
 export function eatsRoutes(eats) {
   const root = '/api/eats', uuid = '([a-f0-9-]{36})';
   return [
+    { method: 'GET', path: /^\/api\/eats\/delivery-profile$/, handle: async ({ user }) => ({ body: await eats.deliveryProfile(user) }) },
+    { method: 'POST', path: /^\/api\/eats\/delivery-profile$/, handle: async ({ user, data, key, reauthenticate }) => ({ body: await eats.saveDeliveryProfile(user, data, key, reauthenticate) }) },
+    { method: 'POST', path: /^\/api\/eats\/delivery-location$/, handle: async ({ user, data, reauthenticate }) => ({ body: await eats.deliveryLocation(user, data, reauthenticate) }) },
     { method: 'GET', path: /^\/api\/eats\/restaurants$/, handle: async ({ user, query }) => ({ body: (await eats.catalog(user, Object.fromEntries(query))) }) },
     { method: 'GET', path: /^\/api\/eats\/foods$/, handle: async ({ user, query }) => ({ body: (await eats.foods(user, Object.fromEntries(query))) }) },
     { method: 'GET', path: new RegExp(`^${root}/restaurants/${uuid}$`), handle: async ({ user, match }) => ({ body: (await eats.restaurant(user, match[1])) }) },

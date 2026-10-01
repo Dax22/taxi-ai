@@ -2,7 +2,7 @@ import { View, StyleSheet } from 'react-native';
 import { Text } from '../ui/typography';
 import { router } from 'expo-router';
 import { EATS_STATUS } from '../../../../packages/shared/src/eats.mjs';
-import type { FoodOrder, FoodTotals } from '../../../../packages/shared/src/eats.mjs';
+import type { FoodOrder, FoodOrderRecipient, FoodTotals } from '../../../../packages/shared/src/eats.mjs';
 import type { EatsState, EatsController } from '../../../../packages/shared/src/eats-controller.mjs';
 import { Button, Card, Loading, Notice, Pill, colors, fare, styles } from '../ui/components';
 export function FoodFeedback({ state, controller }: { state: EatsState; controller: EatsController }) {
@@ -17,6 +17,9 @@ export function FoodFeedback({ state, controller }: { state: EatsState; controll
     {state.uncertain && <Card><Text style={styles.h2}>Confirm the pending action.</Text><Text style={styles.body}>The connection was interrupted. Retry the same action to check its result before changing this order.</Text><Button title="Retry the same action" busy={state.busy} onPress={() => void retry()}/></Card>}</>;
 }
 export function FoodPreview() { return <Text style={styles.small}>Development preview · fictional menus and test orders. No payment is collected or live delivery dispatched.</Text>; }
+export function FoodRecipientDetails({ recipient }: { recipient?: FoodOrderRecipient | null }) {
+  return recipient ? <View style={styles.stack}><Text style={styles.body}>Recipient · {recipient.name}</Text>{recipient.kind === 'other' && <Text style={styles.small}>Ordered for someone else.</Text>}{!!recipient.phone && <Text selectable style={styles.body}>Contact · {recipient.phone}</Text>}</View> : null;
+}
 export function FoodMoney({ value }: { value: FoodTotals }) {
   return <View style={styles.stack}>{([['Food subtotal', value.subtotalKobo], ['Delivery', value.deliveryFeeKobo], ['Service fee · 5%, capped at ₦1,000', value.serviceFeeKobo], ['Order total', value.totalKobo]] as const).map(([label, amount]) => <View key={label} style={food.money}><Text style={[styles.body, food.moneyLabel]}>{label}</Text><Text style={label === 'Order total' ? styles.h2 : styles.body}>{fare(amount)}</Text></View>)}</View>;
 }

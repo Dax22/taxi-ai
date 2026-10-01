@@ -1,6 +1,8 @@
 import { EATS_STATUS, EATS_CUISINES, EATS_SELLERS, eatsTotals } from './eats.mjs';
 import { mealTotals } from './eats-meals.mjs';
 import { insideNigeria } from './locations.mjs';
+import { normalizeFoodAddress, normalizeFoodPoint } from './eats-delivery.mjs';
+import { resolveFoodArea } from './nigeria-areas.mjs';
 const object = (v) => v && typeof v === 'object' && !Array.isArray(v);
 const string = (v) => typeof v === 'string';
 const id = (v) => string(v) && /^[a-f0-9-]{36}$/.test(v);
@@ -18,6 +20,11 @@ function photoReview(p) {
 }
 function publicStore(s) { valid(!['dispatchPoint', 'assets', 'menuReferencePhotoId'].some((key) => Object.hasOwn(s, key))); }
 function publicItem(i) { valid(!['photoStatus', 'photoReviewNote'].some((key) => Object.hasOwn(i, key))); }
+function address(value) { try { normalizeFoodAddress(value); } catch { valid(false); } }
+function recipient(value) {
+  valid(object(value) && Object.keys(value).every((key) => ['kind','name','phone'].includes(key)) && ['self','other'].includes(value.kind) && string(value.name) && value.name.trim().length > 0 && value.name.length <= 100 && !/[\p{Cc}\p{Cf}]/u.test(value.name));
+  valid(value.phone === undefined || value.phone === '' && value.kind === 'self' || string(value.phone) && /^\+[1-9]\d{7,14}$/.test(value.phone));
+}
 function seller(s) { valid((s.sellerType === undefined || Object.hasOwn(EATS_SELLERS, s.sellerType)) && (s.addressHidden === undefined || typeof s.addressHidden === 'boolean')); valid(!s.addressHidden || s.address === ''); }
 function store(s) {
   valid(object(s) && id(s.id) && integer(s.version) && ['pending', 'approved', 'suspended'].includes(s.status) && typeof s.isOpen === 'boolean');
@@ -38,6 +45,10 @@ function snapshot(o) {
   publicStore(o.restaurant);
   seller(o.restaurant); valid(o.fulfillment === undefined || ['delivery', 'pickup'].includes(o.fulfillment));
   valid(object(o.address) && string(o.address.areaId) && (o.address.line === undefined || string(o.address.line)) && string(o.instructions));
+  valid(Object.keys(o.address).every((key) => ['line', 'areaId', 'point'].includes(key)));
+  if (o.address.point != null) { try { normalizeFoodPoint(o.address.point); } catch { valid(false); } }
+  if (o.recipient !== undefined) recipient(o.recipient);
+  valid(!Object.hasOwn(o, 'deliveryProfile'));
   valid(o.isDemo === true && o.payment?.method === 'test' && o.payment.status === 'not_charged');
   valid(Array.isArray(o.lines) && o.lines.every((l) => object(l) && id(l.itemId) && string(l.name) && string(l.description)));
   const totals = eatsTotals(o.lines, o.totals?.deliveryFeeKobo);
@@ -53,11 +64,31 @@ function order(o) {
   valid(o.needsCollectionPoint === undefined || typeof o.needsCollectionPoint === 'boolean' && (!o.needsCollectionPoint || o.role === 'store'));
   for (const code of ['pickupPin', 'deliveryPin']) valid(o[code] === undefined || string(o[code]) && /^\d{6}$/.test(o[code]));
   valid(o.pickupPin === undefined || o.role === 'store'); valid(o.deliveryPin === undefined || o.role === 'customer');
+  if (o.role === 'store' || o.role === 'courier' && ['delivered','cancelled','rejected'].includes(o.status)) {
+    valid(o.address.point == null && o.recipient?.phone === undefined);
+  }
 }
 /** Validate every Eats response before either client replaces a usable screen. */
 export function readEatsResponse(body) {
   valid(object(body));
   let known = false;
+  if (Object.hasOwn(body, 'deliveryProfile')) {
+    known = true; const p = body.deliveryProfile;
+    valid(object(p) && Object.keys(p).every((key) => ['version','addresses'].includes(key)) && integer(p.version) && object(p.addresses) && Object.keys(p.addresses).length === 2 && ['home','work'].every((key) => Object.hasOwn(p.addresses,key)));
+    for (const key of ['home','work']) if (p.addresses[key] !== null) address(p.addresses[key]);
+  }
+  if (Object.hasOwn(body, 'deliverySettings')) {
+    known = true; const s = body.deliverySettings;
+    valid(object(s) && Object.keys(s).every((key) => ['tiles','attribution'].includes(key)) && string(s.attribution) && s.attribution.length <= 300 && (s.tiles === null || string(s.tiles) && s.tiles.length <= 2048));
+    if (s.tiles !== null) {
+      try { const u = new URL(s.tiles.replace('{z}','1').replace('{x}','1').replace('{y}','1')); valid(['https:','http:'].includes(u.protocol) && (u.protocol === 'https:' || ['localhost','127.0.0.1','[::1]'].includes(u.hostname)) && !u.username && !u.password && ['{z}','{x}','{y}'].every((key) => s.tiles.split(key).length === 2)); } catch { valid(false); }
+    }
+  }
+  if (Object.hasOwn(body, 'deliveryLocation')) {
+    known = true; const l = body.deliveryLocation;
+    valid(object(l) && Object.keys(l).every((key) => ['point','line','areaId','attribution'].includes(key)) && string(l.line) && l.line.length <= 240 && !/[\p{Cc}\p{Cf}]/u.test(l.line) && (l.areaId === null || resolveFoodArea(l.areaId)) && string(l.attribution) && l.attribution.length <= 300);
+    try { normalizeFoodPoint(l.point); } catch { valid(false); }
+  }
   if (Object.hasOwn(body, 'foods')) {
     known = true; valid(Array.isArray(body.foods) && body.foods.length <= 60 && integer(body.foodCount) && body.foodCount <= 20_000 && body.foodCount >= body.foods.length && (body.nextOffset === null || integer(body.nextOffset) && body.nextOffset > 0 && body.nextOffset < body.foodCount));
     valid(object(body.area) && string(body.area.id) && string(body.area.name));
@@ -83,7 +114,7 @@ export function readEatsResponse(body) {
   if (Object.hasOwn(body, 'current')) {
     known = true; valid(Array.isArray(body.current) && body.current.length <= 1); body.current.forEach(order);
     valid(typeof body.online === 'boolean' && typeof body.eligible === 'boolean' && body.isDemo === true && Array.isArray(body.available) && body.available.length <= 100);
-    for (const j of body.available) { valid(object(j) && id(j.id) && integer(j.version) && object(j.restaurant) && id(j.restaurant.id) && string(j.restaurant.name) && string(j.restaurant.address) && object(j.deliveryArea) && string(j.deliveryArea.name) && integer(j.deliveryFeeKobo)); publicStore(j.restaurant); }
+    for (const j of body.available) { valid(object(j) && id(j.id) && integer(j.version) && object(j.restaurant) && id(j.restaurant.id) && string(j.restaurant.name) && string(j.restaurant.address) && object(j.deliveryArea) && string(j.deliveryArea.name) && integer(j.deliveryFeeKobo)); publicStore(j.restaurant); valid(!['recipient','address','deliveryProfile'].some((key) => Object.hasOwn(j,key))); }
   }
   if (body.areas !== undefined) valid(Array.isArray(body.areas) && body.areas.length <= 50 && body.areas.every((a) => object(a) && string(a.id) && string(a.name)));
   valid(known); return body;
