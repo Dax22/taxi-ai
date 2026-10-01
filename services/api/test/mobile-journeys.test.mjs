@@ -6,6 +6,7 @@ import { harness, participants, PASSWORD } from './helpers.mjs';
 import { DETAILS, submitApplication, approveApplication, fixtureApi } from './driver-fixtures.mjs';
 import { parseJourney, parseWork, parseThread, parseSentMessage, parseNotifications } from '../../../packages/shared/src/mobile-journeys.mjs';
 import { TRANSPORT_CATEGORIES } from '../../../packages/shared/src/transport-categories.mjs';
+import { readDeliveryUpdates } from '../../../packages/shared/src/delivery-updates.mjs';
 const sample={pickupId:'wuse-ii',destinationId:'maitama'},parcel={description:'Fictional parcel',weightKg:2,recipientName:'Test recipient'};
 const ok=(r)=>{assert.equal(r.status,200,JSON.stringify(r.body));return r.body;};
 async function send(h,path,{token,data,key=randomUUID(),headers={}}={}){
@@ -59,6 +60,14 @@ test('native passenger and delivery journeys complete across all vehicle categor
     r=await act(d,r,'start',{pickupPin:pickup});
     const sender=parseJourney(ok(await c.send(`/journeys/${r.id}`))).ride;
     assert.equal(r.delivery?.dropoffPin,undefined);
+    if(policy.service==='delivery'){
+      const pickedUp=readDeliveryUpdates(ok(await c.send('/delivery-updates'))).updates.filter(n=>n.targetId===r.id);
+      assert.equal(pickedUp.length,1);assert.equal(pickedUp[0].phase,'picked_up');
+      assert.match(pickedUp[0].title,/Kemmy/);assert.match(pickedUp[0].body,/picked up/);
+      assert.equal(r.allowedActions.includes('delivery_arrive'),true);
+      r=await act(d,r,'delivery_arrive');
+      assert.equal(r.status,'in_progress');assert.equal(r.delivery.arrivedAt,h.now);
+    }
     r=await act(d,r,'complete',policy.service==='delivery'?{deliveryPin:sender.delivery.dropoffPin}:{});
     assert.equal(r.status,'completed');assert.equal(parseWork(ok(await d.work())).current.length,0);assert.equal(r.delivery?.dropoffPin,undefined);
     if(policy.service==='ride'){
@@ -71,7 +80,10 @@ test('native passenger and delivery journeys complete across all vehicle categor
     assert.equal(ok(await customer.send(`/api/rides/${r.id}`)).ride.status,'completed');
     const updates=parseNotifications(ok(await c.send('/notifications'))).notifications;
     assert.equal(updates.filter((n)=>n.rideId===r.id&&n.kind==='claim').length,1);
-    assert.equal(updates.filter((n)=>n.rideId===r.id&&n.kind==='complete').length,1);
+    assert.equal(updates.filter((n)=>n.rideId===r.id&&n.kind==='complete').length,policy.service==='delivery'?0:1);
+    assert.equal(updates.filter((n)=>n.rideId===r.id&&n.kind==='start').length,policy.service==='delivery'?0:1);
+    const deliveryUpdates=readDeliveryUpdates(ok(await c.send('/delivery-updates'))).updates.filter(n=>n.targetId===r.id);
+    assert.deepEqual(deliveryUpdates.map(n=>n.phase).sort(),policy.service==='delivery'?['arrived','delivered','picked_up']:[]);
     for(const field of ['pickupPin','dropoffPin','description','accessToken'])assert.equal(JSON.stringify(updates).includes(`"${field}"`),false);
     assert.equal(JSON.stringify(updates).includes(body.body),false,'chat text must stay out of notification bodies');
     for(const notice of updates){

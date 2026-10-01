@@ -1,4 +1,5 @@
 import { checkoutPaymentRoutes } from '../modules/checkout-payments/routes.mjs';
+import { deliveryUpdateRoutes } from '../modules/delivery-updates/routes.mjs';
 import { safetyMonitoringRoutes } from '../modules/safety-monitoring/routes.mjs';
 import { familyRoutes } from '../modules/family/routes.mjs';
 import { deviceSessionRoutes } from '../modules/device-sessions/routes.mjs';
@@ -40,6 +41,7 @@ export function createApiRouter(application, { secure = false } = {}) {
   const cookie = (token, age) => sessionCookie(token, age, secure);
   const routes = [...accountEmailRoutes(application.accountEmail, cookie), ...googleAuthRoutes(application.googleAuth, accounts, secure), ...adminConsoleRoutes(application.adminConsole, accounts, cookie, application.staffAccess), ...deviceSessionRoutes(devices), ...accountRoutes(accounts, cookie), ...driverRoutes(drivers), ...rideRoutes(rides, application.dispatch), ...dispatchRoutes(application.dispatch), ...chatRoutes(chat), ...callRoutes(calls), ...locationRoutes(locations), ...availabilityRoutes(availability), ...paymentRoutes(payments), ...safetyRoutes(safety)];
   routes.push(...checkoutPaymentRoutes(application.checkoutPayments));
+  routes.push(...deliveryUpdateRoutes(application.deliveryUpdates));
   routes.push(...staffAccessRoutes(application.staffAccess), ...adminCasesRoutes(application.adminCases), ...adminOperationsRoutes(application.adminOperations));
   routes.push(...adminFinanceRoutes(application.adminFinance), ...adminComplianceRoutes(application.adminCompliance), ...adminDemandRoutes(application.adminDemand));
   routes.push(...safetyMonitoringRoutes(application.safetyMonitoring));

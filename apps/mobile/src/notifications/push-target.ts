@@ -3,9 +3,12 @@ export function pushTarget(data: unknown):
   | { kind: 'family'; eventId: string }
   | { kind: 'journey'; notificationId: number }
   | { kind: 'announcement'; announcementId: string }
+  | { kind: 'delivery'; deliveryUpdateId: string }
   | null {
   if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
   const value = data as Record<string, unknown>;
+  if (value.kind === 'delivery') return typeof value.deliveryUpdateId === 'string' && /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(value.deliveryUpdateId)
+    ? { kind: 'delivery', deliveryUpdateId: value.deliveryUpdateId } : null;
   if (value.kind === 'family') return typeof value.eventId === 'string' && /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(value.eventId)
     ? { kind: 'family', eventId: value.eventId } : null;
   if (value.kind === 'announcement') return typeof value.announcementId === 'string' && /^[a-f0-9-]{36}$/.test(value.announcementId)

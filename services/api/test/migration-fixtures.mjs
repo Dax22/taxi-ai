@@ -204,6 +204,7 @@ export function removeAdminExpansionFixtureTables(db) {
 
 /** Reconstruct pre-payment schemas only when no provider checkout could be lost. */
 export function removeCheckoutPaymentFixtureTables(db) {
+  removeDeliveryUpdatesFixtureTables(db);
   for (const table of ['checkout_payment_closures', 'checkout_payment_commands', 'checkout_payments']) {
     if (!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(table)) continue;
     if (db.prepare(`SELECT count(*) AS n FROM ${table}`).get().n) throw new Error(`Cannot downgrade a populated ${table} fixture.`);
@@ -213,5 +214,18 @@ export function removeCheckoutPaymentFixtureTables(db) {
   if (db.prepare('PRAGMA table_info(ride_trips)').all().some(row => row.name === 'payment_mode')) {
     if (db.prepare("SELECT count(*) AS n FROM ride_trips WHERE payment_mode<>'simulation'").get().n) throw new Error('Cannot downgrade a Paystack booking fixture.');
     db.exec('ALTER TABLE ride_trips DROP COLUMN payment_mode');
+  }
+}
+
+/** Old-schema fixtures must not discard a real delivery milestone or inbox. */
+export function removeDeliveryUpdatesFixtureTables(db) {
+  for (const table of ['delivery_update_push_jobs','delivery_updates']) {
+    if (!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(table)) continue;
+    if (db.prepare(`SELECT count(*) AS n FROM ${table}`).get().n) throw new Error(`Cannot downgrade a populated ${table} fixture.`);
+    db.exec(`DROP TABLE ${table}`);
+  }
+  if (db.prepare('PRAGMA table_info(delivery_orders)').all().some(row => row.name === 'arrived_at')) {
+    if (db.prepare('SELECT count(*) AS n FROM delivery_orders WHERE arrived_at IS NOT NULL').get().n) throw new Error('Cannot downgrade a parcel arrival fixture.');
+    db.exec('ALTER TABLE delivery_orders DROP COLUMN arrived_at');
   }
 }

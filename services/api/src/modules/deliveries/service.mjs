@@ -12,7 +12,7 @@ export function createDeliveriesService({ repository, tokens }) {
   async function view(ride, user, status) {
     const order = (await repository.find(ride.id));
     if (!order) return null;
-    return { ...order.details, verifiedAt: order.verifiedAt, pinBlockedUntil: order.pinBlockedUntil,
+    return { ...order.details, verifiedAt: order.verifiedAt, arrivedAt: order.arrivedAt, pinBlockedUntil: order.pinBlockedUntil,
       ...(user.id === ride.customerId && status === 'in_progress' && order.dropoffPin ? { dropoffPin: order.dropoffPin } : {}) };
   }
   async function verify(id, pin, now) {
@@ -28,7 +28,10 @@ export function createDeliveriesService({ repository, tokens }) {
     (await repository.close(id, now));
     return true;
   }
-  return Object.freeze({ validate, matches, view, verify,
+  async function arrive(id, now) {
+    check(await repository.arrive(id, now), 'INVALID_TRIP_STATE', 'Arrival at the recipient has already been recorded or this delivery is unavailable.');
+  }
+  return Object.freeze({ validate, matches, view, verify, arrive,
     isDelivery: async (id) => Boolean(await repository.find(id)),
     create: async (id, details) => { if (details) (await repository.insert(id, details)); },
     confirm: async (id) => { if ((await repository.find(id))) (await repository.issue(id, tokens.pickupPin())); },

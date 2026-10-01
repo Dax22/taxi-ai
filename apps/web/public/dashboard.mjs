@@ -32,6 +32,8 @@ import { createParcelLinksPanel } from './dashboard/parcel-links-panel.mjs';
 import { createGuestRidesPanel } from './dashboard/guest-rides-panel.mjs';
 import { createAnnouncementsPanel } from './dashboard/announcements.mjs';
 import { createKemmySetup } from './dashboard/kemmy-setup.mjs';
+import { createDeliveryUpdates, parcelDeliveryTarget, deliveryUpdatePath } from './dashboard/delivery-updates.mjs';
+import { createDeliveryUpdateView } from './dashboard/delivery-update-view.mjs';
 
 let serverTime = { now: Date.now(), received: performance.now() };
 const client = createApiClient({ onServerTime(now) { serverTime = { now, received: performance.now() }; } });
@@ -107,6 +109,12 @@ const guests = createGuestRidesPanel({ client, origin: location.origin,
 const parcels = createParcelLinksPanel({ client, origin: location.origin, now: () => serverTime.now + performance.now() - serverTime.received });
 const announcements = createAnnouncementsPanel({ client, root: $('announcement-banner'), title: $('announcement-title'),
   body: $('announcement-body'), meta: $('announcement-meta'), dismiss: $('announcement-dismiss') });
+const deliveryView = createDeliveryUpdateView({ root: $('delivery-update-card'), banner: $('delivery-update-banner'),
+  onOpen: () => void deliveryUpdates.open(), onDismiss: () => deliveryUpdates.dismiss() });
+const deliveryUpdates = createDeliveryUpdates({ client: activityClient, view: deliveryView,
+  identityOf: session => session.user ? `${session.user.id}:${session.user.role}:${session.csrfToken}` : null,
+  onOpen: target => target.screen === 'journey' ? page.openRide(target.id) : location.assign(deliveryUpdatePath(target)),
+});
 if (document.hidden) { guests.pause(); parcels.pause(); }
 const vehicleCheck = createVehiclePhotoCheck({client,onReport:(id,checkId)=>safetyView.vehicleMismatch(id,checkId)});
 const view = createDashboardView({
@@ -150,8 +158,10 @@ const page = createPageController({ client, activityClient, view, modeView, pref
   initialMode: new URLSearchParams(location.search).get('service') === 'courier' ? 'customer' : null,
   conversation, conversationView, calls, sharing, availability,
   planner, payments, onboarding, safety, vehicleCheck, guests, parcels, authForm,
+  deliveryUpdates: { context: (user, ride) => deliveryUpdates.context(liveIdentity, parcelDeliveryTarget(user, ride)), poll: deliveryUpdates.poll,
+    reset: () => deliveryUpdates.context(liveIdentity, null) },
   onAccount(identity) {
-    if (identity !== liveIdentity) { liveIdentity = identity; liveUpdates.reset(); announcements.context(identity); kemmySetup.context(identity); }
+    if (identity !== liveIdentity) { liveIdentity = identity; liveUpdates.reset(); announcements.context(identity); kemmySetup.context(identity); deliveryUpdates.context(identity, null); }
     if (identity && !document.hidden) liveUpdates.resume(); else liveUpdates.pause();
   }, feedback: {
     clear() { $('page-error').textContent = ''; $('page-notice').textContent = ''; },
@@ -175,10 +185,11 @@ const poll = () => { if (!document.hidden) void page.poll(); };
 $('logout').addEventListener('click', () => page.logout());
 $('refresh').addEventListener('click', () => page.poll());
 document.addEventListener('visibilitychange', () => { if (document.hidden) { liveUpdates.pause(); availability.shutdown(); guests.pause(); parcels.pause(); } else { if (liveIdentity) liveUpdates.resume(); guests.resume(); parcels.resume(); poll(); void announcements.poll(); } });
-window.addEventListener('pagehide', () => { liveUpdates.reset(); calls.shutdown(); sharing.shutdown(); availability.shutdown(); safety.reset(); vehicleCheck.reset(); guests.reset(); parcels.reset(); announcements.reset(); kemmySetup.reset(); });
+window.addEventListener('pagehide', () => { liveUpdates.reset(); calls.shutdown(); sharing.shutdown(); availability.shutdown(); safety.reset(); vehicleCheck.reset(); guests.reset(); parcels.reset(); announcements.reset(); kemmySetup.reset(); deliveryUpdates.reset(); });
 window.addEventListener('afterprint', () => document.body.classList.remove('print-receipt'));
 setInterval(() => { view.tick(); conversationView.tick(); calls.tick(); planner.tick(); sharing.tick(); availability.tick(); guests.tick(); parcels.tick(); }, 1000);
 setInterval(() => { if (calls.hasMedia()) void calls.poll(); }, 2000);
+setInterval(() => { if (!document.hidden && liveIdentity) void deliveryUpdates.poll(); }, 10_000);
 // Location publication remains on sharing.tick(); reception uses account invalidations.
 // Anonymous sessions use a slow check; authenticated sessions refresh on invalidation.
 setInterval(() => { if (!liveIdentity) poll(); else if (!document.hidden) void announcements.poll(); }, 30_000);
@@ -187,4 +198,8 @@ if (initialStart) {
   const clean = new URL(location.href); clean.searchParams.delete('start');
   history.replaceState(null, '', clean.pathname + clean.search + clean.hash);
 }
-void page.poll().then(() => { if (initialStart) modeView.startExperience(initialStart); });
+void page.poll().then(() => {
+  if (initialStart) modeView.startExperience(initialStart);
+  const rideId = new URLSearchParams(location.search).get('ride');
+  if (/^[a-f0-9-]{36}$/.test(rideId ?? '')) void page.openRide(rideId);
+});

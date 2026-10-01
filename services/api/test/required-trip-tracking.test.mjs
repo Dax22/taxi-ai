@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { createRidesService } from '../src/modules/rides/service.mjs';
 import { harness, participants, claimRide, PASSWORD } from './helpers.mjs';
+import { parseJourney } from '../../../packages/shared/src/mobile-journeys.mjs';
 
 const ok = (response, status = 200) => {
   assert.equal(response.status, status, JSON.stringify(response.body)); return response.body;
@@ -133,4 +134,95 @@ test('ride service fails closed when its required tracking port is omitted', asy
   });
   await assert.rejects(service.mutate({ userId: 'driver', id: ride.id, action: 'depart', key: randomUUID(),
     data: { expectedVersion: ride.version } }), { code: 'TRIP_LOCATION_REQUIRED' });
+});
+
+test('parcel destination arrival requires fresh shared GPS and assigned driver, replays once, and keeps PIN handover separate', async t => {
+  const { h, customer, driver, ride: bookedRide } = await booked(t, true);
+  const outsider = h.client(); await outsider.register('arrival-outsider', 'driver');
+  let ride = bookedRide;
+  assert.equal(ride.delivery.arrivedAt, null);
+  assert.equal((await progress(driver, ride, 'delivery_arrive')).body.error.code, 'INVALID_TRIP_STATE');
+  const pickupPin = ride.trip.pickupPin;
+  await driver.shareTripLocation(ride.id);
+  ride = await step(driver, ride, 'depart'); ride = await step(driver, ride, 'arrive');
+  const pickupArrivedAt = ride.trip.arrivedAt;
+  ride = await step(driver, ride, 'start', { pickupPin });
+  const deliveryPin = ok(await customer.send(`/api/rides/${ride.id}`)).ride.delivery.dropoffPin;
+  assert.equal((await progress(customer, ride, 'delivery_arrive')).status, 403);
+  assert.equal((await progress(outsider, ride, 'delivery_arrive')).status, 404);
+  h.advance(30_001);
+  const key = randomUUID(), before = ride;
+  required(await progress(driver, ride, 'delivery_arrive', {}, key));
+  assert.equal(h.db.prepare('SELECT arrived_at FROM delivery_orders WHERE ride_id=?').get(ride.id).arrived_at, null);
+  assert.equal(h.db.prepare('SELECT count(*) AS n FROM idempotency WHERE key=?').get(key).n, 0);
+  await driver.shareTripLocation(ride.id);
+  ride = await step(driver, ride, 'delivery_arrive', {}, key);
+  const arrivedAt = h.now;
+  assert.equal(ride.version, before.version + 1);
+  assert.equal(ride.status, 'in_progress'); assert.equal(ride.trip.completedAt, null);
+  assert.equal(ride.delivery.arrivedAt, arrivedAt); assert.equal(ride.trip.arrivedAt, pickupArrivedAt);
+  assert.equal(ride.delivery.dropoffPin, undefined);
+  assert.equal(ok(await customer.send(`/api/rides/${ride.id}`)).ride.delivery.dropoffPin, deliveryPin);
+  assert.equal(h.db.prepare('SELECT count(*) AS n FROM payments WHERE ride_id=?').get(ride.id).n, 0);
+  assert.equal((await progress(driver, ride, 'delivery_arrive')).body.error.code, 'INVALID_TRIP_STATE');
+  h.advance(60_001);
+  const replay = ok(await progress(driver, before, 'delivery_arrive', {}, key));
+  assert.equal(replay.replayed, true); assert.equal(replay.ride.delivery.arrivedAt, arrivedAt);
+  assert.equal(h.db.prepare("SELECT count(*) AS n FROM audit_events WHERE subject_id=? AND kind='delivery.arrived'").get(ride.id).n, 1);
+  assert.equal((await progress(driver, ride, 'complete', { deliveryPin: deliveryPin === '000000' ? '111111' : '000000' })).body.error.code, 'INVALID_DELIVERY_PIN');
+  ride = await step(driver, ride, 'complete', { deliveryPin });
+  assert.equal(ride.status, 'completed'); assert.equal(ride.delivery.arrivedAt, arrivedAt);
+});
+
+test('recipient arrival cannot be applied to a passenger ride or create parcel state', async t => {
+  const { h, driver, ride: bookedRide } = await booked(t);
+  const pickupPin = bookedRide.trip.pickupPin;
+  await driver.shareTripLocation(bookedRide.id);
+  let ride = await step(driver, bookedRide, 'depart'); ride = await step(driver, ride, 'arrive');
+  ride = await step(driver, ride, 'start', { pickupPin });
+  assert.equal((await progress(driver, ride, 'delivery_arrive')).body.error.code, 'INVALID_TRIP_STATE');
+  assert.equal(ok(await driver.send(`/api/rides/${ride.id}`)).ride.version, ride.version);
+  assert.equal(h.db.prepare('SELECT count(*) AS n FROM delivery_orders').get().n, 0);
+  assert.equal(h.db.prepare("SELECT count(*) AS n FROM audit_events WHERE kind='delivery.arrived'").get().n, 0);
+});
+
+test('native parcel arrival action and timestamp match the browser lifecycle without exposing the recipient PIN', async t => {
+  const { h, customer, driver, ride: bookedRide } = await booked(t, true);
+  let token;
+  const native = async (path, data, key = randomUUID()) => {
+    const response = await fetch(`${h.base}/api/mobile/v1${path}`, { method: data === undefined ? 'GET' : 'POST',
+      headers: { 'Content-Type': 'application/json', 'Idempotency-Key': key, ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      ...(data === undefined ? {} : { body: JSON.stringify(data) }) });
+    return { status: response.status, body: await response.json() };
+  };
+  token = ok(await native('/auth/login', { email: driver.user.email, password: PASSWORD, deviceName: 'Parcel arrival fixture' })).credentials.accessToken;
+  assert.equal(parseJourney(ok(await native(`/journeys/${bookedRide.id}`))).ride.allowedActions.includes('delivery_arrive'), false);
+  const pickupPin = bookedRide.trip.pickupPin;
+  await driver.shareTripLocation(bookedRide.id);
+  let ride = await step(driver, bookedRide, 'depart'); ride = await step(driver, ride, 'arrive');
+  ride = await step(driver, ride, 'start', { pickupPin });
+  const projection = parseJourney(ok(await native(`/journeys/${ride.id}`))).ride;
+  assert.equal(projection.delivery.arrivedAt, null);
+  assert.equal(projection.allowedActions.includes('delivery_arrive'), true);
+  assert.equal(projection.allowedActions.includes('complete'), true, 'Legacy PIN completion remains available.');
+  const arrived = parseJourney(ok(await native(`/journeys/${ride.id}/delivery_arrive`, { expectedVersion: ride.version }))).ride;
+  assert.equal(arrived.delivery.arrivedAt, h.now); assert.equal(arrived.delivery.dropoffPin, undefined);
+  assert.equal(arrived.status, 'in_progress'); assert.equal(arrived.allowedActions.includes('delivery_arrive'), false);
+  assert.equal(ok(await customer.send(`/api/rides/${ride.id}`)).ride.delivery.arrivedAt, arrived.delivery.arrivedAt);
+});
+
+test('recipient arrival timestamp, version and retry key roll back together when its audit write fails', async t => {
+  const { h, driver, ride: bookedRide } = await booked(t, true);
+  const pickupPin = bookedRide.trip.pickupPin;
+  await driver.shareTripLocation(bookedRide.id);
+  let ride = await step(driver, bookedRide, 'depart'); ride = await step(driver, ride, 'arrive');
+  ride = await step(driver, ride, 'start', { pickupPin });
+  const key = randomUUID();
+  h.db.exec("CREATE TRIGGER fail_arrival BEFORE INSERT ON audit_events WHEN NEW.kind='delivery.arrived' BEGIN SELECT RAISE(ABORT,'test rollback'); END;");
+  assert.equal((await progress(driver, ride, 'delivery_arrive', {}, key)).status, 500);
+  assert.equal(h.db.prepare('SELECT arrived_at FROM delivery_orders WHERE ride_id=?').get(ride.id).arrived_at, null);
+  assert.equal(ok(await driver.send(`/api/rides/${ride.id}`)).ride.version, ride.version);
+  assert.equal(h.db.prepare('SELECT count(*) AS n FROM idempotency WHERE key=?').get(key).n, 0);
+  h.db.exec('DROP TRIGGER fail_arrival');
+  assert.equal((await step(driver, ride, 'delivery_arrive', {}, key)).delivery.arrivedAt, h.now);
 });

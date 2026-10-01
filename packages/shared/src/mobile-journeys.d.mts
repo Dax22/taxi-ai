@@ -2,7 +2,7 @@ import type { Envelope, Mode } from './mobile-contracts.mjs';
 import type { BookingRide, Place } from './mobile-booking.mjs';
 import type { VehicleCategoryId } from './vehicle-categories.mjs';
 import type { MatchRecommendation } from './smart-matching.mjs';
-export type JourneyAction = 'claim' | 'propose' | 'accept' | 'confirm' | 'depart' | 'arrive' | 'start' | 'complete' | 'cancel';
+export type JourneyAction = 'claim' | 'propose' | 'accept' | 'confirm' | 'depart' | 'arrive' | 'start' | 'delivery_arrive' | 'complete' | 'cancel';
 export interface JourneyData { expectedVersion: number; amountKobo?: number; offerId?: string; pickupPin?: string; deliveryPin?: string; reason?: string }
 export interface Journey extends BookingRide { mode: Mode; customerName: string; chatReady: boolean; pickupPin: string | null; pinBlockedUntil: number | null;
  offer: { id: string; amountKobo: number; fromYou: boolean; expiresAt: number } | null; allowedActions: JourneyAction[];

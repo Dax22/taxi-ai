@@ -8,6 +8,7 @@ export function tripControls(ride, user, now) {
   return {
     confirm: Boolean(participant && user.role === 'customer' && user.id === ride.customer.id && ride.status === 'agreed' && ride.negotiation?.agreement),
     cancel: Boolean(participant && (user.role === 'customer' || driver) && canCancelRide(ride.status)),
+    deliveryArrive: Boolean(driver && ride.delivery && ride.status === 'in_progress' && !ride.delivery.arrivedAt),
     next: next ? { action: next[0], ...next[1] } : null,
     pin: participant && user.id === ride.customer.id && ['booked', 'on_way', 'arrived'].includes(ride.status)
       ? ride.trip?.pickupPin ?? null : null,

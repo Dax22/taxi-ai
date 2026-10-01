@@ -16,6 +16,7 @@ function projection(ride,user,now) {
       if (offer && !offer.fromYou && now < offer.expiresAt) allowedActions.push('accept');
     }
     if (ride.status === 'agreed' && mode === 'customer') allowedActions.push('confirm');
+    if (mode === 'work' && ride.status === 'in_progress' && ride.delivery && ride.delivery.arrivedAt == null) allowedActions.push('delivery_arrive');
     if (mode === 'work') for (const [action,transition] of Object.entries(TRIP_TRANSITIONS)) {
       if (ride.status === transition.from && (action !== 'start' || user.driver.eligibility.eligible)) allowedActions.push(action);
     }
@@ -44,7 +45,7 @@ export function createMobileJourneys({ rides, dispatch, availability, chat, cloc
     if (write && lease) return lease[2] === 'offline' ? (await availability.command(context,'offline',lease[1],data,key)) : (await availability.update(context,lease[1],data));
     const rating = path.match(/^\/journeys\/([a-f0-9-]{36})\/rating$/);
     if (write && rating) return { ride: projection((await rides.rate(user,rating[1],data)).ride,user,clock()) };
-    const journey = path.match(/^\/journeys\/([a-f0-9-]{36})(?:\/(claim|propose|accept|confirm|depart|arrive|start|complete|cancel))?$/);
+    const journey = path.match(/^\/journeys\/([a-f0-9-]{36})(?:\/(claim|propose|accept|confirm|depart|arrive|start|delivery_arrive|complete|cancel))?$/);
     if (journey) {
       if (!write && !journey[2]) return { ride: projection((await rides.get(user,journey[1])),user,clock()) };
       if (write && journey[2]) { const result = (await rides.mutate({ userId: user.id, action: journey[2], id: journey[1], data, key }));

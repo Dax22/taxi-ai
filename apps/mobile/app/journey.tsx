@@ -11,6 +11,7 @@ import { Button, Card, Field, Heading, Loading, Notice, Pill, Screen, fare, styl
 import { VehicleCard } from '../src/ui/vehicle-card';
 import { PickupIdentity } from '../src/ui/pickup-identity';
 import { KemmyCard } from '../src/journeys/kemmy';
+import { KemmyDeliveryCard } from '../src/notifications/delivery-updates';
 import { PaymentCard } from '../src/payments/payment-card';
 import { CheckoutPaymentCard } from '../src/payments/checkout-card';
 import { showJourneyCheckout } from '../src/payments/checkout-eligibility';
@@ -32,13 +33,14 @@ function JourneyScreen({id}:{id:string}){
     if (local.sharing || local.background || local.busy) void locationController.stop();
   }, [locationController, terminalWork]);
   function confirm(action:JourneyAction,title:string,detail:string){const shown=r!;Alert.alert(title,detail,[{text:'Back',style:'cancel'},{text:title,onPress:()=>void c.act(action,shown)}]);}
-  const labels:Partial<Record<JourneyAction,string>>={depart:'On my way',arrive:'I have arrived',start:r?.delivery?'Verify pickup and collect parcel':'Verify pickup and start trip',complete:r?.delivery?'Verify drop-off and complete delivery':'Complete trip'};
+  const labels:Partial<Record<JourneyAction,string>>={depart:'On my way',arrive:'I have arrived',delivery_arrive:'I’m at the delivery address',start:r?.delivery?'Verify pickup and collect parcel':'Verify pickup and start trip',complete:r?.delivery?'Verify drop-off and complete delivery':'Complete trip'};
   if (r && r.mode !== mode) return <Screen><Notice message="This journey belongs to a different app experience. Open it from your web account."/></Screen>;
   return <Screen><Notice message={s.error}/>{!r&&s.loading&&<Loading/>}<Button title="Refresh journey" secondary busy={s.loading} disabled={s.busy} onPress={()=>void c.refresh()}/>
     {s.uncertain&&<Button title="Retry the same action" busy={s.busy} onPress={()=>void c.retry()}/>}
     {r&&<><Button title="Safety / SOS" secondary onPress={()=>router.push({pathname:'/safety',params:{id:r.id}})}/><Pill>{bookingStatusLabel(r.status).toUpperCase()}</Pill><Heading title={`${r.pickup} → ${r.destination}`} subtitle={`${vehicleCategory(r.vehicleCategory??'standard')?.name} · ${r.mode==='work'?'Driver':'Customer'}`}/>
       {r.mode==='customer'&&!r.delivery&&r.passenger?.kind!=='guest'&&<Button title="Family Safety · choose who can view this trip" secondary onPress={()=>router.push({pathname:'/family',params:{rideId:r.id}})}/>}
       {r.mode==='customer'&&<KemmyCard ride={r} now={s.now} ratingChoice={s.ratingChoice} busy={s.busy} onChoose={(stars)=>c.chooseRating(stars)} onRate={()=>void c.rate()}/>}
+      {r.mode==='customer'&&r.delivery&&<KemmyDeliveryCard kind="parcel" targetId={r.id}/>}
       {r.status==='negotiating'&&r.driver&&<Card><Pill>AGREE YOUR FARE</Pill><Text style={styles.h2}>Talk with {r.mode==='customer'?r.driver.name:r.customerName} before accepting.</Text>
         <Text style={styles.body}>Use Taxi Ai chat below to discuss the price. The suggested fare is only a starting point; only an exact offer accepted by the other person creates a fare agreement.</Text></Card>}
       {r.status==='negotiating'&&<JourneyChat state={s} controller={c}/>}
@@ -64,7 +66,7 @@ function JourneyScreen({id}:{id:string}){
       {r.pickupPin&&<Card><Text style={styles.label}>{r.passenger?.kind==='guest'?'PASSENGER’S PICKUP PIN':'YOUR PICKUP PIN'}</Text><Text selectable style={styles.title}>{r.pickupPin}</Text><Text style={styles.body}>{r.passenger?.kind==='guest'?'Share privately with your passenger. They give the PIN to the driver only at pickup after checking the driver and vehicle’s number plate, make, model and colour.':`Share this only when the correct driver and vehicle arrive${r.delivery?' to collect your parcel':' and you are ready to start'}.`}</Text></Card>}
       {r.mode==='work'&&<TripLocationCard id={r.id} ride={r}/>}
       {r.mode==='work'&&r.allowedActions.some((a)=>labels[a])&&<Card><Text style={styles.h2}>{r.delivery?'Delivery progress':'Trip progress'}</Text>
-        {workLocationRequired(location) && r.allowedActions.some(a => ['depart', 'arrive', 'start'].includes(a)) && <Text style={styles.body}>Live location sharing is required before you depart, confirm arrival or start this {r.delivery ? 'delivery' : 'ride'}. Start sharing above and keep your location up to date.</Text>}
+        {workLocationRequired(location) && r.allowedActions.some(a => ['depart', 'arrive', 'start', 'delivery_arrive'].includes(a)) && <Text style={styles.body}>Live location sharing is required before you depart, confirm arrival or start this {r.delivery ? 'delivery' : 'ride'}. Start sharing above and keep your location up to date.</Text>}
         {(r.allowedActions.includes('start')||r.allowedActions.includes('complete')&&r.delivery)&&<><Field label={r.status==='arrived'?(r.passenger?.kind==='guest'?'Passenger’s six-digit pickup PIN':'Customer’s six-digit pickup PIN'):'Recipient’s six-digit drop-off code'} value={s.pin} onChangeText={(v)=>c.edit('pin',v.replace(/[^0-9]/g,''))} keyboardType="number-pad" maxLength={6} secureTextEntry editable={!locked}/>
           {(r.status==='arrived'?r.pinBlockedUntil:r.delivery?.pinBlockedUntil)!>s.now&&<Text style={styles.body}>Verification paused until {new Date((r.status==='arrived'?r.pinBlockedUntil:r.delivery?.pinBlockedUntil)!).toLocaleTimeString()}.</Text>}</>}
         {r.allowedActions.filter((a)=>labels[a]).map((a)=><Button key={a} title={labels[a]!} disabled={locked || workLocationBlocks('ride', a, location)} onPress={()=>confirm(a,labels[a]!,a==='complete'?'Confirm that the journey and handover are complete.':'Update this journey to the next stage?')}/>)}

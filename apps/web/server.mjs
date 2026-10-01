@@ -41,6 +41,10 @@ import { createRidePilotConfig } from '../../packages/shared/src/ride-pilot.mjs'
 // Explicit allowlist: never serve the repository root or arbitrary disk paths.
 const routes = new Map([
   ['/shared/realtime-client.mjs', ['../../packages/shared/src/realtime-client.mjs', 'text/javascript; charset=utf-8']],
+  ['/shared/delivery-updates.mjs', ['../../packages/shared/src/delivery-updates.mjs', 'text/javascript; charset=utf-8']],
+  ['/dashboard/delivery-updates.mjs', ['public/dashboard/delivery-updates.mjs', 'text/javascript; charset=utf-8']],
+  ['/dashboard/delivery-update-view.mjs', ['public/dashboard/delivery-update-view.mjs', 'text/javascript; charset=utf-8']],
+  ['/delivery-updates.css', ['public/delivery-updates.css', 'text/css; charset=utf-8']],
   ...['/admin', '/admin/', '/admin/accounts', '/admin/trips', '/admin/analytics', '/admin/operations', '/admin/announcements', '/admin/staff', '/admin/audit', '/admin/cases', '/admin/finance', '/admin/compliance', '/admin/demand', '/admin/coverage'].map((path) => [path, ['../admin/public/index.html', 'text/html; charset=utf-8']]),
   ['/admin/styles.css', ['../admin/public/styles.css', 'text/css; charset=utf-8']],
   ...['app', 'api-client', 'controller', 'view', 'navigation', 'pages', 'charts', 'ui', 'forms', 'operations-page', 'staff-pages', 'case-pages', 'finance-pages', 'compliance-pages', 'demand-page', 'coverage-page', 'coverage-map', 'coverage-map-model', 'announcements-page'].map((name) => [`/admin/${name}.mjs`, [`../admin/public/${name}.mjs`, 'text/javascript; charset=utf-8']]),
@@ -255,7 +259,7 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
       });
       // Provider I/O stays outside transactions. Each outbox separately claims
       // jobs; the coordinator only permits starting the next bounded drain.
-      for (const service of [application.safetyMonitoring, application.accountEmail, application.notifications, application.announcements, application.familyDelivery]) {
+      for (const service of [application.safetyMonitoring, application.accountEmail, application.notifications, application.deliveryUpdates, application.announcements, application.familyDelivery]) {
         if (!active() || !await application.workerCoordinator.guard(lease)) return;
         await service.deliverPending();
       }
@@ -337,7 +341,7 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
       // Signal every producer immediately before waiting, so an in-flight route
       // cannot publish another offer while the worker runtime is draining.
       const tasks = [workers.stop(), application.dispatch.stop(), application.safetyMonitoring.stop(),
-        application.accountEmail.stop(), application.notifications.stop(), application.announcements.stop(), application.familyDelivery.stop(), application.realtime.close()];
+        application.accountEmail.stop(), application.notifications.stop(), application.deliveryUpdates.stop(), application.announcements.stop(), application.familyDelivery.stop(), application.realtime.close()];
       let deadline;
       const completed = Promise.allSettled(tasks).then((results) => {
         if (results.some((result) => result.status === 'rejected')) throw new Error('A background service could not finish shutting down.');

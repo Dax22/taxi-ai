@@ -6,7 +6,7 @@ export interface Place { name: string; lat: number; lng: number }
 export interface RouteGeometry { distanceMeters: number; durationSeconds: number | null; distanceKind?: 'road' | 'straight_line'; coordinates: [number, number][];
   pricing?: { baseKobo: number; distanceKobo: number; timeKobo: number; minimumKobo: number; incrementKobo: number } }
 export type RequestData = ({ quoteId: string } | { pickupId: string; destinationId: string }) & { vehicleCategory?: VehicleCategoryId; delivery?: DeliveryDetails; passenger?: PassengerDetails };
-export interface DeliveryView extends DeliveryDetails { verifiedAt: number | null; pinBlockedUntil: number | null; dropoffPin?: string }
+export interface DeliveryView extends DeliveryDetails { verifiedAt: number | null; arrivedAt?: number | null; pinBlockedUntil: number | null; dropoffPin?: string }
 export interface BookingPreview { vehicleCategory?: VehicleCategoryId; kind: 'route' | 'sample'; pickup: string; destination: string; suggestedFareKobo: number;
   expiresAt: number | null; request: RequestData; route: RouteGeometry | null }
 export interface BookingRide { paymentMode?: 'simulation' | 'paystack_test'; vehicleCategory?: VehicleCategoryId; service?: 'ride' | 'delivery'; delivery?: DeliveryView | null; passenger?: PassengerView; id: string; version: number; status: string; pickup: string; destination: string;

@@ -1,11 +1,11 @@
 import { readReceivedParcelsResponse, readParcelResponse } from '/shared/parcels.mjs';
 
 /** Recipient reads are session-scoped; possession of a link alone never displays a parcel. */
-export function createParcelsController({ client, view, token = '', onAccepted = () => {}, now = Date.now }) {
+export function createParcelsController({ client, view, token = '', initialId = null, onAccepted = () => {}, now = Date.now }) {
   let identity = null, user = null, parcels = [], selectedId = null, settings = null, busy = false, error = '', epoch = 0, paused = false;
   let loading = false, loadId = 0, actionId = 0, validUntil = 0;
   const identityOf = (session) => session.user ? `${session.user.id}:${session.csrfToken}` : null;
-  function render() { view.render({ user, parcels, selectedId, settings, busy, loading, error, hasInvitation: Boolean(token) }); }
+  function render() { view.render({ identity, user, parcels, selectedId, settings, busy, loading, error, hasInvitation: Boolean(token) }); }
   function session(value) {
     const next = identityOf(value);
     if (next !== identity) { epoch++; parcels = []; selectedId = null; settings = null; validUntil = 0; client.reset(); }
@@ -28,7 +28,8 @@ export function createParcelsController({ client, view, token = '', onAccepted =
       if (identityOf(current) !== key) { session(current); return; }
       if (now() - startedAt >= 30_000) { parcels = []; selectedId = null; validUntil = 0; error = 'The tracking response took too long. Refresh to verify your current access.'; return; }
       parcels = readReceivedParcelsResponse(response).parcels; settings = maps.settings; validUntil = now() + 30_000;
-      if (!parcels.some((parcel) => parcel.rideId === selectedId)) selectedId = parcels[0]?.rideId ?? null;
+      if (!parcels.some((parcel) => parcel.rideId === selectedId)) selectedId = parcels.some(parcel => parcel.rideId === initialId) ? initialId : parcels[0]?.rideId ?? null;
+      initialId = null;
     } catch (failure) {
       if (!paused && start === epoch) { parcels = []; selectedId = null; error = failure.message; if ([401, 403].includes(failure.status)) session({ user: null }); }
     } finally { if (operation === loadId) { loading = false; if (!paused) render(); } }

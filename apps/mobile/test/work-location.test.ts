@@ -9,11 +9,11 @@ const active = { now: 100_000, stale: false, uncertain: false,
 
 test('required ride and food progression needs recent location, including a valid share from another device', () => {
   assert.equal(workLocationRequired(active), true); assert.equal(freshWorkLocation(active), true);
-  for (const action of ['depart', 'arrive', 'start']) assert.equal(workLocationBlocks('ride', action, active), false);
+  for (const action of ['depart', 'arrive', 'start', 'delivery_arrive']) assert.equal(workLocationBlocks('ride', action, active), false);
   for (const action of ['pickup', 'arrive']) assert.equal(workLocationBlocks('food', action, active), false);
   const stale = { ...active, now: 129_000 };
   assert.equal(freshWorkLocation({ ...active, now: 128_999 }), true);
-  for (const action of ['depart', 'arrive', 'start']) assert.equal(workLocationBlocks('ride', action, stale), true);
+  for (const action of ['depart', 'arrive', 'start', 'delivery_arrive']) assert.equal(workLocationBlocks('ride', action, stale), true);
   for (const action of ['pickup', 'arrive']) assert.equal(workLocationBlocks('food', action, stale), true);
 });
 

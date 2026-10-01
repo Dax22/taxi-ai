@@ -395,6 +395,19 @@ export function createRidesService({ repository, deliveries, passengerForRide, s
     if (ride.driverId === user.id) requireRole(user, 'driver');
     requireVersion(ride, data.expectedVersion);
     const status = ride.trip?.status ?? ride.status;
+    // Recipient arrival is a parcel milestone, not the existing pickup-arrival
+    // transition. Keep the trip in progress until its drop-off PIN is verified.
+    if (action === 'delivery_arrive') {
+      requireRole(user, 'driver');
+      check(ride.driverId === user.id, 'FORBIDDEN', 'Only the assigned driver can operate this trip.');
+      check(status === 'in_progress' && await deliveries.isDelivery(id), 'INVALID_TRIP_STATE', 'Recipient arrival is available only for a collected parcel.');
+      await requireTripLocation(user.id, id);
+      await deliveries.arrive(id, now);
+      check(await repository.updateState({ id, status: 'agreed', expectedVersion: ride.version, now }),
+        'STALE_VERSION', 'This trip has changed. Refresh and try again.');
+      await audit.record(user.id, 'delivery.arrived', id, now);
+      return { rideId: id };
+    }
     let next;
     let reason = null;
     if (action === 'confirm') {
@@ -500,7 +513,7 @@ export function createRidesService({ repository, deliveries, passengerForRide, s
           : { ride: (await view((await record(previous.rideId)), user)), replayed: true };
       }
       const now = clock();
-      const tripAction = ['confirm', 'depart', 'arrive', 'start', 'complete', 'cancel'].includes(action);
+      const tripAction = ['confirm', 'depart', 'arrive', 'start', 'delivery_arrive', 'complete', 'cancel'].includes(action);
       const outcome = tripAction ? (await changeTrip(user, id, action, data, now)) : { rideId:
         action === 'create' ? (await create(user, data, now)) : action === 'claim' ? (await claim(user, id, data, now))
           : (await changeFare(user, id, action, data, now)) };

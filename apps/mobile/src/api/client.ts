@@ -5,6 +5,8 @@ import { readContacts, readSafety, readSafetyResult } from '../safety/contracts.
 import { readPayment, readReceipt, readEarnings } from '../payments/contracts.ts';
 import { readCheckoutPaymentResponse } from '../../../../packages/shared/src/checkout-payments.mjs';
 import type { CheckoutPaymentKind } from '../../../../packages/shared/src/checkout-payments.mjs';
+import { readDeliveryUpdate, readDeliveryUpdates, readDeliveryUpdateTarget } from '../../../../packages/shared/src/delivery-updates.mjs';
+import type { DeliveryUpdateKind } from '../../../../packages/shared/src/delivery-updates.mjs';
 import { readTracking, readTrackingResult } from '../tracking/contracts.ts';
 import type { Tracking, TrackingResult, LocationShare } from '../tracking/contracts.ts';
 import type { BackgroundGrant, TrackingKind, BackgroundConnection } from '../tracking/background-contracts.ts';
@@ -305,6 +307,9 @@ export class MobileClient {
   async readMessages(id: string, throughSequence: number) { return parseReadMessages(await this.request(`/journeys/${id}/chat/read`,{ throughSequence })); }
   async reportMessage(id: string, messageId: string, reason: string) { return this.request(`/journeys/${id}/chat/messages/${messageId}/report`,{ reason }); }
   async notifications(before?: number | null) { return parseNotifications(await this.request(`/notifications${before ? `?before=${before}` : ''}`)); }
+  async deliveryUpdates(before?: string | null, signal?: AbortSignal) { return readDeliveryUpdates(await this.request(`/delivery-updates${before ? `?before=${before}` : ''}`, undefined, undefined, signal)); }
+  async deliveryUpdate(kind: DeliveryUpdateKind, targetId: string, signal?: AbortSignal) { return readDeliveryUpdate(await this.request(`/delivery-updates/${kind}/${targetId}`, undefined, undefined, signal), { kind, targetId }); }
+  async openDeliveryUpdate(id: string, signal?: AbortSignal) { return readDeliveryUpdateTarget(await this.request(`/delivery-updates/${id}/open`, {}, undefined, signal)); }
   async openNotification(id: number) { return parseNotificationTarget(await this.request(`/notifications/${id}/open`,{})); }
   async readNotification(id: number) { return this.request(`/notifications/${id}/read`,{}); }
   async readAnnouncement(id: string) { return this.request(`/announcements/${id}/read`,{}); }

@@ -13,6 +13,7 @@ import { useTripLocation } from '../src/tracking/provider';
 import { TripLocationCard } from '../src/tracking/view';
 import type { TripLocationState } from '../src/tracking/controller';
 import { CheckoutPaymentCard } from '../src/payments/checkout-card';
+import { KemmyDeliveryCard } from '../src/notifications/delivery-updates';
 import { NativeMap } from '../src/maps/native-map';
 import { Button, Card, Field, Heading, Pill, Screen, fare, styles } from '../src/ui/components';
 const labels: Record<FoodAction, string> = { accept: 'Accept order', reject: 'Decline order', prepare: 'Start preparing', ready: 'Ready for pickup', claim: 'Accept delivery', pickup: 'Confirm food collected', arrive: 'I’m at the delivery address', deliver: 'Confirm delivered', complete_pickup: 'Confirm customer collected', cancel: 'Cancel order' };
@@ -70,6 +71,7 @@ export default function FoodOrder() {
         {o.payment.status === 'expired' && <Text style={styles.body}>This food reservation has expired. Check any payment already attempted before placing another order.</Text>}
         {o.payment.targetId ? <CheckoutPaymentCard key={o.payment.targetId} kind="food" targetId={o.payment.targetId} grouped={o.payment.targetId !== o.id}/> : <Text style={styles.body}>Payment details are unavailable. Refresh this order before paying.</Text>}
       </>}
+      {o.role === 'customer' && o.fulfillment === 'delivery' && <KemmyDeliveryCard kind="food" targetId={o.id}/>}
       {step && (showFoodOrderTracking(o) ? <FoodDeliveryProgress key={o.id} {...step}/> : <OrderStep {...step}/>)}
       <Card><Text style={styles.h2}>Your food</Text>{o.lines.map((i) => <Text key={i.itemId} style={styles.body}>{i.quantity} × {i.name} · {fare(i.priceKobo * i.quantity)}</Text>)}<FoodMoney value={o.totals}/><Text style={styles.small}>Test checkout · no money charged.</Text></Card>
       <Card><Text style={styles.h2}>Order progress</Text>{o.events.map((e, i) => <View key={i} style={food.timeline}><Text style={styles.body}>{EATS_STATUS[e.status]}</Text><Text style={styles.small}>{new Date(e.at).toLocaleString()}</Text>{e.reason && <Text style={styles.body}>{e.reason}</Text>}</View>)}</Card>

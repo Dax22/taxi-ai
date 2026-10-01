@@ -45,6 +45,19 @@ const ride = (status = 'booked', extra = {}) => ({ id: 'ride-one', version: 4, s
   negotiation: { agreement: { amountKobo: 470000 } },
   trip: { pickupPin: '001234', pinBlockedUntil: null }, activity: [], ...extra });
 
+test('parcel recipient arrival has its own versioned driver action and leaves the handover code available', (t) => {
+  const { view, node, commands } = setup(t);
+  view.render(ride('in_progress', { delivery: { arrivedAt: null } }), driver);
+  assert.equal(node('delivery-arrive').hidden, false); assert.equal(node('delivery-pin-form').hidden, false);
+  node('delivery-arrive').onclick(); assert.equal(commands[0][0], '/api/rides/ride-one/delivery_arrive');
+  assert.deepEqual(commands[0][1], { expectedVersion: 4 });
+  view.setBusy(true); assert.equal(node('delivery-arrive').disabled, true); view.setBusy(false);
+  view.render(ride('in_progress', { delivery: { arrivedAt: 1000 } }), driver); assert.equal(node('delivery-arrive').hidden, true);
+  assert.equal(node('delivery-pin-form').hidden, false);
+  view.render(ride('arrived', { delivery: { arrivedAt: null } }), driver); assert.equal(node('delivery-arrive').hidden, true);
+  view.render(ride('in_progress', { delivery: { arrivedAt: null } }), customer); assert.equal(node('delivery-arrive').hidden, true);
+});
+
 test('pickup PINs and entered PINs are cleared on participant changes, trip changes, start and reset', (t) => {
   const { view, node } = setup(t);
   view.render(ride(), customer);

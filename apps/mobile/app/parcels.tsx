@@ -6,12 +6,13 @@ import { ParcelsController } from '../src/parcels/controller';
 import { useParcelFocus } from '../src/parcels/use-focus';
 import { NativeMap } from '../src/maps/native-map';
 import { VehicleCard } from '../src/ui/vehicle-card';
+import { KemmyDeliveryCard } from '../src/notifications/delivery-updates';
 import { Text } from '../src/ui/typography';
 import { Button, Card, Field, Heading, Loading, Notice, Pill, Screen, readable, styles } from '../src/ui/components';
 
 function IncomingParcels() {
   const { client, user, mode, blocked } = useSession();
-  const { token } = useLocalSearchParams<{ token?: string }>();
+  const { token, rideId } = useLocalSearchParams<{ token?: string; rideId?: string }>();
   const consumed = useRef('');
   const controller = useMemo(() => new ParcelsController(client, randomUUID), [client, user?.id, mode]);
   const s = useSyncExternalStore(controller.subscribe, controller.snapshot);
@@ -21,6 +22,11 @@ function IncomingParcels() {
       consumed.current = token; controller.editInvitation(token); router.setParams({ token: undefined });
     }
   }, [token, s.loading, blocked, controller]);
+  useEffect(() => {
+    if (!blocked && !s.loading && !s.busy && typeof rideId === 'string' && s.parcels.some(parcel => parcel.rideId === rideId)) {
+      controller.select(rideId); router.setParams({ rideId: undefined });
+    }
+  }, [rideId, s.loading, s.busy, s.parcels, blocked, controller]);
   const parcel = blocked ? null : s.selected, position = parcel?.location;
   const stalePosition = position ? s.stale || s.now - position.capturedAt >= 30_000 : false;
   return <Screen><Pill>TAXI AI COURIER</Pill><Heading title="Parcels sent to you." subtitle="Accept your sender’s invitation to track a parcel securely in your account."/>
@@ -35,6 +41,7 @@ function IncomingParcels() {
     {s.loading && !s.parcels.length && <Loading/>}
     {!s.loading && !s.parcels.length && <Text style={styles.body}>{s.stale ? 'Connect to refresh your parcels and confirm access.' : 'No accepted parcel invitations yet.'}</Text>}
     {!blocked && s.parcels.map(item => <Card key={item.rideId}><Pill>{readable(item.status).toUpperCase()}</Pill><Text style={styles.h2}>{item.description}</Text><Text style={styles.body}>{item.reference} · To {item.destination}</Text><Button title={s.selectedId === item.rideId ? 'Refresh parcel details' : 'Track this parcel'} secondary disabled={s.busy || s.uncertain} onPress={() => controller.select(item.rideId)}/></Card>)}
+    {parcel && <KemmyDeliveryCard kind="parcel" targetId={parcel.rideId}/>}
     {parcel && <Card><Pill>{parcel.reference}</Pill><Heading title={parcel.description} subtitle={readable(parcel.status)}/>
       <Text style={styles.body}>Recipient · {parcel.recipientName}</Text><Text style={styles.body}>Delivery to · {parcel.destination}</Text><Text style={styles.small}>Parcel weight · {parcel.weightKg} kg</Text>
       {parcel.driver && <><Text style={styles.body}>Driver · {parcel.driver.name}</Text><VehicleCard vehicle={parcel.driver.vehicle} compact label="DELIVERY VEHICLE"/></>}

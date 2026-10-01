@@ -15,7 +15,7 @@ export function rideRoutes(rides, dispatch) {
       handle: async ({ user, match }) => ({ body: { ride: (await rides.get(user, match[1])) } }) },
     { method: 'POST', path: /^\/api\/rides\/([a-f0-9-]{36})\/rating$/, access: 'write',
       handle: async ({ user, match, data }) => ({ body: (await rides.rate(user, match[1], data)) }) },
-    { method: 'POST', path: /^\/api\/rides\/([a-f0-9-]{36})\/(claim|offers|accept|cancel|confirm|depart|arrive|start|complete)$/, access: 'write',
+    { method: 'POST', path: /^\/api\/rides\/([a-f0-9-]{36})\/(claim|offers|accept|cancel|confirm|depart|arrive|start|delivery_arrive|complete)$/, access: 'write',
       handle: async (context) => (await write(context.match[2] === 'offers' ? 'propose' : context.match[2], context.match[1], context)) },
   ];
 }
