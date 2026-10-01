@@ -3,6 +3,13 @@ export type FoodStatus = 'placed' | 'accepted' | 'preparing' | 'ready' | 'assign
 export type FoodAction = 'accept' | 'reject' | 'prepare' | 'ready' | 'claim' | 'pickup' | 'arrive' | 'deliver' | 'complete_pickup' | 'cancel';
 export interface FoodArea { id: string; name: string; town?: string; stateId?: string; stateName?: string }
 export type FoodFulfillment = 'delivery' | 'pickup';
+export interface FoodPoint { lat: number; lng: number }
+export interface FoodDeliveryAddress { line: string; areaId: string; point?: FoodPoint | null }
+export interface FoodRecipient { kind: 'self' | 'other'; name: string; phone: string }
+export interface FoodOrderRecipient { kind: 'self' | 'other'; name: string; phone?: string }
+export interface FoodDeliveryProfile { version: number; addresses: { home: FoodDeliveryAddress | null; work: FoodDeliveryAddress | null } }
+export interface FoodDeliverySettings { tiles: string | null; attribution: string }
+export interface FoodDeliveryLocation { point: FoodPoint; line: string; areaId: string | null; attribution: string }
 export type FoodSellerType = 'restaurant' | 'food_vendor' | 'home_kitchen';
 export type FoodPhotoStatus = 'pending' | 'approved' | 'rejected' | 'legacy-approved';
 export interface FoodPhotoAsset { id: string; purpose: 'dish' | 'logo' | 'cover' | 'menu_reference'; status: FoodPhotoStatus | 'private'; version: number; reviewNote: string }
@@ -13,7 +20,7 @@ export interface FoodDish extends FoodMenuItem { seller: FoodStore }
 export interface FoodMenuItem { photoStatus?: FoodPhotoStatus | null; photoReviewNote?: string; photoVersion?: number | null; portionsRemaining?: number | null; allergens?: string; photoId?: string | null; id: string; name: string; description: string; category: string; priceKobo: number; available: boolean }
 export interface CartLine { itemId: string; quantity: number }
 export interface FoodTotals { subtotalKobo: number; deliveryFeeKobo: number; serviceFeeKobo: number; totalKobo: number; currency: 'NGN' }
-export interface FoodQuote { fulfillment?: FoodFulfillment; id: string; restaurant: { sellerType?: FoodSellerType; addressHidden?: boolean; id: string; name: string; address: string; areaId: string; prepMinutes: number }; lines: (CartLine & { name: string; description: string; allergens?: string; priceKobo: number })[]; totals: FoodTotals; address: { line?: string; areaId: string }; instructions: string; isDemo: true; payment: { method: 'test'; status: 'not_charged' }; expiresAt: number }
+export interface FoodQuote { fulfillment?: FoodFulfillment; id: string; restaurant: { sellerType?: FoodSellerType; addressHidden?: boolean; id: string; name: string; address: string; areaId: string; prepMinutes: number }; lines: (CartLine & { name: string; description: string; allergens?: string; priceKobo: number })[]; totals: FoodTotals; address: { line?: string; areaId: string; point?: FoodPoint | null }; recipient?: FoodOrderRecipient; instructions: string; isDemo: true; payment: { method: 'test'; status: 'not_charged' }; expiresAt: number }
 export interface FoodOrder extends Omit<FoodQuote, 'expiresAt'> { needsCollectionPoint?: boolean; status: FoodStatus; version: number; role: 'customer' | 'store' | 'courier' | 'admin'; actions: FoodAction[]; customerName: string; courier: { id: string; name: string; vehicle: Vehicle } | null; pickupPin?: string; deliveryPin?: string; pinBlockedUntil?: number | null; events: { status: FoodStatus; at: number; reason?: string }[]; createdAt: number; updatedAt: number }
 export interface FoodJob { id: string; version: number; restaurant: FoodQuote['restaurant']; deliveryArea: FoodArea; deliveryFeeKobo: number; createdAt: number; isDemo: true }
 export interface FoodWork { current: FoodOrder[]; available: FoodJob[]; online: boolean; eligible: boolean; isDemo: true }

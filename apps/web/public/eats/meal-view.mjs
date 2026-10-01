@@ -1,23 +1,19 @@
-import { createFoodLocationFields, foodAreaLabel } from './location-fields.mjs';
+import { foodAreaLabel } from './location-fields.mjs';
+import { createDeliveryForm } from './delivery-form.mjs';
 import { $, element } from '../dashboard/dom.mjs';
 import { EATS_SELLERS, foodAvailable, foodStock, isPrivateKitchen } from '/shared/eats.mjs';
 import { formatNaira } from '/shared/demo-booking.mjs';
 const field = (id) => $('food-meal-' + id);
 const suggestions = ['Jollof rice', 'Egusi & pounded yam', 'Suya', 'Plantain', 'Moi moi'];
 
-export function createMealView(controller, { button, mealPhoto, totals }) {
+export function createMealView(controller, { button, mealPhoto, totals, geolocation, createMap }) {
   let state, owner, keys = new Map();
   const locked = () => state.busy || state.uncertain || state.stale;
   const update = (id, value, build) => {
     const key = JSON.stringify(value); if (keys.get(id) === key) return;
     keys.set(id, key); const root = field(id); root.replaceChildren(); build(root);
   };
-  const location = createFoodLocationFields({ state: field('state'), town: field('town') });
-  field('location-form').addEventListener('submit', (event) => {
-    event.preventDefault();
-    void controller.confirmDelivery({ line: field('address').value, areaId: location.value() }).then((ok) => { if (ok) field('query').focus(); });
-  });
-  field('change').addEventListener('click', () => { controller.editDelivery(); field('address').focus(); });
+  const deliveryForm = createDeliveryForm(controller, { geolocation, createMap, onConfirmed: () => field('query').focus() });
   field('search-form').addEventListener('submit', (event) => { event.preventDefault(); void controller.findMeals(field('query').value); });
   field('more').addEventListener('click', () => void controller.findMeals(state.foodQuery, true));
   field('instructions').addEventListener('input', () => controller.delivery(state.address, field('instructions').value));
@@ -26,20 +22,15 @@ export function createMealView(controller, { button, mealPhoto, totals }) {
   return { render(next) {
     state = next;
     if (owner !== state.user?.id) {
-      owner = state.user?.id; keys.clear(); location.set('');
-      for (const id of ['query', 'address', 'instructions']) field(id).value = '';
+      owner = state.user?.id; keys.clear();
+      for (const id of ['query', 'instructions']) field(id).value = '';
       for (const id of ['results', 'lines', 'quotes']) field(id).replaceChildren();
     }
+    deliveryForm.render(state);
     if (!state.user) return;
     const admin = state.user.role === 'admin';
-    field('location-form').hidden = state.deliveryConfirmed;
-    field('location-fields').disabled = locked() || state.foodLoading;
     field('builder').hidden = field('destination').hidden = !state.deliveryConfirmed;
     $('food-kitchen-browser').hidden = !state.deliveryConfirmed;
-    field('destination-text').textContent = `${state.address.line} · ${foodAreaLabel(state.address.areaId)}`;
-    field('change').disabled = state.busy || state.uncertain;
-    const addressKey = JSON.stringify(state.address);
-    if (keys.get('address-value') !== addressKey) { keys.set('address-value', addressKey); field('address').value = state.address.line; location.set(state.address.areaId); }
     field('query').disabled = field('find').disabled = locked() || state.foodLoading;
     field('instructions').disabled = locked();
     if (document.activeElement !== field('instructions')) field('instructions').value = state.instructions;
@@ -89,7 +80,7 @@ export function createMealView(controller, { button, mealPhoto, totals }) {
       for (const quote of state.mealCheckout.quotes) { const group = element('section', undefined, 'food-basket-group'); group.append(element('h3', quote.restaurant.name)); for (const line of quote.lines) group.append(element('p', `${line.quantity} × ${line.name} · ${formatNaira(line.quantity * line.priceKobo)}`, 'small-note')); group.append(totals(quote.totals)); root.append(group); }
       root.append(element('h3', `Combined total · ${formatNaira(state.mealCheckout.totals.totalKobo)}`));
     });
-    field('expiry').textContent = state.mealCheckout ? `Deliver to ${state.address.line}. Total held until ${new Date(state.mealCheckout.expiresAt).toLocaleTimeString()}.` : '';
+    field('expiry').textContent = state.mealCheckout ? `Deliver to ${state.recipient?.kind === 'other' ? state.recipient.name + ' at ' : ''}${state.address.line}. Total held until ${new Date(state.mealCheckout.expiresAt).toLocaleTimeString()}.` : '';
     field('place').textContent = state.mealCheckout?.quotes.length === 1 ? 'Place test order' : `Place ${state.mealCheckout?.quotes.length ?? ''} test orders`;
     field('place').disabled = locked() || !state.mealCheckout || state.now >= state.mealCheckout.expiresAt;
   } };

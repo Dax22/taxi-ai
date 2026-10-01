@@ -31,7 +31,8 @@ import { createRidesService } from './modules/rides/service.mjs';
 import { createRidePilotConfig } from '../../../packages/shared/src/ride-pilot.mjs';
 import { createEatsRepository } from './modules/eats/repository.mjs';
 import { deliveryAreas, EATS_LEGACY_AREA_IDS } from '../../../packages/shared/src/eats.mjs';
-import { distanceMeters } from '../../../packages/shared/src/locations.mjs';
+import { insideNigeria, distanceMeters } from '../../../packages/shared/src/locations.mjs';
+import { NIGERIAN_STATES, foodAreaId } from '../../../packages/shared/src/nigeria-areas.mjs';
 import { normaliseFoodPhoto } from './infrastructure/food-photo-codec.mjs';
 import { createEatsService } from './modules/eats/service.mjs';
 import { normalizeDishPhoto } from './infrastructure/eats-photo-codec.mjs';
@@ -41,6 +42,7 @@ import { createCallsRepository } from './modules/calls/repository.mjs';
 import { createCallsService } from './modules/calls/service.mjs';
 import { createCallConfig } from './infrastructure/call-config.mjs';
 import { createMapProvider } from './infrastructure/map-provider.mjs';
+import { createFoodLocationProvider } from './infrastructure/food-location-provider.mjs';
 import { createPickupEtaProvider } from './infrastructure/pickup-eta.mjs';
 import { createDispatchConfig } from './infrastructure/dispatch-config.mjs';
 import { readMatchingFastConfig } from './infrastructure/matching-fast-config.mjs';
@@ -98,6 +100,12 @@ import { createAnnouncementsService } from './modules/announcements/service.mjs'
 
 /** Composition root: the only place that wires business modules to adapters. */
 export function createApplication({ db, clock = Date.now, callConfig = createCallConfig(), mapProvider = createMapProvider(), allowSimulation = false,
+  resolveDeliveryLocation = createFoodLocationProvider({ env: { ...process.env, TAXI_AI_MAPS_MODE: mapProvider.mode ?? 'off' },
+    insideNigeria, distanceMeters, foodAreaId, states: NIGERIAN_STATES }).resolveDeliveryLocation,
+  deliveryMapSettings = () => {
+    const tiles = mapProvider.describe?.().tiles ?? null;
+    return { tiles, attribution: tiles ? '© OpenStreetMap contributors' : '' };
+  },
   ridePilot = createRidePilotConfig(), dispatchProfiler = null, matchingFast = readMatchingFastConfig(),
   dispatchConfig = createDispatchConfig(), workerConfig = createWorkerConfig(), staffMfa = createStaffMfaConfig(),
   driverFaceProvider = createDriverFaceProvider({ config: readDriverFaceConfig({}) }),
@@ -276,6 +284,7 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
   const adminDemand = createAdminDemandService({ repository: createAdminDemandRepository(db),
     requirePermission: staffAccess.requirePermission, unitOfWork, clock, allowSimulation });
   const eats = createEatsService({ repository: eatsRepository, getAccount: accounts.profile, photoCodec: { normalize: normalizeDishPhoto },
+    resolveDeliveryLocation, deliveryMapSettings,
     hasOtherWork: async (id) => (await rideRepository.hasDriverWork(id)) || (await rideRepository.hasCustomerWork(id, clock())),
     availabilityFor: availability.positionFor, onClaim: availability.onClaim, tokens, unitOfWork, audit, clock, normalisePhoto: normaliseFoodPhoto });
   const googleAuth = createGoogleAuthService({ repository: createGoogleAuthRepository(db), provider: googleProvider,

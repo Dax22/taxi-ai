@@ -81,6 +81,28 @@
 .food-seller-art { position:relative; }
 .food-seller-art .food-art-note { color:#171a18; }
 @media(max-width:900px) { .food-photo-editors { grid-template-columns:1fr; }.food-photo-editor { display:block; }.food-photo-reviews { grid-template-columns:1fr; } }
+.food-delivery-location { max-width:560px!important; }
+.food-delivery-location h2 { font-size:21px; margin:24px 0 12px; }
+.food-delivery-location .food-toggle button { min-height:44px; margin-top:0; width:auto; flex:1; }
+.food-delivery-location .food-actions .button { margin-top:0; width:auto; flex:1; }
+.food-saved-addresses { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:16px; }
+.food-saved-address { border:1px solid #dfe3dc; border-radius:14px; padding:14px; min-width:0; overflow-wrap:anywhere; }
+.food-saved-address .food-actions { display:grid; gap:8px; }
+.food-saved-address .button { width:100%!important; font-size:12px; padding:8px; min-height:44px; }
+.food-delivery-pin { margin:18px 0; padding:14px; border:1px solid #dfe3dc; border-radius:14px; }
+.food-delivery-pin summary { cursor:pointer; min-height:44px; align-content:center; font-weight:600; }
+.food-coordinate-fields { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.food-delivery-confirm { margin:20px 0 0; padding:14px; border-radius:14px; background:#f3f5ec; overflow-wrap:anywhere; }
+.food-delivery-confirm p { margin-bottom:0; }
+#food-meal-map .map-frame { width:100%; overflow:hidden; background:#edf0e8; border:1px solid #dfe3dc; border-radius:12px; }
+#food-meal-map .map-frame svg { display:block; width:100%; height:auto; aspect-ratio:2; touch-action:manipulation; }
+#food-meal-map .map-frame svg:focus-visible { outline:3px solid #f4b400; outline-offset:-4px; }
+#food-meal-map .map-controls { display:flex; flex-wrap:wrap; gap:6px; margin:14px 0; }
+#food-meal-map .map-controls .button { width:auto; margin:0; padding:8px 10px; min-height:44px; }
+#food-meal-map .map-marker circle { fill:#fff; stroke:#202626; stroke-width:3; }
+#food-meal-map .map-marker text { fill:#172125; font:bold 15px sans-serif; }
+#food-meal-map .map-crosshair { fill:none; stroke:#202626; stroke-width:2; }
+@media(max-width:650px) { .food-saved-addresses { grid-template-columns:1fr; }.food-delivery-location .food-actions { flex-wrap:wrap; }.food-destination .button { width:100%; } }
 @media(max-width:900px) { .food-seller-intro { grid-template-columns:minmax(0,1fr) 38%; }.food-seller-intro img { object-position:68% center; } }
 @media(max-width:650px) {
   .food-seller-intro { display:flex; flex-direction:column; border-radius:24px; }

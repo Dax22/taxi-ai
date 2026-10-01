@@ -23,6 +23,7 @@ function fixture() {
     if (path.startsWith('/eats/orders/')) return { order };
     if (path === '/eats/orders') return { orders: [order], nextBefore: null };
     if (path === '/eats/store') return { store: null, menu: [], areas: [{ id: 'wuse-ii', name: 'Wuse II' }] };
+    if (path === '/eats/delivery-profile') return { deliveryProfile: { version: 0, addresses: { home: null, work: null } }, deliverySettings: { tiles: null, attribution: '' } };
     throw new Error('Unexpected read ' + path);
   }, async command(path, data, key) { writes.push({ path, data, key }); return path === '/eats/quotes' ? { quote } : { order }; } };
   const c = createEatsController({ api, makeKey: () => 'test-command-key-' + ++key, now: () => now });
@@ -113,7 +114,15 @@ const imports = (source) => source
 const locationSource = (await readFile(new URL('../public/eats/location-fields.mjs', import.meta.url), 'utf8'))
   .replace("'../dashboard/dom.mjs'", `'${new URL('../public/dashboard/dom.mjs', import.meta.url)}'`)
   .replace("'/shared/nigeria-areas.mjs'", `'${new URL('../../../packages/shared/src/nigeria-areas.mjs', import.meta.url)}'`);
-const mealSource = imports(await readFile(new URL('../public/eats/meal-view.mjs', import.meta.url), 'utf8'));
+const mapSource = (await readFile(new URL('../public/dashboard/map-view.mjs', import.meta.url), 'utf8'))
+  .replace("'/shared/locations.mjs'", `'${new URL('../../../packages/shared/src/locations.mjs', import.meta.url)}'`)
+  .replace("'/shared/vehicle-profile.mjs'", `'${new URL('../../../packages/shared/src/vehicle-profile.mjs', import.meta.url)}'`)
+  .replace("'./dom.mjs'", `'${new URL('../public/dashboard/dom.mjs', import.meta.url)}'`);
+const deliverySource = imports(await readFile(new URL('../public/eats/delivery-form.mjs', import.meta.url), 'utf8'))
+  .replace("'../dashboard/map-view.mjs'", `'data:text/javascript;base64,${Buffer.from(mapSource).toString('base64')}'`);
+const { checkedFoodLocation } = await import(`data:text/javascript;base64,${Buffer.from(deliverySource).toString('base64')}`);
+const mealSource = imports(await readFile(new URL('../public/eats/meal-view.mjs', import.meta.url), 'utf8'))
+  .replace("'./delivery-form.mjs'", `'data:text/javascript;base64,${Buffer.from(deliverySource).toString('base64')}'`);
 const viewSource = imports(await readFile(new URL('../public/eats/view.mjs', import.meta.url), 'utf8'))
   .replace("'./photo-view.mjs'", `'${new URL('../public/eats/photo-view.mjs', import.meta.url)}'`)
   .replace("'./photo-upload.mjs'", `'${new URL('../public/eats/photo-upload.mjs', import.meta.url)}'`)
@@ -131,11 +140,12 @@ function dom(t) {
     removeAttribute(name) { delete this[name]; }
     addEventListener(name, handler) { this.handlers[name] = handler; }
     querySelectorAll(tag) { return this.children.flatMap((child) => [ ...(child.tag === tag ? [child] : []), ...child.querySelectorAll(tag) ]); }
+    getBoundingClientRect() { return { left: 0, top: 0, width: 800, height: 400 }; }
     reset() {} focus() {} scrollIntoView() {} reportValidity() { return true; }
   }
   for (const [, tag, id] of html.matchAll(/<(\w+)\b[^>]*?\bid="([^"]+)"/g)) { assert.ok(!nodes.has(id), 'Duplicate HTML ID ' + id); nodes.set(id, new Element(tag)); }
   const node = (id) => { assert.ok(nodes.has('food-' + id), 'Missing shipped HTML ID ' + id); return nodes.get('food-' + id); };
-  globalThis.document = { createElement: (tag) => new Element(tag), getElementById: (id) => node(id.slice(5)) };
+  globalThis.document = { createElement: (tag) => new Element(tag), createElementNS: (_, tag) => new Element(tag), getElementById: (id) => node(id.slice(5)) };
   t.after(() => { globalThis.document = original; }); return node;
 }
 
@@ -473,4 +483,152 @@ test('staff photo review requires a reason, sends the displayed version and relo
   assert.equal(f.writes[1].data.expectedVersion, 2); assert.deepEqual(f.c.snapshot().reviewPhotos, []);
   node('photo-review-filter').value = 'rejected'; node('photo-review-filter').handlers.change(); await flush();
   assert.equal(f.c.snapshot().reviewPhotos[0].status, 'rejected'); assert.equal(f.c.snapshot().review, null);
+});
+
+test('recipient selection precedes the address and ordering for someone else never requests buyer GPS', async (t) => {
+  const node = dom(t), f = mealFixture(); let locates = 0;
+  const view = createEatsView(f.c, { geolocation: { supported: () => true, locate() { locates++; throw new Error('GPS must not be used'); } } }); f.c.subscribe(() => view.render(f.c.snapshot()));
+  await f.c.navigate('browse'); assert.equal(locates, 0);
+  assert.ok(html.indexOf('id="food-meal-recipient-other"') < html.indexOf('id="food-meal-address"'));
+  node('meal-recipient-other').handlers.click(); assert.equal(node('meal-self-destination-options').hidden, true);
+  node('meal-recipient-name').value = 'Kemi Test'; node('meal-recipient-phone').value = '08031234567';
+  node('meal-address').value = quote.address.line; node('meal-state').value = 'fct'; node('meal-town').value = 'Wuse II';
+  await node('meal-current-location').handlers.click(); assert.equal(locates, 0);
+  await node('meal-location-form').handlers.submit({ preventDefault() {} });
+  assert.deepEqual(f.c.snapshot().recipient, { kind: 'other', name: 'Kemi Test', phone: '+2348031234567' });
+  assert.equal(f.c.snapshot().address.point, undefined); assert.match(node('meal-destination-text').textContent, /Kemi Test/);
+  f.c.mealQuantity(f.foods[0], 1); await f.c.reviewMeal(); assert.equal(f.writes.at(-1).data.recipient.name, 'Kemi Test'); assert.match(node('meal-expiry').textContent, /Kemi Test/);
+});
+
+test('customer GPS is explicit, suggests a destination and does not save or search until confirmation', async (t) => {
+  const node = dom(t), f = mealFixture(), point = { lat: 6.6018, lng: 3.3515 }, areaId = foodAreaId('lagos', 'Ikeja'); let locates = 0;
+  const originalCommand = f.api.command;
+  f.api.command = async (path, data, key) => {
+    if (path === '/eats/delivery-location') { f.writes.push({ path, data, key }); return { deliveryLocation: { point, line: '20 Fictional Road, beside the blue gate', areaId, attribution: 'Map source' } }; }
+    return originalCommand(path, data, key);
+  };
+  const view = createEatsView(f.c, { geolocation: { supported: () => true, async locate() { locates++; return { coords: { latitude: point.lat, longitude: point.lng, accuracy: 20 }, timestamp: Date.now() }; } } }); f.c.subscribe(() => view.render(f.c.snapshot())); await f.c.navigate('browse');
+  assert.equal(locates, 0); await node('meal-current-location').handlers.click();
+  assert.equal(locates, 1); assert.equal(f.c.snapshot().deliveryConfirmed, false); assert.equal(node('meal-address').value, '20 Fictional Road, beside the blue gate');
+  assert.equal(f.reads.some((path) => path.startsWith('/eats/foods?')), false); assert.equal(f.writes.some((entry) => entry.path === '/eats/delivery-profile'), false);
+  await node('meal-location-form').handlers.submit({ preventDefault() {} }); assert.deepEqual(f.c.snapshot().address.point, point); assert.equal(f.c.snapshot().address.areaId, areaId);
+  node('meal-change').handlers.click(); node('meal-address').value = '21 Different Road, by the shops'; node('meal-address').handlers.input();
+  assert.match(node('meal-pin-summary').textContent, /No delivery pin/);
+  await node('meal-location-form').handlers.submit({ preventDefault() {} }); assert.equal(f.c.snapshot().address.point, undefined);
+});
+
+test('outside-Nigeria GPS explains recipient ordering without replacing the location with a Nigerian sample', async (t) => {
+  const node = dom(t), f = fixture();
+  const view = createEatsView(f.c, { geolocation: { supported: () => true, async locate() { return { coords: { latitude: 41.8781, longitude: -87.6298, accuracy: 50 }, timestamp: Date.now() }; } } }); f.c.subscribe(() => view.render(f.c.snapshot())); await f.c.navigate('browse');
+  await node('meal-current-location').handlers.click();
+  assert.match(node('meal-location-error').textContent, /outside Nigeria/); assert.match(node('meal-location-error').textContent, /Someone else/);
+  assert.equal(node('meal-address').value, ''); assert.equal(node('meal-pin-latitude').value, ''); assert.equal(f.writes.length, 0); assert.equal(f.c.snapshot().deliveryConfirmed, false);
+});
+
+for (const source of ['typed', 'saved']) test(`a fresh GPS fix with no address suggestion clears the previous ${source} destination`, async (t) => {
+  const node = dom(t), f = mealFixture(), originalRead = f.api.request, point = { lat: 6.6018, lng: 3.3515 };
+  f.api.request = (path) => path === '/eats/delivery-profile' ? { deliveryProfile: { version: 1, addresses: { home: quote.address, work: null } }, deliverySettings: { tiles: null, attribution: '' } } : originalRead(path);
+  f.api.command = async (path, data, key) => { f.writes.push({ path, data, key }); return { deliveryLocation: { point, line: '', areaId: null, attribution: '' } }; };
+  const view = createEatsView(f.c, { geolocation: { supported: () => true, async locate() { return { coords: { latitude: point.lat, longitude: point.lng, accuracy: 20 }, timestamp: Date.now() }; } } });
+  f.c.subscribe(() => view.render(f.c.snapshot())); await f.c.navigate('browse');
+  if (source === 'saved') node('meal-saved-addresses').querySelectorAll('button').find((button) => button.textContent === 'Use Home').handlers.click();
+  else { node('meal-address').value = quote.address.line; node('meal-state').value = 'fct'; node('meal-town').value = 'Wuse II'; node('meal-address').handlers.input(); }
+  assert.equal(node('meal-address').value, quote.address.line);
+  await node('meal-current-location').handlers.click();
+  assert.equal(node('meal-address').value, ''); assert.equal(node('meal-state').value, ''); assert.equal(node('meal-town').value, '');
+  assert.equal(node('meal-pin-latitude').value, String(point.lat)); assert.equal(node('meal-pin-longitude').value, String(point.lng));
+  await node('meal-location-form').handlers.submit({ preventDefault() {} }); assert.equal(f.c.snapshot().deliveryConfirmed, false);
+  assert.equal(f.writes.length, 1); assert.equal(f.writes[0].path, '/eats/delivery-location');
+});
+
+test('GPS and reverse-address replies are discarded after manual edits, recipient changes or account changes', async (t) => {
+  const node = dom(t), f = fixture(), gps = deferred(), reverse = deferred(); let mode = 'pending';
+  f.api.command = async () => reverse.promise;
+  const view = createEatsView(f.c, { geolocation: { supported: () => true, locate: () => mode === 'pending' ? gps.promise : Promise.resolve({ coords: { latitude: 9.08, longitude: 7.4, accuracy: 10 } }) } }); f.c.subscribe(() => view.render(f.c.snapshot())); await f.c.navigate('browse');
+  const first = node('meal-current-location').handlers.click(); node('meal-recipient-other').handlers.click();
+  gps.resolve({ coords: { latitude: 9.08, longitude: 7.4, accuracy: 10 } }); await first; assert.equal(node('meal-address').value, '');
+  node('meal-recipient-self').handlers.click(); mode = 'ready'; const second = node('meal-current-location').handlers.click(); await flush();
+  node('meal-address').value = 'Manual address beside the market'; node('meal-address').handlers.input();
+  reverse.resolve({ deliveryLocation: { point: { lat: 9.08, lng: 7.4 }, line: 'Delayed map address', areaId: 'wuse-ii', attribution: '' } }); await second;
+  assert.equal(node('meal-address').value, 'Manual address beside the market'); assert.match(node('meal-pin-summary').textContent, /No delivery pin/);
+  const waiting = deferred(); f.api.command = () => waiting.promise; const third = node('meal-current-location').handlers.click(); await flush(); f.c.context({ ...user, id: uuid(998) });
+  waiting.resolve({ deliveryLocation: { point: { lat: 9.08, lng: 7.4 }, line: 'Other account must not see', areaId: 'wuse-ii', attribution: '' } }); await third;
+  assert.equal(node('meal-address').value, ''); assert.equal(node('meal-pin-latitude').value, '');
+});
+
+test('Home and Work require explicit saves, can be edited or removed, and clear on account changes', async (t) => {
+  const node = dom(t), f = fixture(); let profile = { version: 0, addresses: { home: null, work: null } };
+  const originalRead = f.api.request;
+  f.api.request = async (path) => path === '/eats/delivery-profile' ? { deliveryProfile: profile, deliverySettings: { tiles: null, attribution: '' } } : originalRead(path);
+  f.api.command = async (path, data, key) => { f.writes.push({ path, data, key }); profile = { version: profile.version + 1, addresses: { ...profile.addresses, [data.label]: data.address } }; return { deliveryProfile: profile }; };
+  const view = createEatsView(f.c); f.c.subscribe(() => view.render(f.c.snapshot())); await f.c.navigate('browse');
+  node('meal-address').value = quote.address.line; node('meal-address').handlers.input(); node('meal-state').value = 'fct'; node('meal-town').value = 'Wuse II'; node('meal-town').handlers.input(); assert.equal(f.writes.length, 0);
+  await node('meal-save-home').handlers.click(); assert.equal(f.writes[0].path, '/eats/delivery-profile'); assert.equal(f.writes[0].data.label, 'home'); assert.equal(f.writes[0].data.expectedVersion, 0); assert.equal(f.c.snapshot().deliveryConfirmed, false);
+  node('meal-saved-addresses').querySelectorAll('button').find((button) => button.textContent === 'Edit Home').handlers.click();
+  node('meal-address').value = '30 Updated Test Close'; node('meal-address').handlers.input(); assert.equal(f.writes.length, 1);
+  await node('meal-save-home').handlers.click(); assert.equal(f.writes[1].data.expectedVersion, 1); assert.equal(profile.addresses.home.line, '30 Updated Test Close');
+  node('meal-saved-addresses').querySelectorAll('button').find((button) => button.textContent === 'Remove Home').handlers.click(); await flush(); assert.equal(f.writes[2].data.address, null); assert.equal(profile.addresses.home, null);
+  f.c.context({ ...user, id: uuid(999) }); assert.equal(node('meal-address').value, ''); assert.equal(node('meal-saved-addresses').querySelectorAll('button').length, 0);
+});
+
+test('map tiles are opt-in and editing an optional coordinate pin survives a normal screen tick', async (t) => {
+  const node = dom(t), f = fixture(), originalRead = f.api.request;
+  f.api.request = async (path) => path === '/eats/delivery-profile' ? { deliveryProfile: { version: 0, addresses: { home: null, work: null } }, deliverySettings: { tiles: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', attribution: '© OpenStreetMap contributors' } } : originalRead(path);
+  const view = createEatsView(f.c); f.c.subscribe(() => view.render(f.c.snapshot())); await f.c.navigate('browse');
+  assert.equal(node('meal-map').querySelectorAll('image').length, 0); assert.equal(node('meal-pin-latitude').value, '');
+  node('meal-map-toggle').handlers.click(); assert.ok(node('meal-map').querySelectorAll('image').length > 0); assert.equal(node('meal-pin-latitude').value, '');
+  node('meal-pin-latitude').value = '9.08'; node('meal-pin-longitude').value = '7.4'; f.c.tick(); assert.equal(node('meal-pin-latitude').value, '9.08');
+  node('meal-pin-apply').handlers.click(); assert.match(node('meal-pin-summary').textContent, /9.08000/);
+  node('meal-address').value = quote.address.line; node('meal-state').value = 'fct'; node('meal-town').value = 'Wuse II'; await node('meal-location-form').handlers.submit({ preventDefault() {} });
+  assert.deepEqual(f.c.snapshot().address.point, { lat: 9.08, lng: 7.4 }); assert.equal(node('meal-map').querySelectorAll('image').length, 0);
+});
+
+test('delivery GPS rejects inaccurate, stale and future fixes while preserving manual ordering', () => {
+  const fix = { coords: { latitude: 9.08, longitude: 7.4, accuracy: 20 }, timestamp: 100_000 };
+  assert.deepEqual(checkedFoodLocation(fix, 100_000), { lat: 9.08, lng: 7.4 });
+  assert.throws(() => checkedFoodLocation({ ...fix, coords: { ...fix.coords, accuracy: 201 } }, 100_000), /not accurate/);
+  assert.throws(() => checkedFoodLocation({ ...fix, timestamp: 69_999 }, 100_000), /out of date/);
+  assert.throws(() => checkedFoodLocation({ ...fix, timestamp: 105_001 }, 100_000), /out of date/);
+});
+
+test('buyer order details name the recipient and explain private delivery-code sharing', async (t) => {
+  const node = dom(t), f = fixture(), recipient = { kind: 'other', name: 'Kemi Test', phone: '+2348031234567' }, originalRead = f.api.request;
+  f.api.request = (path) => path.startsWith('/eats/orders/') ? { order: { ...order, status: 'picked_up', recipient, deliveryPin: '123456' } } : originalRead(path);
+  const view = createEatsView(f.c); f.c.subscribe(() => view.render(f.c.snapshot())); await f.c.navigate('order', order.id);
+  const text = (node) => [node.textContent ?? '', ...node.children.map(text)].join(' '), details = text(node('order-detail'));
+  assert.match(details, /Recipient: Kemi Test/); assert.match(details, /share this with your recipient privately/); assert.match(details, /does not send it automatically/);
+});
+
+for (const supported of [false, true]) test(`manual delivery still works with ${supported ? 'denied' : 'unsupported'} GPS and unavailable saved-address storage`, async (t) => {
+  const node = dom(t), f = mealFixture(), originalRead = f.api.request;
+  f.api.request = async (path) => { if (path === '/eats/delivery-profile') throw new Error('Saved addresses could not load. Refresh to retry.'); return originalRead(path); };
+  const view = createEatsView(f.c, { geolocation: { supported: () => supported, async locate() { throw { code: 1 }; } } }); f.c.subscribe(() => view.render(f.c.snapshot())); await f.c.navigate('browse');
+  await node('meal-current-location').handlers.click(); assert.match(node('meal-location-error').textContent, supported ? /blocked/ : /HTTPS/);
+  assert.equal(node('meal-save-home').disabled, true); assert.equal(node('meal-confirm-location').disabled, false);
+  node('meal-address').value = quote.address.line; node('meal-state').value = 'fct'; node('meal-town').value = 'Wuse II'; await node('meal-location-form').handlers.submit({ preventDefault() {} });
+  assert.equal(f.c.snapshot().deliveryConfirmed, true); assert.equal(f.c.snapshot().address.point, undefined);
+});
+
+test('customer pickup clearly remains in the buyer name when a delivery recipient was selected', async (t) => {
+  const node = dom(t), f = mealFixture(), view = createEatsView(f.c); f.c.subscribe(() => view.render(f.c.snapshot()));
+  await f.c.confirmDelivery(quote.address, { kind: 'other', name: 'Kemi Test', phone: '08031234567' }); await f.c.selectRestaurant(store.id);
+  f.c.fulfillment('pickup'); assert.match(node('pickup-note').textContent, /your name \(Customer\)/); assert.match(node('pickup-note').textContent, /Choose Delivery/);
+  f.c.quantity(menu[0].id, 1); await f.c.checkout(); assert.equal(f.writes.at(-1).data.recipient.kind, 'self'); assert.equal(f.writes.at(-1).data.recipient.name, 'Customer');
+});
+
+test('an edited saved-address draft cannot overwrite a profile changed by another device', async (t) => {
+  const node = dom(t), f = fixture(), originalRead = f.api.request;
+  let profile = { version: 1, addresses: { home: quote.address, work: null } };
+  f.api.request = (path) => path === '/eats/delivery-profile' ? { deliveryProfile: profile, deliverySettings: { tiles: null, attribution: '' } } : originalRead(path);
+  f.api.command = async (path, data, key) => { f.writes.push({ path, data, key }); profile = { version: profile.version + 1, addresses: { ...profile.addresses, [data.label]: data.address } }; return { deliveryProfile: profile }; };
+  const view = createEatsView(f.c); f.c.subscribe(() => view.render(f.c.snapshot())); await f.c.navigate('browse');
+  const edit = node('meal-saved-addresses').querySelectorAll('button').find((button) => button.textContent === 'Edit Home'); f.c.tick();
+  assert.equal(node('meal-saved-addresses').querySelectorAll('button').find((button) => button.textContent === 'Edit Home'), edit, 'Polling must preserve keyboard focus on saved-address actions');
+  edit.handlers.click(); node('meal-address').value = '31 Old draft address'; node('meal-address').handlers.input();
+  profile = { ...profile, version: 2, addresses: { ...profile.addresses, home: { ...quote.address, line: '40 Address updated on another phone' } } }; await f.c.refresh({ quiet: true });
+  assert.equal(node('meal-saved-stale').hidden, false); assert.equal(node('meal-save-home').disabled, true); assert.equal(node('meal-address').value, '31 Old draft address');
+  await node('meal-save-home').handlers.click(); assert.equal(f.writes.length, 0);
+  node('meal-saved-addresses').querySelectorAll('button').find((button) => button.textContent === 'Use Home').handlers.click();
+  assert.equal(node('meal-address').value, '40 Address updated on another phone'); assert.equal(node('meal-saved-stale').hidden, true);
+  await node('meal-save-home').handlers.click(); assert.equal(f.writes[0].data.expectedVersion, 2);
 });

@@ -134,7 +134,7 @@ test('food photo previews and camera access stay scoped to Eats and account work
       assert.match(csp, /media-src 'self' blob:/); assert.match(csp, /connect-src 'self'/);
       assert.match(csp, /script-src 'self';/); assert.match(csp, /object-src 'none';/);
       assert.equal(result.headers.get('cache-control'), 'no-store');
-      assert.equal(result.headers.get('referrer-policy'), account ? 'strict-origin-when-cross-origin' : 'no-referrer');
+      assert.equal(result.headers.get('referrer-policy'), account || eats ? 'strict-origin-when-cross-origin' : 'no-referrer');
       await result.text();
     }
   }, mode);

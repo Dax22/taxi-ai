@@ -1,5 +1,6 @@
 import { EATS_CUISINES, EATS_SELLERS, foodAvailable, eatsTotals, isPrivateKitchen, deliveryAreas } from '../../../../../packages/shared/src/eats.mjs';
 import { resolveFoodArea } from '../../../../../packages/shared/src/nigeria-areas.mjs';
+import { normalizeFoodAddress, normalizeFoodPoint, normalizeFoodRecipient } from '../../../../../packages/shared/src/eats-delivery.mjs';
 import { insideNigeria } from '../../../../../packages/shared/src/locations.mjs';
 import { check } from '../../shared/errors.mjs';
 import { fields, label } from '../../shared/validation.mjs';
@@ -14,6 +15,24 @@ export function dispatchPoint(value) {
   fields(value, ['lat', 'lng']);
   check(insideNigeria(value), 'INVALID_LOCATION', 'Choose a kitchen dispatch location within Nigeria.');
   return { lat: Number(value.lat.toFixed(6)), lng: Number(value.lng.toFixed(6)) };
+}
+export function deliveryPoint(value) {
+  if (value == null) return null;
+  fields(value, ['lat', 'lng']);
+  try { return normalizeFoodPoint(value); } catch (error) { check(false, 'INVALID_LOCATION', error.message); }
+}
+export function deliveryAddress(data) {
+  fields(data, ['line', 'areaId', 'point'], ['line', 'areaId']);
+  area(data.areaId);
+  if (data.point != null) deliveryPoint(data.point);
+  try { return normalizeFoodAddress(data); } catch (error) { check(false, 'INVALID_ADDRESS', error.message); }
+}
+export function deliveryRecipient(data, user) {
+  if (data !== undefined) {
+    fields(data, ['kind', 'name', 'phone'], ['kind']);
+    check(data.phone === undefined || typeof data.phone === 'string', 'INVALID_RECIPIENT', 'Enter a valid recipient phone number.');
+  }
+  try { return normalizeFoodRecipient(data, user.name); } catch (error) { check(false, 'INVALID_RECIPIENT', error.message); }
 }
 export function storeDetails(data, previous = {}) {
   const required = ['name', 'cuisine', 'description', 'areaId', 'prepMinutes', 'minimumKobo', 'deliveryFeeKobo'];
@@ -45,13 +64,13 @@ export function menuDetails(data, store, previous = {}) {
 }
 export function checkedBasket(store, menu, data) {
   const required = ['storeId', 'expectedVersion', 'items', 'address', 'instructions'];
-  fields(data, [...required, 'fulfillment'], required);
+  fields(data, [...required, 'fulfillment', 'recipient'], required);
   const fulfillment = data.fulfillment ?? 'delivery';
   check(['delivery', 'pickup'].includes(fulfillment), 'INVALID_CART', 'Choose delivery or customer pickup.');
   check(fulfillment === 'pickup' ? store.pickupEnabled : store.deliveryEnabled !== false, 'STORE_UNAVAILABLE', 'This kitchen does not offer that order option.');
   version(store, data.expectedVersion);
-  fields(data.address, ['line', 'areaId']);
-  if (fulfillment === 'delivery') area(data.address.areaId);
+  fields(data.address, ['line', 'areaId', 'point'], ['line', 'areaId']);
+  const address = fulfillment === 'delivery' ? deliveryAddress(data.address) : { areaId: store.areaId };
   check(fulfillment !== 'delivery' || deliveryAreas(store).includes(data.address.areaId), 'STORE_UNAVAILABLE', 'This kitchen does not deliver to the selected town or area.');
   check(Array.isArray(data.items) && data.items.length > 0 && data.items.length <= 20, 'INVALID_CART', 'Choose 1–20 menu items.');
   check(new Set(data.items.map((i) => i?.itemId)).size === data.items.length, 'INVALID_CART', 'Combine duplicate items into one quantity.');
@@ -66,6 +85,6 @@ export function checkedBasket(store, menu, data) {
   try { totals = eatsTotals(lines, fulfillment === 'pickup' ? 0 : store.deliveryFeeKobo); } catch (error) { check(false, 'INVALID_CART', error.message); }
   check(totals.subtotalKobo >= store.minimumKobo, 'INVALID_CART', 'Add items to meet this kitchen’s minimum order.');
   return { fulfillment, restaurant: { sellerType: store.sellerType, id: store.id, name: store.name, address: isPrivateKitchen(store.sellerType) ? '' : store.address, areaId: store.areaId, prepMinutes: store.prepMinutes }, lines, totals,
-    address: fulfillment === 'pickup' ? { areaId: store.areaId } : { line: label(data.address.line, 'Delivery address and landmark', 8, 240), areaId: data.address.areaId },
+    address,
     instructions: label(data.instructions, 'Delivery or kitchen instructions', 0, 240), isDemo: true, payment: { method: 'test', status: 'not_charged' } };
 }

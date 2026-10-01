@@ -17,6 +17,15 @@ const order = (row) => row ? { ...row, snapshot: JSON.parse(row.snapshot), couri
 export function createEatsRepository(db, { deliveryAreas, legacyAreaIds: EATS_LEGACY_AREA_IDS, distanceMeters }) {
   const readStore = async (row) => (await store(row, deliveryAreas));
   return Object.freeze({
+    deliveryProfile: async (userId) => {
+      const row = await db.prepare('SELECT version,addresses_json AS addresses FROM eats_delivery_profiles WHERE user_id=?').get(userId);
+      return row ? { version: row.version, addresses: JSON.parse(row.addresses) } : { version: 0, addresses: { home: null, work: null } };
+    },
+    async saveDeliveryProfile(userId, profile, expectedVersion, now) {
+      return (await db.prepare(`INSERT INTO eats_delivery_profiles (user_id,version,addresses_json,updated_at) VALUES (?,?,?,?)
+        ON CONFLICT(user_id) DO UPDATE SET version=excluded.version,addresses_json=excluded.addresses_json,updated_at=excluded.updated_at
+        WHERE eats_delivery_profiles.version=?`).run(userId,profile.version,JSON.stringify(profile.addresses),now,expectedVersion)).changes;
+    },
     store: async (id) => (await readStore((await db.prepare(`SELECT ${storeColumns} FROM eats_stores WHERE id = ?`).get(id)))),
     async stores(admin = false, { areaId = null, deliveryAreaId = null, openOnly = false, excludeMemberId = null, fulfillment = '' } = {}) {
       // Geographic eligibility runs before the bounded page, so stores in an

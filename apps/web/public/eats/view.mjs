@@ -13,7 +13,7 @@ const actionLabels = { accept: 'Accept order', reject: 'Decline order', prepare:
 const field = (id) => $('food-' + id);
 const text = (tag, value, className) => element(tag, value, className);
 const money = (value) => { const n = Number(value); if (!Number.isFinite(n) || n < 0 || !/^\d+(\.\d{1,2})?$/.test(value)) throw new Error('Enter an amount with up to two decimal places.'); return Math.round(n * 100); };
-export function createEatsView(controller, { geolocation = createGeolocation(), sellerPage = () => globalThis.location?.pathname === '/eats/sell', navigate = (screen) => controller.navigate(screen), preparePhoto = prepareFoodPhoto } = {}) {
+export function createEatsView(controller, { geolocation = createGeolocation(), sellerPage = () => globalThis.location?.pathname === '/eats/sell', navigate = (screen) => controller.navigate(screen), preparePhoto = prepareFoodPhoto, createMap } = {}) {
   let state, ownerId = null, storeDirty = false, storeVersion = undefined, menuId = null, menuVersion = null, menuDirty = false, photo = null, photoId = null, photoReading = false, photoEpoch = 0, kitchenLimit = 24;
   let coverage = [], dispatchPoint = null, locating = false, dispatchEpoch = 0, dispatchError = '';
   const keys = new Map(); let photoManager;
@@ -64,7 +64,7 @@ export function createEatsView(controller, { geolocation = createGeolocation(), 
   });
   field('kitchen-filter-clear').addEventListener('click', () => { if (!locked() && !state.loading) void controller.browseLocation(''); });
   const deliveryLocation = createFoodLocationFields({ state: field('state'), town: field('town'), onChange: () => delivery() });
-  function delivery() { const address = { line: field('address').value, areaId: deliveryLocation.value() }; keys.set('delivery-address', JSON.stringify(address)); controller.delivery(address, field('instructions').value); }
+  function delivery() { const sameAddress = field('address').value === state.address.line && deliveryLocation.value() === state.address.areaId; const address = { line: field('address').value, areaId: deliveryLocation.value(), ...(sameAddress && state.address.point ? { point: state.address.point } : {}) }; keys.set('delivery-address', JSON.stringify(address)); controller.delivery(address, field('instructions').value); }
   field('address').addEventListener('input', delivery); field('instructions').addEventListener('input', delivery);
   field('checkout-form').addEventListener('submit', (event) => { event.preventDefault(); delivery(); void controller.checkout(); });
   field('place').addEventListener('click', () => void controller.place());
@@ -80,7 +80,7 @@ export function createEatsView(controller, { geolocation = createGeolocation(), 
       if (ok) { field('pin').value = ''; field('reason').value = ''; field('collection').value = ''; }
     });
   });
-  const mealView = createMealView(controller, { button, mealPhoto, totals });
+  const mealView = createMealView(controller, { button, mealPhoto, totals, geolocation, createMap });
   photoManager = createPhotoManager(controller, { prepare: preparePhoto, onChange: () => { if (state) render(state); } });
   const storeLocation = createFoodLocationFields({ state: field('store-state'), town: field('store-town'), onChange: (areaId) => {
     if (locked()) return; storeDirty = true; coverage = areaId ? [areaId] : []; dispatchPoint = null; dispatchEpoch++; dispatchError = ''; renderStoreLocation();
@@ -214,6 +214,7 @@ export function createEatsView(controller, { geolocation = createGeolocation(), 
     if (keys.get('catalog-area') !== (state.catalogAreaId ?? '')) { keys.set('catalog-area', state.catalogAreaId ?? ''); const area = resolveFoodArea(state.catalogAreaId); field('state-filter').value = area?.stateId ?? ''; field('town-filter').value = area?.town ?? ''; }
     for (const mode of ['delivery', 'pickup']) { field(mode + '-mode').setAttribute('aria-pressed', String(state.fulfillment === mode)); field(mode + '-mode').disabled = state.busy || state.uncertain; }
     field('fulfillment').value = state.fulfillment; field('delivery-fields').hidden = state.fulfillment === 'pickup'; field('address').required = state.fulfillment !== 'pickup'; field('pickup-note').hidden = state.fulfillment !== 'pickup';
+    field('pickup-note').textContent = `Pickup is booked in your name (${state.user?.name ?? 'account holder'}). ${state.recipient?.kind === 'other' ? 'Choose Delivery to send food to someone else. ' : ''}Collect the food yourself; no delivery fee. A food vendor or home kitchen shares a private collection point when food is ready.`;
     field('item-stock').required = state.store?.sellerType === 'home_kitchen';
     if (keys.get('delivery-address') !== JSON.stringify(state.address)) { keys.set('delivery-address', JSON.stringify(state.address)); field('address').value = state.address.line; deliveryLocation.set(state.address.areaId); }
     deliveryLocation.required(state.fulfillment !== 'pickup'); field('instructions').value = state.instructions;
@@ -263,7 +264,7 @@ export function createEatsView(controller, { geolocation = createGeolocation(), 
     field('checkout').disabled = locked() || !state.cart.length || !state.restaurant?.isOpen || admin || (state.fulfillment === 'pickup' ? !state.restaurant?.pickupEnabled : state.restaurant?.deliveryEnabled === false);
     field('quote').hidden = !state.quote; field('place').disabled = locked() || !state.quote || state.now >= state.quote.expiresAt;
     update('quote-totals', state.quote?.totals, (root) => { if (state.quote) root.append(totals(state.quote.totals)); });
-    field('quote-expiry').textContent = state.quote ? `${state.quote.fulfillment === 'pickup' ? 'Customer pickup · collect your food yourself.' : 'Delivery to ' + state.quote.address.line + '.'} Total held until ${new Date(state.quote.expiresAt).toLocaleTimeString()}.` : '';
+    field('quote-expiry').textContent = state.quote ? `${state.quote.fulfillment === 'pickup' ? 'Customer pickup for ' + (state.quote.recipient?.name || state.user.name) + ' · collect your food yourself.' : 'Delivery to ' + (state.quote.recipient?.kind === 'other' ? state.quote.recipient.name + ' at ' : '') + state.quote.address.line + '.'} Total held until ${new Date(state.quote.expiresAt).toLocaleTimeString()}.` : '';
     update('orders-list', [state.orders, locked()], (root) => orders(root, state.orders)); field('orders-more').hidden = !state.nextBefore; field('orders-more').disabled = locked() || state.loading;
     field('store-form-title').textContent = state.store ? 'Store settings' : 'Create your store';
     if (!storeDirty && storeVersion !== (state.store?.version ?? null)) fillStore();
@@ -280,10 +281,11 @@ export function createEatsView(controller, { geolocation = createGeolocation(), 
       const o = state.order; if (!o) return; const card = text('section', undefined, 'food-card');
       card.append(text('p', 'TEST ORDER · ' + o.id.slice(0,8).toUpperCase(), 'eyebrow'), text('h1', EATS_STATUS[o.status]), text('h2', o.restaurant.name), text('p', `${o.customerName} · ${pickupAddress(o.restaurant)}`));
       card.append(text('p', o.fulfillment === 'pickup' ? 'Customer pickup · collect your food from the kitchen' : 'Delivery', 'food-tag'));
+      if (o.recipient?.kind === 'other') card.append(text('p', `Recipient: ${o.recipient.name}${o.recipient.phone ? ' · ' + o.recipient.phone : ''}`));
       if (o.address.line) card.append(text('p', `Deliver to: ${o.address.line} · ${foodAreaLabel(o.address.areaId)}`));
       if (o.instructions) card.append(text('p', `Instructions: ${o.instructions}`));
       if (o.courier) card.append(text('p', `Courier: ${o.courier.name} · ${o.courier.vehicle.colour ?? ''} ${o.courier.vehicle.model} · ${o.courier.vehicle.plate}`));
-      if (o.pickupPin || o.deliveryPin) card.append(text('p', o.pickupPin ? 'Kitchen pickup code · share at handover only' : o.fulfillment === 'pickup' ? 'Your pickup code · show the kitchen when collecting your food' : 'Your delivery code · share only when you receive the food', 'small-note'), text('p', o.pickupPin ?? o.deliveryPin, 'food-pin'));
+      if (o.pickupPin || o.deliveryPin) card.append(text('p', o.pickupPin ? 'Kitchen pickup code · share at handover only' : o.fulfillment === 'pickup' ? 'Your pickup code · show the kitchen when collecting your food' : o.recipient?.kind === 'other' ? 'Delivery code · share this with your recipient privately. They should give it to the courier only when the food arrives. Taxi Ai does not send it automatically.' : 'Your delivery code · share only when you receive the food', 'small-note'), text('p', o.pickupPin ?? o.deliveryPin, 'food-pin'));
       for (const i of o.lines) card.append(text('p', `${i.quantity} × ${i.name} · ${formatNaira(i.priceKobo * i.quantity)}`));
       card.append(totals(o.totals), text('p', 'Test checkout · no money charged.', 'small-note'));
       const timeline = text('ol', undefined, 'food-timeline');

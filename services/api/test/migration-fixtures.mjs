@@ -131,7 +131,14 @@ export function removeAdminWorkspaceFixtureTables(db) {
 
 
 /** Kemmy setup is account preference state; old-schema fixtures may remove it only while empty. */
+export function removeEatsDeliveryProfileFixtureTable(db) {
+  if (!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='eats_delivery_profiles'").get()) return;
+  if (db.prepare('SELECT count(*) AS n FROM eats_delivery_profiles').get().n) throw new Error('Cannot downgrade a populated delivery profile fixture.');
+  db.exec('DROP TABLE eats_delivery_profiles');
+}
+
 export function removeEatsPhotoWorkflowFixtureFields(db) {
+  removeEatsDeliveryProfileFixtureTable(db);
   for (const table of ['eats_photo_reviews','eats_store_assets']) {
     if (!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(table)) continue;
     if (db.prepare(`SELECT count(*) AS count FROM ${table}`).get().count) throw new Error(`Cannot downgrade a populated ${table} fixture.`);

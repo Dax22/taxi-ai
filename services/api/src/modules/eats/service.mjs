@@ -5,12 +5,12 @@ import { distanceMeters } from '../../../../../packages/shared/src/locations.mjs
 import { hasCapability, requireEligibleDriver, requireRole } from '../../shared/policies.mjs';
 import { fields, label } from '../../shared/validation.mjs';
 import { check } from '../../shared/errors.mjs';
-import { canonical, version, storeDetails, menuDetails, checkedBasket, area } from './domain.mjs';
+import { canonical, version, storeDetails, menuDetails, checkedBasket, area, deliveryAddress, deliveryRecipient, deliveryPoint } from './domain.mjs';
 import { asyncMap, asyncFlatMap, asyncSome, asyncFilter } from '../../shared/async-collections.mjs';
 
 
 /** Stores and food orders own their state; other work is checked through injected ports. */
-export function createEatsService({ repository, getAccount, hasOtherWork, availabilityFor, onClaim, photoCodec, tokens, unitOfWork, audit, clock, normalisePhoto }) {
+export function createEatsService({ repository, getAccount, hasOtherWork, availabilityFor, onClaim, photoCodec, tokens, unitOfWork, audit, clock, normalisePhoto, resolveDeliveryLocation = async (point) => ({ point, line: '', areaId: null, attribution: '' }), deliveryMapSettings = () => ({ tiles: null, attribution: '' }) }) {
   const actor = async (user) => { const fresh = (await getAccount(user?.id)); check(fresh, 'UNAUTHENTICATED', 'Sign in to continue.'); return fresh; };
   const identifier = (id) => { check(typeof id === 'string' && /^[a-f0-9-]{36}$/.test(id), 'INVALID_ID', 'Choose a valid record.'); return id; };
   const storeRecord = async (id) => { const value = (await repository.store(identifier(id))); check(value, 'NOT_FOUND', 'Restaurant not found.'); return value; };
@@ -86,11 +86,15 @@ export function createEatsService({ repository, getAccount, hasOtherWork, availa
     const active = !EATS_TERMINAL.includes(order.status), pickup = order.snapshot.fulfillment === 'pickup';
     const reveal = role === 'store' || role === 'admin' || active && (role === 'courier' || role === 'customer' && pickup && order.status === 'ready');
     const source = order.collectionPoint ? { ...order.snapshot, restaurant: { ...order.snapshot.restaurant, address: order.collectionPoint } } : order.snapshot;
-    const { address, ...snapshot } = (await snapshotView(source, reveal));
+    const { address, recipient: savedRecipient, ...snapshot } = (await snapshotView(source, reveal));
+    const customer = await getAccount(order.customerId), recipient = savedRecipient ?? deliveryRecipient(undefined, customer);
+    const contactVisible = role === 'customer' || role === 'admin' || role === 'courier' && active;
+    const { point, ...addressWithoutPoint } = address;
     return { id: order.id, status: order.status, version: order.version, ...snapshot, role, actions: eatsActions(order, role),
-      address: role === 'store' ? { areaId: address.areaId } : address,
+      address: role === 'store' ? { areaId: address.areaId } : contactVisible ? address : addressWithoutPoint,
+      recipient: contactVisible ? recipient : { kind: recipient.kind, name: recipient.name },
       needsCollectionPoint: role === 'store' && order.status === 'preparing' && (await privateKitchen(order.snapshot.restaurant)) && !order.snapshot.restaurant.address && !order.collectionPoint,
-      customerName: (await getAccount(order.customerId)).name, courier: order.courier,
+      customerName: customer.name, courier: order.courier,
       ...(active && !pickup && role === 'store' && ['ready', 'assigned'].includes(order.status) ? { pickupPin: order.pickupPin } : {}),
       ...(active && role === 'customer' && (pickup ? order.status === 'ready' : ['picked_up', 'arrived'].includes(order.status)) ? { deliveryPin: order.deliveryPin } : {}),
       pinBlockedUntil: role === 'courier' || pickup && role === 'store' ? order.pinBlockedUntil : undefined,
@@ -98,7 +102,7 @@ export function createEatsService({ repository, getAccount, hasOtherWork, availa
   }
   async function quoteView(user, id) {
     const quote = (await repository.quote(id)); check(quote?.customerId === user.id, 'NOT_FOUND', 'Checkout quote not found.');
-    return { id: quote.id, ...(await snapshotView(quote.snapshot)), expiresAt: quote.expiresAt };
+    return { id: quote.id, ...(await snapshotView(quote.snapshot)), recipient: quote.snapshot.recipient ?? deliveryRecipient(undefined, user), expiresAt: quote.expiresAt };
   }
   async function list(user, scope = 'customer', beforeId = null) {
     user = (await actor(user)); check(['customer', 'store', 'courier'].includes(scope), 'INVALID_SCOPE', 'Choose customer, store or courier orders.');
@@ -128,6 +132,7 @@ export function createEatsService({ repository, getAccount, hasOtherWork, availa
   }
   async function project(user, result, replayed) {
     if (result.failure) check(false, result.failure.code, result.failure.message);
+    if (result.deliveryProfile) { requireRole(user, 'customer'); return { deliveryProfile: await repository.deliveryProfile(user.id), replayed }; }
     if (result.orderIds) return { orders: (await asyncMap(result.orderIds, async (id) => (await orderView(user, (await repository.order(id)))))), nextBefore: null, checkoutId: result.checkoutId, replayed };
     if (result.checkoutId) return { checkout: (await checkoutView(user, result.checkoutId)), replayed };
     if (result.orderId) return { order: (await orderView(user, (await repository.order(result.orderId)))), replayed };
@@ -150,7 +155,7 @@ export function createEatsService({ repository, getAccount, hasOtherWork, availa
     check(store.status === 'approved' && store.isOpen, 'STORE_UNAVAILABLE', 'This kitchen is not accepting orders.');
     check(data.fulfillment === 'pickup' || dispatchReady(store), 'STORE_UNAVAILABLE', 'This kitchen needs a saved pickup location before it can offer courier delivery.');
     check(!(await member(user, store.id)), 'FORBIDDEN', 'Use a separate customer account to test orders from your store.');
-    const snapshot = checkedBasket(store, (await repository.menu(store.id)), data), quoteId = tokens.id();
+    const snapshot = { ...checkedBasket(store, (await repository.menu(store.id)), data), recipient: deliveryRecipient(data.recipient, user) }, quoteId = tokens.id();
     (await repository.createQuote({ id: quoteId, customerId: user.id, storeId: store.id, storeVersion: store.version, snapshot, expiresAt: now + 600_000 }));
     return quoteId;
   }
@@ -233,7 +238,7 @@ export function createEatsService({ repository, getAccount, hasOtherWork, availa
       } else if (action === 'place') {
         fields(data, ['quoteId']); result = { orderId: (await placeQuote(user, data.quoteId, now)) };
       } else if (action === 'meal-quote') {
-        requireRole(user, 'customer'); fields(data, ['groups', 'address', 'instructions']);
+        requireRole(user, 'customer'); fields(data, ['groups', 'address', 'instructions', 'recipient'], ['groups', 'address', 'instructions']);
         check(Array.isArray(data.groups) && data.groups.length > 0 && data.groups.length <= MEAL_LIMITS.kitchens, 'INVALID_CART', 'Choose dishes from 1–5 kitchens.');
         const ids = new Set(); let lines = 0;
         for (const group of data.groups) {
@@ -242,7 +247,7 @@ export function createEatsService({ repository, getAccount, hasOtherWork, availa
           ids.add(group.storeId); lines += group.items.length;
         }
         check(lines > 0 && lines <= MEAL_LIMITS.lines, 'INVALID_CART', 'Choose up to 20 different dishes.');
-        const quoteIds = (await asyncMap(data.groups, async (group) => (await makeQuote(user, { ...group, address: data.address, instructions: data.instructions, fulfillment: 'delivery' }, now))));
+        const quoteIds = (await asyncMap(data.groups, async (group) => (await makeQuote(user, { ...group, address: data.address, instructions: data.instructions, recipient: data.recipient, fulfillment: 'delivery' }, now))));
         checkedTotal((await asyncMap(quoteIds, async (quoteId) => (await repository.quote(quoteId)).snapshot)));
         const checkoutId = tokens.id(); (await repository.createCheckout(checkoutId, user.id, quoteIds, now)); result = { checkoutId };
       } else if (action === 'meal-place') {
@@ -410,7 +415,44 @@ export function createEatsService({ repository, getAccount, hasOtherWork, availa
     });
     return { ...result, replayed };
   }
-  return Object.freeze({ command, photoCommand, assetCommand, photoReview, image, work, orders: list,
+  async function deliveryProfile(user) {
+    user = await actor(user); requireRole(user, 'customer');
+    return { deliveryProfile: await repository.deliveryProfile(user.id), deliverySettings: await deliveryMapSettings() };
+  }
+  async function saveDeliveryProfile(user, data, key, reauthenticate) {
+    check(typeof key === 'string' && /^[A-Za-z0-9_-]{16,128}$/.test(key), 'INVALID_IDEMPOTENCY_KEY', 'A unique request key is required.');
+    fields(data, ['expectedVersion', 'label', 'address']);
+    check(['home', 'work'].includes(data.label), 'INVALID_ADDRESS', 'Choose Home or Work.');
+    const address = data.address === null ? null : deliveryAddress(data.address);
+    user = await actor(user); requireRole(user, 'customer');
+    const fresh = await reauthenticate(); check(fresh?.id === user.id, 'UNAUTHENTICATED', 'Sign in again to save the delivery address.'); user = fresh;
+    const fingerprint = tokens.digest(canonical({ action: 'delivery-profile-save', data }));
+    let replayed = false;
+    const result = await unitOfWork(async () => {
+      user = await actor(user); requireRole(user, 'customer');
+      const previous = await repository.command(user.id, key);
+      if (previous) { check(previous.fingerprint === fingerprint, 'KEY_REUSED', 'This key belongs to another action.'); replayed = true; return previous.result; }
+      const profile = await repository.deliveryProfile(user.id); version(profile, data.expectedVersion);
+      const next = { version: profile.version + 1, addresses: { ...profile.addresses, [data.label]: address } }, now = clock();
+      check(await repository.saveDeliveryProfile(user.id, next, profile.version, now), 'STALE_VERSION', 'Your saved addresses changed. Refresh and try again.');
+      const result = { deliveryProfile: true };
+      await audit.record(user.id, address ? 'eats.delivery-address.saved' : 'eats.delivery-address.removed', user.id, now);
+      await repository.saveCommand(user.id, key, fingerprint, result, now);
+      return result;
+    });
+    return project(user, result, replayed);
+  }
+  async function deliveryLocation(user, data, reauthenticate) {
+    user = await actor(user); requireRole(user, 'customer');
+    fields(data, ['lat', 'lng']); const point = deliveryPoint(data);
+    const located = await resolveDeliveryLocation(point);
+    const fresh = await reauthenticate(); check(fresh?.id === user.id, 'UNAUTHENTICATED', 'Sign in again to use this delivery location.');
+    user = await actor(fresh); requireRole(user, 'customer');
+    if (located.areaId !== null && located.areaId !== undefined) area(located.areaId);
+    return { deliveryLocation: { point, line: label(located.line ?? '', 'Suggested delivery address', 0, 240), areaId: located.areaId ?? null,
+      attribution: label(located.attribution ?? '', 'Map attribution', 0, 500) } };
+  }
+  return Object.freeze({ deliveryProfile, saveDeliveryProfile, deliveryLocation, command, photoCommand, assetCommand, photoReview, image, work, orders: list,
     async photoReviewList(user, query = {}) {
       user = await actor(user); requireRole(user, 'admin');
       const status = query.status ?? 'pending';
