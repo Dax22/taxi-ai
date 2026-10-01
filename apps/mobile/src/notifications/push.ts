@@ -11,7 +11,6 @@ export async function notificationToken(projectId: string): Promise<string> {
   if(Platform.OS==='android')await Promise.all([
     Notifications.setNotificationChannelAsync('journeys',{name:'Journey updates',importance:Notifications.AndroidImportance.DEFAULT}),
     Notifications.setNotificationChannelAsync('announcements',{name:'Taxi Ai announcements',importance:Notifications.AndroidImportance.DEFAULT}),
-    Notifications.setNotificationChannelAsync('deliveries',{name:'Kemmy delivery updates',importance:Notifications.AndroidImportance.DEFAULT}),
   ]);
   let permission=await Notifications.getPermissionsAsync();
   if(!permission.granted)permission=await Notifications.requestPermissionsAsync();

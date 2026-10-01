@@ -54,7 +54,9 @@ notification permission or promise alerts after the browser is closed. Native
 phone alerts reuse the existing Expo opt-in and signed device build setup in
 [native journeys](mobile-journeys.md#optional-phone-alerts). Enable phone alerts
 in **Updates** and allow the device permission. Native Updates also keeps an inbox
-when push is disabled. Rebuild the app for its delivery notification channel.
+when push is disabled. Delivery alerts reuse the existing journey notification
+channel and its permission settings. Rebuild the native app to include the new
+delivery screens and notification navigation.
 
 ## Implementation and delivery limits
 

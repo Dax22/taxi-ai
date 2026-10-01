@@ -34,7 +34,7 @@ export function createPushProvider({ env = {}, fetchImpl = fetch } = {}) {
           : arrival ? arrivalBody : 'You have a new journey update. Open Taxi Ai to view it.',
         data: delivery ? { kind: 'delivery', deliveryUpdateId } : announcement ? {kind:'announcement',announcementId}
           : family ? {kind:'family',eventId:familyEventId} : { notificationId },
-        sound: 'default', channelId: delivery ? 'deliveries' : announcement ? 'announcements' : 'journeys',
+        sound: 'default', channelId: announcement ? 'announcements' : 'journeys',
         ttl: announcement ? (announcementPriority==='critical'?86400:3600) : 300 });
       if (!result.data) return { status: result.status ?? 'retry' };
       return result.data.status === 'ok' && typeof result.data.id === 'string' ? { status: 'ticket', ticket: result.data.id } : error(result.data);

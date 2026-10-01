@@ -21,7 +21,7 @@ test('Kemmy delivery push shows the saved message and opens only an authenticate
   assert.equal(calls[0].payload.body, input.deliveryBody);
   assert.deepEqual(calls[0].payload.data, { kind: 'delivery', deliveryUpdateId: id });
   assert.equal(calls[0].payload.ttl, 300);
-  assert.equal(calls[0].payload.channelId, 'deliveries');
+  assert.equal(calls[0].payload.channelId, 'journeys', 'Existing opted-in devices already have this delivery channel.');
   for (const invalid of [{ deliveryUpdateId: 'https://untrusted.example' }, { notificationId: 1 },
     { familyEventId: id }, { announcementId: id }, { deliveryBody: 'x'.repeat(1001) }, { deliveryTitle: '' }]) {
     assert.deepEqual(await provider.send({ ...input, ...invalid }), { status: 'error' });
