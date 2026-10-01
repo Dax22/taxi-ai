@@ -1,7 +1,14 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="strict-origin-when-cross-origin"><title>Your parcels · Taxi Ai</title><link rel="stylesheet" href="/styles.css"><link rel="stylesheet" href="/dashboard.css"><link rel="stylesheet" href="/typography.css"><script type="module" src="/parcels.mjs"></script></head>
-<body class="account-page"><header class="site-header shell"><a class="brand" href="/"><img class="brand-mark" src="/assets/taxi-ai-mark.svg" width="48" height="36" alt=""><span>Taxi Ai</span></a><a class="text-link" href="/app?service=courier">Send a parcel ↗</a></header>
-<main class="shell account-shell"><p class="eyebrow">COURIER / NIGERIA</p><h1>Your incoming parcels.</h1><p id="parcel-identity"></p><p id="parcel-error" class="error-text" role="alert"></p>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="strict-origin-when-cross-origin"><title>Your parcels · Taxi Ai</title><link rel="stylesheet" href="/styles.css"><link rel="stylesheet" href="/dashboard.css"><link rel="stylesheet" href="/typography.css"><script type="module" src="/parcels.mjs"></script>
+  <link rel="stylesheet" href="/companion-pages.css">
+<link rel="stylesheet" href="/page-scenes.css"><script type="module" src="/page-scenes.mjs"></script>
+</head>
+<body class="companion-photo-page account-page"><header class="site-header shell"><a class="brand" href="/"><img class="brand-mark" src="/assets/taxi-ai-mark.svg" width="48" height="36" alt=""><span>Taxi Ai</span></a><a class="text-link" href="/app?service=courier">Send a parcel ↗</a></header>
+<main class="shell account-shell"><section class="page-scene companion-scene" data-page-scene="courier">
+      <img class="page-scene-image" src="/assets/scenes/courier-handoff.webp" alt="" width="1536" height="1024">
+      <div class="companion-scene-copy"><p class="eyebrow">COURIER / NIGERIA</p><h1>Your incoming parcels.</h1></div>
+      <p class="companion-scene-credit">AI-generated scene</p>
+    </section><p id="parcel-identity"></p><p id="parcel-error" class="error-text" role="alert"></p>
 <section id="parcel-auth" class="account-card"><h2>Use your Taxi Ai account</h2><p>Sign in or create an account in the new tab, then return here and select Refresh. Your private invitation stays in this tab.</p><a class="button button-primary" href="/app" target="_blank" rel="noopener noreferrer">Sign in or create account ↗</a></section>
 <section id="parcel-invitation" class="account-card" hidden><h2>Accept this parcel invitation</h2><p>Accept only if you are the intended recipient. This connects the delivery to the account shown above. You can then see its status, courier details and the location shared after collection.</p><button id="parcel-accept" class="button button-primary" type="button" disabled>Accept invitation</button></section>
 <section class="account-card"><div class="card-topline"><h2>Incoming deliveries</h2><button id="parcel-refresh" class="button button-outline button-small" type="button">Refresh</button></div><p id="parcel-state" role="status">Opening your parcels…</p><div id="parcel-list" class="request-list"></div></section>

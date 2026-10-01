@@ -1,0 +1,25 @@
+/* The host page owns this container's dimensions and reserves a clear control corner. */
+@layer components {
+  .page-scene { position: relative; isolation: isolate; overflow: hidden; background: #e8e5dd; }
+  .page-scene::after { content: ''; position: absolute; z-index: 1; inset: 0; pointer-events: none;
+    background: var(--scene-gradient, linear-gradient(180deg, transparent 55%, #171c1830)); }
+  .page-scene > .page-scene-image { position: absolute; inset: 0; width: 100%; height: 100%; max-width: none;
+    object-fit: cover; object-position: var(--scene-image-position, center); pointer-events: none; user-select: none; }
+  .page-scene > .page-scene-image-enter { animation: page-scene-enter .8s ease both; }
+  .page-scene-controls { position: absolute; z-index: 3; right: var(--scene-controls-right, 16px); bottom: var(--scene-controls-bottom, 16px);
+    display: flex; align-items: center; gap: 4px; padding: 4px; border: 1px solid #ffffff75; border-radius: 999px;
+    background: #fffef5e8; box-shadow: 0 4px 18px #10241618; backdrop-filter: blur(10px); }
+  .page-scene-controls button { display: grid; place-items: center; flex: 0 0 44px; width: 44px; height: 44px; min-width: 44px; min-height: 44px;
+    padding: 0; border: 0; border-radius: 50%; background: transparent; color: #25342b; font: inherit; font-size: 19px; line-height: 1; cursor: pointer; }
+  .page-scene-controls button:hover { background: #e1eadf; }
+  .page-scene-controls button:focus-visible { outline: 3px solid #1c5234; outline-offset: 2px; background: #fff; }
+  .page-scene-controls button:disabled { cursor: default; color: #6a716b; background: transparent; }
+  .page-scene-status { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden;
+    clip-path: inset(50%); white-space: nowrap; border: 0; }
+  .page-scene[hidden], .page-scene [hidden] { display: none !important; }
+  .page-scene[data-scene-reduced-motion='true'] > .page-scene-image { animation: none; transition: none; }
+  @keyframes page-scene-enter { from { opacity: 0; } to { opacity: 1; } }
+}
+@media (prefers-reduced-motion: reduce) {
+  .page-scene > .page-scene-image { animation: none !important; transition: none !important; }
+}

@@ -5,12 +5,18 @@
   <title>Taxi Ai — Private trip view</title>
   <link rel="icon" href="/favicon.svg?v=amber" type="image/svg+xml"><link rel="stylesheet" href="/styles.css"><link rel="stylesheet" href="/dashboard.css">
   <script type="module" src="/trip-share.mjs"></script>
+  <link rel="stylesheet" href="/companion-pages.css">
+<link rel="stylesheet" href="/page-scenes.css"><script type="module" src="/page-scenes.mjs"></script>
 </head>
-<body class="account-page">
+<body class="companion-photo-page account-page">
   <a class="skip-link" href="#shared-main">Skip to trip</a>
   <header class="site-header shell"><a class="brand" href="/" aria-label="Taxi Ai home"><img class="brand-mark" src="/assets/taxi-ai-mark.svg" width="48" height="36" alt=""><span>Taxi Ai</span></a><span class="status-badge">PRIVATE LINK</span></header>
   <main id="shared-main" class="shell account-shell trip-share-shell">
-    <p class="eyebrow">TAXI AI / NIGERIA</p><h1>A trip shared with you.</h1>
+    <section class="page-scene companion-scene" data-page-scene="rides">
+      <img class="page-scene-image" src="/assets/scenes/ride-city.webp" alt="" width="1536" height="1024">
+      <div class="companion-scene-copy"><p class="eyebrow">TAXI AI / NIGERIA</p><h1>A trip shared with you.</h1></div>
+      <p class="companion-scene-credit">AI-generated scene</p>
+    </section>
     <p class="safety-preview-note"><strong>Development preview.</strong> This is a test trip view. It does not monitor emergencies or dispatch help. For an actual emergency, use your phone to contact emergency services or someone you trust.</p>
     <p class="supporting-copy">Keep this link private. It stops working when it expires, is revoked, its owner signs out or the trip ends.</p>
     <p id="shared-message" class="supporting-copy" role="status">Checking this private link…</p>

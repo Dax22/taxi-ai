@@ -633,3 +633,121 @@
   .fare-negotiation-guide h3 { margin: 6px 0 8px; }
   .fare-negotiation-guide .review-actions { margin-top: 12px; }
 }
+
+/* Account photography is decorative; all forms keep their own opaque surfaces. */
+@layer components {
+  .dashboard-photo-page { background: #f8f7f3; --line: #e6e3db; --paper: #f8f7f3; --soft: #f2f0e9; }
+  .dashboard-photo-page .site-header { height: 88px; border-color: #e8e5dd; }
+  .dashboard-photo-page .account-shell { padding-top: 22px; }
+  .dashboard-photo-page .environment-note { color: #76756e; }
+  .dashboard-photo-page .auth-layout { grid-template-columns: minmax(0, 1.12fr) minmax(0, 1fr); align-items: stretch; gap: 24px; max-width: 1240px; padding-top: 28px; }
+  .dashboard-photo-page .auth-photo { position: relative; isolation: isolate; overflow: hidden; min-height: 690px; padding: 46px 42px 108px; display: flex; align-items: end; border-radius: 28px; background: #202a29; color: #fff; }
+  .dashboard-photo-page .auth-photo > .page-scene { position: absolute; inset: 0; --scene-image-position: 64% center; --scene-gradient: linear-gradient(180deg, #15222226 0%, #15222266 30%, #12201cde 70%, #12201cf2 100%); --scene-controls-right: 24px; --scene-controls-bottom: 24px; }
+  .dashboard-photo-page .auth-photo-copy { position: relative; z-index: 1; min-width: 0; }
+  .dashboard-photo-page .auth-photo-copy > .eyebrow { color: #ffe2a0; font-size: 10px; letter-spacing: .16em; }
+  .dashboard-photo-page .auth-intro h1 { max-width: 520px; margin: 22px 0; font-size: clamp(44px, 4.9vw, 72px); line-height: 1.02; letter-spacing: -.065em; }
+  .dashboard-photo-page .auth-intro h1 span { color: #ffce58; }
+  .dashboard-photo-page .auth-photo-description { max-width: 400px; color: #f2f1e9; font-size: 15px; line-height: 1.7; }
+  .dashboard-photo-page .auth-services { display: flex; flex-wrap: wrap; gap: 8px; margin: 23px 0 0; padding: 0; list-style: none; }
+  .dashboard-photo-page .auth-services li { border: 1px solid #ffffff4d; border-radius: 30px; padding: 6px 13px; background: #10232030; color: #fff; font-size: 11px; font-weight: 600; }
+  .dashboard-photo-page .auth-promise { max-width: 440px; align-items: center; gap: 13px; margin: 28px 0 20px; padding-top: 22px; border-color: #ffffff38; font-size: 12px; line-height: 1.65; color: #f0f0e8; }
+  .dashboard-photo-page .auth-promise > span { min-width: 36px; height: 36px; color: #202225; }
+  .dashboard-photo-page .auth-preview-note { max-width: 410px; color: #d8ded7; font-size: 10px; line-height: 1.65; }
+  .dashboard-photo-page .account-card { border-radius: 20px; border-color: #e6e3db; box-shadow: 0 4px 18px #262c2603; }
+  .dashboard-photo-page .auth-card { align-self: start; padding: 36px; border-radius: 24px; background: #fff; box-shadow: 0 18px 50px #252b2210; }
+  .dashboard-photo-page .auth-card h2 { font-size: 34px; letter-spacing: -.055em; }
+  .dashboard-photo-page .auth-card > .supporting-copy { margin-top: 12px; }
+  .dashboard-photo-page .auth-mode { padding: 5px; border: 1px solid #e9e6df; border-radius: 12px; background: #f5f4ef; }
+  .dashboard-photo-page .auth-mode button { min-height: 44px; border-radius: 8px; }
+  .dashboard-photo-page .auth-mode button[aria-pressed="true"] { box-shadow: 0 2px 6px #533c0010; }
+  .dashboard-photo-page .stack-form input:not([type="checkbox"]), .dashboard-photo-page .stack-form select, .dashboard-photo-page .stack-form textarea { border-radius: 10px; border-color: #dcded6; background: #fff; }
+  .dashboard-photo-page .stack-form input:not([type="checkbox"]):focus, .dashboard-photo-page .stack-form select:focus, .dashboard-photo-page .stack-form textarea:focus { border-color: #bd8b00; }
+  .dashboard-photo-page .stack-form label { font-size: 12px; color: #414740; }
+  .dashboard-photo-page .button { border-radius: 10px; }
+  .dashboard-photo-page .auth-card .registration-intent-grid { grid-template-columns: 1fr; gap: 8px; }
+  .dashboard-photo-page .auth-card .registration-intent-card { grid-template-columns: 112px minmax(0, 1fr); gap: 10px; align-items: center; min-height: 68px; border-radius: 10px; background: #faf9f5; }
+  .dashboard-photo-page .auth-card .registration-intent-card strong { font-size: 13px; }
+  .dashboard-photo-page .auth-card .registration-intent-card[aria-pressed="true"] { background: #fff7df; }
+  .dashboard-photo-page .dashboard-photo-heading { position: relative; isolation: isolate; overflow: hidden; min-height: 224px; align-items: center; padding: 30px 32px 68px; margin: 24px 0; border-radius: 22px; background: #202a29; color: #fff; }
+  .dashboard-photo-page .dashboard-photo-heading > .page-scene { position: absolute; inset: 0; --scene-image-position: 66% 53%; --scene-gradient: linear-gradient(90deg, #13201ced, #182721bc 45%, #1d302643 100%); --scene-controls-right: 24px; --scene-controls-bottom: 18px; }
+  .dashboard-photo-page .dashboard-heading-copy { position: relative; z-index: 1; min-width: 0; max-width: 720px; padding-right: 40px; }
+  .dashboard-photo-page .dashboard-heading .eyebrow { color: #ffdc8a; }
+  .dashboard-photo-page .dashboard-heading h1 { margin-top: 12px; font-size: clamp(28px, 3.5vw, 44px); line-height: 1.1; letter-spacing: -.05em; text-wrap: balance; }
+  .dashboard-photo-page .dashboard-heading .supporting-copy { max-width: 640px; margin-top: 12px; color: #f0f2e9; font-size: 13px; line-height: 1.6; }
+  .dashboard-photo-page .dashboard-photo-heading .refresh-controls { position: relative; z-index: 1; align-self: start; flex-direction: column-reverse; align-items: end; gap: 7px; }
+  .dashboard-photo-page .dashboard-photo-heading #sync-status { color: #fff; font-size: 10px; }
+  .dashboard-photo-page .dashboard-photo-heading #refresh { color: #fff; background: #16241a80; border-color: #ffffff75; min-height: 40px; }
+  .dashboard-photo-page .dashboard-photo-heading #refresh:hover { background: #314333; }
+  .dashboard-photo-page .dashboard-photo-heading #refresh:focus-visible { outline-color: #ffdb7f; }
+  .dashboard-photo-page .dashboard-photo-heading #refresh:disabled { color: #eee; background: #374338; opacity: .7; }
+  .dashboard-photo-page #dashboard > .account-card { margin-bottom: 22px; }
+  .dashboard-photo-page .account-modes { padding: 24px 28px; }
+  .dashboard-photo-page .account-modes .card-topline { margin-bottom: 14px; }
+  .dashboard-photo-page .account-modes .card-topline h2 { font-size: 24px; }
+  .dashboard-photo-page .account-shortcuts { display: flex; flex-wrap: wrap; gap: 6px 24px; padding: 12px 0 16px; margin-bottom: 12px; border-block: 1px solid #eeece5; }
+  .dashboard-photo-page .account-shortcuts .text-link { font-size: 11px; color: #515950; }
+  .dashboard-photo-page .account-modes > .review-actions { margin-top: 18px; }
+  .dashboard-photo-page .account-modes > .small-note { font-size: 11px; }
+  .dashboard-photo-page #vehicle-categories-panel > h2, .dashboard-photo-page #passenger-panel > h2, .dashboard-photo-page #ride-destination-panel > h2 { margin-top: 8px; }
+  .dashboard-photo-page #vehicle-categories-panel > .auth-mode { max-width: 480px; margin: 22px 0 14px; }
+  .dashboard-photo-page #passenger-panel { border-left: 3px solid #e3ba51; }
+  .dashboard-photo-page #ride-destination-panel { border-color: #dfd3ac; box-shadow: 0 8px 24px #5b4b1905; }
+  .dashboard-photo-page .ride-workspace .account-card > .eyebrow, .dashboard-photo-page .dashboard-sidebar .eyebrow { color: #7d642f; }
+  .dashboard-photo-page .request-row { border-radius: 12px; padding: 18px; }
+  .dashboard-photo-page .fare-display { border-radius: 14px; background: #fff7df; }
+  .dashboard-photo-page .account-footer { margin-top: 12px; }
+}
+@layer responsive {
+  @media (max-width: 1000px) {
+    .dashboard-photo-page .auth-layout { gap: 20px; }
+    .dashboard-photo-page .auth-photo { padding-inline: 28px; }
+    .dashboard-photo-page .auth-card { padding: 28px; }
+    .dashboard-photo-page .dashboard-heading-copy { padding-right: 10px; }
+  }
+  @media (max-width: 800px) {
+    .dashboard-photo-page .auth-layout { grid-template-columns: 1fr; max-width: 640px; padding-top: 22px; }
+    .dashboard-photo-page .auth-photo { min-height: 440px; padding: 30px 30px 88px; border-radius: 22px; }
+    .dashboard-photo-page .auth-intro h1 { max-width: 500px; font-size: clamp(38px, 6.5vw, 54px); margin: 18px 0; }
+    .dashboard-photo-page .auth-intro h1 br { display: none; }
+    .dashboard-photo-page .auth-photo-description { font-size: 14px; }
+    .dashboard-photo-page .auth-promise { margin: 22px 0 16px; }
+    .dashboard-photo-page .auth-services { margin-top: 18px; }
+    .dashboard-photo-page .auth-card { width: 100%; padding: 30px; }
+    .dashboard-photo-page .dashboard-photo-heading { flex-direction: row; align-items: start; min-height: 220px; padding: 25px 26px 76px; }
+    .dashboard-photo-page .dashboard-photo-heading .refresh-controls { flex-direction: column-reverse; }
+    .dashboard-photo-page .dashboard-heading h1 { font-size: 32px; }
+    .dashboard-photo-page .account-shortcuts { column-gap: 18px; }
+  }
+  @media (max-width: 580px) {
+    .dashboard-photo-page .site-header { min-height: 82px; height: auto; padding-block: 16px; align-items: start; gap: 12px; }
+    .dashboard-photo-page .account-header-actions { flex-wrap: wrap; justify-content: end; gap: 4px 12px; max-width: 145px; }
+    .dashboard-photo-page .account-header-actions > a { display: inline-flex; font-size: 10px; min-height: 28px; }
+    .dashboard-photo-page .account-header-actions .button { padding: 8px 12px; min-height: 34px; }
+    .dashboard-photo-page .brand { font-size: 25px; }
+    .dashboard-photo-page .brand-mark { width: 40px; height: 30px; }
+    .dashboard-photo-page .account-shell { padding-top: 16px; }
+    .dashboard-photo-page .environment-note { flex-wrap: wrap; font-size: 8px; line-height: 1.6; }
+    .dashboard-photo-page .auth-photo { min-height: 420px; padding: 26px 24px 88px; }
+    .dashboard-photo-page .auth-intro h1 { font-size: 40px; }
+    .dashboard-photo-page .auth-photo-description { font-size: 13px; }
+    .dashboard-photo-page .auth-promise { font-size: 11px; gap: 11px; }
+    .dashboard-photo-page .auth-preview-note { font-size: 10px; }
+    .dashboard-photo-page .auth-card { padding: 24px; border-radius: 20px; }
+    .dashboard-photo-page .auth-card h2 { font-size: 30px; }
+    .dashboard-photo-page .auth-card .registration-intent-card { grid-template-columns: 1fr; gap: 4px; min-height: 0; }
+    .dashboard-photo-page .account-card { padding: 22px; }
+    .dashboard-photo-page .dashboard-photo-heading { flex-wrap: wrap; gap: 16px; min-height: 236px; padding: 24px 22px 76px; margin-block: 20px; }
+    .dashboard-photo-page .dashboard-heading-copy { max-width: none; padding-right: 0; }
+    .dashboard-photo-page .dashboard-heading h1 { font-size: 30px; }
+    .dashboard-photo-page .dashboard-heading .supporting-copy { font-size: 12px; line-height: 1.55; }
+    .dashboard-photo-page .dashboard-photo-heading .refresh-controls { flex-direction: row; align-items: center; gap: 10px; }
+    .dashboard-photo-page .dashboard-photo-heading #refresh { min-height: 34px; padding: 8px 12px; }
+    .dashboard-photo-page .account-modes .card-topline { flex-wrap: wrap; align-items: start; }
+    .dashboard-photo-page .account-modes .card-topline h2 { font-size: 23px; }
+    .dashboard-photo-page .account-shortcuts { display: grid; gap: 8px; }
+    .dashboard-photo-page .account-shortcuts .text-link { width: fit-content; max-width: 100%; font-size: 11px; }
+    .dashboard-photo-page .review-actions { flex-wrap: wrap; }
+    .dashboard-photo-page .dashboard-layout { gap: 20px; }
+    .dashboard-photo-page .request-row { padding: 14px; }
+  }
+}
