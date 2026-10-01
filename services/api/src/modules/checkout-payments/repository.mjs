@@ -41,7 +41,7 @@ export function createCheckoutPaymentsRepository(db) {
     },
     async close(id, now) {
       await db.prepare(`UPDATE checkout_payments SET closed_at=COALESCE(closed_at,?),status=CASE WHEN status='paid' THEN 'refund_required' ELSE status END,
-        updated_at=?,version=version+1,next_check_at=CASE WHEN status IN ('paid','refund_required') THEN NULL ELSE ? END WHERE id=?`).run(now,now,now,id);
+        updated_at=?,version=version+1,next_check_at=CASE WHEN status IN ('paid','refund_required') THEN NULL ELSE CAST(? AS BIGINT) END WHERE id=?`).run(now,now,now,id);
     },
     async saveClosure(id, key, amount, reason, now) {
       return (await db.prepare(`INSERT INTO checkout_payment_closures(payment_id,closure_key,amount_kobo,reason,closed_at)
