@@ -1,0 +1,177 @@
+name: taxi-ai-tencent
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: '3'
+
+x-app: &app
+  image: ${TAXI_AI_IMAGE:?Set the same immutable app image on both hosts}
+  init: true
+  restart: unless-stopped
+  read_only: true
+  security_opt: [no-new-privileges:true]
+  cap_drop: [ALL]
+  stop_grace_period: 30s
+  env_file: ./.env
+  environment: &app-environment
+    TAXI_AI_MODE: staging
+    TAXI_AI_PUBLIC_ORIGIN: https://${TAXI_AI_DOMAIN:?Set the invited staging DNS name}
+    TAXI_AI_PROXY_TOKEN: ${TAXI_AI_PROXY_TOKEN:?Generate a private proxy token}
+    TAXI_AI_STAGING_ACCESS_FILE: /run/secrets/testers
+    TAXI_AI_RIDES_PAUSED: ${TAXI_AI_RIDES_PAUSED:-true}
+    TAXI_AI_DATABASE_POOL_SIZE: ${TAXI_AI_DATABASE_POOL_SIZE:-10}
+  volumes:
+    - ./launch.mjs:/app/deploy-launch.mjs:ro
+  tmpfs: ['/tmp:size=64m,mode=1777']
+  mem_limit: 1g
+  cpus: 0.75
+  pids_limit: 128
+  logging: *logging
+  networks: [database]
+
+services:
+  postgres:
+    profiles: [database, runtime]
+    image: ${TAXI_AI_POSTGRES_IMAGE:?Set an immutable postgis/postgis PostgreSQL 16 image}
+    platform: linux/amd64
+    restart: unless-stopped
+    entrypoint: [sh, /opt/taxi/postgres-entrypoint.sh]
+    environment: &postgres-environment
+      POSTGRES_DB: taxi_ai
+      POSTGRES_USER: taxi_owner
+      POSTGRES_PASSWORD_FILE: /run/secrets/owner_password
+      PGDATA: /var/lib/postgresql/data
+      TAXI_AI_DB_ROLE: ${TAXI_AI_DB_ROLE:?Set primary or standby}
+      TAXI_AI_PRIVATE_IP: ${TAXI_AI_PRIVATE_IP:?Set this server private IPv4 address}
+      TAXI_AI_REPLICATION_PEER_IP: ${TAXI_AI_REPLICATION_PEER_IP:?Set the other server private IPv4 address}
+      TAXI_AI_DOCKER_SUBNET: ${TAXI_AI_DOCKER_SUBNET:-172.28.0.0/24}
+    secrets:
+      - owner_password
+      - app_password
+      - replication_password
+      - postgres_certificate
+      - postgres_key
+      - replication_ca
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres-entrypoint.sh:/opt/taxi/postgres-entrypoint.sh:ro
+      - ./postgresql.conf:/etc/taxi/postgresql.conf:ro
+      - ./init-database.sh:/docker-entrypoint-initdb.d/20-taxi-ai.sh:ro
+    tmpfs: ['/run/taxi-postgres:size=2m,mode=0700']
+    extra_hosts:
+      - taxi-db-primary:${TAXI_AI_PRIMARY_PRIVATE_IP:?Set the current primary private IPv4 address}
+    # Bind only the private NIC. Also restrict cloud + Docker-aware host firewall.
+    ports:
+      - '${TAXI_AI_PRIVATE_IP:?Set this server private IPv4 address}:5432:5432'
+    healthcheck:
+      # TCP stays closed while the upstream image runs one-time init scripts.
+      test: [CMD-SHELL, 'pg_isready -h 127.0.0.1 -U taxi_owner -d taxi_ai']
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    mem_limit: 3g
+    cpus: 1.5
+    shm_size: 256m
+    logging: *logging
+    networks: [database]
+
+  bootstrap-replica:
+    profiles: [tooling]
+    image: ${TAXI_AI_POSTGRES_IMAGE:?Set an immutable postgis/postgis PostgreSQL 16 image}
+    platform: linux/amd64
+    restart: 'no'
+    entrypoint: [sh, /opt/taxi/bootstrap-replica.sh]
+    environment:
+      <<: *postgres-environment
+    secrets: [replication_password, replication_ca]
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./bootstrap-replica.sh:/opt/taxi/bootstrap-replica.sh:ro
+    tmpfs: ['/run/taxi-postgres:size=2m,mode=0700']
+    extra_hosts:
+      - taxi-db-primary:${TAXI_AI_PRIMARY_PRIVATE_IP:?Set the current primary private IPv4 address}
+    networks: [database]
+
+  migrate:
+    <<: *app
+    profiles: [runtime]
+    restart: 'no'
+    # No provider secrets are needed for a schema migration.
+    env_file: []
+    command: [node, /app/deploy-launch.mjs, migrate]
+    secrets: [owner_password]
+    healthcheck:
+      disable: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  app:
+    <<: *app
+    profiles: [runtime]
+    command: [node, /app/deploy-launch.mjs, api]
+    secrets: [app_password, testers]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  worker:
+    <<: *app
+    profiles: [runtime]
+    command: [node, /app/deploy-launch.mjs, worker]
+    environment:
+      <<: *app-environment
+      TAXI_AI_WORKER_REGIONS: auto
+      TAXI_AI_WORKER_CONCURRENCY: ${TAXI_AI_WORKER_CONCURRENCY:-2}
+    secrets: [app_password, testers]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  gateway:
+    profiles: [runtime]
+    image: ${TAXI_AI_CADDY_IMAGE:?Set an immutable caddy image}
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    ports: ['80:80', '443:443']
+    environment:
+      TAXI_AI_DOMAIN: ${TAXI_AI_DOMAIN:?Set the invited staging DNS name}
+      TAXI_AI_PROXY_TOKEN: ${TAXI_AI_PROXY_TOKEN:?Generate a private proxy token}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    mem_limit: 256m
+    logging: *logging
+    networks: [database]
+
+networks:
+  database:
+    ipam:
+      config:
+        - subnet: ${TAXI_AI_DOCKER_SUBNET:-172.28.0.0/24}
+
+secrets:
+  owner_password:
+    file: ./secrets/postgres-owner-password
+  app_password:
+    file: ./secrets/postgres-app-password
+  replication_password:
+    file: ./secrets/postgres-replication-password
+  testers:
+    file: ./secrets/staging-testers.json
+  postgres_certificate:
+    file: ./secrets/postgres-server.crt
+  postgres_key:
+    file: ./secrets/postgres-server.key
+  replication_ca:
+    file: ./secrets/replication-ca.crt
+
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:
