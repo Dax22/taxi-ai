@@ -1,0 +1,12 @@
+.env
+.env.local
+secrets/
+tls/
+backups/
+*.key
+*.crt
+*.pem
+*.sql
+*.sql.gz
+*.dump
+*.dump.gz
