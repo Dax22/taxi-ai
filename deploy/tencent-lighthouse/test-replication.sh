@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Isolated integration smoke: requires Docker, Compose v2 and OpenSSL.
 # It never uses the deployment's .env, secrets, host ports, or named volumes.
-set -euo pipefail
+set -Eeuo pipefail
+trap 'status=$?; printf "FAIL: smoke test stopped at line %s (status %s).\n" "$LINENO" "$status" >&2; exit "$status"' ERR
 umask 077
 here=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 repo=$(cd -- "$here/../.." && pwd)
@@ -187,6 +188,7 @@ start_runtime() {
 }
 launch "$primary_ip" migrate
 start_runtime "$primary_ip"
+printf '%s\n' 'PASS: primary API and worker are healthy.'
 sql "$primary" 'CREATE TABLE taxi_replication_smoke (id integer PRIMARY KEY); INSERT INTO taxi_replication_smoke VALUES (1)' >/dev/null
 
 bootstrap() {
@@ -204,6 +206,7 @@ if bootstrap "$empty_volume" "$scratch/wrong-ca.crt" > "$scratch/tls.log" 2>&1; 
   printf '%s\n' 'FAIL: replication trusted an unrelated CA.' >&2; exit 1
 fi
 case "$(cat "$scratch/tls.log")" in *'certificate verify failed'*) ;; *) cat "$scratch/tls.log"; exit 1;; esac
+printf '%s\n' 'PASS: replication rejects an untrusted CA. Starting the real base backup.'
 bootstrap "$standby_volume" "$scratch/tls/standby/replication-ca.crt"
 if bootstrap "$standby_volume" "$scratch/tls/standby/replication-ca.crt" > "$scratch/overwrite.log" 2>&1; then
   printf '%s\n' 'FAIL: bootstrap accepted a populated standby volume.' >&2; exit 1
@@ -214,9 +217,14 @@ docker run --rm -v "$standby_volume:/data:ro" \
   --mount "type=bind,source=$scratch/secrets/replication_password,target=/password,readonly" \
   --entrypoint sh "$pg_image" -ec '
     secret=$(cat /password)
-    case "$(cat /data/postgresql.auto.conf)" in *"$secret"*) exit 1;; esac
-    case "$(cat /data/postgresql.auto.conf)" in *"sslmode=verify-full"*"passfile="*|*"passfile="*"sslmode=verify-full"*) ;; *) exit 1;; esac
+    config=$(cat /data/postgresql.auto.conf)
+    case "$config" in *"$secret"*) printf "%s\n" "FAIL: recovery settings contain a password value." >&2; exit 1;; esac
+    case "$config" in *"sslmode=verify-full"*) ;; *) printf "%s\n" "FAIL: recovery settings do not require TLS hostname verification." >&2; exit 1;; esac
+    case "$config" in *"passfile=/run/taxi-postgres/replication.pgpass"*) ;; *) printf "%s\n" "FAIL: recovery settings do not reference the protected password file." >&2; exit 1;; esac
+    case "$config" in *"primary_slot_name"*) ;; *) printf "%s\n" "FAIL: recovery settings do not identify the replication slot." >&2; exit 1;; esac
+    test -f /data/standby.signal || { printf "%s\n" "FAIL: standby signal is missing." >&2; exit 1; }
   '
+printf '%s\n' 'PASS: recovery settings contain no password value and require TLS plus a password file.'
 
 tls_args standby
 docker run -d --name "$standby" --ip "$standby_ip" "${db_args[@]}" "${host_tls[@]}" \
@@ -226,12 +234,14 @@ wait_sql "$standby" 'SELECT pg_is_in_recovery()' t
 sql "$primary" 'INSERT INTO taxi_replication_smoke VALUES (2)' >/dev/null
 wait_sql "$standby" 'SELECT count(*) FROM taxi_replication_smoke' 2
 wait_sql "$primary" "SELECT s.ssl FROM pg_stat_replication r JOIN pg_stat_ssl s USING (pid) WHERE r.application_name = 'taxi_lighthouse_standby'" t
+printf '%s\n' 'PASS: standby receives new writes over TLS.'
 for role in check migrate api worker; do
   if launch "$standby_ip" "$role" > "$scratch/guard.log" 2>&1; then
     printf 'FAIL: %s guard accepted a read-only standby.\n' "$role" >&2; exit 1
   fi
   case "$(cat "$scratch/guard.log")" in *'Startup refused:'*) ;; *) cat "$scratch/guard.log"; exit 1;; esac
 done
+printf '%s\n' 'PASS: all runtime and migration startup guards reject the standby.'
 
 # The old primary is stopped FIRST. Production fencing must also prevent it
 # restarting or accepting traffic; this is deliberately not an auto-failover tool.
