@@ -11,6 +11,8 @@ prefix="taxi-lighthouse-test-$suffix"
 network="$prefix-network"
 primary="$prefix-primary"
 standby="$prefix-standby"
+api="$prefix-api"
+worker="$prefix-worker"
 primary_volume="$prefix-primary-data"
 standby_volume="$prefix-standby-data"
 empty_volume="$prefix-empty-data"
@@ -24,7 +26,7 @@ created_volumes=()
 created_app_image=false
 
 cleanup() {
-  docker rm -f "$primary" "$standby" >/dev/null 2>&1 || true
+  docker rm -f "$primary" "$standby" "$api" "$worker" >/dev/null 2>&1 || true
   for volume in "${created_volumes[@]}"; do docker volume rm "$volume" >/dev/null 2>&1 || true; done
   if "$created_network"; then docker network rm "$network" >/dev/null 2>&1 || true; fi
   if "$created_app_image"; then docker image rm "$app_image" >/dev/null 2>&1 || true; fi
@@ -48,6 +50,8 @@ for role in owner app replication; do
   # Production secrets use the narrower documented owner and permissions.
   chmod 444 "$scratch/secrets/${role}_password"
 done
+printf '%s\n' '{"version":1,"testers":[{"name":"smoke-tester","tokenHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]}' > "$scratch/secrets/testers"
+chmod 444 "$scratch/secrets/testers"
 sh "$here/make-replication-tls.sh" "$scratch/tls" "$primary_ip" "$standby_ip"
 openssl req -x509 -newkey rsa:2048 -sha256 -nodes -days 1 \
   -keyout "$scratch/wrong-ca.key" -out "$scratch/wrong-ca.crt" \
@@ -76,6 +80,7 @@ docker compose --project-directory "$scratch" -f "$scratch/compose.yml" \
   --profile database --profile runtime --profile tooling config --quiet
 docker compose --project-directory "$scratch" -f "$scratch/compose.yml" \
   --profile database --profile runtime --profile tooling config --format json > "$scratch/compose-model.json"
+chmod 444 "$scratch/compose-model.json"
 docker run --rm --mount "type=bind,source=$scratch/compose-model.json,target=/tmp/compose-model.json,readonly" \
   "$app_image" node -e '
     const { services } = JSON.parse(require("node:fs").readFileSync("/tmp/compose-model.json", "utf8"));
@@ -151,7 +156,37 @@ launch() {
     --mount "type=bind,source=$scratch/secrets/owner_password,target=/run/secrets/owner_password,readonly" \
     "$app_image" node /app/deploy-launch.mjs "$role"
 }
+start_runtime() {
+  local ip=$1 name role
+  for role in api worker; do
+    if [ "$role" = api ]; then name=$api; else name=$worker; fi
+    docker run -d --name "$name" --network "$network" --add-host "postgres:$ip" \
+      --read-only --cap-drop ALL --security-opt no-new-privileges:true \
+      --tmpfs /tmp:rw,size=64m,mode=1777 \
+      -e TAXI_AI_PUBLIC_ORIGIN=https://taxi-pilot.example.test \
+      -e TAXI_AI_PROXY_TOKEN=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
+      -e TAXI_AI_STAGING_ACCESS_FILE=/run/secrets/testers \
+      -e TAXI_AI_RIDES_PAUSED=true -e TAXI_AI_MAPS_MODE=off \
+      -e TAXI_AI_WORKER_REGIONS=auto -e TAXI_AI_WORKER_CONCURRENCY=2 \
+      --mount "type=bind,source=$here/launch.mjs,target=/app/deploy-launch.mjs,readonly" \
+      --mount "type=bind,source=$scratch/secrets/app_password,target=/run/secrets/app_password,readonly" \
+      --mount "type=bind,source=$scratch/secrets/testers,target=/run/secrets/testers,readonly" \
+      "$app_image" node /app/deploy-launch.mjs "$role" >/dev/null
+    local healthy=false
+    for ((attempt=0; attempt<60; attempt++)); do
+      if docker exec "$name" node scripts/healthcheck.mjs >/dev/null 2>&1; then healthy=true; break; fi
+      sleep 1
+    done
+    if ! "$healthy"; then
+      printf 'FAIL: %s readiness timed out.\n' "$role" >&2
+      docker logs --tail 40 "$name" >&2
+      exit 1
+    fi
+  done
+  docker exec "$api" node /app/deploy-launch.mjs config
+}
 launch "$primary_ip" migrate
+start_runtime "$primary_ip"
 sql "$primary" 'CREATE TABLE taxi_replication_smoke (id integer PRIMARY KEY); INSERT INTO taxi_replication_smoke VALUES (1)' >/dev/null
 
 bootstrap() {
@@ -191,7 +226,7 @@ wait_sql "$standby" 'SELECT pg_is_in_recovery()' t
 sql "$primary" 'INSERT INTO taxi_replication_smoke VALUES (2)' >/dev/null
 wait_sql "$standby" 'SELECT count(*) FROM taxi_replication_smoke' 2
 wait_sql "$primary" "SELECT s.ssl FROM pg_stat_replication r JOIN pg_stat_ssl s USING (pid) WHERE r.application_name = 'taxi_lighthouse_standby'" t
-for role in check migrate; do
+for role in check migrate api worker; do
   if launch "$standby_ip" "$role" > "$scratch/guard.log" 2>&1; then
     printf 'FAIL: %s guard accepted a read-only standby.\n' "$role" >&2; exit 1
   fi
@@ -200,10 +235,13 @@ done
 
 # The old primary is stopped FIRST. Production fencing must also prevent it
 # restarting or accepting traffic; this is deliberately not an auto-failover tool.
+docker stop -t 20 "$api" "$worker" >/dev/null
+docker rm "$api" "$worker" >/dev/null
 docker stop -t 20 "$primary" >/dev/null
 docker exec --user postgres "$standby" pg_ctl promote -D /var/lib/postgresql/data -w -t 30
 wait_sql "$standby" 'SELECT pg_is_in_recovery()' f
 launch "$standby_ip" check
 sql "$standby" 'INSERT INTO taxi_replication_smoke VALUES (3)' >/dev/null
 wait_sql "$standby" 'SELECT count(*) FROM taxi_replication_smoke' 3
-printf '%s\n' 'PASS: Compose, empty-volume guard, CA rejection, TLS replication, safe bootstrap, writable-primary guards, and fenced manual promotion.'
+start_runtime "$standby_ip"
+printf '%s\n' 'PASS: Compose, empty-volume guard, CA rejection, TLS replication, safe bootstrap, writable-primary guards, API/worker health, and fenced manual promotion.'
