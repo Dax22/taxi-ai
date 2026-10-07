@@ -97,6 +97,7 @@ function sender(t) {
         return { invitation: { rideId, canCreate: true, link }, token: path.endsWith('/revoke') ? undefined : token };
       } } });
   panel.session(owner); panel.context({ id: 'sender', role: 'customer' }, { id: rideId, customer: { id: 'sender' }, delivery: {} });
+  nodes.get('parcel-link-recipient-email').value = 'recipient@example.test';
   return { panel, commands, copies, node: (id) => nodes.get('parcel-link-' + id), session(value) { session = value; }, failing(value) { failing = value; }, claim() { link = { ...link, claimed: true }; } };
 }
 
@@ -113,7 +114,9 @@ test('sender invitation is fragment-only and never sent automatically; replaceme
 test('sender checks cross-tab identity before writes and clears its private link on pause/reset', async (t) => {
   const h = sender(t); await flush(); h.node('create').handlers.click(); await flush();
   h.panel.pause(); assert.equal(h.node('url').value, ''); assert.equal(h.node('panel').hidden, true);
+  assert.equal(h.node('recipient-email').value, '', 'Private recipient input clears on pause.');
   h.panel.resume(); await flush(); h.session({ user: { id: 'other' }, csrfToken: 'new' });
+  h.node('recipient-email').value = 'recipient@example.test';
   h.node('replace').handlers.click(); h.node('confirm-action').handlers.click(); await flush();
   assert.equal(h.commands.length, 1); assert.equal(h.node('panel').hidden, true);
   assert.equal(h.node('url').value, '');

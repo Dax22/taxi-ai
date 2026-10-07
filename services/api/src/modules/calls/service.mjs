@@ -35,11 +35,17 @@ export function createCallsService({ repository, getAccount, sessionOwner, getRi
   }
   async function context(input, requireClient = false) {
     const user = (await actor(input.userId));
-    check(typeof input.sessionToken === 'string', 'UNAUTHENTICATED', 'Sign in to use calls.');
-    const sessionHash = tokens.digest(input.sessionToken);
+    let sessionHash;
+    if (input.nativeSessionId !== undefined) {
+      check(typeof input.nativeSessionId === 'string' && /^[a-f0-9-]{36}$/.test(input.nativeSessionId), 'UNAUTHENTICATED', 'This device session has expired.');
+      sessionHash = `native:${input.nativeSessionId}`;
+    } else {
+      check(typeof input.sessionToken === 'string', 'UNAUTHENTICATED', 'Sign in to use calls.');
+      sessionHash = tokens.digest(input.sessionToken);
+    }
     check((await sessionOwner(sessionHash)) === user.id, 'UNAUTHENTICATED', 'This call session has expired.');
     const clientHash = input.clientId ? tokens.digest(clientIdentity(input.clientId)) : null;
-    check(!requireClient || clientHash, 'INVALID_CALL_CLIENT', 'Open the call controls in this window.');
+    check(!requireClient || clientHash, 'INVALID_CALL_CLIENT', 'Open the call controls in this app session.');
     return { ...input, user, sessionHash, clientHash };
   }
   async function close(call, status, reason, now, userId = null) {
@@ -82,7 +88,7 @@ export function createCallsService({ repository, getAccount, sessionOwner, getRi
     (await sweep());
     const call = (await participant(ctx.user, id));
     check(isActiveCall(call) && call.status !== 'ringing', 'CALL_CLOSED', 'Answer the call before connecting audio.');
-    check(owns(call, ctx.userId, ctx.sessionHash, ctx.clientHash), 'CALL_WINDOW', 'Audio belongs to the browser window that started or answered this call.');
+    check(owns(call, ctx.userId, ctx.sessionHash, ctx.clientHash), 'CALL_WINDOW', 'Audio belongs to the app or browser session that started or answered this call.');
     const sdp = ctx.userId === call.callerId ? call.answerSdp : call.offerSdp;
     return { call: (await view(call, ctx)), configuration: config.rtc(call.id, ctx.userId, clock()),
       remoteDescription: sdp ? { type: ctx.userId === call.callerId ? 'answer' : 'offer', sdp } : null };
@@ -131,7 +137,7 @@ export function createCallsService({ repository, getAccount, sessionOwner, getRi
             else { (await repository.accept(id, ctx.sessionHash, ctx.clientHash, now)); (await audit.record(ctx.userId, 'call.accepted', id, now)); }
           } else if (action === 'signal') {
             check(call.status !== 'ringing', 'CALL_CLOSED', 'Wait for the recipient to answer.');
-            check(owns(call, ctx.userId, ctx.sessionHash, ctx.clientHash), 'CALL_WINDOW', 'This call belongs to another browser window.');
+            check(owns(call, ctx.userId, ctx.sessionHash, ctx.clientHash), 'CALL_WINDOW', 'This call belongs to another app or browser session.');
             check(data.type === (ctx.userId === call.callerId ? 'offer' : 'answer'), 'INVALID_CALL_SIGNAL', 'Wrong audio negotiation role.');
             const sdp = audioDescription(data.type, data.sdp, config.mode);
             check(data.type !== 'answer' || call.offerSdp, 'INVALID_CALL_SIGNAL', 'Wait for the caller’s connection offer.');
@@ -148,13 +154,13 @@ export function createCallsService({ repository, getAccount, sessionOwner, getRi
   }
   async function pulse(input, id, data) {
     fields(data, ['connected']);
-    check(typeof data.connected === 'boolean', 'INVALID_CALL_SIGNAL', 'Send the browser connection state.');
+    check(typeof data.connected === 'boolean', 'INVALID_CALL_SIGNAL', 'Send the current audio connection state.');
     const ctx = (await context(input, true));
     (await sweep());
     return (await unitOfWork(async () => {
       const call = (await participant(ctx.user, id));
       check(isActiveCall(call), 'CALL_CLOSED', 'This call has ended.');
-      check(owns(call, ctx.userId, ctx.sessionHash, ctx.clientHash), 'CALL_WINDOW', 'This call belongs to another browser window.');
+      check(owns(call, ctx.userId, ctx.sessionHash, ctx.clientHash), 'CALL_WINDOW', 'This call belongs to another app or browser session.');
       const now = clock();
       if ((await repository.pulse(id, ctx.userId === call.callerId, data.connected, now))) (await audit.record(ctx.userId, 'call.connected', id, now));
       return { call: (await view((await repository.find(id)), ctx)) };

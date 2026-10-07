@@ -1,6 +1,8 @@
+import { accountNoticeRoutes } from '../modules/account-controls/routes.mjs';
 import { safetyMonitoringRoutes } from '../modules/safety-monitoring/routes.mjs';
 import { familyRoutes } from '../modules/family/routes.mjs';
 import { parcelTrackingRoutes } from '../modules/parcel-tracking/routes.mjs';
+import { deliveryOperationsRoutes } from '../modules/delivery-operations/routes.mjs';
 import { deliveryUpdateRoutes } from '../modules/delivery-updates/routes.mjs';
 import { MOBILE_API_VERSION } from '../../../../packages/shared/src/mobile-contracts.mjs';
 import { check } from '../shared/errors.mjs';
@@ -18,11 +20,12 @@ import { eatsRoutes } from '../modules/eats/routes.mjs';
 import { realtimeResponse, requestAbortSignal } from '../modules/realtime/routes.mjs';
 
 /** Versioned native surface. Cookie identity and browser CSRF are never reused. */
-export function createMobileRouter({ devices, accounts, drivers, rides, dispatch, eats, locations, backgroundLocations, availability, chat, notifications, deliveryUpdates, announcements, safety, safetyMonitoring, guestRides, parcelTracking, family, vehicleChecks, payments, checkoutPayments, clock, rateLimiter, googleAuth, accountEmail, realtime }) {
+export function createMobileRouter({ accountControls, devices, accounts, drivers, rides, dispatch, eats, locations, backgroundLocations, availability, chat, calls, notifications, deliveryUpdates, announcements, safety, safetyMonitoring, guestRides, parcelTracking, deliveryOperations, family, vehicleChecks, payments, checkoutPayments, mobileOperations, clock, rateLimiter, googleAuth, accountEmail, realtime }) {
   const monitorRoutes = safetyMonitoringRoutes(safetyMonitoring).filter(r=>!r.role);
   const foodRoutes = eatsRoutes(eats);
+  const noticeRoutes = accountNoticeRoutes(accountControls);
   const relativesRoutes = familyRoutes(family);
-  const parcelRoutes = parcelTrackingRoutes(parcelTracking);
+  const parcelRoutes = [...parcelTrackingRoutes(parcelTracking), ...deliveryOperationsRoutes(deliveryOperations)];
   const deliveryRoutes = deliveryUpdateRoutes(deliveryUpdates);
   const booking = createMobileBooking({ rides, locations, availability, clock });
   const journeys = createMobileJourneys({ rides, dispatch, availability, chat, clock });
@@ -60,6 +63,7 @@ export function createMobileRouter({ devices, accounts, drivers, rides, dispatch
     const foodImage = !write && /^\/eats\/images\/[a-f0-9-]{36}$/.test(path);
     (await rateLimiter.consume(auth ? `auth:${clientAddress}` : foodImage ? `mobile-image:${session.user.id}` : `mobile:${session.user.id}`,
       clock(), auth ? 30 : foodImage ? 600 : 120, auth ? 10 * 60_000 : 60_000));
+    if (write && path === '/auth/register') await rateLimiter.consume(`register:${clientAddress}`, clock(), 5, 60 * 60_000);
     let data;
     if (write) {
       data = await readBody(request, path === '/driver/application/upload' || /^\/eats\/stores\/[a-f0-9-]{36}\/(menu|photo|assets)$/.test(path) || /^\/vehicle-checks\/rides\/[a-f0-9-]{36}$/.test(path) ? 2_800_000 : path === '/auth/google' ? 20_000 : 4096);
@@ -76,7 +80,13 @@ export function createMobileRouter({ devices, accounts, drivers, rides, dispatch
       return;
     }
     let body;
-    if (path.startsWith('/parcels/')) {
+    if (path==='/account/notices'||path.startsWith('/account/notices/')) {
+      const route=noticeRoutes.find(entry=>entry.method===request.method&&entry.path.test('/api'+path));
+      check(route,'NOT_FOUND','Account notice endpoint not found.');
+      body=(await route.handle({user:session.user,data,query,key:request.headers['idempotency-key'],match:('/api'+path).match(route.path),
+        reauthenticate:async()=>{const fresh=await devices.sessionFor(accessToken);check(fresh,'UNAUTHENTICATED','Sign in again.');return fresh.user;}})).body;
+    }
+    else if (path.startsWith('/parcels/')) {
       const parcelPath = `/api${path}`;
       const route = parcelRoutes.find(entry => entry.method === request.method && entry.path.test(parcelPath));
       check(route, 'NOT_FOUND', 'Parcel endpoint not found.');
@@ -111,6 +121,16 @@ export function createMobileRouter({ devices, accounts, drivers, rides, dispatch
     }
     else if (auth) body = path === '/auth/login' ? await devices.login(data) : path === '/auth/refresh' ? (await devices.refresh(data)) : (await devices.logout(data));
     else if (!write && path === '/session') body = { user: session.user, sessionId: session.id };
+    else if (write && path === '/device/heartbeat') body = await mobileOperations.heartbeat({ userId: session.user.id, sessionId: session.id }, data);
+    else if (!write && path === '/calls') body = await calls.list({ userId: session.user.id, nativeSessionId: session.id, clientId: session.id });
+    else if (write && /^\/rides\/[a-f0-9-]{36}\/calls$/.test(path)) body = await calls.mutate({ userId: session.user.id, nativeSessionId: session.id,
+      clientId: session.id, action: 'create', rideId: path.split('/')[2], key: request.headers['idempotency-key'], data });
+    else if (!write && /^\/calls\/[a-f0-9-]{36}\/media$/.test(path)) body = await calls.media({ userId: session.user.id, nativeSessionId: session.id, clientId: session.id }, path.split('/')[2]);
+    else if (write && /^\/calls\/[a-f0-9-]{36}\/(accept|decline|end|signal)$/.test(path)) {
+      const parts=path.split('/'), result=await calls.mutate({ userId: session.user.id, nativeSessionId: session.id, clientId: session.id,
+        action: parts[3], id: parts[2], key: request.headers['idempotency-key'], data }); body=result;
+    }
+    else if (write && /^\/calls\/[a-f0-9-]{36}\/pulse$/.test(path)) body = await calls.pulse({ userId: session.user.id, nativeSessionId: session.id, clientId: session.id }, path.split('/')[2], data);
     else if (!write && path === '/account/email') body = (await accountEmail.status(session.user.id));
     else if (!write && path === '/account/kemmy-setup') body = (await accounts.kemmySetup(session.user.id));
     else if (write && path === '/account/kemmy-setup') body = (await accounts.updateKemmySetup(session.user.id,data));

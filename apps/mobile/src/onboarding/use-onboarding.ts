@@ -4,7 +4,7 @@ import { useFocusEffect } from 'expo-router';
 import { randomUUID } from 'expo-crypto';
 import { ApiError } from '../api/client';
 import { useSession } from '../session/provider';
-import { DRIVER_DOCUMENTS, driverDocumentDeadline } from '../../../../packages/shared/src/driver-onboarding.mjs';
+import { DRIVER_DOCUMENTS, DRIVER_REQUIRED_DOCUMENTS, driverDocumentDeadline } from '../../../../packages/shared/src/driver-onboarding.mjs';
 import type { DocumentKind, DriverCommands, DriverOnboarding } from '../../../../packages/shared/src/mobile-contracts.mjs';
 import { draftFromDetails, detailsFromDraft } from './form';
 import type { DriverDraft } from './form';
@@ -45,7 +45,7 @@ export function useDriverOnboarding(editVehicle = false) {
   function accept(app: DriverOnboarding | null, name: string, vehicle = client.account()?.driver?.vehicle) {
     setApplication(app); const next = draftFromDetails(app?.details ?? null, app?.vehicle ?? vehicle, name);
     savedDraft.current = JSON.stringify(next); setDraft(next); setFile(null); setExpiresOn('');
-    setKind((Object.keys(DRIVER_DOCUMENTS) as DocumentKind[]).find((k) => app?.eligibility.missing.includes(k)) ?? 'profile_photo');
+    setKind((DRIVER_REQUIRED_DOCUMENTS as readonly DocumentKind[]).find((k) => app?.eligibility.missing.includes(k)) ?? 'profile_photo');
     setStale(false); retry.current = null;
   }
   async function load(assertCurrent: () => void) {
@@ -122,7 +122,7 @@ export function useDriverOnboarding(editVehicle = false) {
       if (app.details || app.documents.length || app.status !== 'draft') throw new ApiError('This application was changed elsewhere. Load and review the saved details.', 'STALE_VERSION', 409);
     }
     const next = await command('save', { expectedVersion: app.version, details }); current();
-    accept(next, user!.name); setStep(1); setNotice('Your details are saved. If you changed the vehicle, upload its replacement vehicle document, insurance and vehicle photo next.');
+    accept(next, user!.name); setStep(1); setNotice('Your details are saved. If you changed the vehicle, upload its replacement vehicle document and vehicle photo next.');
   });
   const chooseFile = () => run(async (current) => { const next = await pickDriverFile(); current(); if (next) setFile(next); });
   const captureFile = () => run(async (current) => {
@@ -150,7 +150,7 @@ export function useDriverOnboarding(editVehicle = false) {
     if (DRIVER_DOCUMENTS[kind].expires && driverDocumentDeadline(expiry) === null) throw new Error('Enter a valid expiry date as YYYY-MM-DD.');
     const next = await command('upload', { expectedVersion: application.version, kind, ...file, expiresOn: expiry }); current();
     setApplication(next); setFile(null); setExpiresOn('');
-    setKind((Object.keys(DRIVER_DOCUMENTS) as DocumentKind[]).find((k) => next.eligibility.missing.includes(k)) ?? kind);
+    setKind((DRIVER_REQUIRED_DOCUMENTS as readonly DocumentKind[]).find((k) => next.eligibility.missing.includes(k)) ?? kind);
     setNotice('Document saved privately to your application.');
   });
   const change = (action: 'submit' | 'reopen' | 'remove', documentId?: string) => run(async (current) => {

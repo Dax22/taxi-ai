@@ -32,14 +32,14 @@ try {
   const maps = createMapProvider({ env: { ...process.env, TAXI_AI_MAPS_MODE: process.env.TAXI_AI_MAPS_MODE ?? (runtime.mode === 'staging' ? 'off' : 'community') } });
   const dispatch = createDispatchConfig(process.env);
   if (runtime.mode === 'staging' && calls.mode === 'local') throw new Error('Staging calls require off or a configured relay.');
-  console.log(`Configuration valid: ${runtime.mode}; calls=${calls.mode}; maps=${maps.mode}; google=${google.enabled ? 'on' : 'off'}; nativeGoogle=${google.nativeClientIds.length ? 'on' : 'off'}; email=${email.enabled ? 'smtp' : 'off'}; invited testers=${runtime.testers.size}.`);
+  console.log(`Configuration valid: ${runtime.mode}; access=${runtime.accessMode}; calls=${calls.mode}; maps=${maps.mode}; google=${google.enabled ? 'on' : 'off'}; nativeGoogle=${google.nativeClientIds.length ? 'on' : 'off'}; email=${email.enabled ? 'smtp' : 'off'}; invited testers=${runtime.testers.size}.`);
   console.log(`Phone alerts: ${push.enabled ? 'configured' : 'off'}.`);
   console.log(`Staff authenticator: ${staffMfa.factor.available ? 'configured' : 'unavailable'}; required=${staffMfa.required}.`);
   console.log(`Storage: ${process.env.TAXI_AI_DATABASE_URL ? 'PostgreSQL (schema must already be migrated)' : 'SQLite (single instance)'}; process role=${workers.role}.`);
   console.log(`Vehicle photo checks: ${vision.enabled ? 'configured' : 'off'}.`);
   console.log(`Driver face comparison: ${driverFace.provider}; this does not validate credentials, licence records or liveness.`);
   console.log(`Ride matching: ${dispatch.mode}; pickup road estimates ${maps.mode === 'off' ? 'unavailable (distance fallback)' : 'use the configured router'}.`);
-  console.log(`Passenger ride requests: ${ridePilot.paused ? 'paused' : ridePilot.bounds ? 'test-only within configured area' : 'local development only'}.`);
+  console.log(`Passenger ride requests: ${ridePilot.paused ? 'paused' : ridePilot.coverageMode === 'nigeria' ? 'Nigeria coverage enabled; available drivers still required' : ridePilot.bounds ? 'within configured pilot area' : 'local development only'}.`);
   console.log(`Payments: ${paystack.enabled ? 'Paystack test checkout; live money disabled' : 'Paystack off'}.`);
   console.log('This checks configuration only, not TLS, network providers, disk persistence or a deployed server.');
 } catch (error) { console.error(error.message); process.exitCode = 1; }

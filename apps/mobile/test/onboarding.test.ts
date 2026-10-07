@@ -70,7 +70,7 @@ test('native vehicle applications retain category and require a bounded delivery
 
 test('native face comparison requires explicit consent, current saved evidence and an editable application', () => {
   const check: DriverFaceCheck = { available: true, provider: 'aws_rekognition', status: 'not_started', reason: null, checkedAt: null,
-    similarity: null, threshold: 95, consentVersion: 'driver-face-match-v1', retryAfter: null };
+    similarity: null, threshold: 95, consentVersion: 'driver-face-match-v2', retryAfter: null };
   const app = parseOnboarding({ apiVersion: 1, serverNow: 1000, application: { ...application, faceCheck: check, documents: [
     { id: 'selfie', kind: 'profile_photo', name: 'selfie.jpg', mimeType: 'image/jpeg', sizeBytes: 100, expiresOn: null },
     { id: 'licence', kind: 'driving_licence', name: 'licence.jpg', mimeType: 'image/jpeg', sizeBytes: 100, expiresOn: '2099-12-31' },
@@ -90,7 +90,7 @@ test('native face comparison requires explicit consent, current saved evidence a
 
 test('native face results preserve review states and reject malformed evidence without breaking older servers', () => {
   const check: DriverFaceCheck = { available: true, provider: 'aws_rekognition', status: 'needs_review', reason: 'low_similarity', checkedAt: 1000,
-    similarity: 54, threshold: 95, consentVersion: 'driver-face-match-v1', retryAfter: 61000 };
+    similarity: 54, threshold: 95, consentVersion: 'driver-face-match-v2', retryAfter: 61000 };
   const parse = (faceCheck: unknown): DriverOnboarding => parseOnboarding({ apiVersion: 1, serverNow: 1000, application: { ...application, faceCheck } });
   assert.equal(parse(undefined).faceCheck, undefined);
   assert.equal(parse(check).faceCheck?.status, 'needs_review');

@@ -5,8 +5,9 @@ export const IMAGE = { name: 'fixture.png', mimeType: 'image/png',
   base64: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aA3cAAAAASUVORK5CYII=' };
 export const DETAILS = { legalName: 'Fictional Test Driver', phone: '+2348000000000', licenceNumber: 'TEST-LICENCE-ONLY',
   vehicle: { make: 'Toyota', model: 'Corolla', year: 2020, colour: 'Yellow', plate: 'TEST-DRIVER' } };
-export const CHECKS = { identity: true, licence: true, vehicle: true, insurance: true };
-export const KINDS = ['profile_photo', 'driving_licence', 'vehicle_registration', 'insurance', 'vehicle_photo'];
+export const CHECKS = { identity: true, licence: true, vehicle: true };
+export const KINDS = ['profile_photo', 'driving_licence', 'vehicle_registration', 'vehicle_photo'];
+export const LEGACY_OPTIONAL_KINDS = ['insurance'];
 export async function submitApplication(api, expiresOn = '2099-12-31', details = DETAILS) {
   let { application } = await api.request('/api/driver/application');
   ({ application } = await api.command('/api/driver/application/save', { expectedVersion: application.version, details }));

@@ -9,6 +9,19 @@ import { createDispatchWakeupSubscription } from './dispatch-wakeups.mjs';
 
 export const POSTGRES_MIGRATIONS = ['001_baseline.sql', '002_scale.sql', '003_family_safety.sql', '004_family_delivery.sql', '005_staff_access.sql', '006_admin_cases.sql', '007_admin_operations.sql', '008_admin_compliance.sql', '009_driver_face_checks.sql', '010_parcel_tracking.sql', '011_admin_announcements.sql', '012_kemmy_setup.sql', '013_google_registration_intent.sql', '014_dispatch_wakeups.sql', '015_eats_photo_workflow.sql', '016_eats_delivery_profiles.sql', '017_eats_live_tracking.sql', '018_background_location_tokens.sql', '019_checkout_payments.sql'];
 POSTGRES_MIGRATIONS.push('020_delivery_updates.sql');
+POSTGRES_MIGRATIONS.push('021_snapshot_import_constraints.sql');
+POSTGRES_MIGRATIONS.push('022_parcel_hardening.sql');
+POSTGRES_MIGRATIONS.push('023_admin_command_center.sql');
+POSTGRES_MIGRATIONS.push('024_account_controls.sql');
+POSTGRES_MIGRATIONS.push('025_admin_safety_alerts.sql');
+POSTGRES_MIGRATIONS.push('026_account_welcome_email.sql');
+POSTGRES_MIGRATIONS.push('027_paystack_live_mode.sql');
+POSTGRES_MIGRATIONS.push('028_dispatch_ml_ranking.sql');
+POSTGRES_MIGRATIONS.push('029_matching_intelligence.sql');
+POSTGRES_MIGRATIONS.push('030_production_acceptance.sql');
+POSTGRES_MIGRATIONS.push('031_mobile_operations.sql');
+POSTGRES_MIGRATIONS.push('032_investigation_exports.sql');
+POSTGRES_MIGRATIONS.push('033_investigation_location_evidence.sql');
 export const POSTGRES_SCHEMA_VERSION = POSTGRES_MIGRATIONS.length;
 const safeNumber = (value) => {
   const result = Number(value);
@@ -33,6 +46,7 @@ const integer = (value, fallback, min, max, label) => {
 export async function openPostgresDatabase({
   connectionString = process.env.TAXI_AI_DATABASE_URL,
   max = process.env.TAXI_AI_DATABASE_POOL_SIZE,
+  transactionRetries = process.env.TAXI_AI_DATABASE_TRANSACTION_RETRIES,
   schema = process.env.TAXI_AI_DATABASE_SCHEMA ?? 'public',
   ssl,
   migrate = false,
@@ -42,6 +56,7 @@ export async function openPostgresDatabase({
 } = {}) {
   if (!connectionString) throw new TypeError('TAXI_AI_DATABASE_URL is required for PostgreSQL.');
   schema = schemaName(schema);
+  transactionRetries = integer(transactionRetries, 6, 0, 10, 'database transaction retries');
   const pool = new pg.Pool({ connectionString, max: integer(max, 10, 1, 100, 'database pool size'),
     connectionTimeoutMillis: 5000, idleTimeoutMillis: 30000,
     statement_timeout: 15000, lock_timeout: 5000, idle_in_transaction_session_timeout: 30000,
@@ -83,7 +98,7 @@ export async function openPostgresDatabase({
       });
     },
     async exec(sql) { return query(sql); },
-    async transaction(callback, { retries = 3, isolation = 'SERIALIZABLE' } = {}) {
+    async transaction(callback, { retries = transactionRetries, isolation = 'SERIALIZABLE' } = {}) {
       if (!['SERIALIZABLE', 'REPEATABLE READ', 'READ COMMITTED'].includes(isolation)) throw new TypeError('Invalid transaction isolation.');
       if (!Number.isInteger(retries) || retries < 0 || retries > 10) throw new TypeError('Invalid transaction retry limit.');
       const current = activeContext();

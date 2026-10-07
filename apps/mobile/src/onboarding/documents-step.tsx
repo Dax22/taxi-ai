@@ -1,6 +1,6 @@
 import { Image, View } from 'react-native';
 import { Text } from '../ui/typography';
-import { DRIVER_DOCUMENTS } from '../../../../packages/shared/src/driver-onboarding.mjs';
+import { DRIVER_DOCUMENTS, DRIVER_REQUIRED_DOCUMENTS } from '../../../../packages/shared/src/driver-onboarding.mjs';
 import type { DocumentKind, DriverOnboarding } from '../../../../packages/shared/src/mobile-contracts.mjs';
 import type { DriverFile } from './files';
 import { Button, Card, Field, Pill, styles } from '../ui/components';
@@ -9,10 +9,10 @@ export function DocumentsStep({ application, kind, onKind, expiresOn, onExpiry, 
   { application: DriverOnboarding; kind: DocumentKind; onKind(value: DocumentKind): void; expiresOn: string; onExpiry(value: string): void;
     file: DriverFile | null; onChoose(): void; onCapture(): void; onClear(): void; onUpload(): void; onRemove(id: string): void; onContinue(): void; disabled: boolean; pending: boolean }) {
   const ready = application.details && !application.eligibility.missing.length && !application.eligibility.expired.length;
-  return <><Card><Pill>{`${application.documents.length} OF 5 DOCUMENTS ADDED`}</Pill><Text style={styles.h2}>A few checks. A better journey.</Text>
+  return <><Card><Pill>{`${application.documents.filter((d) => DRIVER_REQUIRED_DOCUMENTS.includes(d.kind)).length} OF ${DRIVER_REQUIRED_DOCUMENTS.length} DOCUMENTS ADDED`}</Pill><Text style={styles.h2}>A few checks. A better journey.</Text>
     <Text style={styles.body}>Add clear PNG or JPEG images up to 2 MiB each. Include the car and its readable number plate in the vehicle photo.</Text>
     <Text style={styles.small}>These uploads are private to you and the review team. They are not customer-facing vehicle photos. Expiry dates use Nigeria time (WAT).</Text>
-  </Card><Card>{(Object.entries(DRIVER_DOCUMENTS) as [DocumentKind, { label: string; expires: boolean }][]).map(([key,spec]) => {
+  </Card><Card>{(DRIVER_REQUIRED_DOCUMENTS as readonly DocumentKind[]).map((key) => { const spec = DRIVER_DOCUMENTS[key];
     const doc = application.documents.find((d) => d.kind === key), expired = application.eligibility.expired.includes(key);
     return <View key={key} style={[styles.stack,{ paddingVertical: 12 }]}><Text style={styles.body}>{spec.label}</Text>
       <Text style={styles.small}>{doc ? `${expired ? 'Expired · ' : 'Added · '}${doc.name}${doc.expiresOn ? ` · expires ${doc.expiresOn}` : ''}` : 'Still needed'}</Text>

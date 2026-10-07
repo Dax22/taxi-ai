@@ -31,7 +31,7 @@ export function RoutePreview({ preview, now, disabled, busy, onRequest, onPrevie
         disabled={disabled || busy || selected} onPress={() => onChooseCategory(id)}/>;
     })}</View>}
     <Pill>{`${vehicleCategory(selectedCategory)?.name.toUpperCase()} · REVIEW YOUR JOURNEY`}</Pill>
-    {drawing && <NativeMap route={points} direct={preview.route?.distanceKind === 'straight_line'} summary={`Planned route from ${preview.pickup} to ${preview.destination}. This is not live tracking.`}
+    {drawing && <NativeMap eager height={300} route={points} direct={preview.route?.distanceKind === 'straight_line'} summary={`Planned route from ${preview.pickup} to ${preview.destination}. This is not live tracking.`}
       pins={[{ ...points[0], id: 'pickup', title: 'A · Pickup route point', description: preview.pickup }, { ...points[points.length - 1], id: 'destination', title: 'B · Destination route point', description: preview.destination }]}
       fallback={<><View style={look.map} accessible accessibilityLabel={`Route outline from ${preview.pickup} to ${preview.destination}. This is not a street map or live tracking.`}>
       <Svg width="100%" height="100%" viewBox="0 0 360 220" preserveAspectRatio="xMidYMid meet" accessible={false}>
@@ -49,7 +49,7 @@ export function RoutePreview({ preview, now, disabled, busy, onRequest, onPrevie
     {preview.route?.distanceKind === 'straight_line' ? <><Text style={styles.body}>{(preview.route.distanceMeters / 1000).toFixed(1)} km in a straight line</Text><Text style={styles.small}>Direct-distance delivery estimate, not a road route or driving ETA. Confirm access and timing with the driver.</Text></> : preview.route ? <><View style={styles.row}><Text style={styles.body}>{(preview.route.distanceMeters / 1000).toFixed(1)} km</Text><Text style={styles.body}>About {Math.ceil((preview.route.durationSeconds ?? 0) / 60)} min driving</Text></View>
       <Text style={styles.small}>Route data: © OpenStreetMap contributors · OSRM. Travel time excludes traffic and driver arrival.</Text></>
       : <Text style={styles.small}>Sample areas for local testing. No road route or travel time is calculated.</Text>}
-    <Text style={styles.small}>This is a starting fare, not an accepted price. After a driver joins, agree the final amount in Taxi Ai chat before confirming the ride. No live dispatch or payment.</Text>
+    <Text style={styles.small}>This is a starting fare, not an accepted price. After a driver joins, agree the final amount in Taxi Ai chat before confirming the ride.</Text>
     {preview.expiresAt !== null && <Text style={styles.small}>{expired ? 'This preview has expired.' : `Route preview valid for about ${Math.max(1, Math.ceil((preview.expiresAt - now) / 60_000))} more min.`}</Text>}
     {expired ? <Button title={isRide ? 'Refresh ride options' : 'Refresh route preview'} onPress={onPreview} disabled={disabled}/>
       : <Button title={isRide ? `Find a ${vehicleCategory(selectedCategory)?.name ?? 'selected'} driver` : 'Find a delivery driver'} onPress={onRequest} busy={busy} disabled={disabled}/>}

@@ -2,11 +2,11 @@ import { check } from '../../shared/errors.mjs';
 import { fields, label } from '../../shared/validation.mjs';
 import { hasCapability, requireRole } from '../../shared/policies.mjs';
 import { applicationDetails, documentExpiry, eligibility, canonical } from './domain.mjs';
-import { DRIVER_REVIEW_CHECKS } from '../../../../../packages/shared/src/driver-onboarding.mjs';
+import { DRIVER_REVIEW_CHECKS, DRIVER_REQUIRED_DOCUMENTS } from '../../../../../packages/shared/src/driver-onboarding.mjs';
 import { asyncMap } from '../../shared/async-collections.mjs';
 
 
-/** Automatic face comparison supplies evidence; staff still review licence, vehicle and insurance. */
+/** Automatic face comparison supplies evidence; staff still review identity, licence and vehicle. */
 export function createDriversService({ repository, getAccount, hasDriverWork, codec, faceProvider, faceChecksFactory, tokens, unitOfWork, audit, clock }) {
   const faceChecks = faceChecksFactory({ repository, provider: faceProvider, getAccount, hasDriverWork,
     access, editable, view, canonical, tokens, unitOfWork, audit, clock });
@@ -34,18 +34,18 @@ export function createDriversService({ repository, getAccount, hasDriverWork, co
   }
   function ready(app, documents, now) {
     const state = eligibility(app, documents, now);
-    check(app.details && !state.missing.length && !state.expired.length, 'APPLICATION_INCOMPLETE', 'Complete the details and upload all five current documents before submitting or approving.');
+    check(app.details && !state.missing.length && !state.expired.length, 'APPLICATION_INCOMPLETE', 'Complete the details and upload all four current required documents before submitting or approving.');
     // Recheck old drafts/submissions against today's policy without rewriting approved history.
     applicationDetails(app.details, now);
   }
   async function command(user, id, action, data, key, reauthenticate) {
     if (action === 'face-check') return await faceChecks.run(user, id, data, key, reauthenticate);
     (await access(user, id));
-    if (action === 'review') { requireRole(user, 'admin'); check(user.id !== id, 'FORBIDDEN', 'You cannot review your own application.'); }
+    if (['review','approve-exception'].includes(action)) { requireRole(user, 'admin'); check(user.id !== id, 'FORBIDDEN', 'You cannot review your own application.'); }
     else check(hasCapability(user, 'driver') && user.id === id, 'FORBIDDEN', 'Only the applicant can change the application.');
     check(typeof key === 'string' && /^[A-Za-z0-9_-]{16,128}$/.test(key), 'INVALID_IDEMPOTENCY_KEY', 'A unique request key is required.');
     const allowed = { save: ['details'], upload: ['kind', 'name', 'mimeType', 'base64', 'expiresOn'],
-      remove: ['documentId'], submit: [], reopen: [], review: ['decision', 'reason', 'reference', 'checks'] }[action];
+      remove: ['documentId'], submit: [], reopen: [], review: ['decision', 'reason', 'reference', 'checks'], 'approve-exception': [] }[action];
     check(allowed, 'NOT_FOUND', 'Application action not found.');
     fields(data, ['expectedVersion', ...allowed], action === 'review' ? ['expectedVersion', 'decision', 'reason'] : ['expectedVersion', ...allowed]);
     check(Number.isSafeInteger(data.expectedVersion) && data.expectedVersion >= 0, 'INVALID_VERSION', 'Use the application version shown on screen.');
@@ -98,7 +98,7 @@ export function createDriversService({ repository, getAccount, hasDriverWork, co
         editable(app); ready(app, documents, now);
         await faceChecks.requireCompleted(id, documents);
         app.status = 'submitted'; app.submittedAt = now; app.verification = null;
-      } else {
+      } else if (action === 'review') {
         check(app.status === 'submitted', 'APPLICATION_LOCKED', 'Only a submitted application can be reviewed.');
         check(['approved', 'rejected', 'changes_requested'].includes(data.decision), 'INVALID_DECISION', 'Approve, reject or request corrections.');
         const reason = label(data.reason, 'Review reason', 10, 1000);
@@ -106,23 +106,37 @@ export function createDriversService({ repository, getAccount, hasDriverWork, co
           const documents = (await repository.documents(id)); ready(app, documents, now);
           const faceCheck = await faceChecks.requireCompleted(id, documents);
           fields(data.checks, Object.keys(DRIVER_REVIEW_CHECKS));
-          check(Object.values(data.checks).every((value) => value === true), 'INVALID_REVIEW', 'Record all four manual checks before approval.');
+          check(Object.values(data.checks).every((value) => value === true), 'INVALID_REVIEW', 'Record all three manual checks before approval.');
+          const requiredKinds = new Set(DRIVER_REQUIRED_DOCUMENTS);
           const read = (await repository.readIds(id, user.id));
-          check(documents.every((doc) => read.includes(doc.id)), 'INVALID_REVIEW', 'Download and inspect every current document before approval.');
+          check(documents.filter((doc) => requiredKinds.has(doc.kind)).every((doc) => read.includes(doc.id)), 'INVALID_REVIEW', 'Download and inspect every current required document before approval.');
           app.verification = { method: 'manual', reference: label(data.reference, 'Verification reference', 5, 200),
-            checks: { ...data.checks }, documents: documents.map(({ id, kind, sha256, expiresOn }) => ({ id, kind, sha256, expiresOn })),
+            checks: { ...data.checks }, documents: documents.filter((doc) => requiredKinds.has(doc.kind)).map(({ id, kind, sha256, expiresOn }) => ({ id, kind, sha256, expiresOn })),
             reviewerId: user.id, checkedAt: now,
             ...(faceCheck.checkedAt !== null ? { faceCheck: { ...faceCheck, attemptId: (await repository.faceCheck(id))?.id ?? null } } : {}) };
         } else app.verification = null;
         app.status = data.decision; app.reviewedAt = now; app.reviewedBy = user.id; app.reviewReason = reason;
         event = { reason, details: app.details, verification: app.verification };
+      } else {
+        check(['draft','submitted','changes_requested','rejected'].includes(app.status), 'APPLICATION_LOCKED', 'This driver is already approved or the application cannot be overridden.');
+        check(app.details, 'APPLICATION_INCOMPLETE', 'Save the driver and vehicle details before using an approval exception.');
+        applicationDetails(app.details, now);
+        const documents = await repository.documents(id), state = eligibility(app, documents, now), faceCheck = await faceChecks.project(id, documents);
+        const reason = 'Approved by an administrator with an incomplete-registration exception.';
+        app.verification = { method: 'admin_exception', reference: `admin-exception:${id}:${now}`,
+          reviewerId: user.id, checkedAt: now, missing: [...state.missing], expired: [...state.expired],
+          documents: documents.map(({ id, kind, sha256, expiresOn }) => ({ id, kind, sha256, expiresOn })),
+          faceCheck: { ...faceCheck, attemptId: (await repository.faceCheck(id))?.id ?? null } };
+        app.status = 'approved'; app.reviewedAt = now; app.reviewedBy = user.id; app.reviewReason = reason;
+        event = { reason, details: app.details, verification: app.verification, missing: [...state.missing], expired: [...state.expired] };
       }
       app.version++; app.updatedAt = now;
       (await repository.save(app));
       (await repository.setProfile(id, app.status === 'approved' ? 'approved' : app.status === 'rejected' ? 'rejected' : 'pending',
         app.status === 'approved' ? app.details : null, action === 'review' ? user.id : null, now));
-      (await repository.event(id, user.id, action === 'review' ? app.status : action, app.version, event, now));
-      (await audit.record(user.id, `driver.application.${action === 'review' ? app.status : action}`, id, now));
+      const recordedAction = action === 'review' ? app.status : action === 'approve-exception' ? 'approved_exception' : action;
+      (await repository.event(id, user.id, recordedAction, app.version, event, now));
+      (await audit.record(user.id, `driver.application.${recordedAction}`, id, now));
       (await repository.saveCommand(user.id, key, fingerprint, id));
       return { application: (await view(user, id)), replayed: false };
     }));
@@ -137,5 +151,5 @@ export function createDriversService({ repository, getAccount, hasDriverWork, co
         base64: codec.encode((await repository.content(documentId))) };
     }));
   }
-  return Object.freeze({ list, get: view, command, download, eligibilityFor });
+  return Object.freeze({ list, get: view, command, download, eligibilityFor, faceStatusFor: async (id) => faceChecks.project(id, await repository.documents(id)) });
 }

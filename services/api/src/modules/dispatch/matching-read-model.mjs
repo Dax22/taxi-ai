@@ -25,7 +25,7 @@ export function createMatchingReadModel({ repository, driverEligibility, clock, 
         documentsByDriver.get(document.driverId).push(document);
       }
       for (const row of rows) {
-        if (row.role === 'admin' || !row.driverCapability || row.status !== 'approved' || !row.sessionActive
+        if (row.workRestricted || row.role === 'admin' || !row.driverCapability || row.status !== 'approved' || !row.sessionActive
           || row.nativeSessionId && !row.customerCapability || row.driverBusy || row.customerBusy || row.eatsBusy) continue;
         const details = row.detailsJson ? JSON.parse(row.detailsJson) : null;
         const application = { status: row.applicationStatus, details,
@@ -47,7 +47,7 @@ export function createMatchingReadModel({ repository, driverEligibility, clock, 
     const result = new Map(); ids = unique(ids);
     for (let offset = 0; offset < ids.length; offset += PAGE) {
       const page = ids.slice(offset, offset + PAGE);
-      const rows = await repository.rideRows(page);
+      const rows = await repository.rideRows(page,clock());
       for (const { routeJson, deliveryJson, recipientId, ...ride } of rows) result.set(ride.id, {
         ride, route: routeJson ? JSON.parse(routeJson) : null,
         weightKg: deliveryJson ? JSON.parse(deliveryJson).weightKg : null, recipientId });

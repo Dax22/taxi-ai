@@ -1,5 +1,5 @@
-import { useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { Alert, AppState, Share } from 'react-native';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { Alert, AppState, Share, TextInput } from 'react-native';
 import { randomUUID } from 'expo-crypto';
 import { useSession } from '../session/provider';
 import { ParcelLinkController } from './link-controller';
@@ -11,6 +11,8 @@ export function ParcelRecipientLink({ rideId }: { rideId: string }) {
   const { client, user, mode, blocked } = useSession();
   const controller = useMemo(() => new ParcelLinkController(client, rideId, randomUUID), [client, user?.id, mode, rideId]);
   const s = useSyncExternalStore(controller.subscribe, controller.snapshot);
+  const [recipientEmail, setRecipientEmail] = useState('');
+  useEffect(() => { setRecipientEmail(''); }, [user?.id, rideId]);
   const [sharing, setSharing] = useState(false), sharingRef = useRef(false);
   useParcelFocus(controller);
   const link = !blocked ? s.value?.link : null;
@@ -22,7 +24,7 @@ export function ParcelRecipientLink({ rideId }: { rideId: string }) {
       'The existing invitation and recipient’s tracking access will stop working. This does not cancel the delivery.', [
       { text: 'Keep access', style: 'cancel' }, { text: action === 'replace' ? 'Replace invitation' : 'Revoke access', style: 'destructive', onPress: () => {
         if (AppState.currentState !== 'active' || client.account()?.id !== user?.id) return;
-        if (action === 'replace') void controller.create(shown.id); else void controller.revoke(shown.id, shown.version);
+        if (action === 'replace') void controller.create(shown.id, recipientEmail); else void controller.revoke(shown.id, shown.version);
       } },
     ]);
   }
@@ -37,11 +39,12 @@ export function ParcelRecipientLink({ rideId }: { rideId: string }) {
     } catch { /* Cancelling the operating-system share menu never changes the invitation. */ }
     finally { sharingRef.current = false; setSharing(false); }
   }
-  return <Card><Text style={styles.h2}>Recipient tracking</Text><Text style={styles.body}>Create a private invitation and share it only with your recipient. The first eligible account to accept it can track this parcel and see the delivery code after collection.</Text>
+  return <Card><Text style={styles.h2}>Recipient tracking</Text><Text style={styles.body}>Enter the intended recipient’s email. Only their account with that verified email can accept the invitation and view precise tracking and the handover code after collection.</Text>
+    <TextInput accessibilityLabel="Recipient’s Taxi Ai email" value={recipientEmail} onChangeText={setRecipientEmail} editable={!locked} keyboardType="email-address" autoCapitalize="none" autoCorrect={false} maxLength={254} placeholder="Recipient’s account email" style={[styles.body, { borderWidth: 1, borderRadius: 8, padding: 12 }]}/>
     <Text style={styles.small}>Nothing is sent automatically. Replace or revoke access here if you shared with the wrong person.</Text><Notice message={s.error}/>
     {link && <Text style={styles.body}>{link.active ? link.claimed ? 'Recipient accepted · account access active' : `Invitation awaiting acceptance · expires ${new Date(link.expiresAt).toLocaleString()}` : 'Recipient invitation inactive'}</Text>}
     {link?.active && !link.claimed && !s.token && <Text style={styles.small}>The invitation secret is shown only when created. Replace it to share a new link from this screen.</Text>}
-    {s.value?.canCreate && <Button title={link ? 'Replace recipient invitation' : 'Create recipient invitation'} disabled={locked} busy={s.busy} onPress={() => link ? confirm('replace') : void controller.create(null)}/>}
+    {s.value?.canCreate && <Button title={link ? 'Replace recipient invitation' : 'Create recipient invitation'} disabled={locked} busy={s.busy} onPress={() => link ? confirm('replace') : void controller.create(null, recipientEmail)}/>}
     {!!s.token && link?.active && !link.claimed && <Button title="Share with recipient" disabled={locked} busy={sharing} onPress={() => void share()}/>}
     {link?.active && <Button title="Revoke recipient access" secondary disabled={locked} onPress={() => confirm('revoke')}/>}
     {s.value && !s.value.canCreate && <Text style={styles.small}>New invitations are available after requesting a delivery and before it ends.</Text>}

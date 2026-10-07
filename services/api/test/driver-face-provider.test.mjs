@@ -151,3 +151,98 @@ test('the total provider timeout aborts pending work and does not start another 
   assert.equal(signal.aborted, true);
   assert.equal(calls, 1);
 });
+
+const deepfaceConfig = readDriverFaceConfig({
+  TAXI_DRIVER_FACE_PROVIDER: 'deepface',
+  TAXI_DRIVER_FACE_DEEPFACE_URL: 'http://deepface:5000',
+});
+
+function deepfaceHarness(replies) {
+  const calls = [];
+  const fetchImpl = async (url, options) => {
+    calls.push({ url, options });
+    const reply = replies.shift();
+    if (reply instanceof Error) throw reply;
+    const { status = 200, body = reply } = reply?.body === undefined ? { body: reply } : reply;
+    return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+  };
+  return { calls, provider: createDriverFaceProvider({ config: deepfaceConfig, fetchImpl }) };
+}
+
+test('DeepFace config is private, bounded and defaults to SFace with a conservative confidence gate', () => {
+  assert.equal(deepfaceConfig.provider, 'deepface');
+  assert.equal(deepfaceConfig.deepfaceUrl, 'http://deepface:5000');
+  assert.equal(deepfaceConfig.model, 'SFace');
+  assert.equal(deepfaceConfig.detector, 'opencv');
+  assert.equal(deepfaceConfig.threshold, 90);
+  assert.equal(deepfaceConfig.timeoutMs, 30_000);
+  for (const values of [
+    { TAXI_DRIVER_FACE_PROVIDER: 'deepface', TAXI_DRIVER_FACE_DEEPFACE_URL: 'file:///private' },
+    { TAXI_DRIVER_FACE_PROVIDER: 'deepface', TAXI_DRIVER_FACE_DEEPFACE_URL: 'http://user:pass@deepface:5000' },
+    { TAXI_DRIVER_FACE_PROVIDER: 'deepface', TAXI_DRIVER_FACE_MODEL: 'unreviewed-model' },
+    { TAXI_DRIVER_FACE_PROVIDER: 'deepface', TAXI_DRIVER_FACE_DETECTOR: 'unreviewed-detector' },
+  ]) assert.throws(() => readDriverFaceConfig(values));
+});
+
+test('DeepFace compares one face in each normalized image and returns only bounded match evidence', async () => {
+  const { provider, calls } = deepfaceHarness([
+    { results: [{ embedding: [1, 2, 3], face_confidence: 0.99 }] },
+    { results: [{ embedding: [4, 5, 6], face_confidence: 0.98 }] },
+    { verified: true, distance: 0.21, threshold: 0.59, confidence: 97.5, model: 'SFace', detector_backend: 'opencv' },
+  ]);
+  assert.deepEqual(await provider.compare(input), {
+    provider: 'deepface', threshold: 90, status: 'matched', reason: 'matched', similarity: 97.5,
+  });
+  assert.deepEqual(calls.map(call => call.url), [
+    'http://deepface:5000/represent', 'http://deepface:5000/represent', 'http://deepface:5000/verify',
+  ]);
+  for (const call of calls) {
+    assert.equal(call.options.method, 'POST');
+    assert.ok(call.options.body instanceof FormData);
+    assert.equal(call.options.body.get('model_name'), 'SFace');
+    assert.equal(call.options.body.get('detector_backend'), 'opencv');
+  }
+  assert.equal(calls[0].options.body.get('max_faces'), '2');
+  assert.ok(calls[0].options.body.get('img') instanceof Blob);
+  assert.ok(calls[2].options.body.get('img1') instanceof Blob);
+  assert.ok(calls[2].options.body.get('img2') instanceof Blob);
+});
+
+test('DeepFace multiple/no-face results stop before verification and never become matches', async () => {
+  let h = deepfaceHarness([{ results: [{}, {}] }]);
+  assert.equal((await h.provider.compare(input)).reason, 'multiple_faces');
+  assert.equal(h.calls.length, 1);
+
+  h = deepfaceHarness([{ status: 400, body: { error: 'sanitized provider detail' } }]);
+  assert.equal((await h.provider.compare(input)).reason, 'no_face');
+  assert.equal(h.calls.length, 1);
+});
+
+test('DeepFace provider decision and Taxi AI confidence gate both fail closed to staff review', async () => {
+  for (const verification of [
+    { verified: false, distance: 0.8, threshold: 0.59, confidence: 22, model: 'SFace', detector_backend: 'opencv' },
+    { verified: true, distance: 0.4, threshold: 0.59, confidence: 89.9, model: 'SFace', detector_backend: 'opencv' },
+  ]) {
+    const { provider } = deepfaceHarness([
+      { results: [{}] }, { results: [{}] }, verification,
+    ]);
+    const result = await provider.compare(input);
+    assert.equal(result.status, 'needs_review');
+    assert.equal(result.reason, 'below_threshold');
+    assert.equal(result.similarity, verification.confidence);
+  }
+});
+
+test('DeepFace upstream failures and malformed verification replies are sanitized', async () => {
+  for (const replies of [
+    [new Error('private service network detail')],
+    [{ results: [{}] }, { results: [{}] }, { verified: true, confidence: 99 }],
+  ]) {
+    const { provider } = deepfaceHarness(replies);
+    await assert.rejects(provider.compare(input), (error) => {
+      assert.equal(error.message, 'Automatic driver face comparison is unavailable. Please try again later.');
+      assert.equal(error.message.includes('private'), false);
+      return true;
+    });
+  }
+});

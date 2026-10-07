@@ -26,7 +26,7 @@ export function formPayload(form) {
   const payload = { ...form.actionData };
   for (const field of form.elements) {
     if (!field.name || field.disabled) continue;
-    payload[field.name] = field.dataset?.convert === 'wat' ? Date.parse(field.value + '+01:00') : field.name === 'assigneeId' && !field.value ? null : field.value;
+    payload[field.name] = field.dataset?.convert === 'wat' ? (field.value ? Date.parse(field.value + '+01:00') : null) : field.name === 'assigneeId' && !field.value ? null : field.value;
   }
   return payload;
 }

@@ -12,6 +12,7 @@ import { VehicleCard } from '../src/ui/vehicle-card';
 import { PickupIdentity } from '../src/ui/pickup-identity';
 import { KemmyCard } from '../src/journeys/kemmy';
 import { KemmyDeliveryCard } from '../src/notifications/delivery-updates';
+import { NativeCallCard } from '../src/calls/card';
 import { PaymentCard } from '../src/payments/payment-card';
 import { CheckoutPaymentCard } from '../src/payments/checkout-card';
 import { showJourneyCheckout } from '../src/payments/checkout-eligibility';
@@ -38,7 +39,9 @@ function JourneyScreen({id}:{id:string}){
   return <Screen><Notice message={s.error}/>{!r&&s.loading&&<Loading/>}<Button title="Refresh journey" secondary busy={s.loading} disabled={s.busy} onPress={()=>void c.refresh()}/>
     {s.uncertain&&<Button title="Retry the same action" busy={s.busy} onPress={()=>void c.retry()}/>}
     {r&&<><Button title="Safety / SOS" secondary onPress={()=>router.push({pathname:'/safety',params:{id:r.id}})}/><Pill>{bookingStatusLabel(r.status).toUpperCase()}</Pill><Heading title={`${r.pickup} → ${r.destination}`} subtitle={`${vehicleCategory(r.vehicleCategory??'standard')?.name} · ${r.mode==='work'?'Driver':'Customer'}`}/>
+      {r.mode==='customer'&&<TripLocationCard id={r.id} ride={r}/>}
       {r.mode==='customer'&&!r.delivery&&r.passenger?.kind!=='guest'&&<Button title="Family Safety · choose who can view this trip" secondary onPress={()=>router.push({pathname:'/family',params:{rideId:r.id}})}/>}
+      {r.driver&&<NativeCallCard rideId={r.id}/>}
       {r.mode==='customer'&&<KemmyCard ride={r} now={s.now} ratingChoice={s.ratingChoice} busy={s.busy} onChoose={(stars)=>c.chooseRating(stars)} onRate={()=>void c.rate()}/>}
       {r.mode==='customer'&&r.delivery&&<KemmyDeliveryCard kind="parcel" targetId={r.id}/>}
       {r.status==='negotiating'&&r.driver&&<Card><Pill>AGREE YOUR FARE</Pill><Text style={styles.h2}>Talk with {r.mode==='customer'?r.driver.name:r.customerName} before accepting.</Text>
@@ -72,10 +75,8 @@ function JourneyScreen({id}:{id:string}){
         {r.allowedActions.filter((a)=>labels[a]).map((a)=><Button key={a} title={labels[a]!} disabled={locked || workLocationBlocks('ride', a, location)} onPress={()=>confirm(a,labels[a]!,a==='complete'?'Confirm that the journey and handover are complete.':'Update this journey to the next stage?')}/>)}
       </Card>}
       {r.status==='completed'&&<Card><Text style={styles.h2}>{r.delivery?'Delivery complete.':r.passenger?.kind==='guest'?'Passenger’s trip complete.':'You have arrived.'}</Text><Text style={styles.body}>Your journey is saved in Activity.</Text></Card>}
-      {r.mode!=='work'&&<TripLocationCard id={r.id} ride={r}/>}
       {r.status!=='negotiating'&&<JourneyChat state={s} controller={c}/>} 
       {r.allowedActions.includes('cancel')&&<Button title="Cancel journey" secondary disabled={locked} onPress={()=>confirm('cancel','Cancel journey','Cancel this request or booking?')}/>}
-      <Text style={styles.small}>Development preview · no live transport or real payment.</Text>
     </>}</Screen>;
 }
 export default function Journey(){const {id}=useLocalSearchParams<{id:string}>();return typeof id==='string'&&/^[a-f0-9-]{36}$/.test(id)?<JourneyScreen key={id} id={id}/>:<Screen><Notice message="Choose a journey from Activity or Driver."/></Screen>;}

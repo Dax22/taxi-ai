@@ -3,10 +3,13 @@ import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { requireNativePostgres } from './postgres-test-server.mjs';
 import { validateLoadPostgresUrl } from './load-test.mjs';
+import { validatePrivatePostgresTestUrl } from './postgres-socket-test-url.mjs';
 
 // Unlike the optional local suite, this entry point must never silently skip.
 if (!process.env.TAXI_AI_TEST_POSTGRES_URL) throw new Error('Set TAXI_AI_TEST_POSTGRES_URL to a disposable loopback taxi_ai_test database.');
-const connectionString = validateLoadPostgresUrl(process.env.TAXI_AI_TEST_POSTGRES_URL);
+const connectionString = process.env.TAXI_AI_TEST_PRIVATE_SOCKET === 'true'
+  ? validatePrivatePostgresTestUrl(process.env.TAXI_AI_TEST_POSTGRES_URL)
+  : validateLoadPostgresUrl(process.env.TAXI_AI_TEST_POSTGRES_URL);
 await requireNativePostgres(connectionString);
 const files = (await readdir(new URL('../services/api/test/', import.meta.url)))
   .filter((name) => name.includes('postgres') && name.endsWith('.test.mjs')).sort()

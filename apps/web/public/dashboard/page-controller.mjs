@@ -3,7 +3,7 @@ import { canUseMode, accountInMode, modeForRide } from '/shared/account-modes.mj
 
 const emptyState = () => ({ account: null, user: null, mode: 'customer', modePrompt: false,
   activeElsewhere: [], rides: [], available: [], drivers: [], reports: [], chatUnread: {},
-  history: [], historyCursor: null, historyLoaded: false, availabilityOnline: false, sampleMatchingEnabled: false, dispatchMode: 'legacy' });
+  history: [], historyCursor: null, historyLoaded: false, availabilityOnline: false, sampleMatchingEnabled: false, dispatchMode: 'legacy', passengerRides: null });
 const closed = (ride) => ['completed', 'cancelled', 'expired'].includes(ride.status);
 const identity = (session) => session.user ? `${session.user.id}:${session.user.role}:${session.csrfToken}` : null;
 
@@ -57,7 +57,9 @@ export function createPageController({ client, activityClient = client, view, mo
   // These controllers keep their session client and remain visible with the trip reference.
   function activityContext(selected) {
     const call = calls.snapshot?.(), tracking = sharing.snapshot?.();
-    const callRide = calls.hasMedia?.() && call?.selected ? call.selected : selected;
+    const callRide = calls.hasMedia?.() && call?.selected
+      ? [...state.rides, ...state.history].find((ride) => ride.id === call.selected.id) ?? call.selected
+      : selected;
     const trackingRide = sharing.sharing?.() && tracking?.ride ? tracking.ride : selected;
     calls.setContext(state.account, callRide);
     const currentTracking = trackingRide?.id === selected?.id ? selected : trackingRide;
@@ -97,6 +99,7 @@ export function createPageController({ client, activityClient = client, view, mo
           next.rides = data.rides; next.available = data.available; next.activeElsewhere = data.activeElsewhere ?? [];
           next.sampleMatchingEnabled = data.matchingSettings.allowSimulation;
           next.dispatchMode = data.matchingSettings.dispatchMode ?? 'legacy';
+          next.passengerRides = data.matchingSettings.passengerRides ?? null;
         }
         if (epoch !== generation) return;
         if (first.user) {

@@ -2,17 +2,19 @@
   "expo": {
     "name": "Taxi Ai",
     "slug": "taxi-ai",
-    "version": "0.8.0",
+    "version": "0.9.0",
     "scheme": "taxiai",
     "orientation": "default",
     "userInterfaceStyle": "light",
     "icon": "./assets/icon.png",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.taxiai.app"
+      "bundleIdentifier": "com.taxiai.app",
+      "buildNumber": "1"
     },
     "android": {
-      "package": "com.taxiai.app"
+      "package": "com.taxiai.app",
+      "versionCode": 6
     },
     "plugins": [
       "expo-router",
@@ -54,10 +56,23 @@
           "enableBackgroundRecording": false,
           "enableBackgroundPlayback": false
         }
+      ],
+      [
+        "@config-plugins/react-native-webrtc",
+        {
+          "cameraPermission": "Taxi Ai does not use the camera for audio calls.",
+          "microphonePermission": "Allow Taxi Ai to use your microphone for in-app rider/driver calls. Call audio is not recorded."
+        }
       ]
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "owner": "dax-ai-labs",
+    "extra": {
+      "eas": {
+        "projectId": "b157df43-402c-4c24-a966-30fce874de42"
+      }
     }
   }
 }

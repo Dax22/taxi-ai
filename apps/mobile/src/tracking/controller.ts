@@ -259,7 +259,12 @@ export class TripLocationController {
         const active = await this.background.active();
         if (!this.current(generation)) return;
         if (!active) { this.halt(); this.patch({ error: 'Work location sharing ended. Review permissions and start again.' }); await this.cleanup(); }
-        else await this.refresh();
+        else {
+          const recovering = await this.background.recovering?.();
+          if (!this.current(generation)) return;
+          this.patch({ error: recovering ? 'Connection interrupted. Retrying with fresh GPS while your sharing permission remains valid.' : '' });
+          await this.refresh();
+        }
       } catch { if (this.current(generation)) { this.halt(); await this.cleanup(); } }
       return;
     }

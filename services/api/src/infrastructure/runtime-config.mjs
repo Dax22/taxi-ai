@@ -23,9 +23,11 @@ export function createRuntimeConfig(env = process.env) {
   if (!['local', 'staging'].includes(mode) || (env.NODE_ENV === 'production' && mode !== 'staging')) {
     throw new Error('Use TAXI_AI_MODE=staging for hosted operation; local mode is development only.');
   }
+  const accessMode = env.TAXI_AI_ACCESS_MODE === undefined ? 'invited' : env.TAXI_AI_ACCESS_MODE;
+  if (!['invited', 'public'].includes(accessMode)) throw new Error('TAXI_AI_ACCESS_MODE must be invited or public.');
   const port = Number(env.PORT ?? 3000);
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('PORT must be an integer between 1 and 65535.');
-  if (mode === 'local') return Object.freeze({ mode, port, host: '127.0.0.1', database: env.TAXI_AI_DB ?? DEFAULT_DATABASE,
+  if (mode === 'local') return Object.freeze({ mode, accessMode, port, host: '127.0.0.1', database: env.TAXI_AI_DB ?? DEFAULT_DATABASE,
     publicOrigin: null, proxyToken: null, testers: new Map() });
   let origin;
   try { origin = new URL(env.TAXI_AI_PUBLIC_ORIGIN); } catch { throw new Error('Staging needs TAXI_AI_PUBLIC_ORIGIN as an HTTPS origin.'); }
@@ -45,6 +47,6 @@ export function createRuntimeConfig(env = process.env) {
   } catch { throw new Error('Unable to load a valid staging tester access file.'); }
   const host = env.TAXI_AI_BIND ?? '127.0.0.1';
   if (!['127.0.0.1', '0.0.0.0'].includes(host)) throw new Error('TAXI_AI_BIND must be 127.0.0.1 or 0.0.0.0 on an isolated container network.');
-  return Object.freeze({ mode, port, host, database: env.TAXI_AI_DB, publicOrigin: origin.origin,
+  return Object.freeze({ mode, accessMode, port, host, database: env.TAXI_AI_DB, publicOrigin: origin.origin,
     proxyToken: env.TAXI_AI_PROXY_TOKEN, testers });
 }

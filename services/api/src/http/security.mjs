@@ -19,7 +19,7 @@ export function requestContext(request, runtime) {
 }
 
 export function requireStagingAccess(request, response, runtime, pathname = '') {
-  if (runtime.mode !== 'staging') return;
+  if (runtime.mode !== 'staging' || runtime.accessMode === 'public') return;
   const header = pathname.startsWith('/api/mobile/v1/') ? request.headers['x-taxi-ai-preview-access'] : request.headers.authorization;
   let name = '', token = '';
   if (typeof header === 'string' && header.length <= 256 && /^Basic [A-Za-z0-9+/]+=*$/i.test(header)) {

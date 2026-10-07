@@ -24,10 +24,11 @@ export function createParcelLinksPanel({ client, origin, now = Date.now,
     node('secret').hidden = !secret; node('url').value = secret;
     node('share').hidden = !share;
     node('retry').hidden = !pending; node('retry').disabled = busy;
+    node('recipient-email').disabled = busy || Boolean(pending);
     for (const id of ['create', 'replace', 'revoke', 'refresh', 'confirm-action', 'keep', 'copy', 'share']) node(id).disabled = busy || Boolean(pending);
     node('copy').disabled = node('share').disabled = busy || Boolean(pending) || !secret;
   }
-  function reset() { epoch++; context = null; identity = null; value = null; token = ''; busy = false; error = message = confirmation = ''; lastLoad = 0; pending = null; render(); }
+  function reset() { epoch++; node('recipient-email').value = ''; context = null; identity = null; value = null; token = ''; busy = false; error = message = confirmation = ''; lastLoad = 0; pending = null; render(); }
   async function verify(start, expected) {
     const session = await client.request('/api/session');
     if (start !== epoch || paused) return false;
@@ -47,9 +48,14 @@ export function createParcelLinksPanel({ client, origin, now = Date.now,
   }
   async function act(action, retry = false) {
     if (!context || busy || !value || paused || (pending && !retry)) return;
+    const recipientEmail = node('recipient-email').value.trim().toLowerCase();
+    if (!retry && action !== 'revoke' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipientEmail)) {
+      error = 'Enter your intended recipient’s Taxi Ai account email before creating the invitation.';
+      render(); return;
+    }
     const start = epoch, rideId = context.rideId, expected = identity;
     const data = retry ? pending.data : action === 'revoke' ? { linkId: value.link.id, expectedVersion: value.link.version }
-      : { expectedLinkId: value.link?.id ?? null };
+      : { expectedLinkId: value.link?.id ?? null, recipientEmail };
     busy = true; error = message = confirmation = ''; render();
     try {
       // The API client retains an identical command's retry key after an interrupted response.
@@ -81,10 +87,10 @@ export function createParcelLinksPanel({ client, origin, now = Date.now,
     context(user, ride) {
       const next = user?.role === 'customer' && ride?.customer.id === user.id && ride.delivery ? { userId: user.id, rideId: ride.id, status: ride.status } : null;
       if (next?.userId === context?.userId && next?.rideId === context?.rideId) { if (context?.status !== next?.status) message = ''; context = next; render(); return; }
-      epoch++; pending = null; context = next; value = null; token = ''; busy = false; error = message = confirmation = ''; render(); void load();
+      epoch++; node('recipient-email').value = ''; pending = null; context = next; value = null; token = ''; busy = false; error = message = confirmation = ''; render(); void load();
     },
     poll() { if (now() - lastLoad >= 10_000) return load(); },
-    pause() { epoch++; paused = true; token = ''; busy = false; render(); },
+    pause() { epoch++; paused = true; token = ''; node('recipient-email').value = ''; busy = false; render(); },
     resume() { paused = false; void load(); render(); },
     tick: render,
   });

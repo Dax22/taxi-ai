@@ -101,7 +101,7 @@ function dom(t, { onAction } = {}) {
       const fields = this.id.includes('details') ? ['legalName', 'phone', 'licenceNumber', 'make', 'model', 'year', 'colour', 'plate']
         : this.id.includes('upload') ? ['expiresOn', 'file'] : ['reason', 'reference'];
       for (const name of fields) nodes.get('onboarding-' + name).value = '';
-      if (this.id.includes('review')) for (const key of ['identity', 'licence', 'vehicle', 'insurance']) nodes.get('onboarding-check-' + key).checked = false;
+      if (this.id.includes('review')) for (const key of ['identity', 'licence', 'vehicle']) nodes.get('onboarding-check-' + key).checked = false;
     }
     scrollIntoView() {}
     focus() { this.focused = true; }
@@ -140,11 +140,11 @@ test('onboarding forms preserve unsaved text and its version, reset review check
 
 test('onboarding controls bind uploads, downloads and changes to current evidence and respect busy/approved states', (t) => {
   const f = dom(t); f.render();
-  f.node('onboarding-kind').value = 'insurance'; f.node('onboarding-kind').handlers.change();
+  f.node('onboarding-kind').value = 'driving_licence'; f.node('onboarding-kind').handlers.change();
   assert.equal(f.node('onboarding-expiresOn').required, true);
   f.node('onboarding-expiresOn').value = '2099-01-01'; const file = { name: 'image.png' }; f.node('onboarding-file').files = [file];
   f.node('onboarding-upload-form').handlers.submit(f.event);
-  assert.deepEqual(f.actions.at(-1), ['upload', { expectedVersion: 7, kind: 'insurance', expiresOn: '2099-01-01' }, file]);
+  assert.deepEqual(f.actions.at(-1), ['upload', { expectedVersion: 7, kind: 'driving_licence', expiresOn: '2099-01-01' }, file]);
   const controls = f.node('onboarding-documents').children[0].children[1].children;
   controls[0].handlers.click(); assert.deepEqual(f.downloads, ['doc']); controls[1].handlers.click();
   assert.deepEqual(f.actions.at(-1), ['remove', { expectedVersion: 7, documentId: 'doc' }]);

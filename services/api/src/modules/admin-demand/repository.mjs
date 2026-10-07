@@ -22,9 +22,10 @@ const eligibleDrivers = `FROM driver_availability a JOIN drivers d ON d.user_id=
   AND app.details_json IS NOT NULL AND app.verification_json IS NOT NULL AND u.role<>'admin'
   AND EXISTS (SELECT 1 FROM account_capabilities cap WHERE cap.user_id=a.driver_id AND cap.capability='driver')
   AND (a.mode='gps' OR $allowSample=1)
-  AND (SELECT count(*) FROM driver_documents doc WHERE doc.driver_id=a.driver_id)=5
-  AND NOT EXISTS (SELECT 1 FROM driver_documents doc WHERE doc.driver_id=a.driver_id
-    AND doc.kind IN ('driving_licence','vehicle_registration','insurance') AND (doc.expires_on IS NULL OR doc.expires_on<$today))
+  AND (json_extract(app.verification_json,'$.method')='admin_exception' OR (
+    (SELECT count(*) FROM driver_documents doc WHERE doc.driver_id=a.driver_id AND doc.kind IN ('profile_photo','driving_licence','vehicle_registration','vehicle_photo'))=4
+    AND NOT EXISTS (SELECT 1 FROM driver_documents doc WHERE doc.driver_id=a.driver_id
+      AND doc.kind IN ('driving_licence','vehicle_registration') AND (doc.expires_on IS NULL OR doc.expires_on<$today))))
   AND ((a.native_session_id IS NULL AND EXISTS (SELECT 1 FROM sessions s
     WHERE s.token_hash=a.session_hash AND s.user_id=a.driver_id AND s.expires_at>$now))
     OR (a.native_session_id IS NOT NULL AND EXISTS (SELECT 1 FROM device_sessions s

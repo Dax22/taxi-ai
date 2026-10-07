@@ -21,6 +21,7 @@ import { createCallConfig } from '../../services/api/src/infrastructure/call-con
 import { createMapProvider } from '../../services/api/src/infrastructure/map-provider.mjs';
 import { createDispatchConfig } from '../../services/api/src/infrastructure/dispatch-config.mjs';
 import { readMatchingFastConfig } from '../../services/api/src/infrastructure/matching-fast-config.mjs';
+import { readDispatchMlConfig } from '../../services/api/src/infrastructure/dispatch-ml-config.mjs';
 import { createRuntimeConfig } from '../../services/api/src/infrastructure/runtime-config.mjs';
 import { createHealth } from '../../services/api/src/infrastructure/health.mjs';
 import { createDispatchProfiler } from '../../services/api/src/infrastructure/dispatch-profiler.mjs';
@@ -35,6 +36,9 @@ import { createEmailConfig } from '../../services/api/src/infrastructure/email-c
 import { createPushProvider } from '../../services/api/src/infrastructure/push-provider.mjs';
 import { createVehicleVisionProvider } from '../../services/api/src/infrastructure/vehicle-vision-provider.mjs';
 import { createAccountMail } from '../../services/api/src/infrastructure/account-mail.mjs';
+import { createContactMail } from '../../services/api/src/infrastructure/contact-mail.mjs';
+import { createContactEmailConfig } from '../../services/api/src/infrastructure/contact-email-config.mjs';
+import { createContactRoute, CONTACT_PATH } from '../../services/api/src/http/contact.mjs';
 import { createStaffMfaConfig } from '../../services/api/src/infrastructure/staff-config.mjs';
 import { createRidePilotConfig } from '../../packages/shared/src/ride-pilot.mjs';
 
@@ -45,10 +49,16 @@ const routes = new Map([
   ['/dashboard/delivery-updates.mjs', ['public/dashboard/delivery-updates.mjs', 'text/javascript; charset=utf-8']],
   ['/dashboard/delivery-update-view.mjs', ['public/dashboard/delivery-update-view.mjs', 'text/javascript; charset=utf-8']],
   ['/delivery-updates.css', ['public/delivery-updates.css', 'text/css; charset=utf-8']],
-  ...['/admin', '/admin/', '/admin/accounts', '/admin/trips', '/admin/analytics', '/admin/operations', '/admin/announcements', '/admin/staff', '/admin/audit', '/admin/cases', '/admin/finance', '/admin/compliance', '/admin/demand', '/admin/coverage'].map((path) => [path, ['../admin/public/index.html', 'text/html; charset=utf-8']]),
+  ...['/admin', '/admin/', '/admin/accounts', '/admin/trips', '/admin/analytics', '/admin/operations', '/admin/announcements', '/admin/staff', '/admin/audit', '/admin/cases', '/admin/finance', '/admin/compliance', '/admin/demand', '/admin/matching', '/admin/mobile', '/admin/investigations', '/admin/acceptance', '/admin/coverage', '/admin/transactions', '/admin/transactions-export', '/admin/people', '/admin/businesses', '/admin/work', '/admin/insights', '/admin/brief', '/admin/platform', '/admin/reports', '/admin/campaigns', '/admin/access-audit', '/admin/restrictions', '/admin/restriction-impact', '/admin/safety-alerts'].map((path) => [path, ['../admin/public/index.html', 'text/html; charset=utf-8']]),
   ['/admin/styles.css', ['../admin/public/styles.css', 'text/css; charset=utf-8']],
-  ...['app', 'api-client', 'controller', 'view', 'navigation', 'pages', 'charts', 'ui', 'forms', 'operations-page', 'staff-pages', 'case-pages', 'finance-pages', 'compliance-pages', 'demand-page', 'coverage-page', 'coverage-map', 'coverage-map-model', 'announcements-page'].map((name) => [`/admin/${name}.mjs`, [`../admin/public/${name}.mjs`, 'text/javascript; charset=utf-8']]),
+  ...['app', 'api-client', 'controller', 'view', 'navigation', 'pages', 'charts', 'ui', 'forms', 'operations-page', 'staff-pages', 'case-pages', 'finance-pages', 'compliance-pages', 'demand-page', 'matching-page', 'mobile-page', 'investigations-page', 'acceptance-page', 'coverage-page', 'coverage-map', 'coverage-map-model', 'announcements-page', 'command-center-navigation', 'command-center-pages', 'command-center-map', 'command-center-insights', 'moderation-pages', 'safety-alert-pages', 'safety-alert-map'].map((name) => [`/admin/${name}.mjs`, [`../admin/public/${name}.mjs`, 'text/javascript; charset=utf-8']]),
   ['/', ['public/index.html', 'text/html; charset=utf-8']],
+  ...['/contact', '/contact/'].map((path) => [path, ['public/contact.html', 'text/html; charset=utf-8']]),
+  ['/contact.css', ['public/contact.css', 'text/css; charset=utf-8']],
+  ['/contact.mjs', ['public/contact.mjs', 'text/javascript; charset=utf-8']],
+  ['/contact-api.mjs', ['public/contact-api.mjs', 'text/javascript; charset=utf-8']],
+  ['/account-notices', ['public/account-notices.html', 'text/html; charset=utf-8']],
+  ['/account-notices.mjs', ['public/account-notices.mjs', 'text/javascript; charset=utf-8']],
   ['/devices', ['public/devices.html', 'text/html; charset=utf-8']],
   ['/devices.mjs', ['public/devices.mjs', 'text/javascript; charset=utf-8']],
   ['/download.mjs', ['public/download.mjs', 'text/javascript; charset=utf-8']],
@@ -88,6 +98,11 @@ const routes = new Map([
   ['/trip-share', ['public/trip-share.html', 'text/html; charset=utf-8']],
   ['/trip-share.mjs', ['public/trip-share.mjs', 'text/javascript; charset=utf-8']],
   ['/parcels', ['public/parcels.html', 'text/html; charset=utf-8']],
+  ['/parcel-operations', ['public/parcel-operations.html', 'text/html; charset=utf-8']],
+  ['/parcel-operations.css', ['public/parcel-operations.css', 'text/css; charset=utf-8']],
+  ['/parcel-operations.mjs', ['public/parcel-operations.mjs', 'text/javascript; charset=utf-8']],
+  ['/shared/delivery-operations.mjs', ['../../packages/shared/src/delivery-operations.mjs', 'text/javascript; charset=utf-8']],
+  ['/shared/delivery-operations-controller.mjs', ['../../packages/shared/src/delivery-operations-controller.mjs', 'text/javascript; charset=utf-8']],
   ['/parcels.mjs', ['public/parcels.mjs', 'text/javascript; charset=utf-8']],
   ...['controller', 'view'].map((name) => [`/parcels/${name}.mjs`, [`public/parcels/${name}.mjs`, 'text/javascript; charset=utf-8']]),
   ['/dashboard/parcel-links-panel.mjs', ['public/dashboard/parcel-links-panel.mjs', 'text/javascript; charset=utf-8']],
@@ -203,18 +218,66 @@ const routes = new Map([
   ['/shared/locations.mjs', ['../../packages/shared/src/locations.mjs', 'text/javascript; charset=utf-8']],
 ]);
 
+// Staging public landing page: serve only this page and its static dependencies without an invited-tester key.
+// Account, admin, service and API routes remain behind the existing staging gate.
+const PUBLIC_STAGING_MARKETING_PATHS = new Set([
+  '/',
+  '/contact',
+  '/contact/',
+  '/contact.css',
+  '/contact.mjs',
+  '/contact-api.mjs',
+  '/favicon.svg',
+  '/styles.css',
+  '/typography.css',
+  '/homepage.css',
+  '/vehicle-categories.css',
+  '/app.mjs',
+  '/download.mjs',
+  '/app-release.mjs',
+  '/homepage-carousel.mjs',
+  '/dashboard/vehicle-categories.mjs',
+  '/dashboard/dom.mjs',
+  '/shared/transport-categories.mjs',
+  '/shared/fare-negotiation.mjs',
+  '/shared/demo-booking.mjs',
+  '/shared/vehicle-categories.mjs',
+  '/assets/taxi-ai-mark.svg',
+  '/assets/taxi-ai-phone-preview.svg',
+  '/assets/fonts/manrope-latin-wght-normal.woff2',
+  '/assets/fonts/manrope-latin-ext-wght-normal.woff2',
+  '/assets/vehicles/sedan-white.png',
+  '/assets/vehicles/category-suv.png',
+  '/assets/vehicles/category-van.png',
+  '/assets/vehicles/category-truck.png',
+  '/assets/vehicles/category-motorcycle.png',
+  '/assets/scenes/ride-city.webp',
+  '/assets/scenes/ride-city-small.webp',
+  '/assets/scenes/eats-table.webp',
+  '/assets/scenes/eats-table-small.webp',
+  '/assets/scenes/courier-handoff.webp',
+  '/assets/scenes/courier-handoff-small.webp',
+  '/assets/airport-dropoff-hero.webp',
+  '/assets/airport-dropoff-hero-small.webp',
+  '/assets/autonomous-concept.webp',
+  '/assets/autonomous-concept-small.webp',
+  '/assets/ai-journey-features.webp',
+  '/assets/ai-journey-features-small.webp'
+]);
+
 export function createAppServer({ runtime = createRuntimeConfig({}), db = openDatabase(runtime.mode === 'staging' ? runtime.database : ':memory:'),
   clock = Date.now, callConfig = createCallConfig({ ...process.env, TAXI_AI_CALLS_MODE: process.env.TAXI_AI_CALLS_MODE ?? (runtime.mode === 'staging' ? 'off' : 'local') }),
   matchingFast = readMatchingFastConfig(process.env),
+  dispatchMlConfig = readDispatchMlConfig(process.env),
   mapProvider = createMapProvider({ compactPickupTables: matchingFast.enabled,
     env: { ...process.env, TAXI_AI_MAPS_MODE: process.env.TAXI_AI_MAPS_MODE ?? (runtime.mode === 'staging' ? 'off' : 'community') } }),
   resolveDeliveryLocation, deliveryMapSettings,
   dispatchConfig = createDispatchConfig(process.env), workerConfig = createWorkerConfig(process.env), staffMfa = createStaffMfaConfig(process.env),
   ridePilot = createRidePilotConfig(process.env, runtime.mode),
   telemetry = createTelemetry({ enabled: runtime.mode === 'staging' }),
-  dispatchProfiler = createDispatchProfiler({ sampleEvery: Number(process.env.TAXI_AI_DISPATCH_PROFILE_SAMPLE_EVERY ?? 0),
-    report: (value) => telemetry.dispatchProfile?.(value) }),
+  dispatchProfiler = null,
   accountMail = createAccountMail({ config: createEmailConfig(process.env,runtime) }),
+  contactMail = createContactMail({ config: createContactEmailConfig(process.env, runtime) }),
   safetyAlertProvider = createSafetyAlertProvider({env:process.env}),
   pushProvider = createPushProvider({ env: process.env }),
   vehicleVisionProvider = createVehicleVisionProvider({ env:process.env }),
@@ -223,22 +286,27 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
   googleProvider = createGoogleProvider({ config: createGoogleConfig(process.env, runtime), clock }) } = {}) {
   if (runtime.mode === 'staging' && callConfig.mode === 'local') throw new Error('Staging calls require off or a configured relay.');
   db = asAsyncDatabase(db);
+  let dispatchProfileSink = (value) => telemetry.dispatchProfile?.(value);
+  if (!dispatchProfiler) dispatchProfiler = createDispatchProfiler({ sampleEvery: Number(process.env.TAXI_AI_DISPATCH_PROFILE_SAMPLE_EVERY ?? 0),
+    report: (value) => dispatchProfileSink(value) });
   if (workerConfig.role !== 'all' && db.kind !== 'postgres') throw new Error('Split API/worker deployments require PostgreSQL.');
   const application = createApplication({ db, clock, callConfig, mapProvider, resolveDeliveryLocation, deliveryMapSettings, dispatchProfiler, matchingFast,
-    dispatchConfig: { ...dispatchConfig, requestRefresh: workerConfig.role === 'all' }, workerConfig,
+    dispatchConfig: { ...dispatchConfig, requestRefresh: workerConfig.role === 'all' }, dispatchMlConfig, workerConfig,
     paystackProvider, googleProvider, accountMail, pushProvider, vehicleVisionProvider, driverFaceProvider, safetyAlertProvider, staffMfa, ridePilot,
     allowSimulation: runtime.mode === 'local' });
+  dispatchProfileSink = (value) => { telemetry.dispatchProfile?.(value); return application.dispatchPerformance.record(value); };
   const httpApplication = workerConfig.role === 'api' ? { ...application, dispatch: { ...application.dispatch, refresh: async () => {} } } : application;
   const handleApi = createApiRouter(httpApplication, { secure: runtime.mode === 'staging' });
   const handleMobile = createMobileRouter(httpApplication);
   const handleGoogleCallback = createGoogleCallback(application, runtime.mode === 'staging');
   const handlePaystackWebhook = createPaystackWebhook({ provider: paystackProvider, checkoutPayments: application.checkoutPayments, rateLimiter: application.rateLimiter, clock });
+  const handleContact = createContactRoute({ mail: contactMail, rateLimiter: application.rateLimiter, clock });
   const health = createHealth(db);
   const workers = createWorkerRuntime({ coordinator: application.workerCoordinator, config: { ...workerConfig, matchingFast }, wakeups: db,
     regions: () => application.dispatch.regions(), dispatch: application.dispatch, onError: (name) => telemetry.event(name),
     maintenance: async ({ lease, active }) => {
       for (const service of [application.rides, application.availability, application.calls, application.locations, application.foodTracking, application.backgroundLocations,
-        application.safety, application.guestRides, application.family, application.vehicleChecks, application.devices, application.googleAuth]) {
+        application.safety, application.guestRides, application.family, application.vehicleChecks, application.devices, application.mobileOperations, application.googleAuth]) {
         if (!active()) return;
         const held = await db.transaction(async () => {
           if (!await application.workerCoordinator.guard(lease)) return false;
@@ -253,6 +321,9 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
       });
       if (!active() || !await application.workerCoordinator.guard(lease)) return;
       await application.checkoutPayments.reconcileDue({ limit: 5 });
+      if (!active() || !await application.workerCoordinator.guard(lease)) return;
+      try { await application.dispatchMl.sweep(); } catch { telemetry.event('dispatch_ml_retention_failed'); }
+      try { await application.dispatchPerformance.sweep(); } catch { telemetry.event('dispatch_profile_retention_failed'); }
       if (!active()) return;
       await db.transaction(async () => {
         if (await application.workerCoordinator.guard(lease)) await application.rateLimiter.sweep(clock());
@@ -266,6 +337,7 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
     } });
   workers.start();
   const server = createServer(async (request, response) => {
+    const requestStarted = performance.now();
     let pathname = '';
     telemetry.observe(request, response, () => pathname);
     response.setHeader('X-Content-Type-Options', 'nosniff');
@@ -275,8 +347,12 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
     if (runtime.mode === 'staging') response.setHeader('Strict-Transport-Security', 'max-age=86400');
     try {
       pathname = new URL(request.url, 'http://localhost').pathname;
+      if (pathname.startsWith('/api/mobile/v1/')) response.once('finish', () => {
+        void application.mobileOperations.recordApi({ path: pathname.slice('/api/mobile/v1'.length), method: request.method,
+          statusCode: response.statusCode, durationMs: performance.now() - requestStarted }).catch(() => {});
+      });
       response.setHeader('Content-Security-Policy', `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'${['/eats', '/eats/sell'].includes(pathname) ? ' data:' : ''}${mapProvider.mode === 'off' ? '' : ` ${mapProvider.tileOrigin}`}; media-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'`);
-      if (['/app', '/family', '/parcels', '/eats', '/eats/sell'].includes(pathname) && mapProvider.mode !== 'off') response.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+      if ((['/app', '/family', '/parcels', '/eats', '/eats/sell'].includes(pathname) || pathname.startsWith('/admin/live/') || pathname.startsWith('/admin/safety-alerts/')) && mapProvider.mode !== 'off') response.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
       response.setHeader('Permissions-Policy', `camera=${['/app', '/eats', '/eats/sell'].includes(pathname) ? '(self)' : '()'}, microphone=${pathname === '/app' ? '(self)' : '()'}, geolocation=${['/app', '/eats', '/eats/sell'].includes(pathname) ? '(self)' : '()'}, accelerometer=${pathname === '/app' ? '(self)' : '()'}, gyroscope=${pathname === '/app' ? '(self)' : '()'}`);
     } catch {
       response.writeHead(400);
@@ -288,7 +364,11 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
       if (!isInternalHealth(request, pathname)) {
         context = requestContext(request, runtime);
         // Provider signatures protect this exact webhook; the HTTPS gateway remains mandatory.
-        if (pathname !== PAYSTACK_WEBHOOK_PATH || request.method !== 'POST' || !(paystackProvider.configured ?? paystackProvider.enabled)) requireStagingAccess(request, response, runtime, pathname);
+        const publicMarketingRequest = ['GET', 'HEAD'].includes(request.method) && PUBLIC_STAGING_MARKETING_PATHS.has(pathname);
+        const publicContactRequest = pathname === CONTACT_PATH && ['GET', 'POST'].includes(request.method);
+        if (!publicMarketingRequest && !publicContactRequest && (pathname !== PAYSTACK_WEBHOOK_PATH || request.method !== 'POST' || !(paystackProvider.configured ?? paystackProvider.enabled))) {
+          requireStagingAccess(request, response, runtime, pathname);
+        }
       }
       if (['/health/live', '/health/ready'].includes(pathname)) {
         check(['GET', 'HEAD'].includes(request.method), 'METHOD_NOT_ALLOWED', 'Use GET or HEAD.');
@@ -299,6 +379,9 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
       }
       check(workerConfig.role !== 'worker', 'SERVER_DRAINING', 'This process handles background work.');
       check(!health.draining(), 'SERVER_DRAINING', 'Taxi Ai is restarting. Please retry shortly.');
+      if (pathname === CONTACT_PATH) {
+        await handleContact({ request, response, ...context }); return;
+      }
       if (pathname === PAYSTACK_WEBHOOK_PATH) {
         await handlePaystackWebhook({ request, response, ...context }); return;
       }
@@ -310,6 +393,13 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
         return;
       }
     } catch (error) {
+      if (process.env.TAXI_AI_BENCH_DIAGNOSTICS === 'safe-stage') {
+        const safe = (value, pattern, fallback) => typeof value === 'string' && pattern.test(value) ? value : fallback;
+        const name = safe(error?.name, /^[A-Za-z][A-Za-z0-9_]{0,60}$/, 'Error');
+        const code = safe(String(error?.code ?? ''), /^[A-Z0-9_]{1,40}$/, 'NO_CODE');
+        const constraint = safe(error?.constraint, /^[a-z_][a-z0-9_]{0,80}$/, 'none');
+        console.error(`BENCH_SERVER_ERROR=${name}:${code}:${constraint}`);
+      }
       sendError(response, error);
       return;
     }
@@ -318,7 +408,10 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
       response.end('Method not allowed');
       return;
     }
-    const route = routes.get(pathname) ?? (/^\/admin\/(accounts|trips|cases|finance|compliance)\/[a-f0-9-]{36}$/.test(pathname) ? routes.get('/admin') : null);
+    const detailPath = /^\/admin\/(accounts|trips|cases|finance|compliance|people|businesses|work|restrictions|safety-alerts)\/[a-f0-9-]{36}$/.test(pathname)
+      || /^\/admin\/compliance\/[a-f0-9-]{36}\/documents\/[a-f0-9-]{36}$/.test(pathname)
+      || /^\/admin\/(transactions|live|diagnosis)\/(ride|courier|food)\/[a-f0-9-]{36}$/.test(pathname);
+    const route = routes.get(pathname) ?? (detailPath ? routes.get('/admin') : null);
     if (!route) {
       response.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
       response.end(request.method === 'HEAD' ? undefined : 'Not found');
@@ -355,7 +448,10 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
   server.beginShutdown = () => { health.beginShutdown(); void stopServices().catch(() => telemetry.event('worker_shutdown_failed')); };
   let closedResources;
   server.closeResources = () => {
-    if (!closedResources) closedResources = stopServices().finally(() => db.close());
+    if (!closedResources) closedResources = stopServices().finally(() => {
+      contactMail.close?.();
+      return db.close();
+    });
     return closedResources;
   };
   server.on('close', () => { void server.closeResources().catch(() => telemetry.event('worker_shutdown_failed')); });

@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { readCheckoutPaymentResponse, safeCheckoutUrl } from '../src/checkout-payments.mjs';
 const id = n => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const expected = { kind: 'food', targetId: id(1) };
-const settings = { provider: 'paystack', mode: 'test', enabled: true };
-const payment = { id: id(2), ...expected, status: 'pending', amountKobo: 125000, currency: 'NGN', version: 1,
+const settings = { provider: 'paystack', mode: 'test', enabled: true, walletStrategy: 'paystack_hosted', walletCandidates: ['apple_pay','google_pay'], walletAvailability: 'provider_device_eligibility' };
+const payment = { id: id(2), ...expected, status: 'pending', amountKobo: 125000, currency: 'NGN', providerMode: 'test', version: 1,
   checkoutUrl: 'https://checkout.paystack.com/test-example', reference: 'taxiai_test_example', refundRequired: false,
   createdAt: 1000, updatedAt: 1000, paidAt: null, receipt: null };
 const response = p => ({ settings, payment: p, canStart: false, isPayer: true });
@@ -26,8 +26,8 @@ test('checkout records retain target identity and test-only provider settings, i
   const history = readCheckoutPaymentResponse({ ...response(paid), settings: { ...settings, enabled: false } }, expected);
   assert.equal(history.payment.receipt.notice, paid.receipt.notice);
   for (const changed of [{ ...expected, kind: 'ride' }, { ...expected, targetId: id(9) }]) assert.throws(() => readCheckoutPaymentResponse(response(payment), changed));
-  for (const changed of [{ ...settings, mode: 'live' }, { ...settings, provider: 'other' }])
-    assert.throws(() => readCheckoutPaymentResponse({ ...response(payment), settings: changed }, expected));
+  assert.equal(readCheckoutPaymentResponse({ ...response(payment), settings: { ...settings, mode: 'live' } }, expected).settings.mode, 'live');
+  assert.throws(() => readCheckoutPaymentResponse({ ...response(payment), settings: { ...settings, provider: 'other' } }, expected));
   assert.throws(() => readCheckoutPaymentResponse({ ...response(null), canStart: true, isPayer: false }, expected));
   assert.throws(() => readCheckoutPaymentResponse({ ...response(null), canStart: true, settings: { ...settings, enabled: false } }, expected));
 });

@@ -1,5 +1,5 @@
 import { check } from '../../shared/errors.mjs';
-import { fields } from '../../shared/validation.mjs';
+import { fields, emailAddress } from '../../shared/validation.mjs';
 import { hasCapability } from '../../shared/policies.mjs';
 
 const identifier = value => typeof value === 'string' && /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(value);
@@ -10,6 +10,9 @@ const unavailable = () => check(false, 'NOT_FOUND', 'This parcel invitation is u
 
 /** Recipient access starts with explicit authenticated acceptance, never with opening a public URL. */
 export function createParcelTrackingService({ repository, getAccount, getTrip, locationForTrip, unitOfWork, tokens, audit, clock }) {
+  const emailHash = (email, linkId) => tokens.digest(`${linkId}:${emailAddress(email).toLowerCase()}`);
+  const recipientMatches = (user, row) => Boolean(user?.emailVerified && row?.intendedEmailHash
+    && tokens.equal(emailHash(user.email, row.id), row.intendedEmailHash));
   async function actor(id) {
     const user = await getAccount(id);
     check(user, 'UNAUTHENTICATED', 'Sign in to continue.');
@@ -23,7 +26,7 @@ export function createParcelTrackingService({ repository, getAccount, getTrip, l
     return ride;
   }
   function linkView(row) {
-    return row ? { id: row.id, version: row.version, active: Boolean(row.active && (row.recipientId || clock() < row.expiresAt)),
+    return row ? { id: row.id, version: row.version, active: Boolean(row.active && row.intendedEmailHash && (row.recipientId || clock() < row.expiresAt)),
       expiresAt: row.expiresAt, claimed: Boolean(row.recipientId) } : null;
   }
   async function invitation(ride, row) {
@@ -31,7 +34,7 @@ export function createParcelTrackingService({ repository, getAccount, getTrip, l
       link: linkView(row === undefined ? await repository.latest(ride.rideId) : row) } };
   }
   async function snapshot(user, row) {
-    if (!row?.active || row.recipientId !== user.id) unavailable();
+    if (!row?.active || row.recipientId !== user.id || !recipientMatches(user, row)) unavailable();
     const sender = await getAccount(row.ownerId);
     if (!sender) unavailable();
     const ride = await owned(sender, row.rideId);
@@ -61,7 +64,9 @@ export function createParcelTrackingService({ repository, getAccount, getTrip, l
   async function list(userId) {
     return await unitOfWork(async () => {
       const user = await actor(userId), parcels = [];
-      for (const row of await repository.listReceived(userId)) parcels.push(await snapshot(user, row));
+      for (const row of await repository.listReceived(userId)) {
+        if (recipientMatches(user, row)) parcels.push(await snapshot(user, row));
+      }
       return { parcels };
     });
   }
@@ -81,6 +86,8 @@ export function createParcelTrackingService({ repository, getAccount, getTrip, l
         if (typeof data.token !== 'string' || !/^[a-f0-9]{64}$/.test(data.token)) unavailable();
         const row = await repository.byToken(tokens.digest(data.token));
         if (!row || row.recipientId && row.recipientId !== user.id || !row.recipientId && now >= row.expiresAt) unavailable();
+        check(user.emailVerified, 'FORBIDDEN', 'Verify your Taxi Ai account email before accepting a parcel invitation.');
+        if (!recipientMatches(user, row)) unavailable();
         const sender = await getAccount(row.ownerId);
         if (!sender) unavailable();
         const ride = await owned(sender, row.rideId);
@@ -95,14 +102,17 @@ export function createParcelTrackingService({ repository, getAccount, getTrip, l
       const ride = await owned(user, rideId), current = await repository.latest(rideId);
       let linkId, token;
       if (action === 'link') {
-        fields(data, ['expectedLinkId']);
+        check(data && Object.hasOwn(data, 'recipientEmail'), 'INVALID_CLIENT_VERSION', 'Update the Taxi Ai app or use the current website to enter the intended recipient email before creating an invitation.');
+        fields(data, ['expectedLinkId', 'recipientEmail']);
+        const intendedEmail = emailAddress(data.recipientEmail);
         check(data.expectedLinkId === null || identifier(data.expectedLinkId), 'INVALID_INPUT', 'Use the parcel invitation currently shown.');
         check(!terminal.has(ride.status), 'LINK_CLOSED', 'This parcel delivery has ended.');
         check((current?.id ?? null) === data.expectedLinkId, 'STALE_VERSION', 'The parcel invitation changed. Refresh before replacing it.');
         check(await repository.count(rideId) < 30, 'LINK_LIMIT', 'This parcel has reached its invitation limit.');
         if (current?.active) await repository.end(current.id, now, 'replaced');
         linkId = tokens.id(); token = tokens.generate();
-        await repository.add({ id: linkId, rideId, ownerId: user.id, tokenHash: tokens.digest(token), now, expiresAt: now + 7 * 86_400_000 });
+        await repository.add({ id: linkId, rideId, ownerId: user.id, tokenHash: tokens.digest(token),
+          intendedEmailHash: emailHash(intendedEmail, linkId), now, expiresAt: now + 86_400_000 });
       } else if (action === 'revoke') {
         fields(data, ['linkId', 'expectedVersion']);
         check(identifier(data.linkId) && Number.isSafeInteger(data.expectedVersion) && data.expectedVersion >= 0, 'INVALID_INPUT', 'Use the current invitation and version.');
@@ -115,6 +125,21 @@ export function createParcelTrackingService({ repository, getAccount, getTrip, l
       return { ...await invitation(ride, await repository.link(linkId)), replayed: false, ...(token ? { token } : {}) };
     });
   }
-  return Object.freeze({ get, received, list, command,
+  async function preview(data) {
+    fields(data, ['token']);
+    if (typeof data.token !== 'string' || !/^[a-f0-9]{64}$/.test(data.token)) unavailable();
+    return unitOfWork(async () => {
+      const row = await repository.byToken(tokens.digest(data.token));
+      if (!row?.intendedEmailHash || clock() >= row.expiresAt) unavailable();
+      const owner = await getAccount(row.ownerId);
+      if (!owner) unavailable();
+      const ride = await owned(owner, row.rideId);
+      // A capability grants only this coarse status before verified account acceptance.
+      // No name, address, driver, exact location or handover code is returned.
+      return { preview: { reference: `PARCEL-${ride.rideId.slice(0, 8).toUpperCase()}`,
+        status: ride.status, updatedAt: ride.updatedAt, requiresVerifiedAccount: true } };
+    });
+  }
+  return Object.freeze({ get, received, list, command, preview,
     isRecipient: async (userId, rideId) => Boolean(await repository.received(userId, rideId)) });
 }

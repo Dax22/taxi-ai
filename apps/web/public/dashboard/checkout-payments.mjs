@@ -85,12 +85,12 @@ export function createCheckoutPayments({ client, view, makeKey = () => crypto.ra
 
 export function rideCheckoutTarget(user, ride) {
   return user && ['customer', 'driver'].includes(user.role) && ride && (ride.status !== 'cancelled' || ride.trip) && ['booked', 'on_way', 'arrived', 'in_progress', 'completed', 'cancelled'].includes(ride.status)
-    ? { kind: 'ride', targetId: ride.id, title: ride.delivery ? 'Courier test checkout' : 'Ride test checkout' } : null;
+    ? { kind: 'ride', targetId: ride.id, title: ride.delivery ? 'Courier checkout' : 'Ride checkout' } : null;
 }
 
 export function foodCheckoutTarget(user, order) {
   return user && order?.role === 'customer' && order.payment?.method === 'paystack' && order.payment.targetId
-    ? { kind: 'food', targetId: order.payment.targetId, title: 'Food test checkout', grouped: order.payment.targetId !== order.id } : null;
+    ? { kind: 'food', targetId: order.payment.targetId, title: 'Food checkout', grouped: order.payment.targetId !== order.id } : null;
 }
 
 /** Keep the original completed-trip simulator only when hosted checkout is disabled. */

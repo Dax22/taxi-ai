@@ -21,7 +21,7 @@ export const PASSWORD = 'A long test-only password 123';
 // Node fetch may normalize Host; use the real HTTP header in gateway tests.
 export function httpFetch(url, options = {}) {
   return new Promise((resolve, reject) => {
-    const request = httpRequest(url, { method: options.method ?? 'GET', headers: options.headers }, (response) => {
+    const request = httpRequest(url, { method: options.method ?? 'GET', headers: options.headers, ...(options.localAddress ? {localAddress:options.localAddress}: {}) }, (response) => {
       const chunks = []; response.on('data', (chunk) => chunks.push(chunk)); response.on('error', reject);
       response.on('end', async () => (await resolve(new Response(Buffer.concat(chunks), { status: response.statusCode,
         headers: Object.fromEntries(Object.entries(response.headers).map(([key, value]) => [key, Array.isArray(value) ? value.join(', ') : value])) }))));
@@ -35,6 +35,7 @@ export async function harness(t, { persistent = false, callConfig = createCallCo
   const folder = persistent ? await mkdtemp(join(tmpdir(), 'taxi-ai-test-')) : null;
   const filename = folder ? join(folder, 'test.sqlite') : ':memory:';
   let now = TEST_NOW, server, db, base, stopped = true;
+  let fixtureClientIndex=1;
   async function start() {
     db = openDatabase(filename);
     server = createAppServer({ db, clock: () => now, callConfig, mapProvider, resolveDeliveryLocation, deliveryMapSettings, runtime, telemetry, paystackProvider, googleProvider, accountMail, vehicleVisionProvider, driverFaceProvider, dispatchConfig, staffMfa, ridePilot });
@@ -57,13 +58,15 @@ export async function harness(t, { persistent = false, callConfig = createCallCo
     advance(ms) { now += ms; }, async restart(options = {}) { await stop(); ridePilot = options.ridePilot ?? ridePilot; await start(); },
     client() {
       const client = { cookie: '', csrf: '', user: null };
+      // Distinct loopback sources represent separate devices; production registration throttles remain unchanged.
+      const localAddress = `127.0.${Math.floor(fixtureClientIndex / 250)}.${fixtureClientIndex++ % 250 + 1}`;
       const availabilityClient = randomUUID();
       const locationClient = randomUUID();
       client.send = async (path, { method = 'GET', data, headers = {}, rawBody } = {}) => {
         const requestHeaders = { ...gatewayHeaders, ...(client.cookie ? { Cookie: client.cookie } : {}),
           ...(method === 'POST' ? { Origin: runtime?.publicOrigin ?? base, 'Content-Type': 'application/json', 'X-CSRF-Token': client.csrf } : {}), ...headers };
         for (const key of Object.keys(requestHeaders)) if (requestHeaders[key] === null) delete requestHeaders[key];
-        const response = await (runtime?.mode === 'staging' ? httpFetch : fetch)(base + path, { method, headers: requestHeaders,
+        const response = await httpFetch(base + path, { method, headers: requestHeaders, localAddress,
           ...(method === 'POST' ? { body: rawBody ?? JSON.stringify(data ?? {}) } : {}) });
         const cookie = response.headers.get('set-cookie');
         if (cookie) client.cookie = cookie.split(';')[0];

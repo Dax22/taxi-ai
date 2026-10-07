@@ -322,3 +322,77 @@ test('lease reader cannot return unexpected credentials, GPS history, or an unsa
   for (const origin of ['http://public.example', 'https://user:password@example.com', 'https://example.com/path', 'https://example.com/?token=private'])
     assert.equal(readBackgroundLease(JSON.stringify({ ...valid, connection: { origin } })), null);
 });
+
+
+test('temporary connection failure retains scoped consent and resumes with a new fresh point and sequence', async () => {
+  const f = fixture(); await begin(f); f.advance(10_000);
+  const send = f.api.position; let failed = false;
+  f.api.position = async (...args) => {
+    if (!failed) { failed = true; await send(...args); throw Object.assign(new Error('network'), { code: 'CONNECTION_INTERRUPTED' }); }
+    return send(...args);
+  };
+  await f.m.handle([f.fresh({ lng: 7.48 })]);
+  assert.notEqual(f.raw(), null); assert.deepEqual(f.stops, []);
+  assert.equal(f.record()?.failures, 1); assert.equal(f.record()?.sequence, 4);
+  assert.equal(f.raw()?.includes('capturedAt'), false);
+  f.advance(5000); await f.m.handle([f.fresh({ lng: 7.51 })]);
+  assert.deepEqual(f.positions.map(p => p.sequence), [4, 5]);
+  assert.equal(f.positions[1].position.lng, 7.51);
+  assert.equal(f.record()?.failures, undefined);
+});
+
+test('recovery survives headless reconstruction without replaying the failed GPS sample', async () => {
+  const f = fixture(); await begin(f); f.advance(10_000);
+  const send = f.api.position;
+  f.api.position = async () => { throw Object.assign(new Error('busy'), { status: 503 }); };
+  await f.m.handle([f.fresh({ lng: 7.48 })]);
+  const restored = f.manager(); f.api.position = send;
+  f.advance(4999); await restored.handle([f.fresh()]); assert.equal(f.positions.length, 0);
+  f.advance(1); await restored.handle([f.fresh({ lng: 7.52 })]);
+  assert.equal(f.positions[0].sequence, 5); assert.equal(f.positions[0].position.lng, 7.52);
+});
+
+test('retry backoff never extends the existing sharing lease', async () => {
+  const f = fixture(); await begin(f); let attempts = 0;
+  f.api.position = async () => { attempts++; throw Object.assign(new Error('offline'), { code: 'NETWORK_ERROR' }); };
+  f.advance(10_000); await f.m.handle([f.fresh()]);
+  for (let i = 0; i < 49; i++) { f.advance(1000); await f.m.handle([f.fresh()]); }
+  assert.ok(attempts <= 5, `Unexpected number of attempts: ${attempts}`);
+  f.advance(1000); await f.m.handle([f.fresh()]);
+  assert.equal(f.raw(), null); assert.equal(await f.m.current(), null);
+});
+
+test('explicit authorization failures never retry even during a recovery window', async () => {
+  for (const status of [400, 401, 403, 404, 409, 422]) {
+    const f = fixture(); await begin(f); f.advance(10_000);
+    f.api.position = async () => { throw Object.assign(new Error('denied'), { status }); };
+    await f.m.handle([f.fresh()]); assert.equal(f.raw(), null); assert.deepEqual(f.stops, [f.authorization.token]);
+  }
+});
+
+test('stop and permission revocation cancel pending recovery without another upload', async () => {
+  for (const reason of ['stop', 'permission']) {
+    const f = fixture(); await begin(f); f.advance(10_000); let attempts = 0;
+    f.api.position = async () => { attempts++; throw Object.assign(new Error('network'), { status: 502 }); };
+    await f.m.handle([f.fresh()]);
+    if (reason === 'stop') await f.m.stop(); else f.native.permissions = async () => false;
+    f.advance(10_000); await f.m.handle([f.fresh()]);
+    assert.equal(attempts, 1); assert.equal(f.raw(), null);
+  }
+});
+
+test('legacy sanitized network errors retry but arbitrary implementation errors fail closed', async () => {
+  for (const temporary of [true, false]) {
+    const f = fixture(); await begin(f); f.advance(10_000);
+    f.api.position = async () => { throw new Error(temporary ? 'Background location connection interrupted.' : 'invalid application state'); };
+    await f.m.handle([f.fresh()]);
+    assert.equal(f.raw() !== null, temporary);
+  }
+});
+
+test('a Retry-After beyond remaining consent cannot renew or resurrect tracking', async () => {
+  const f = fixture(); await begin(f); f.advance(10_000);
+  f.api.position = async () => { throw Object.assign(new Error('limited'), { status: 429, retryAfterMs: 60_000 }); };
+  await f.m.handle([f.fresh()]); assert.equal(f.raw(), null);
+  f.advance(60_000); await f.manager().handle([f.fresh()]); assert.equal(f.positions.length, 0);
+});

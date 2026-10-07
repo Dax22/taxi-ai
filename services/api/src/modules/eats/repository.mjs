@@ -14,7 +14,7 @@ const store = async (row, deliveryAreas) => {
     deliveryAreaIds: [...(await deliveryAreas(profile))], dispatchPoint: row.dispatchPoint ? JSON.parse(row.dispatchPoint) : null, isOpen: Boolean(row.isOpen) };
 };
 const order = (row) => row ? { ...row, snapshot: JSON.parse(row.snapshot), courier: row.courier ? JSON.parse(row.courier) : null, events: JSON.parse(row.events) } : null;
-export function createEatsRepository(db, { deliveryAreas, legacyAreaIds: EATS_LEGACY_AREA_IDS, distanceMeters }) {
+export function createEatsRepository(db, { deliveryAreas, legacyAreaIds: EATS_LEGACY_AREA_IDS, distanceMeters, clock = Date.now }) {
   const readStore = async (row) => (await store(row, deliveryAreas));
   return Object.freeze({
     deliveryProfile: async (userId) => {
@@ -31,6 +31,7 @@ export function createEatsRepository(db, { deliveryAreas, legacyAreaIds: EATS_LE
       // Geographic eligibility runs before the bounded page, so stores in an
       // unrelated state cannot crowd a local kitchen out of discovery.
       return (await asyncMap((await db.prepare(`SELECT ${storeColumns} FROM eats_stores WHERE (? = 1 OR status = 'approved')
+        AND (?=1 OR NOT EXISTS(SELECT 1 FROM account_restrictions x WHERE x.kind='suspension' AND x.status='active' AND (x.expires_at IS NULL OR x.expires_at>?) AND ((x.subject_type='store' AND x.subject_id=eats_stores.id AND x.scope='store') OR (x.subject_type='account' AND x.scope IN ('vendor','account') AND x.subject_id IN(SELECT user_id FROM eats_memberships WHERE store_id=eats_stores.id)))))
         AND (? IS NULL OR json_extract(details_json,'$.areaId')=?)
         AND (?=0 OR is_open=1)
         AND (?<>'pickup' OR COALESCE(json_extract(details_json,'$.pickupEnabled'),0)=1)
@@ -43,7 +44,7 @@ export function createEatsRepository(db, { deliveryAreas, legacyAreaIds: EATS_LE
             (json_extract(details_json,'$.areaId') IN (SELECT value FROM json_each(?)) AND ? IN (SELECT value FROM json_each(?)))
             OR (json_extract(details_json,'$.areaId') NOT IN (SELECT value FROM json_each(?)) AND json_extract(details_json,'$.areaId')=?)
           ))))) ORDER BY created_at DESC, id DESC LIMIT 200`)
-        .all(admin ? 1 : 0, areaId, areaId, openOnly ? 1 : 0, fulfillment, fulfillment, excludeMemberId, excludeMemberId, deliveryAreaId, JSON.stringify(EATS_LEGACY_AREA_IDS), deliveryAreaId,
+        .all(admin ? 1 : 0, admin ? 1 : 0, clock(), areaId, areaId, openOnly ? 1 : 0, fulfillment, fulfillment, excludeMemberId, excludeMemberId, deliveryAreaId, JSON.stringify(EATS_LEGACY_AREA_IDS), deliveryAreaId,
           JSON.stringify(EATS_LEGACY_AREA_IDS), deliveryAreaId, JSON.stringify(EATS_LEGACY_AREA_IDS), JSON.stringify(EATS_LEGACY_AREA_IDS), deliveryAreaId)), readStore));
     },
     membership: async (userId) => (await db.prepare('SELECT store_id AS storeId, role FROM eats_memberships WHERE user_id = ?').get(userId)) ?? null,

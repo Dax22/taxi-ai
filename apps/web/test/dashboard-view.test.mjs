@@ -350,3 +350,13 @@ test('guest rider is labelled separately from booker, contact is owner-only, and
   assert.match(h.node('pickup-pin-help').textContent, /passenger, Test Friend/);
   h.view.reset(); assert.equal(h.node('detail-passenger').textContent, '');
 });
+
+
+test('paused passenger service is disclosed without marking courier jobs paused', t => {
+  const h = setup(t);
+  h.view.render({ ...state(customer, []), passengerRides: { paused: true, coverage: 'nigeria' } });
+  assert.match(h.node('booking-service-note').textContent, /Passenger ride requests are currently paused/);
+  assert.match(h.node('booking-service-note').textContent, /Viewing a map does not request a driver/);
+  h.view.render({ ...state(customer, []), passengerRides: { paused: false, coverage: 'nigeria' } });
+  assert.doesNotMatch(h.node('booking-service-note').textContent, /currently paused/);
+});

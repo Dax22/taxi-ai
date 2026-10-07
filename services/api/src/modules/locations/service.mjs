@@ -6,6 +6,8 @@ import { NIGERIA_BOUNDS, insideNigeria, canShareLocation } from '../../../../../
 import { key, clientIdentity, endpoints, point, checkedRoute, directQuote, position, QUOTE_MS, FRESH_MS, SHARE_MS } from './domain.mjs';
 import { createRidePilotConfig } from '../../../../../packages/shared/src/ride-pilot.mjs';
 
+const INVESTIGATION_LOCATION_RETENTION_MS = 180 * 24 * 60 * 60_000;
+
 export function createLocationsService({ repository, provider, getAccount, sessionOwner, nativeAccessOwner = () => null, nativeSessionOwner = () => null, getRideContext, unitOfWork, tokens, audit, clock, onChange = async () => {}, ridePilot = createRidePilotConfig(), canShare = canShareLocation, resourceLabel = 'ride' }) {
   async function context(input, clientRequired = false, planning = false) {
     const user = (await getAccount(input.userId));
@@ -28,7 +30,8 @@ export function createLocationsService({ repository, provider, getAccount, sessi
     return { user, userId: user.id, sessionHash, clientHash };
   }
   const planningContext = async (input) => (await context(input, false, true));
-  async function settings(input) { (await planningContext(input)); return { ...provider.describe(), bounds: NIGERIA_BOUNDS, quoteSeconds: QUOTE_MS / 1000 }; }
+  async function settings(input) { (await planningContext(input)); return { ...provider.describe(), bounds: NIGERIA_BOUNDS, quoteSeconds: QUOTE_MS / 1000,
+      passengerRides: ridePilot.describe?.() ?? { paused: ridePilot.paused, coverage: ridePilot.bounds ? 'pilot' : 'local' } }; }
   async function search(input, data) {
     (await planningContext(input)); fields(data, ['query']);
     const query = label(data.query, 'Address search', 3, 160);
@@ -92,6 +95,11 @@ export function createLocationsService({ repository, provider, getAccount, sessi
   }
   async function close(share, now) {
     if (!share?.active) return;
+    if (share.positionJson && share.sequence > 0) {
+      const value = JSON.parse(share.positionJson);
+      await repository.recordEvidence?.({ shareId: share.id, rideId: share.rideId, driverId: share.driverId,
+        sequence: share.sequence, value, now, force: true });
+    }
     (await repository.stop(share.id, now));
     (await audit.record(share.driverId, 'location.stopped', share.id, now));
     await onChange(share.rideId, now);
@@ -119,6 +127,7 @@ export function createLocationsService({ repository, provider, getAccount, sessi
     for (const share of rows) (await validate(share, now));
     maintenanceCursor = rows.length === 200 ? rows.at(-1).id : '';
     (await repository.pruneQuotes(now));
+    (await repository.pruneEvidence?.(now - INVESTIGATION_LOCATION_RETENTION_MS));
   }
   const sweep = async () => (await unitOfWork(expire));
   const owns = (share, ctx) => share.driverId === ctx.userId && share.sessionHash === ctx.sessionHash && share.clientHash === ctx.clientHash;
@@ -187,8 +196,11 @@ export function createLocationsService({ repository, provider, getAccount, sessi
       }
       const previous = share.positionJson ? JSON.parse(share.positionJson) : null;
       check(!previous || value.capturedAt >= previous.capturedAt, 'STALE_LOCATION', 'An older GPS fix cannot replace a newer one.');
-      (await repository.update(id, data.sequence, value, clock()));
-      await onChange(share.rideId, clock());
+      const now = clock();
+      (await repository.update(id, data.sequence, value, now));
+      await repository.recordEvidence?.({ shareId: share.id, rideId: share.rideId, driverId: share.driverId,
+        sequence: data.sequence, value, now });
+      await onChange(share.rideId, now);
       return { share: shareView((await repository.share(id)), ctx), replayed: false };
     }));
   }

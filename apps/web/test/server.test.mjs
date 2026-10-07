@@ -73,6 +73,10 @@ test('the local site serves HTML, modules and artwork with correct content types
   await withServer(async (base) => {
     for (const [path, type] of [['/', 'text/html'], ['/app', 'text/html'],
       ['/admin/coverage', 'text/html'], ['/admin/coverage-page.mjs', 'text/javascript'],
+      ['/admin/matching', 'text/html'], ['/admin/matching-page.mjs', 'text/javascript'],
+      ['/admin/acceptance', 'text/html'], ['/admin/acceptance-page.mjs', 'text/javascript'],
+      ['/admin/mobile', 'text/html'], ['/admin/mobile-page.mjs', 'text/javascript'],
+      ['/admin/investigations', 'text/html'], ['/admin/investigations-page.mjs', 'text/javascript'],
       ['/admin/coverage-map.mjs', 'text/javascript'], ['/admin/coverage-map-model.mjs', 'text/javascript'],
       ['/shared/nigeria-map-places.mjs', 'text/javascript'],
       ['/eats', 'text/html'], ['/eats.css', 'text/css'], ['/typography.css', 'text/css'], ['/eats.mjs', 'text/javascript'],
@@ -167,5 +171,20 @@ test('the static routes never expose repository files or accept writes', async (
     assert.equal(await head.text(), '');
     assert.match(head.headers.get('content-security-policy'), /connect-src 'self'/);
     assert.equal(head.headers.get('x-content-type-options'), 'nosniff');
+  });
+});
+
+test('admin loading state renders an accessible spinning ring', async () => {
+  await withServer(async (base) => {
+    const page = await fetch(base + '/admin');
+    assert.equal(page.status, 200);
+    const html = await page.text();
+    assert.match(html, /id="loading"[^>]*role="status"[^>]*aria-live="polite"/);
+    assert.match(html, /class="loading-ring"[^>]*aria-hidden="true"/);
+    const css = await (await fetch(base + '/admin/styles.css')).text();
+    assert.match(css, /@keyframes taxi-loading-spin/);
+    assert.match(css, /\.loading-ring\{[^}]*animation:taxi-loading-spin/);
+    const view = await (await fetch(base + '/admin/view.mjs')).text();
+    assert.match(view, /aria-busy/);
   });
 });

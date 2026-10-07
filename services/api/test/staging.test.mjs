@@ -72,10 +72,16 @@ test('staging fails closed for incomplete configuration; local mode keeps loopba
   writeFileSync(file, 'not-json'); assert.throws(() => createRuntimeConfig(env));
 });
 
-test('HTTPS gateway and tester gates protect all content; forwarded headers cannot select a host or bypass access', async (t) => {
+test('HTTPS gateway protects public marketing and tester gates protect account features without forwarded-header bypass', async (t) => {
   const { h } = await setup(t);
   assert.equal((await fetch(h.base + '/app')).status, 403);
-  for (const path of ['/', '/app', '/dashboard.mjs', '/assets/taxi-hero.webp', '/api/session', '/health/ready']) {
+  for (const path of ['/', '/contact', '/contact.mjs', '/api/contact']) {
+    const missing = { ...gatewayHeaders }; delete missing.Authorization;
+    const publicPage = await httpFetch(h.base + path, { headers: missing });
+    assert.equal(publicPage.status, 200, path); await publicPage.text();
+    assert.equal((await fetch(h.base + path)).status, 403, 'Public marketing still requires the trusted HTTPS gateway.');
+  }
+  for (const path of ['/app', '/dashboard.mjs', '/assets/taxi-hero.webp', '/api/session', '/health/ready', '/parcel-operations', '/parcel-operations.mjs']) {
     const missing = { ...gatewayHeaders }; delete missing.Authorization;
     const response = await httpFetch(h.base + path, { headers: missing });
     assert.equal(response.status, 401, path); assert.match(response.headers.get('www-authenticate'), /private preview/); await response.text();
@@ -206,4 +212,38 @@ test('native bearer sessions require the independent tester gate and trusted HTT
   }
   const browser = await httpFetch(h.base + '/app', { headers }); assert.equal(browser.status, 401); await browser.text();
   assert.ok(!JSON.stringify(logs).includes(auth.credentials.accessToken)); assert.ok(!JSON.stringify(logs).includes(testerKey));
+});
+
+
+test('exported public account mode preserves gateway checks and still rejects anonymous staff access', async t => {
+  const { env } = configuration(t);
+  const runtime = createRuntimeConfig({ ...env, TAXI_AI_ACCESS_MODE: 'public' });
+  const { h } = await setup(t, { runtime });
+  const headers = { ...gatewayHeaders }; delete headers.Authorization;
+  for (const path of ['/app', '/api/session']) {
+    const response = await httpFetch(h.base + path, { headers });
+    assert.equal(response.status, 200, path); await response.text();
+  }
+  for (const path of ['/api/admin/console/session', '/api/admin/console/accounts']) {
+    const response = await httpFetch(h.base + path, { headers });
+    assert.equal(response.status, 401, path); await response.text();
+  }
+  assert.equal((await fetch(h.base + '/api/session')).status, 403, 'Public mode must not bypass the trusted gateway.');
+  assert.throws(() => createRuntimeConfig({ ...env, TAXI_AI_ACCESS_MODE: 'invalid' }));
+});
+
+test('exported registration cap is shared across web and native without granting staff roles', async t => {
+  const { env } = configuration(t);
+  const runtime = createRuntimeConfig({ ...env, TAXI_AI_ACCESS_MODE: 'public' });
+  const { h } = await setup(t, { runtime });
+  for (let i = 0; i < 5; i++) await h.client().register('registration-limit-' + i);
+  const headers = { ...gatewayHeaders, 'Content-Type': 'application/json' }; delete headers.Authorization;
+  const response = await httpFetch(h.base + '/api/mobile/v1/auth/register', {
+    method: 'POST', headers,
+    body: JSON.stringify({ name: 'Synthetic sixth account', email: 'sixth@example.test', password: PASSWORD, deviceName: 'Fixture phone' })
+  });
+  assert.equal(response.status, 429);
+  assert.equal((await response.json()).error.code, 'RATE_LIMITED');
+  assert.equal(h.db.prepare('SELECT count(*) AS n FROM users').get().n, 5);
+  assert.equal(h.db.prepare("SELECT count(*) AS n FROM users WHERE role='admin'").get().n, 0);
 });

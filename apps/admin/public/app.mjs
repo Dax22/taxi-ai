@@ -33,9 +33,9 @@ function schedule() {
   timer = setTimeout(async () => {
     if (document.hidden) return;
     if ($('workspace').hidden) { schedule(); return; }
-    if (route.name === 'operations' && !document.activeElement?.closest('#page-content form')) await controller.load(); else await controller.revalidate();
+    if (['operations', 'matching', 'mobile', 'acceptance', 'safetyAlerts', 'safetyAlertDetail'].includes(route.name) && !document.activeElement?.closest('#page-content form')) await controller.load(); else await controller.revalidate();
     schedule();
-  }, 30000);
+  }, route.section === 'safety-alerts' ? 10000 : 30000);
 }
 document.addEventListener('visibilitychange', () => {
   clearTimeout(timer);
@@ -43,4 +43,13 @@ document.addEventListener('visibilitychange', () => {
 });
 window.addEventListener('pagehide', () => { clearTimeout(timer); controller.conceal(); });
 window.addEventListener('pageshow', (event) => { if (event.persisted) { void controller.load(); schedule(); } });
+// Expire a current-location view even while a reviewer is typing.
+if (route.section === 'safety-alerts') setInterval(() => {
+  for (const node of document.querySelectorAll('[data-safety-current="true"]')) {
+    if (Date.now() - Number(node.getAttribute('data-received-at')) >= 30000) {
+      node.replaceChildren(document.createTextNode('Current-location view expired. Refresh to verify sharing access. Incident evidence is historical.'));
+      node.removeAttribute('data-safety-current');
+    }
+  }
+}, 1000);
 void controller.load(); schedule();

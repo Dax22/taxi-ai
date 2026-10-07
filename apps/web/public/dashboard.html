@@ -44,7 +44,6 @@
       <div class="account-card auth-card">
         <div class="auth-mode" role="group" aria-label="Choose account action"><button id="show-login" type="button" aria-pressed="true">Sign in</button><button id="show-register" type="button" aria-pressed="false">Create account</button></div>
         <h2 id="auth-title">Welcome back.</h2><p class="supporting-copy" id="auth-description">Sign in to pick up where you left off.</p>
-        <div id="google-auth" hidden><button id="google-sign-in" class="google-button" type="button" aria-label="Sign in with Google"><img src="/assets/google-sign-in.png" width="216" height="48" alt=""><span id="google-progress" hidden>Opening Google…</span></button><p class="small-note">New here? Google can create your Taxi Ai account too.</p><p class="auth-divider">or continue with email</p></div>
         <form id="auth-form" class="stack-form">
           <div id="registration-fields" hidden>
             <fieldset class="registration-intent"><legend>What would you like to do first?</legend>
@@ -68,6 +67,11 @@
 
           <button id="auth-submit" class="button button-primary button-full" type="submit">Sign in <span aria-hidden="true">↗</span></button>
         </form>
+        <div id="google-auth" class="google-auth-below" hidden>
+          <p class="auth-divider">or continue with Google</p>
+          <button id="google-sign-in" class="google-button" type="button" aria-label="Continue with Google"><img src="/assets/google-sign-in.png" width="216" height="48" alt=""><span id="google-progress" hidden>Opening Google…</span></button>
+          <p class="small-note google-auth-note">New here? Google can create your Taxi Ai account too.</p>
+        </div>
       </div>
     </section>
 
@@ -280,6 +284,7 @@
           <section class="account-card" aria-labelledby="your-requests-title"><div class="card-topline"><h2 id="your-requests-title">Current journeys</h2><span id="ride-count" class="small-note"></span></div><div id="ride-list" class="request-list"></div></section>
           <section id="delivery-update-card" hidden></section>
           <section id="location-tracking" class="account-card location-panel" hidden aria-labelledby="location-tracking-title">
+            <a id="delivery-operations-open" class="text-link" href="/app" hidden>Delivery issues, returns &amp; handover record ↗</a>
             <div class="card-topline"><div><p class="eyebrow">YOUR ROUTE</p><h2 id="location-tracking-title">Journey map.</h2></div><button id="tracking-online" type="button" class="button button-outline button-small">Enable online maps</button></div>
             <p id="tracking-route-summary" class="supporting-copy"></p><p id="tracking-eta" class="small-note" role="status"></p><p id="tracking-provider-note" class="small-note"></p>
             <div id="tracking-map" class="location-map"></div><p class="map-attribution">© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a> · OSRM routing · <a href="https://www.openstreetmap.org/fixthemap" target="_blank" rel="noopener">Fix the map</a></p>
@@ -340,7 +345,9 @@
           </section>
           <section id="parcel-link-panel" class="account-card" hidden aria-labelledby="parcel-link-title">
             <p class="eyebrow">RECIPIENT TRACKING</p><h2 id="parcel-link-title">Invite your recipient</h2>
-            <p class="small-note">Send the private invitation only to your recipient. They must sign in and accept it to see this delivery and its handover code. Driver location is shared after collection. Replacing or revoking an invitation removes the previous recipient’s access.</p>
+            <p class="small-note">Enter your recipient’s account email, then share the invitation privately. Only an account with that verified email can accept it. Driver location and the handover code are available after collection. Replacing or revoking removes the previous recipient’s access.</p>
+            <label for="parcel-link-recipient-email">Recipient’s Taxi Ai email</label><input id="parcel-link-recipient-email" type="email" maxlength="254" autocomplete="off" placeholder="Recipient’s verified account email">
+            <p class="small-note">Invitations expire after 24 hours if not accepted. Older invitations must be replaced to enable verified recipient access.</p>
             <p id="parcel-link-message" class="small-note" role="status"></p><p id="parcel-link-error" class="error-text" role="alert"></p>
             <div class="review-actions"><button id="parcel-link-create" type="button" class="button button-primary button-small">Create invitation</button><button id="parcel-link-replace" type="button" class="button button-outline button-small" hidden>Replace invitation</button><button id="parcel-link-revoke" type="button" class="button button-outline button-small" hidden>Revoke access</button><button id="parcel-link-retry" type="button" class="button button-outline button-small" hidden>Retry the same action</button><button id="parcel-link-refresh" type="button" class="button button-outline button-small">Refresh</button></div>
             <div id="parcel-link-confirm" class="mode-confirm" hidden><p>Replacing or revoking this invitation immediately removes the current recipient’s tracking access.</p><button id="parcel-link-confirm-action" type="button" class="button button-primary button-small">Confirm</button><button id="parcel-link-keep" type="button" class="button button-outline button-small">Keep current invitation</button></div>
@@ -441,5 +448,6 @@
     <noscript><p class="account-card">Enable JavaScript to sign in and use Taxi Ai accounts.</p></noscript>
   </main>
   <footer class="shell account-footer"><p>Taxi Ai · Built for Nigeria.</p><p>Rides, Eats and courier previews. Autonomous taxis are coming later.</p></footer>
+<nav class="account-notice-link" aria-label="Account support"><a href="/account-notices">Account notices and appeals</a></nav>
 </body>
 </html>

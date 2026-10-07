@@ -256,8 +256,9 @@ test('hosted mode exposes no simulator writes, retries are bounded, and shared-l
     if (n < 2) notice = (await simulate(admin, notice, 'retry')).body.incident.notifications[0];
   }
   assert.equal(notice.attempts, 3); assert.equal((await simulate(admin, notice, 'retry')).status, 409);
-  for (let n = 0; n < 30; n++) assert.equal((await viewLink(h, 'f'.repeat(64))).status, 404);
-  assert.equal((await viewLink(h, 'f'.repeat(64))).status, 429);
+  const sameSource=h.client();
+  for (let n = 0; n < 30; n++) assert.equal((await sameSource.post('/api/trip-share/view',{token:'f'.repeat(64)})).status,404);
+  assert.equal((await sameSource.post('/api/trip-share/view',{token:'f'.repeat(64)})).status,429);
 });
 
 test('administrator pagination handles tied timestamps, filters and reporter limits without exposing private details in the queue', async (t) => {

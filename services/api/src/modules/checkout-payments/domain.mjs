@@ -3,6 +3,7 @@ import { check } from '../../shared/errors.mjs';
 export const SETTLED = ['paid', 'refund_required'];
 export const LEASE_MS = 60_000;
 export const TEST_NOTICE = 'PAYSTACK TEST RECEIPT — NO LIVE MONEY MOVED';
+export const LIVE_NOTICE = 'PAYSTACK VERIFIED PAYMENT';
 export function target(kind, id) {
   check(['ride', 'food'].includes(kind) && typeof id === 'string' && /^[a-f0-9-]{36}$/.test(id), 'INVALID_INPUT', 'Choose a valid payment target.');
 }
@@ -20,9 +21,9 @@ export function checkoutUrl(value) {
   } catch { check(false, 'PAYMENT_VERIFICATION_FAILED', 'The checkout address could not be verified.'); }
 }
 export function verifyResult(value, payment) {
-  check(value && value.reference === payment.reference && value.domain === 'test' && value.amountKobo === payment.amountKobo
+  check(value && ['test','live'].includes(payment.providerMode) && value.reference === payment.reference && value.domain === payment.providerMode && value.amountKobo === payment.amountKobo
     && value.currency === payment.currency && ['success', 'failed', 'abandoned', 'pending', 'ongoing', 'processing', 'queued', 'reversed', 'unknown'].includes(value.status),
-  'PAYMENT_VERIFICATION_FAILED', 'The provider result does not match this test payment.');
+  'PAYMENT_VERIFICATION_FAILED', 'The provider result does not match this payment.');
   check(value.transactionId == null || typeof value.transactionId === 'string' && /^[A-Za-z0-9_-]{1,120}$/.test(value.transactionId),
     'PAYMENT_VERIFICATION_FAILED', 'The provider transaction could not be verified.');
   return value;

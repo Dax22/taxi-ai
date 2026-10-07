@@ -14,7 +14,10 @@
     "test": "node --experimental-strip-types --test test/*.test.ts",
     "export": "expo export --platform ios --platform android",
     "verify": "npm run check && npm run typecheck && npm test && npm run export",
-    "check": "node ../../scripts/check-mobile.mjs"
+    "check": "node ../../scripts/check-mobile.mjs",
+    "release:check": "node --env-file-if-exists=.env ../../scripts/mobile-release-readiness.mjs",
+    "acceptance:prepare": "node ../../scripts/mobile-build-acceptance.mjs",
+    "acceptance:build": "node ../../scripts/mobile-build-acceptance.mjs"
   },
   "dependencies": {
     "@expo-google-fonts/manrope": "^0.4.2",
@@ -46,9 +49,11 @@
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.0",
     "react-native-svg": "15.15.4",
+    "react-native-webrtc": "^124.0.8",
     "react-native-worklets": "0.10.1"
   },
   "devDependencies": {
+    "@config-plugins/react-native-webrtc": "^15.0.2",
     "@types/node": "^24.0.0",
     "@types/react": "~19.2.0",
     "typescript": "~6.0.2"

@@ -16,18 +16,43 @@ services:
       TAXI_AI_STAFF_MFA_KEY: ${TAXI_AI_STAFF_MFA_KEY:-}
       TAXI_AI_STAFF_MFA_REQUIRED: ${TAXI_AI_STAFF_MFA_REQUIRED:-false}
       TAXI_AI_MODE: staging
+      TAXI_AI_ACCESS_MODE: ${TAXI_AI_ACCESS_MODE-invited}
       TAXI_AI_PAYMENT_PROVIDER: ${TAXI_AI_PAYMENT_PROVIDER:-off}
       PAYSTACK_SECRET_KEY: ${PAYSTACK_SECRET_KEY:-}
+      TAXI_AI_PAYSTACK_LIVE_ENABLED: ${TAXI_AI_PAYSTACK_LIVE_ENABLED:-false}
       TAXI_AI_RIDES_PAUSED: ${TAXI_AI_RIDES_PAUSED:-true}
       TAXI_AI_RIDE_PILOT_BOUNDS: ${TAXI_AI_RIDE_PILOT_BOUNDS:-}
+      TAXI_AI_RIDE_COVERAGE: ${TAXI_AI_RIDE_COVERAGE:-}
       TAXI_AI_PUBLIC_ORIGIN: https://${TAXI_AI_DOMAIN:?Set the staging DNS name}
       TAXI_AI_PROXY_TOKEN: ${TAXI_AI_PROXY_TOKEN:?Generate a private proxy token}
       TAXI_AI_STAGING_ACCESS_FILE: /run/secrets/testers
       TAXI_AI_DB: ${TAXI_AI_DB_PATH:-/data/taxi-ai.sqlite}
+      TAXI_AI_DATABASE_URL: ${TAXI_AI_DATABASE_URL:-}
+      TAXI_AI_DATABASE_POOL_SIZE: ${TAXI_AI_DATABASE_POOL_SIZE:-10}
+      TAXI_AI_DATABASE_TRANSACTION_RETRIES: ${TAXI_AI_DATABASE_TRANSACTION_RETRIES:-6}
+      TAXI_AI_DISPATCH_MODE: ${TAXI_AI_DISPATCH_MODE:-sequential}
+      TAXI_AI_DISPATCH_PROFILE_SAMPLE_EVERY: ${TAXI_AI_DISPATCH_PROFILE_SAMPLE_EVERY:-0}
+      TAXI_AI_MOBILE_API_SAMPLE_EVERY: ${TAXI_AI_MOBILE_API_SAMPLE_EVERY:-20}
+      TAXI_AI_MOBILE_MIN_IOS_BUILD: ${TAXI_AI_MOBILE_MIN_IOS_BUILD:-}
+      TAXI_AI_MOBILE_MIN_IOS_VERSION: ${TAXI_AI_MOBILE_MIN_IOS_VERSION:-}
+      TAXI_AI_MOBILE_MIN_ANDROID_BUILD: ${TAXI_AI_MOBILE_MIN_ANDROID_BUILD:-}
+      TAXI_AI_MOBILE_MIN_ANDROID_VERSION: ${TAXI_AI_MOBILE_MIN_ANDROID_VERSION:-}
+      TAXI_AI_MATCHING_FAST_PATH: ${TAXI_AI_MATCHING_FAST_PATH:-false}
+      TAXI_AI_MATCHING_FAST_REGIONS: ${TAXI_AI_MATCHING_FAST_REGIONS:-}
+      TAXI_AI_ML_RANKING_MODE: ${TAXI_AI_ML_RANKING_MODE:-off}
+      TAXI_AI_ML_RANKING_MODEL: ${TAXI_AI_ML_RANKING_MODEL:-bootstrap-shadow-v1}
+      TAXI_AI_ML_RANKING_REGIONS: ${TAXI_AI_ML_RANKING_REGIONS:-}
+      TAXI_AI_ML_RANKING_LIVE_ENABLED: ${TAXI_AI_ML_RANKING_LIVE_ENABLED:-false}
+      TAXI_AI_ML_RANKING_RETENTION_DAYS: ${TAXI_AI_ML_RANKING_RETENTION_DAYS:-30}
       TAXI_AI_MAPS_MODE: ${TAXI_AI_MAPS_MODE:-off}
+      TAXI_AI_PMS_NGN_PER_LITRE: ${TAXI_AI_PMS_NGN_PER_LITRE:-1348}
+      TAXI_AI_DIESEL_NGN_PER_LITRE: ${TAXI_AI_DIESEL_NGN_PER_LITRE:-1757}
+      TAXI_AI_FUEL_PRICE_AS_OF: ${TAXI_AI_FUEL_PRICE_AS_OF:-2026-10-03}
+      TAXI_AI_FUEL_PRICE_SOURCE: "${TAXI_AI_FUEL_PRICE_SOURCE:-Nigeria retail market reference · 3 Oct 2026}"
+      TAXI_AI_PRICING_MARKET_MULTIPLIER_BPS: ${TAXI_AI_PRICING_MARKET_MULTIPLIER_BPS:-10000}
       TAXI_AI_CALLS_MODE: ${TAXI_AI_CALLS_MODE:-off}
       TAXI_AI_TURN_URLS: ${TAXI_AI_TURN_URLS:-}
-      TAXI_AI_TURN_SECRET: ${TAXI_AI_TURN_SECRET:-}
+      TAXI_AI_TURN_SECRET_FILE: /run/secrets/turn_secret
       TAXI_AI_GOOGLE_CLIENT_ID: ${TAXI_AI_GOOGLE_CLIENT_ID:-}
       TAXI_AI_GOOGLE_CLIENT_SECRET: ${TAXI_AI_GOOGLE_CLIENT_SECRET:-}
       TAXI_AI_GOOGLE_REDIRECT_URI: ${TAXI_AI_GOOGLE_REDIRECT_URI:-}
@@ -38,14 +63,31 @@ services:
       TAXI_AI_SMTP_USER: ${TAXI_AI_SMTP_USER:-}
       TAXI_AI_SMTP_PASSWORD: ${TAXI_AI_SMTP_PASSWORD:-}
       TAXI_AI_SMTP_FROM: ${TAXI_AI_SMTP_FROM:-}
+      TAXI_AI_CONTACT_EMAIL_MODE: ${TAXI_AI_CONTACT_EMAIL_MODE:-off}
+      TAXI_AI_CONTACT_SMTP_HOST: ${TAXI_AI_CONTACT_SMTP_HOST:-}
+      TAXI_AI_CONTACT_SMTP_PORT: ${TAXI_AI_CONTACT_SMTP_PORT:-}
+      TAXI_AI_CONTACT_SMTP_USER: ${TAXI_AI_CONTACT_SMTP_USER:-}
+      TAXI_AI_CONTACT_SMTP_PASSWORD: ${TAXI_AI_CONTACT_SMTP_PASSWORD:-}
+      TAXI_AI_CONTACT_SMTP_FROM: ${TAXI_AI_CONTACT_SMTP_FROM:-}
       TAXI_AI_PUSH_ENABLED: ${TAXI_AI_PUSH_ENABLED:-false}
       TAXI_AI_EXPO_PROJECT_ID: ${TAXI_AI_EXPO_PROJECT_ID:-}
       TAXI_AI_EXPO_ACCESS_TOKEN: ${TAXI_AI_EXPO_ACCESS_TOKEN:-}
+      TAXI_DRIVER_FACE_PROVIDER: ${TAXI_DRIVER_FACE_PROVIDER:-off}
+      TAXI_DRIVER_FACE_THRESHOLD: ${TAXI_DRIVER_FACE_THRESHOLD:-99}
+      TAXI_DRIVER_FACE_TIMEOUT_MS: ${TAXI_DRIVER_FACE_TIMEOUT_MS:-15000}
+      TAXI_DRIVER_FACE_DEEPFACE_URL: ${TAXI_DRIVER_FACE_DEEPFACE_URL:-http://deepface:5000}
+      TAXI_DRIVER_FACE_MODEL: ${TAXI_DRIVER_FACE_MODEL:-SFace}
+      TAXI_DRIVER_FACE_DETECTOR: ${TAXI_DRIVER_FACE_DETECTOR:-opencv}
+      AWS_REGION: ${AWS_REGION:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
       TAXI_AI_VEHICLE_VISION_MODE: ${TAXI_AI_VEHICLE_VISION_MODE:-off}
       TAXI_AI_VEHICLE_VISION_API_KEY: ${TAXI_AI_VEHICLE_VISION_API_KEY:-}
       TAXI_AI_VEHICLE_VISION_MODEL: ${TAXI_AI_VEHICLE_VISION_MODEL:-gpt-4.1-mini-2025-04-14}
     secrets:
       - testers
+      - turn_secret
     volumes:
       - app_data:/data
       - backups:/backups
@@ -59,7 +101,105 @@ services:
       options:
         max-size: 10m
         max-file: '3'
+    networks:
+      - default
+      - postgres
     # No host port: all browser traffic must pass through the HTTPS gateway.
+  deepface:
+    image: serengil/deepface@sha256:58d96a2ff61b37daf8895e2dc2d9377a25bb1b6b780867e19ca959a2ed857aed
+    command: ['gunicorn','--workers=1','--timeout=120','--bind=0.0.0.0:5000','--log-level=info','--access-logfile=-','app:create_app()']
+    restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    environment:
+      DEEPFACE_HOME: /data
+      HOME: /data
+      TF_CPP_MIN_LOG_LEVEL: '3'
+    expose:
+      - '5000'
+    volumes:
+      - deepface_data:/data
+    tmpfs:
+      - /tmp:size=128m,mode=1777
+    mem_limit: 3g
+    cpus: 1.0
+    pids_limit: 256
+    healthcheck:
+      test: ['CMD','python','-c','import urllib.request; urllib.request.urlopen("http://127.0.0.1:5000/", timeout=2).read()']
+      interval: 30s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'
+    networks:
+      - default
+
+  turn:
+    image: coturn/coturn:4.18.0-r0
+    restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - '3478:3478/tcp'
+      - '3478:3478/udp'
+      - '49160-49200:49160-49200/udp'
+    environment:
+      TAXI_AI_DOMAIN: ${TAXI_AI_DOMAIN:?Set the staging DNS name}
+      TAXI_AI_CALLS_MODE: ${TAXI_AI_CALLS_MODE:-off}
+      TAXI_AI_TURN_EXTERNAL_IP: ${TAXI_AI_TURN_EXTERNAL_IP:-}
+    entrypoint: ['/bin/sh','-ec']
+    command:
+      - |
+        if [ "$${TAXI_AI_CALLS_MODE}" != relay ]; then exec sleep infinity; fi
+        test -n "$${TAXI_AI_TURN_EXTERNAL_IP}"
+        SECRET=$$(cat /run/secrets/turn_secret)
+        test $${#SECRET} -ge 32
+        case "$$SECRET" in DISABLED-*) exit 1;; esac
+        umask 077
+        cat >/tmp/turnserver.conf <<EOF
+        listening-port=3478
+        min-port=49160
+        max-port=49200
+        external-ip=$${TAXI_AI_TURN_EXTERNAL_IP}
+        realm=$${TAXI_AI_DOMAIN}
+        server-name=$${TAXI_AI_DOMAIN}
+        fingerprint
+        use-auth-secret
+        static-auth-secret=$$SECRET
+        stale-nonce=600
+        no-tls
+        no-multicast-peers
+        denied-peer-ip=10.0.0.0-10.255.255.255
+        denied-peer-ip=100.64.0.0-100.127.255.255
+        denied-peer-ip=127.0.0.0-127.255.255.255
+        denied-peer-ip=169.254.0.0-169.254.255.255
+        denied-peer-ip=172.16.0.0-172.31.255.255
+        denied-peer-ip=192.168.0.0-192.168.255.255
+        user-quota=4
+        total-quota=200
+        max-bps=1500000
+        log-file=stdout
+        simple-log
+        EOF
+        exec turnserver -c /tmp/turnserver.conf
+    secrets:
+      - turn_secret
+    tmpfs:
+      - /tmp:size=8m,mode=1777
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'
+
   gateway:
     image: caddy:2-alpine
     restart: unless-stopped
@@ -84,8 +224,15 @@ services:
 secrets:
   testers:
     file: ./secrets/staging-testers.json
+  turn_secret:
+    file: ./secrets/turn-secret.txt
+networks:
+  postgres:
+    external: true
+    name: ${TAXI_AI_POSTGRES_NETWORK:-taxi-ai-tencent_database}
 volumes:
   app_data:
   backups:
   caddy_data:
   caddy_config:
+  deepface_data:

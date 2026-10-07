@@ -9,7 +9,7 @@ export const SESSION_MS = 12 * 60 * 60 * 1000;
  * repository, driverProfiles {find, insert, validateVehicle}, passwords {hash, verify}, tokens
  * {id, generate, digest}, unitOfWork, audit, hasRideHistory and clock.
  */
-export function createAccountsService({ repository, driverProfiles, passwords, tokens, unitOfWork, audit, hasRideHistory, clock, revokeDevices = () => {}, onRegistered = () => {}, revokeRecoveryLinks = () => {} }) {
+export function createAccountsService({ repository, driverProfiles, passwords, tokens, unitOfWork, audit, hasRideHistory, clock, revokeDevices = () => {}, onRegistered = () => {}, revokeRecoveryLinks = () => {}, restrictionsFor = async () => ({scopes:[],notices:[],moreNotices:false}) }) {
   const passwordProofs = new WeakMap();
   const registrationIntents = ['customer','driver','eats_seller'];
   function registrationIntent(value, fallback = 'customer') {
@@ -23,7 +23,7 @@ export function createAccountsService({ repository, driverProfiles, passwords, t
     const capabilities = (await repository.capabilities(id));
     const driver = capabilities.includes('driver') ? (await driverProfiles.find(id)) : null;
     const setup = await repository.kemmySetup(id);
-    return { ...user, emailVerified: Boolean(user.emailVerified), capabilities,
+    return { ...user, emailVerified: Boolean(user.emailVerified), capabilities, restrictions: await restrictionsFor(id),
       startingExperience: setup?.experience ?? null,
       driver: driver ? { status: driver.status, vehicle: driver.vehicle, eligibility: driver.eligibility } : null };
   }
@@ -68,7 +68,7 @@ export function createAccountsService({ repository, driverProfiles, passwords, t
       (await audit.record(id, 'account.created', id, now));
       return (await profile(id));
     }));
-    (await onRegistered(user.id));
+    (await onRegistered(user.id, { emailVerified: false, intent }));
     return user;
   }
 
@@ -152,7 +152,7 @@ export function createAccountsService({ repository, driverProfiles, passwords, t
     const user = (await profile(userId));
     if (!user?.capabilities.includes('customer')) return null;
     const credential = (await repository.findByEmail(user.email));
-    return { id: user.id, email: user.email, verified: user.emailVerified,
+    return { id: user.id, email: user.email, name: user.name, startingExperience: user.startingExperience, verified: user.emailVerified,
       passwordEnabled: Boolean(credential.passwordEnabled), passwordHash: credential.passwordHash };
   }
   async function emailStateForAddress(email) { const row = (await repository.findByEmail(email)); return row ? (await emailState(row.id)) : null; }
@@ -177,7 +177,8 @@ export function createAccountsService({ repository, driverProfiles, passwords, t
     const startingIntent = intent === null ? null : registrationIntent(intent);
     const name = typeof identity.name === 'string' && identity.name.trim().length >= 2
       && !/[\u0000-\u001f\u007f]/.test(identity.name) ? identity.name.trim().slice(0, 80) : 'Taxi Ai member';
-    return (await unitOfWork(async () => {
+    let created = false;
+    const user = await unitOfWork(async () => {
       const owner = (await repository.googleOwner(subject));
       if (owner) {
         const user = (await profile(owner)); requireRole(user, 'customer');
@@ -193,16 +194,22 @@ export function createAccountsService({ repository, driverProfiles, passwords, t
         check(!(await repository.googleLinked(id)), 'GOOGLE_ACCOUNT_CONFLICT', 'A different Google account is already connected.');
       } else {
         check(!collision, 'GOOGLE_ACCOUNT_EXISTS', 'Sign in with your Taxi Ai password first, then connect Google from Sign-in methods.');
-        id = tokens.id();
+        id = tokens.id(); created = true;
         const now = clock();
         (await repository.insert({ id, email, name, passwordHash: '', passwordEnabled: false, role: 'customer', createdAt: now }));
         (await repository.grant(id, 'customer', now));
         if (startingIntent) await repository.kemmyPatch(id, { experience: startingIntent }, now);
         (await audit.record(id, 'account.created', id, now));
       }
-      (await repository.linkGoogle(id, subject, clock())); (await audit.record(id, 'account.google_connected', id, clock()));
+      (await repository.linkGoogle(id, subject, clock()));
+      // Google identity verification requires email_verified=true before this port is called.
+      // Treat that as mailbox verification for the same Taxi Ai address.
+      (await repository.confirmEmail(id, email, clock()));
+      (await audit.record(id, 'account.google_connected', id, clock()));
       return (await profile(id));
-    }));
+    });
+    if (created) await onRegistered(user.id, { emailVerified: true, intent: startingIntent });
+    return user;
   }
 
   async function signInMethods(userId) {

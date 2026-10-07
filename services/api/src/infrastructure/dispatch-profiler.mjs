@@ -50,14 +50,15 @@ export function createDispatchProfiler({ sampleEvery = 0, report = () => {}, now
         },
       });
     },
-    async cycle(action) {
+    async cycle(action, metadata = {}) {
       if (!sampleEvery || sequence++ % sampleEvery) return action();
       const scope = { active: true, queryCount: 0, queryMs: 0, queryErrors: 0, transactions: 0, retries: 0, queries: new Map(), phases: {} };
       const started = now(); let failed = false;
       try { return await context.run(scope, action); } catch (error) { failed = true; throw error; }
       finally {
         scope.active = false;
-        const value = { durationMs: round(Math.max(0, now() - started)), failed, sampleEvery,
+        const region = typeof metadata.region === 'string' && /^(?:ng:\d{1,3}:\d{1,3}|sample:[a-z0-9-]{1,80})$/.test(metadata.region) ? metadata.region : null;
+        const value = { durationMs: round(Math.max(0, now() - started)), failed, sampleEvery, region,
           queryCount: scope.queryCount, queryMs: round(scope.queryMs), queryErrors: scope.queryErrors,
           transactions: scope.transactions, retries: scope.retries, phases: scope.phases,
           queries: [...scope.queries].map(([fingerprint, row]) => ({ fingerprint, ...row, totalMs: round(row.totalMs), maxMs: round(row.maxMs) })) };

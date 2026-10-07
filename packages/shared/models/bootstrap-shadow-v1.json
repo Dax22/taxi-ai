@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "type": "linear_logit",
+  "version": "bootstrap-shadow-v1",
+  "purpose": "dispatch_acceptance_and_completion_proxy",
+  "features": {
+    "pickupCostSeconds": { "mean": 600, "scale": 600 },
+    "distanceMeters": { "mean": 5000, "scale": 5000 },
+    "waitSeconds": { "mean": 60, "scale": 60 },
+    "driverAcceptanceRate": { "mean": 0.5, "scale": 0.25 },
+    "driverCompletionRate": { "mean": 0.5, "scale": 0.25 },
+    "driverOfferLog1p": { "mean": 2, "scale": 2 },
+    "roadEstimate": { "mean": 0.5, "scale": 0.5 },
+    "fallbackEstimate": { "mean": 0.5, "scale": 0.5 }
+  },
+  "intercept": 0.1,
+  "weights": {
+    "pickupCostSeconds": -1.1,
+    "distanceMeters": -0.25,
+    "waitSeconds": 0.35,
+    "driverAcceptanceRate": 0.45,
+    "driverCompletionRate": 0.45,
+    "driverOfferLog1p": -0.05,
+    "roadEstimate": 0.15,
+    "fallbackEstimate": -0.1
+  },
+  "approval": {
+    "trainedOnRealOutcomes": false,
+    "approvedForLive": false,
+    "trainingRows": 0,
+    "note": "Bootstrap shadow artifact for pipeline validation only; these weights are not learned from Taxi AI production outcomes."
+  }
+}

@@ -46,7 +46,9 @@ export function createDashboardView({ onCommand, onReview, onReportReview, onSel
     $('delivery-weight').max = String(maxLoadKg ?? '');
     $('booking-service-ride').setAttribute('aria-pressed', String(!isDelivery()));
     $('booking-service-courier').setAttribute('aria-pressed', String(isDelivery()));
-    $('booking-service-note').textContent = isDelivery() ? 'Choose a car, motorcycle, van or truck, then add your parcel and recipient details.' : 'Choose a vehicle, enter your destination, and Taxi Ai will use your current location for pickup.';
+    $('booking-service-note').textContent = !isDelivery() && state.passengerRides?.paused
+      ? 'Passenger ride requests are currently paused. Viewing a map does not request a driver. Existing journeys and courier orders keep their own status.'
+      : isDelivery() ? 'Choose a car, motorcycle, van or truck, then add your parcel and recipient details.' : 'Choose a vehicle, enter your destination, and Taxi Ai will use your current location for pickup.';
     $('delivery-load-hint').textContent = maxLoadKg ? `${category.id === 'standard' ? 'Car' : category.name} parcel limit: ${maxLoadKg} kg. Matching also respects the driver’s approved load capacity.` : '';
     $('request-submit').textContent = `Request a test ${isDelivery() ? 'delivery' : 'ride'}`;
     if (customer) {

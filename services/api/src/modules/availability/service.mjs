@@ -1,3 +1,4 @@
+import { isRestricted, requireNewDriverWork } from '../../shared/service-restrictions.mjs';
 import { check } from '../../shared/errors.mjs';
 import { fields } from '../../shared/validation.mjs';
 import { hasCapability, requireEligibleDriver } from '../../shared/policies.mjs';
@@ -23,7 +24,8 @@ export function createAvailabilityService({ repository, getAccount, sessionOwner
     return { user, userId: user.id, sessionHash, nativeSessionId, clientHash };
   }
   async function invalidReason(row, now) {
-    const driver = (await getAccount(row.driverId))?.driver;
+    const account = await getAccount(row.driverId), driver = account?.driver;
+    if (isRestricted(account,'driver') || isRestricted(account,'vehicle')) return 'approval_changed';
     if (driver?.status !== 'approved' || !driver.eligibility?.eligible) return 'approval_changed';
     if ((row.nativeSessionId ? (await nativeSessionOwner(row.nativeSessionId)) : (await sessionOwner(row.sessionHash))) !== row.driverId) return 'session_ended';
     if ((row.mode === 'sample' && !allowSimulation) || now >= row.seenAt + AVAILABILITY_MS
@@ -82,7 +84,7 @@ export function createAvailabilityService({ repository, getAccount, sessionOwner
       }
       const now = clock(); let row;
       if (action === 'online') {
-        requireEligibleDriver(fresh.user);
+        requireEligibleDriver(fresh.user); requireNewDriverWork(fresh.user);
         const value = startData(data, now, allowSimulation);
         check(!(await isBusy(ctx.userId)), 'DRIVER_BUSY', 'Finish your current negotiation or trip before going online.');
         check(!(await repository.current(ctx.userId)), 'AVAILABILITY_BUSY', 'You are already online. Go offline before starting from this window.');

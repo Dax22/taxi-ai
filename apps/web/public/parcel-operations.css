@@ -1,0 +1,9 @@
+.parcel-ops main { width: min(54rem, calc(100% - 2rem)); margin: 2rem auto; }
+.parcel-ops .stack-form { display: grid; gap: .8rem; margin-block: 1.5rem; }
+.parcel-ops input, .parcel-ops select, .parcel-ops textarea { box-sizing: border-box; width: 100%; padding: .8rem; font: inherit; }
+.parcel-ops textarea { resize: vertical; min-height: 7rem; }
+.parcel-ops .review-actions { display: flex; flex-wrap: wrap; gap: .75rem; }
+.parcel-ops #ops-events li { margin-block: .8rem; overflow-wrap: anywhere; }
+.parcel-ops #ops-return-box { display: grid; gap: .8rem; }
+.parcel-ops #ops-retry, .parcel-ops #ops-refresh { margin: .5rem .5rem .5rem 0; }
+.parcel-ops [hidden] { display: none !important; }

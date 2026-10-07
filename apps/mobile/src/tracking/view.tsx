@@ -35,7 +35,7 @@ export function TripLocationCard({ id, ride, kind = 'ride', destination }: { id:
       <Text style={styles.body}>Recorded {new Date(position.capturedAt).toLocaleTimeString()} · {age} seconds ago</Text>
       <Text style={styles.small}>Reported accuracy: {Math.round(position.accuracy)} m · {position.lat.toFixed(5)}, {position.lng.toFixed(5)}</Text>
     </> : <Text style={styles.body}>No {operator}-shared location is available.</Text>}
-    {(position || route || destination) && <NativeMap route={routePoints} pins={[
+    {(position || route || destination) && <NativeMap eager height={320} route={routePoints} pins={[
       ...(route ? [{ id: 'pickup', lat: route.pickup.lat, lng: route.pickup.lng, title: 'Pickup' },
         { id: 'destination', lat: route.destination.lat, lng: route.destination.lng, title: 'Destination' }] : []),
       ...(!route && destination ? [{ id: 'destination', lat: destination.lat, lng: destination.lng, title: 'Delivery destination' }] : []),
@@ -51,6 +51,7 @@ export function TripLocationCard({ id, ride, kind = 'ride', destination }: { id:
     {data?.isDriver && (share?.active || s.sharing || s.busy) && <Button title="Stop sharing location" secondary onPress={() => void c.stop()}/>}
     {s.uncertain && <Button title="Resolve interrupted location action" secondary busy={s.busy} onPress={() => void c.retry()}/>}
     <Button title="Refresh location" secondary busy={s.loading} disabled={s.busy} onPress={() => void c.refresh()}/>
+    {ride?.delivery && <Button title="Delivery issues, returns & handover record" secondary onPress={() => router.push({ pathname: '/parcel-operations', params: { id } })}/>}
   </Card>;
 }
 function LocationStatus({ controller: c }: { controller: TripLocationController }) {

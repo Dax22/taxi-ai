@@ -9,7 +9,8 @@ export default function TabLayout() {
   const { updates, deliveryUpdates } = useOperations();
   const unread = (updates?.notifications.filter((notice) => notice.mode === mode && notice.readAt === null).length ?? 0) + (deliveryUpdates?.unread ?? 0);
   return <Tabs screenOptions={{ headerShown: false, tabBarActiveTintColor: colors.ink, tabBarInactiveTintColor: colors.muted,
-    tabBarActiveBackgroundColor: '#fff0bd', tabBarStyle: { backgroundColor: colors.white }, tabBarLabelStyle: { fontFamily: fontFamilySemiBold, fontSize: 12, fontWeight: 'normal' } }}>
+    tabBarStyle: { backgroundColor: colors.white, borderTopColor: colors.border, height: 72, paddingTop: 7, paddingBottom: 7 },
+    tabBarItemStyle: { borderRadius: 16, marginHorizontal: 3 }, tabBarLabelStyle: { fontFamily: fontFamilySemiBold, fontSize: 11, fontWeight: 'normal' } }}>
     <Tabs.Screen name="index" options={{ title: 'Home', href: role === 'driver' ? null : undefined, tabBarIcon: ({ color }) => <TabIcon name="home" color={color}/> }}/>
     <Tabs.Screen name="activity" options={{ title: 'Activity', tabBarIcon: ({ color }) => <TabIcon name="activity" color={color}/> }}/>
     <Tabs.Screen name="work" options={{ title: 'Driver', href: role === 'customer' ? null : undefined, tabBarIcon: ({ color }) => <TabIcon name="work" color={color}/> }}/>

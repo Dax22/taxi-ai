@@ -1,5 +1,5 @@
-export const DRIVER_FACE_CONSENT_VERSION = 'driver-face-match-v1';
-export const DRIVER_FACE_CONSENT = 'I agree to Taxi AI sending my saved driver photo and licence image to Amazon Rekognition to compare their faces.';
+export const DRIVER_FACE_CONSENT_VERSION = 'driver-face-match-v2';
+export const DRIVER_FACE_CONSENT = 'I agree to Taxi AI securely processing my saved driver photo and licence image with its configured face-comparison service to compare their faces.';
 
 /** Face similarity is separate from licence validity, liveness and driver approval. */
 export function driverFaceCheckComplete(check) {

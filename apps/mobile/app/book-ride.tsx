@@ -39,7 +39,7 @@ function BookingScreen() {
   const routePreview = s.preview && <RoutePreview preview={s.preview} now={s.now} disabled={disabled} busy={s.busy === 'request'} passengerName={!delivery && s.passenger.kind === 'guest' ? s.passenger.name.trim() : undefined}
     onRequest={() => void c.submit()} onPreview={() => void c.preview()} onChooseCategory={passengerRoute ? (id) => { c.chooseCategory(id); void c.preview(); } : undefined}/>;
   return <Screen><Pill>RIDES & DELIVERIES · NIGERIA</Pill><Heading title={delivery ? 'Send a parcel.' : 'Where to?'} subtitle={delivery ? 'Choose pickup and delivery addresses, a suitable vehicle and an agreed fare.' : 'Your route. Your choice. A fare you both agree.'}/>
-    <Text style={styles.small}>Development preview · no live rides or payments.</Text>{!showRideSearch && <Notice message={s.error}/>}
+    {!showRideSearch && <Notice message={s.error}/>}
     {s.uncertain && <Card><Text style={styles.h2}>Let’s confirm that action.</Text><Text style={styles.body}>The connection ended before confirmation arrived. Retrying reuses the original action to avoid creating a duplicate request.</Text>
       <Button title={s.uncertain === 'request' ? 'Retry the same request' : 'Retry the same cancellation'} busy={!!s.busy} onPress={() => void c.retry()}/></Card>}
     {s.stale && settings && <Text accessibilityLiveRegion="polite" style={styles.body}>Refresh to check your latest account status before making changes.</Text>}

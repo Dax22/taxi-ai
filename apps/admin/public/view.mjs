@@ -1,22 +1,32 @@
 import { $, el, date } from './ui.mjs';
 import { renderPage } from './pages.mjs';
+import { commandSections } from './command-center-navigation.mjs';
 import { canAccess } from './navigation.mjs';
 import { actionForm } from './forms.mjs';
 
 const permissions = { overview: 'analytics.read', analytics: 'analytics.read', accounts: 'accounts.read', trips: 'trips.read', operations: 'operations.read', announcements: 'announcements.manage', cases: 'cases', staff: 'staff.manage', audit: 'audit.read', finance: 'finance.read', compliance: 'compliance.read', demand: 'demand.read', coverage: 'demand.read' };
+Object.assign(permissions,Object.fromEntries(Object.entries(commandSections).map(([key,value])=>[key,value[2]])));
 export function createAdminView() {
   return Object.freeze({
     clear() {
       $('page-content').replaceChildren(); $('staff-name').textContent = ''; $('page-error').textContent = ''; $('updated').textContent = '';
       $('workspace').hidden = true; $('password').value = ''; $('mfa-card').hidden = true; $('mfa-content').replaceChildren(); $('mfa-error').textContent = '';
       for (const anchor of document.querySelectorAll('#navigation a')) anchor.hidden = true;
-      $('action-feedback').hidden = true; $('action-message').textContent = '';
+      $('action-feedback').hidden = true; $('action-message').textContent = ''; $('retry-action').hidden=false;
     },
     loading(value) { $('loading').hidden = !value; $('refresh').disabled = value; $('login-submit').disabled = value;
+      document.body.setAttribute('aria-busy', value ? 'true' : 'false');
       if (value) { $('sign-in').hidden = true; $('mfa-card').hidden = true; } },
     signIn(message) { $('sign-in').hidden = false; $('workspace').hidden = true; $('mfa-card').hidden = true; $('loading').hidden = true; $('auth-error').textContent = message; },
     error(message) { $('workspace').hidden = false; $('sign-in').hidden = true; $('page-content').replaceChildren(); $('page-error').textContent = message; },
-    actionError(message) { $('workspace').hidden = false; $('sign-in').hidden = true; $('page-content').replaceChildren(); $('action-feedback').hidden = false; $('action-message').textContent = message; },
+    actionError(message) { $('workspace').hidden = false; $('sign-in').hidden = true; $('page-content').replaceChildren(); $('action-feedback').hidden = false; $('action-message').textContent = message; $('retry-action').hidden=false; },
+    deliverEvidence({bytes,filename,sha256,exportId}) {
+      const blob=new Blob([bytes],{type:'application/zip'}),url=URL.createObjectURL(blob);
+      const anchor=el('a',null,'',{href:url,download:filename});anchor.download=filename;
+      document.body.append(anchor);try{anchor.click();}finally{anchor.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+      $('action-feedback').hidden=false;$('action-message').textContent=`Evidence archive prepared. Export ID: ${exportId}. SHA-256: ${sha256}. Save this checksum in the secure case file. Never send the ZIP unencrypted.`;
+      $('retry-action').hidden=true;
+    },
     mfa(state, setup = null, error = '') {
       $('mfa-card').hidden = false; $('workspace').hidden = true; $('sign-in').hidden = true; $('loading').hidden = true; $('mfa-error').textContent = error;
       const content = $('mfa-content'); content.replaceChildren();
@@ -43,7 +53,17 @@ export function createAdminView() {
       for (const anchor of document.querySelectorAll('#navigation a')) {
         anchor.hidden = staff ? !canAccess(staff, permissions[anchor.dataset.section]) : true;
         if (anchor.dataset.section === 'overview' && staff?.role === 'finance' && canAccess(staff, 'finance.read')) anchor.hidden = true;
-        if (anchor.dataset.section === route.section) anchor.setAttribute('aria-current', 'page'); else anchor.removeAttribute('aria-current');
+        const target = new URL(anchor.getAttribute('href'), window.location.origin);
+        const routeService = route.query?.get?.('service') ?? null;
+        const targetService = target.searchParams.get('service');
+        const active = !anchor.hidden && target.pathname === route.path
+          && (route.section !== 'transactions' || targetService === routeService || !targetService && !routeService);
+        if (active) anchor.setAttribute('aria-current', 'page'); else anchor.removeAttribute('aria-current');
+      }
+      for (const group of document.querySelectorAll('#navigation .nav-group')) {
+        const links = [...group.querySelectorAll('a')], visible = links.filter((anchor) => !anchor.hidden);
+        group.hidden = visible.length === 0;
+        group.open = visible.some((anchor) => anchor.getAttribute('aria-current') === 'page');
       }
       $('legacy-review').hidden = !staff?.permissions?.includes('legacy.review');
       for (const anchor of page.querySelectorAll?.('a[href^="/admin"]') ?? []) {

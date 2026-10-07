@@ -1,3 +1,5 @@
+import { commandRoute } from './command-center-navigation.mjs';
+
 const metadata = {
   overview: ['Overview', 'Nigeria operations, at a glance.', 'analytics.read'], accounts: ['Accounts', 'Know the people behind every journey.', 'accounts.read'],
   account: ['Account details', 'One profile. A complete view of their Taxi Ai activity.', 'accounts.read'], trips: ['Trips', 'Follow each request from its first offer to its final status.', 'trips.read'],
@@ -8,6 +10,7 @@ const metadata = {
   financeDetail: ['Payment details', 'Payment attempts, receipt metadata and record checks.', 'finance.read'],
   compliance: ['Driver compliance', 'Document expiry, eligibility and internal follow-up tasks.', 'compliance.read'],
   complianceDetail: ['Driver compliance details', 'Review document status and record the next follow-up.', 'compliance.read'],
+  complianceDocument: ['Driver document', 'Audited view of one private driver application document.', 'compliance.read'],
   demand: ['Demand analytics', 'Request patterns and current driver coverage across Nigeria.', 'demand.read'],
   coverage: ['Coverage map', 'Demand, pickup waits and current driver availability across Nigeria.', 'demand.read'],
   staff: ['Staff access', 'Assign a role and manage access to the operations workspace.', 'staff.manage'],
@@ -21,7 +24,13 @@ export function canAccess(staff, permission) {
 }
 export const defaultPage = (staff) => staff?.role === 'finance' && canAccess(staff, 'finance.read') ? '/admin/finance' : [['analytics.read', '/admin'], ['operations.read', '/admin/operations'], ['cases', '/admin/cases'], ['finance.read', '/admin/finance'], ['trips.read', '/admin/trips'], ['staff.manage', '/admin/staff']].find(([permission]) => canAccess(staff, permission))?.[1] ?? null;
 export function routeFor(location) {
-  const path = location.pathname.replace(/\/$/, ''), match = path.match(/^\/admin(?:\/(accounts|trips|analytics|operations|announcements|staff|audit|cases|finance|compliance|demand|coverage)(?:\/([a-f0-9-]{36}))?)?$/);
+  const extended=commandRoute(location);if(extended)return extended;
+  const path = location.pathname.replace(/\/$/, '');
+  const documentMatch = path.match(/^\/admin\/compliance\/([a-f0-9-]{36})\/documents\/([a-f0-9-]{36})$/);
+  if (documentMatch) return { path, query: new URLSearchParams(location.search), section: 'compliance', name: 'complianceDocument',
+    permission: metadata.complianceDocument[2], title: metadata.complianceDocument[0], description: metadata.complianceDocument[1],
+    apiPath: `/api/admin/console/compliance/${documentMatch[1]}/documents/${documentMatch[2]}` };
+  const match = path.match(/^\/admin(?:\/(accounts|trips|analytics|operations|announcements|staff|audit|cases|finance|compliance|demand|coverage)(?:\/([a-f0-9-]{36}))?)?$/);
   if (!match || (match[2] && !['accounts', 'trips', 'cases', 'finance', 'compliance'].includes(match[1]))) throw new Error('This dashboard page does not exist.');
   const section = match[1] ?? 'overview', name = match[2] ? { accounts: 'account', trips: 'trip', cases: 'case', finance: 'financeDetail', compliance: 'complianceDetail' }[section] : section;
   const query = new URLSearchParams(location.search), endpoint = section === 'overview' ? 'analytics' : section === 'audit' ? 'staff/audit' : section === 'coverage' ? 'demand/coverage' : section;

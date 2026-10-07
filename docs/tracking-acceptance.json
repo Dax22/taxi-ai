@@ -1,0 +1,26 @@
+{
+  "releaseCommit": null,
+  "notice": "Template only. No real-device, deployed-provider or inbox acceptance is claimed.",
+  "checks": {
+    "legacy_invitation_transition": {"status": "pending"},
+    "deployed_revision": {"status": "pending"},
+    "postgres_migration": {"status": "pending"},
+    "android_signed_device": {"status": "pending"},
+    "ios_signed_device": {"status": "pending"},
+    "locked_screen_tracking": {"status": "pending"},
+    "short_network_recovery": {"status": "pending"},
+    "expired_lease_restart": {"status": "pending"},
+    "permission_revocation": {"status": "pending"},
+    "logout_stops_tracking": {"status": "pending"},
+    "recipient_verification": {"status": "pending"},
+    "forwarded_link_rejected": {"status": "pending"},
+    "sender_recipient_live_map": {"status": "pending"},
+    "handover_and_tracking_shutdown": {"status": "pending"},
+    "return_workflow": {"status": "pending"},
+    "pending_confirmation_recovery": {"status": "pending"},
+    "account_email_delivery": {"status": "pending"},
+    "contact_inbox_delivery": {"status": "pending"},
+    "map_capacity_and_availability": {"status": "pending"},
+    "monitoring_and_support": {"status": "pending"}
+  }
+}

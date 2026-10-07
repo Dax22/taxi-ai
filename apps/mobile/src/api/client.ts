@@ -22,9 +22,12 @@ import { parseJourney, parseWork, parseAvailability, parseDeclinedOffer, parseTh
 import type { JourneyAction, JourneyData, OnlineData, Position } from '../../../../packages/shared/src/mobile-journeys.mjs';
 import type { Place, RequestData } from '../../../../packages/shared/src/mobile-booking.mjs';
 import { readKemmySetup } from '../kemmy/contracts.ts';
+import { callsView,callResult,callMedia } from '../calls/contracts.ts';
 
 export interface Vault { read(): Promise<string | null>; write(value: string): Promise<void>; clear(): Promise<void> }
 export interface SavedSession { origin: string; refreshToken: string; sessionId: string; previewAccess: string }
+export interface MobileHeartbeat { platform:'ios'|'android'; appVersion:string; nativeBuild:number; easBuildId:string|null; buildProfile:string|null; gitCommit:string|null; osVersion:string;
+  locationPermission:'granted'|'denied'|'unknown'; backgroundLocationPermission:'granted'|'denied'|'unknown'; notificationPermission:'granted'|'denied'|'unknown' }
 export class ApiError extends Error {
   code: string; status: number;
   constructor(message: string, code = 'NETWORK', status = 0) { super(message); this.code = code; this.status = status; }
@@ -208,6 +211,7 @@ export class MobileClient {
     if (epoch !== this.epoch) throw changed(); return result;
   }
   async session() { const epoch = this.epoch, body = await this.request('/session'); if (epoch !== this.epoch) throw changed(); const user = parseAccount(body.user); this.publish(user); return user; }
+  async deviceHealth(data:MobileHeartbeat) { const result=await this.request('/device/heartbeat',data); if(result.recorded!==true)throw new ApiError('Invalid device heartbeat response.','INVALID_RESPONSE'); }
   async activity(mode: Mode, before?: string | null) { return parseActivity(await this.request(`/activity?mode=${mode}${before ? `&before=${encodeURIComponent(before)}` : ''}`), mode); }
   async booking() { return parseBooking(await this.request('/booking')); }
   async searchPlaces(query: string) { return parsePlaces(await this.request('/booking/search', { query })); }
@@ -313,6 +317,11 @@ export class MobileClient {
   async openNotification(id: number) { return parseNotificationTarget(await this.request(`/notifications/${id}/open`,{})); }
   async readNotification(id: number) { return this.request(`/notifications/${id}/read`,{}); }
   async readAnnouncement(id: string) { return this.request(`/announcements/${id}/read`,{}); }
+  async calls() { return callsView(await this.request('/calls')); }
+  async startCall(rideId:string,key:string) { return callResult(await this.request(`/rides/${rideId}/calls`,{},key)); }
+  async callMedia(id:string) { return callMedia(await this.request(`/calls/${id}/media`)); }
+  async callCommand(id:string,action:'accept'|'decline'|'end'|'signal',data:unknown,key:string) { return callResult(await this.request(`/calls/${id}/${action}`,data,key)); }
+  async callPulse(id:string,connected:boolean) { const body:any=await this.request(`/calls/${id}/pulse`,{connected}); return body.call; }
   async registerPush(token: string, projectId: string) { return this.request('/notifications/push',{ token,projectId }); }
   async disablePush() { return this.request('/notifications/push/disable',{}); }
   private ownApplication(body: unknown) {
@@ -340,7 +349,7 @@ export class MobileClient {
     return this.request(path, data, key);
   }
   async parcels(path: string, data?: unknown, key?: string, signal?: AbortSignal) {
-    if (!/^\/parcels\/(?:received(?:\/[a-f0-9-]{36})?|accept|[a-f0-9-]{36}\/(?:invitation|link|revoke))$/.test(path)) throw new Error('Invalid parcel API path.');
+    if (!/^\/parcels\/(?:received(?:\/[a-f0-9-]{36})?|accept|[a-f0-9-]{36}\/(?:invitation|link|revoke|operations))$/.test(path)) throw new Error('Invalid parcel API path.');
     return this.request(path, data, key, signal);
   }
   async kemmySetup() { return readKemmySetup(await this.request('/account/kemmy-setup')); }
@@ -396,10 +405,19 @@ export function createBackgroundTrackingApi({ origin, previewAccess = '', develo
         headers: { Accept: 'application/json', 'Content-Type': 'application/json', Authorization: `Bearer ${token}`,
           ...(previewAccess ? { 'X-Taxi-Ai-Preview-Access': previewAccess } : {}) }, body: JSON.stringify(data),
       });
-      const body = await response.json();
-      if (!response.ok) throw new ApiError(body?.error?.message ?? 'Background location update failed.', body?.error?.code ?? 'REQUEST_FAILED', response.status);
-      return envelope(body);
-    } catch (error) { if (error instanceof ApiError) throw error; throw new ApiError('Background location connection interrupted.'); }
+      const body = await response.json().catch(() => null);
+      if (!response.ok) {
+        const header = response.headers.get('Retry-After');
+        const seconds = header && /^\d+$/.test(header) ? Number(header) : null;
+        const date = header && seconds === null ? Date.parse(header) : NaN;
+        const retryAfterMs = seconds !== null ? Math.min(60_000, seconds * 1000)
+          : Number.isFinite(date) ? Math.max(0, Math.min(60_000, date - Date.now())) : undefined;
+        throw Object.assign(new ApiError(body?.error?.message ?? 'Background location update failed.',
+          body?.error?.code ?? 'REQUEST_FAILED', response.status), { retryAfterMs });
+      }
+      try { return envelope(body); }
+      catch { throw new ApiError('Background location response was invalid.', 'INVALID_RESPONSE'); }
+    } catch (error) { if (error instanceof ApiError) throw error; throw new ApiError('Background location connection interrupted.', 'CONNECTION_INTERRUPTED'); }
     finally { clearTimeout(timer); }
   }
   return {

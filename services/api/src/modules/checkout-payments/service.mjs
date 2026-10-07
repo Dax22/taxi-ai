@@ -1,11 +1,12 @@
 import { check } from '../../shared/errors.mjs';
 import { fields } from '../../shared/validation.mjs';
-import { SETTLED, TEST_NOTICE, target, contextAmount, checkoutUrl, verifyResult, retryDelay } from './domain.mjs';
+import { SETTLED, TEST_NOTICE, LIVE_NOTICE, target, contextAmount, checkoutUrl, verifyResult, retryDelay } from './domain.mjs';
 
 /** Paystack test checkout: reserve durably, call provider outside transactions,
  * then reconcile verified money and target fulfillment in one transaction. */
 export function createCheckoutPaymentsService({ repository, getAccount, contextFor, onPaid, provider, unitOfWork, tokens, audit, clock, enabled = false }) {
-  const settings = Object.freeze({ provider: 'paystack', mode: 'test', enabled: Boolean(enabled) });
+  const providerMode = ['test','live'].includes(provider.mode) ? provider.mode : 'test';
+  const settings = Object.freeze({ provider: 'paystack', mode: providerMode, enabled: Boolean(enabled), walletStrategy: 'paystack_hosted', walletCandidates: ['apple_pay','google_pay'], walletAvailability: 'provider_device_eligibility' });
   const supported = context => context.paymentMode !== 'simulation';
   async function actor(userId, reauthenticate) {
     if (reauthenticate) check((await reauthenticate())?.id === userId, 'UNAUTHENTICATED', 'Sign in to continue.');
@@ -19,7 +20,7 @@ export function createCheckoutPaymentsService({ repository, getAccount, contextF
     if (!row) return null;
     const closures = await repository.closures(row.id);
     const total = closures.reduce((sum,item) => sum + BigInt(item.amountKobo),0n);
-    return { id:row.id,kind:row.kind,targetId:row.targetId,status:row.status,amountKobo:row.amountKobo,currency:row.currency,version:row.version,
+    return { id:row.id,kind:row.kind,targetId:row.targetId,status:row.status,amountKobo:row.amountKobo,currency:row.currency,providerMode:row.providerMode ?? 'test',version:row.version,
       checkoutUrl:isPayer && !row.closedAt && row.status === 'pending' ? row.checkoutUrl : null, reference:isPayer ? row.reference : null,
       refundRequired:row.status === 'refund_required', refundAmountKobo:row.status === 'refund_required' ? Number(total > BigInt(row.amountKobo) ? BigInt(row.amountKobo) : total || BigInt(row.amountKobo)) : null,
       createdAt:row.createdAt,updatedAt:row.updatedAt,paidAt:row.paidAt,
@@ -62,7 +63,7 @@ export function createCheckoutPaymentsService({ repository, getAccount, contextF
         check(context.eligible && (!context.expiresAt || context.expiresAt > clock()),'PAYMENT_NOT_READY','This booking is no longer available for payment.');
         const now = clock(), id = tokens.id(); initializeToken = tokens.id();
         const inserted = await repository.insert({id,kind,targetId,customerId:user.id,amountKobo:context.amountKobo,currency:context.currency,
-          reference:`TA-TEST-${id}`,now,leaseToken:initializeToken});
+          reference:`TA-${providerMode === 'live' ? 'LIVE' : 'TEST'}-${id}`,providerMode,now,leaseToken:initializeToken});
         check(inserted,'STALE_VERSION','A checkout already exists. Refresh its status.');
         payment = await repository.byId(id);
         await audit.record(userId,'checkout.test_reserved',id,now);
@@ -107,23 +108,23 @@ export function createCheckoutPaymentsService({ repository, getAccount, contextF
       const context = await settlementContext(payment);
       const eligible = Boolean(context && context.customerId === payment.customerId && context.amountKobo === payment.amountKobo
         && context.currency === payment.currency && context.eligible && (!context.expiresAt || context.expiresAt > now) && !payment.closedAt);
-      const record = {...payment,provider:'paystack',mode:'test',paidAt:now,eligible};
+      const record = {...payment,provider:'paystack',mode:payment.providerMode,paidAt:now,eligible};
       const outcome = context ? await onPaid(record) : {applied:false};
       check(outcome && typeof outcome.applied === 'boolean','PAYMENT_NOT_READY','Payment fulfillment could not be recorded.');
       check(!outcome.applied || eligible,'PAYMENT_NOT_READY','An unavailable booking cannot be fulfilled.');
       const applied = eligible && outcome.applied;
       if (!applied && !(await repository.closures(id)).length) await repository.saveClosure(id,'settlement_unavailable',payment.amountKobo,'target_unavailable',now);
       const receipt = {reference:payment.reference,amountKobo:payment.amountKobo,currency:payment.currency,paidAt:now,
-        provider:'paystack',mode:'test',notice:TEST_NOTICE};
+        provider:'paystack',mode:payment.providerMode,notice:payment.providerMode === 'live' ? LIVE_NOTICE : TEST_NOTICE};
       check(await repository.settle(id,token,applied ? 'paid' : 'refund_required',receipt,result.transactionId ?? null,now),
         'STALE_VERSION','This payment changed during verification.');
-      await audit.record(payment.customerId,applied ? 'checkout.test_paid' : 'checkout.test_refund_required',id,now);
+      await audit.record(payment.customerId,applied ? `checkout.${payment.providerMode}_paid` : `checkout.${payment.providerMode}_refund_required`,id,now);
       return true;
     });
   }
   async function handleVerifiedReference(reference) {
     check(typeof reference === 'string' && /^[A-Za-z0-9_.=-]{1,128}$/.test(reference),'INVALID_INPUT','Invalid payment reference.');
-    if (!/^TA-TEST-[a-f0-9-]{36}$/.test(reference)) return {accepted:false};
+    if (!/^TA-(TEST|LIVE)-[a-f0-9-]{36}$/.test(reference)) return {accepted:false};
     const payment = await repository.byReference(reference);
     if (!payment) return {accepted:false};
     await reconcile(payment.id,true); return {accepted:true};

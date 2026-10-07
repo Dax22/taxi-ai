@@ -2,7 +2,7 @@ import type { VehicleCategoryId } from './vehicle-categories.mjs';
 import type { PassengerView } from './guest-rides.mjs';
 export const MOBILE_API_VERSION: 1;
 export type Mode = 'customer' | 'work';
-export interface Eligibility { eligible: boolean; missing: string[]; expired: string[] }
+export interface Eligibility { eligible: boolean; missing: string[]; expired: string[]; manualException?: boolean }
 export interface Vehicle { model: string; plate: string; make?: string; modelName?: string; year?: number; colour?: string; category?: VehicleCategoryId; payloadKg?: number | null }
 export interface Account { id: string; name: string; email: string; emailVerified?: boolean; startingExperience?: 'customer' | 'driver' | 'eats_seller' | null; capabilities: ('customer' | 'driver')[];
   driver: { status: string; vehicle: Vehicle; eligibility: Eligibility } | null }

@@ -1,0 +1,20 @@
+export function createAdminInsightsRepository(db){return Object.freeze({
+ healthy:async()=>{try{await db.prepare('SELECT 1 AS alive').get();return true;}catch{return false;}},
+ async operationalCounts(now){return {
+  waitingRequests:(await db.prepare("SELECT COUNT(*) AS n FROM rides WHERE status='requested' AND request_expires_at>?").get(now)).n,
+  activeFoodOrders:(await db.prepare("SELECT COUNT(*) AS n FROM eats_orders WHERE status NOT IN ('delivered','cancelled','rejected')").get()).n,
+  foodStageAlerts:await db.prepare("SELECT status,COUNT(*) AS count FROM eats_orders WHERE status NOT IN ('delivered','cancelled','rejected') AND updated_at<? GROUP BY status ORDER BY status").all(now-30*60000),
+  freshAvailabilityRecords:(await db.prepare("SELECT COUNT(*) AS n FROM driver_availability WHERE active=1 AND mode='gps' AND expires_at>?").get(now)).n,
+  overdueReviews:(await db.prepare("SELECT COUNT(*) AS n FROM admin_work_items WHERE due_at<? AND status NOT IN ('resolved','rejected')").get(now)).n};},
+ async reports(userId){return db.prepare('SELECT id,title,filters_json AS filtersJson,created_at AS createdAt,updated_at AS updatedAt,version FROM admin_report_definitions WHERE owner_id=? ORDER BY created_at DESC,id DESC LIMIT 100').all(userId);},
+ async report(userId,id){return await db.prepare('SELECT id,title,filters_json AS filtersJson,version FROM admin_report_definitions WHERE owner_id=? AND id=?').get(userId,id)??null;},
+ async saveReport(row){await db.prepare('INSERT INTO admin_report_definitions(id,owner_id,title,filters_json,created_at,updated_at,version) VALUES(?,?,?,?,?,?,1)').run(row.id,row.userId,row.title,JSON.stringify(row.filters),row.now,row.now);},
+ async deleteReport(userId,id,version){return (await db.prepare('DELETE FROM admin_report_definitions WHERE owner_id=? AND id=? AND version=?').run(userId,id,version)).changes===1;},
+ async campaigns(){return db.prepare('SELECT id,title,service,budget_kobo AS budgetKobo,discount_kobo AS discountKobo,status,note,created_at AS createdAt,version FROM admin_campaign_drafts ORDER BY created_at DESC,id DESC LIMIT 100').all();},
+ async campaign(id){return await db.prepare('SELECT id,version,status FROM admin_campaign_drafts WHERE id=?').get(id)??null;},
+ async saveCampaign(row){await db.prepare("INSERT INTO admin_campaign_drafts(id,title,service,budget_kobo,discount_kobo,status,note,created_by,created_at,updated_at,version) VALUES(?,?,?,?,?,'draft',?,?,?,?,1)").run(row.id,row.title,row.service,row.budgetKobo,row.discountKobo,row.note,row.userId,row.now,row.now);},
+ async archiveCampaign(id,version,now){return (await db.prepare("UPDATE admin_campaign_drafts SET status='archived',version=version+1,updated_at=? WHERE id=? AND version=? AND status='draft'").run(now,id,version)).changes===1;},
+ async audit(before,limit){return db.prepare('SELECT id,actor_id AS actorId,action,subject_id AS subjectId,detail,created_at AS createdAt FROM admin_access_events WHERE id<? ORDER BY id DESC LIMIT ?').all(before,limit+1);},
+ command:async(actor,key)=>await db.prepare('SELECT fingerprint,result_json AS resultJson FROM admin_command_keys WHERE actor_id=? AND command_key=?').get(actor,key)??null,
+ async saveCommand(actor,key,fingerprint,result,now){await db.prepare('INSERT INTO admin_command_keys(actor_id,command_key,fingerprint,result_json,created_at) VALUES(?,?,?,?,?)').run(actor,key,fingerprint,JSON.stringify(result),now);},
+});}

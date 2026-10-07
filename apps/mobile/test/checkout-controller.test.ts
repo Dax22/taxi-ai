@@ -6,10 +6,10 @@ import type { CheckoutPaymentDetail, CheckoutPayment } from '../../../packages/s
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const tick = () => new Promise<void>(resolve => setImmediate(resolve));
 function deferred<T>() { let resolve!: (value: T) => void; let reject!: (error: unknown) => void; const promise = new Promise<T>((ok, no) => { resolve = ok; reject = no; }); return { promise, resolve, reject }; }
-const payment: CheckoutPayment = { id: id(2), kind: 'food', targetId: id(1), status: 'pending', amountKobo: 125000, currency: 'NGN', version: 1,
+const payment: CheckoutPayment = { id: id(2), kind: 'food', targetId: id(1), status: 'pending', amountKobo: 125000, currency: 'NGN', providerMode: 'test', version: 1,
   checkoutUrl: 'https://checkout.paystack.com/test-example', reference: 'taxiai_test_example', refundRequired: false,
   createdAt: 1000, updatedAt: 1000, paidAt: null, receipt: null };
-const detail = (value: CheckoutPayment | null = null): CheckoutPaymentDetail => ({ settings: { provider: 'paystack', mode: 'test', enabled: true }, payment: value, isPayer: true, canStart: value === null });
+const detail = (value: CheckoutPayment | null = null): CheckoutPaymentDetail => ({ settings: { provider: 'paystack', mode: 'test', enabled: true, walletStrategy: 'paystack_hosted', walletCandidates: ['apple_pay','google_pay'], walletAvailability: 'provider_device_eligibility' }, payment: value, isPayer: true, canStart: value === null });
 test('cancelled requests expose checkout only when a confirmed trip payment mode was projected', () => {
   for (const status of ['requested', 'negotiating', 'agreed', 'cancelled', 'expired']) assert.equal(showJourneyCheckout({ status }), false);
   for (const paymentMode of ['simulation', 'paystack_test'] as const) assert.equal(showJourneyCheckout({ status: 'cancelled', paymentMode }), true);
@@ -82,7 +82,7 @@ test('read failures remove old secrets; nonpayers cannot open checkout, but roll
   const { f, c } = fixture(); f.next = detail(payment); c.activate(); await tick();
   f.read = async () => { throw new Error('offline'); }; await c.load(); assert.equal(c.checkoutUrl(), null); assert.equal(c.snapshot().detail, null);
   f.read = null; f.next = { ...detail(payment), isPayer: false }; await c.load(); await c.act('refresh'); assert.equal(c.checkoutUrl(), null); assert.equal(f.keys, 0);
-  f.next = { ...detail(payment), settings: { provider: 'paystack', mode: 'test', enabled: false } }; await c.load();
+  f.next = { ...detail(payment), settings: { provider: 'paystack', mode: 'test', enabled: false, walletStrategy: 'paystack_hosted', walletCandidates: ['apple_pay','google_pay'], walletAvailability: 'provider_device_eligibility' } }; await c.load();
   assert.equal(c.checkoutUrl(), payment.checkoutUrl); assert.equal(c.snapshot().detail?.payment?.reference, payment.reference);
   await c.act('start'); assert.equal(f.keys, 0);
   await c.act('refresh'); assert.equal(f.keys, 1);

@@ -1,3 +1,4 @@
+import { isRestricted, requireUnrestricted, requireNewDriverWork } from '../../shared/service-restrictions.mjs';
 import { EATS_TERMINAL, EATS_DISPATCH_RADIUS_METERS, EATS_LEGACY_AREA_IDS, eatsActions, foodAvailable, discoverKitchens, isPrivateKitchen } from '../../../../../packages/shared/src/eats.mjs';
 import { matchMeals, mealTotals, MEAL_LIMITS } from '../../../../../packages/shared/src/eats-meals.mjs';
 import { LEGACY_FOOD_AREAS } from '../../../../../packages/shared/src/nigeria-areas.mjs';
@@ -11,7 +12,7 @@ import { createEatsPayments, foodPaymentPending, foodPaymentView, FOOD_PAYMENT_R
 
 
 /** Stores and food orders own their state; other work is checked through injected ports. */
-export function createEatsService({ repository, getAccount, hasOtherWork, availabilityFor, onClaim, photoCodec, tokens, unitOfWork, audit, clock, normalisePhoto, resolveDeliveryLocation = async (point) => ({ point, line: '', areaId: null, attribution: '' }), deliveryMapSettings = () => ({ tiles: null, attribution: '' }), foodTracking = null, paymentsEnabled = false, onPaymentClosed = async () => {}, onDeliveryEvent = async () => {} }) {
+export function createEatsService({ repository, getAccount, hasOtherWork, availabilityFor, onClaim, photoCodec, tokens, unitOfWork, audit, clock, normalisePhoto, resolveDeliveryLocation = async (point) => ({ point, line: '', areaId: null, attribution: '' }), deliveryMapSettings = () => ({ tiles: null, attribution: '' }), foodTracking = null, paymentsEnabled = false, onPaymentClosed = async () => {}, onDeliveryEvent = async () => {}, assertStoreAvailable = async () => {} }) {
   const actor = async (user) => { const fresh = (await getAccount(user?.id)); check(fresh, 'UNAUTHENTICATED', 'Sign in to continue.'); return fresh; };
   const identifier = (id) => { check(typeof id === 'string' && /^[a-f0-9-]{36}$/.test(id), 'INVALID_ID', 'Choose a valid record.'); return id; };
   const storeRecord = async (id) => { const value = (await repository.store(identifier(id))); check(value, 'NOT_FOUND', 'Restaurant not found.'); return value; };
@@ -74,6 +75,7 @@ export function createEatsService({ repository, getAccount, hasOtherWork, availa
   async function storeView(user, id) {
     const store = (await storeRecord(id)), managing = user.role === 'admin' || (await member(user, id));
     check(managing || store.status === 'approved', 'NOT_FOUND', 'Restaurant not found.');
+    if(!managing)await assertStoreAvailable(store.id);
     const owned = await member(user, id), assets = await repository.assets(id);
     const selected = (purpose) => { const photo = assets.find((value) => value.purpose === purpose); return photo ? photoMetadata(photo) : null; };
     return { store: { ...(await kitchenView(store, managing)), ...(managing ? { dispatchPoint: store.dispatchPoint,
@@ -133,7 +135,7 @@ export function createEatsService({ repository, getAccount, hasOtherWork, availa
     check(hasCapability(user, 'driver'), 'FORBIDDEN', 'A driver profile is required.');
     const current = (await asyncMap((await repository.activeCourier(user.id)), async (o) => (await orderView(user, o))));
     const position = (await availabilityFor(user.id, clock()));
-    const eligible = user.driver?.eligibility?.eligible && ['motorcycle', 'standard', 'suv', 'van'].includes(user.driver.vehicle.category ?? 'standard');
+    const eligible = !isRestricted(user,'driver') && !isRestricted(user,'vehicle') && user.driver?.eligibility?.eligible && ['motorcycle', 'standard', 'suv', 'van'].includes(user.driver.vehicle.category ?? 'standard');
     const available = eligible && position && !(await hasOtherWork(user.id)) && !current.length ? (await asyncMap((await repository.ready(position, EATS_DISPATCH_RADIUS_METERS, user.id)), async (o) => ({ id: o.id, version: o.version, restaurant: (await kitchenView(o.snapshot.restaurant)), deliveryArea: area(o.snapshot.address.areaId),
         deliveryFeeKobo: o.snapshot.totals.deliveryFeeKobo, createdAt: o.createdAt, isDemo: true }))) : [];
     return { current, available, online: Boolean(position), eligible: Boolean(eligible), isDemo: true };
@@ -164,7 +166,8 @@ export function createEatsService({ repository, getAccount, hasOtherWork, availa
       ...(placed?.snapshot.payment?.method === 'paystack' ? { payment: foodPaymentView(placed.snapshot.payment, 'customer') } : {}) };
   }
   async function makeQuote(user, data, now) {
-    requireRole(user, 'customer'); const store = (await storeRecord(data?.storeId));
+    requireRole(user, 'customer'); requireUnrestricted(user,'customer'); const store = (await storeRecord(data?.storeId));
+    await assertStoreAvailable(store.id);
     check(store.status === 'approved' && store.isOpen, 'STORE_UNAVAILABLE', 'This kitchen is not accepting orders.');
     check(data.fulfillment === 'pickup' || dispatchReady(store), 'STORE_UNAVAILABLE', 'This kitchen needs a saved pickup location before it can offer courier delivery.');
     check(!(await member(user, store.id)), 'FORBIDDEN', 'Use a separate customer account to test orders from your store.');
@@ -173,12 +176,12 @@ export function createEatsService({ repository, getAccount, hasOtherWork, availa
     return quoteId;
   }
   async function placeQuote(user, quoteId, now, paymentTargetId = null) {
-    requireRole(user, 'customer'); const q = (await repository.quote(identifier(quoteId)));
+    requireRole(user, 'customer'); requireUnrestricted(user,'customer'); const q = (await repository.quote(identifier(quoteId)));
     check(q?.customerId === user.id, 'NOT_FOUND', 'Checkout quote not found.');
     check(!q.orderId, 'QUOTE_USED', 'This checkout already created an order. Open My orders.');
     check(q.expiresAt > now, 'QUOTE_EXPIRED', 'This checkout expired. Review your cart again.');
     if (paymentsEnabled && !paymentTargetId) check(!(await repository.checkoutForQuote(user.id, q.id)), 'PAYMENT_NOT_READY', 'Place this combined checkout together so its kitchens share one payment.');
-    const store = (await storeRecord(q.storeId));
+    const store = (await storeRecord(q.storeId)); await assertStoreAvailable(store.id);
     check(store.status === 'approved' && store.isOpen, 'STORE_UNAVAILABLE', 'This kitchen stopped accepting orders.');
     check(q.snapshot.fulfillment === 'pickup' || dispatchReady(store), 'STORE_UNAVAILABLE', 'This kitchen needs a saved pickup location before it can offer courier delivery.');
     check(store.version === q.storeVersion, 'MENU_CHANGED', 'The menu or fees changed. Review a fresh checkout before ordering.');
@@ -203,6 +206,7 @@ export function createEatsService({ repository, getAccount, hasOtherWork, availa
       if (previous) { check(previous.fingerprint === fingerprint, 'KEY_REUSED', 'This key belongs to another action.'); replayed = true; return previous.result; }
       const now = clock(); let result;
       if (action === 'store-create') {
+        requireUnrestricted(user,'vendor');
         requireRole(user, 'customer'); fields(data, ['details']);
         check(!(await repository.membership(user.id)), 'STORE_EXISTS', 'Your account already has a store. Open My store to manage it.');
         const storeId = tokens.id(); (await repository.createStore({ id: storeId, details: storeDetails(data.details) }, user.id, now)); result = { storeId };
@@ -237,6 +241,7 @@ export function createEatsService({ repository, getAccount, hasOtherWork, availa
           await checkedPhotoStorage(store.id);
         } else if (action === 'store-open') {
           check(typeof data.isOpen === 'boolean', 'INVALID_STORE', 'Choose open or closed.');
+          if(data.isOpen){requireUnrestricted(user,'vendor');await assertStoreAvailable(store.id);}
           check(!data.isOpen || store.status === 'approved', 'STORE_UNAVAILABLE', 'The store needs administrator approval before opening.');
           check(!data.isOpen || store.deliveryEnabled === false || dispatchReady(store), 'STORE_UNAVAILABLE', 'Save a private pickup location before opening for delivery, or offer customer pickup only.');
           check(!data.isOpen || (await repository.menu(store.id)).some(foodAvailable), 'INVALID_MENU', 'Add an available menu item before opening.');
@@ -289,7 +294,7 @@ export function createEatsService({ repository, getAccount, hasOtherWork, availa
           (await repository.saveCollectionPoint(order.id, label(point, 'Private collection point for this order', 8, 240)));
         }
         if (action === 'claim') {
-          courierEligible(user);
+          courierEligible(user);requireNewDriverWork(user);
           check(order.customerId !== user.id && !(await member(user, order.storeId)), 'FORBIDDEN', 'You cannot deliver your own order or your store’s order.');
           check(!(await hasOtherWork(user.id)) && !(await repository.hasWork(user.id)), 'DRIVER_BUSY', 'Finish your current journey or food delivery first.');
           const position = (await availabilityFor(user.id, now));

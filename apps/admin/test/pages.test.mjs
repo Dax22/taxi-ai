@@ -21,18 +21,21 @@ class Node {
   append(...children) { this.children.push(...children); }
   replaceChildren(...children) { this.children = children; }
   setAttribute(key, value) { this.attributes[key] = value; }
+  getAttribute(key) { return this.attributes[key] ?? null; }
+  querySelectorAll() { return []; }
   removeAttribute(key) { delete this.attributes[key]; }
   set innerHTML(value) { throw new Error('Private strings must not be rendered as HTML: ' + value); }
 }
 const all = (node) => [node, ...node.children.flatMap(all)];
 const text = (node) => all(node).map((item) => item.textContent).join(' ');
 function fixture(t) {
-  const old = globalThis.document, nodes = new Map();
+  const old = globalThis.document, oldWindow = globalThis.window, nodes = new Map();
   for (const [, tag, id] of html.matchAll(/<(\w+)\b[^>]*?\bid="([^"]+)"/g)) nodes.set(id, new Node(tag));
-  const nav = ['overview', 'accounts', 'trips', 'analytics'].map((section) => { const item = new Node('a'); item.dataset.section = section; return item; });
+  const nav = ['overview', 'accounts', 'trips', 'analytics'].map((section) => { const item = new Node('a'); item.dataset.section = section; item.attributes.href = section === 'overview' ? '/admin' : '/admin/' + section; return item; });
   globalThis.document = { getElementById(id) { assert.ok(nodes.has(id), id); return nodes.get(id); }, createElement: (tag) => new Node(tag),
-    createElementNS: (space, tag) => new Node(tag), createTextNode: (value) => { const node = new Node('#text'); node.textContent = value; return node; }, querySelectorAll: () => nav };
-  t.after(() => { globalThis.document = old; }); return { nodes, nav };
+    createElementNS: (space, tag) => new Node(tag), createTextNode: (value) => { const node = new Node('#text'); node.textContent = value; return node; }, querySelectorAll: (selector) => selector === '#navigation a' ? nav : [] };
+  globalThis.window = { location: { origin: 'https://taxiai.app' } };
+  t.after(() => { globalThis.document = old; globalThis.window = oldWindow; }); return { nodes, nav };
 }
 const id = '11111111-1111-4111-8111-111111111111', now = Date.UTC(2026, 8, 20);
 const summary = { requests: 3, completed: 2, cancelled: 1, expired: 0, active: 0, completionRate: 2 / 3, cancellationRate: 1 / 3,
@@ -75,7 +78,7 @@ test('directory empty states are explicit, exact money stays precise and resetti
   const output = renderPage(route('accounts'), { items: [], page: { next: null, previous: null }, counts: { total: 0, drivers: 0, customerOnly: 0, awaitingReview: 0 } });
   assert.match(text(output), /No matching accounts/);
   assert.equal(money('18014398509481982'), '₦180,143,985,094,819.82');
-  const view = createAdminView(); view.render(route('overview'), { ...analytics, serverNow: now }, { name: 'Private staff name' });
+  const view = createAdminView(); view.render(route('overview', '/admin'), { ...analytics, serverNow: now }, { name: 'Private staff name' }, { role: 'owner', permissions: ['analytics.read'] });
   assert.equal(f.nodes.get('workspace').hidden, false); assert.equal(f.nav[0].attributes['aria-current'], 'page');
   view.clear(); assert.equal(f.nodes.get('workspace').hidden, true); assert.equal(f.nodes.get('page-content').children.length, 0);
   assert.equal(f.nodes.get('staff-name').textContent, ''); view.signIn('Sign in'); assert.equal(f.nodes.get('sign-in').hidden, false);
@@ -90,4 +93,19 @@ test('finance overview and analytics show aggregate totals without treating perm
     assert.equal(all(output).filter((node) => node.attributes.href?.startsWith('/admin/trips')).length, 0);
     assert.equal(all(output).filter((node) => node.attributes.href?.startsWith('/admin/accounts')).length, 0);
   }
+});
+
+test('Mobile Operations renders build, push, tracking and API health without secret token material', (t) => {
+  fixture(t);
+  const mobileData = { serverNow: now, filters: { window: '24h', platform: 'all', since: now - 86_400_000 }, canManage: false, sampleEvery: 20,
+    policy: { ios: { minimumBuild: null, minimumVersion: null }, android: { minimumBuild: 12, minimumVersion: '0.9.0' } },
+    summary: { activeDevices: 2, reportingDevices: 2, iosDevices: 1, androidDevices: 1, unknownBuildDevices: 0, pushRegistered: 1, knownDevices: 2, latestBuildDevices: 2, latestAdoption: 1, unsupportedDevices: 0 },
+    latestBuilds: { ios: 9, android: 14 }, builds: [{ platform: 'android', appVersion: '0.9.0', nativeBuild: 14, buildProfile: 'acceptance', devices: 1, lastSeenAt: now, easBuildId: id, gitCommit: 'a'.repeat(40) }],
+    push: { registered: 1, jobs: { done: { count: 3, attempts: 3 }, dead: { count: 1, attempts: 2 } } },
+    tracking: { ride: { active: 1, healthy: 1, stale: 0, expired: 0 }, food: { active: 0, healthy: 0, stale: 0, expired: 0 }, backgroundGrants: 1 },
+    api: { estimatedRequests: 101, clientErrors: 2, serverErrors: 1, errorRate: 3 / 101, p50: 80, p95: 210, samples: 8, byRoute: [{ route: 'booking', requests: 50, errors: 1, errorRate: .02, p95: 190 }] },
+    devices: [{ sessionId: id, deviceName: 'Fictional Android', userId: id, userName: 'Fictional rider', email: 'rider@example.test', platform: 'android', appVersion: '0.9.0', nativeBuild: 14, easBuildId: id, buildProfile: 'acceptance', gitCommit: 'a'.repeat(40), osVersion: '15', locationPermission: 'granted', backgroundLocationPermission: 'granted', notificationPermission: 'denied', lastSeenAt: now, refreshedAt: now, pushRegistered: true, driverOnline: false, supported: true }], limits: { deviceRows: 500, apiSamples: 5000 } };
+  const output = renderPage(route('mobile'), mobileData, { role: 'operations', permissions: ['mobile.read'] }), content = text(output);
+  assert.match(content, /Active native sessions/); assert.match(content, /1 iOS · 1 Android/); assert.match(content, /Mobile API reliability/); assert.match(content, /Ride shares/); assert.match(content, /0\.9\.0/);
+  assert.doesNotMatch(content, /ExponentPushToken|refreshToken|accessToken|latitude|longitude/);
 });

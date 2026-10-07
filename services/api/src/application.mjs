@@ -1,3 +1,18 @@
+import { createAccountControlsRepository } from './modules/account-controls/repository.mjs';
+import { createAccountControlsService } from './modules/account-controls/service.mjs';
+import { createAdminWorkRepository } from './modules/admin-work-items/repository.mjs';
+import { createAdminWorkService } from './modules/admin-work-items/service.mjs';
+import { createAdminInsightsRepository } from './modules/admin-insights/repository.mjs';
+import { createAdminInsightsService } from './modules/admin-insights/service.mjs';
+import { filters as transactionFilters, summarize as transactionSummary } from './modules/admin-transactions/domain.mjs';
+import { createAdminTransactionsRepository } from './modules/admin-transactions/repository.mjs';
+import { createAdminTransactionsService } from './modules/admin-transactions/service.mjs';
+import { createAdminInvestigationsRepository } from './modules/admin-investigations/repository.mjs';
+import { createAdminInvestigationsService } from './modules/admin-investigations/service.mjs';
+import { evidenceZip, sha256 as evidenceSha256 } from './infrastructure/evidence-zip.mjs';
+import { deliveryOperationState } from './modules/delivery-operations/domain.mjs';
+import { createAdminSafetyAlertsRepository } from './modules/admin-safety-alerts/repository.mjs';
+import { createAdminSafetyAlertsService } from './modules/admin-safety-alerts/service.mjs';
 import { createPaystackConfig } from './infrastructure/paystack-config.mjs';
 import { createPaystackProvider } from './infrastructure/paystack-provider.mjs';
 import { createCheckoutPaymentsRepository } from './modules/checkout-payments/repository.mjs';
@@ -16,6 +31,8 @@ import { createGuestRidesRepository } from './modules/guest-rides/repository.mjs
 import { createGuestRidesService } from './modules/guest-rides/service.mjs';
 import { createParcelTrackingRepository } from './modules/parcel-tracking/repository.mjs';
 import { createParcelTrackingService } from './modules/parcel-tracking/service.mjs';
+import { createDeliveryOperationsRepository } from './modules/delivery-operations/repository.mjs';
+import { createDeliveryOperationsService } from './modules/delivery-operations/service.mjs';
 import { MAX_DRIVER_FILE_BYTES } from '../../../packages/shared/src/driver-onboarding.mjs';
 import { createDriverDocumentCodec } from './infrastructure/driver-document-codec.mjs';
 import { createDriverFaceProvider } from './infrastructure/driver-face-provider.mjs';
@@ -53,9 +70,14 @@ import { createFoodLocationProvider } from './infrastructure/food-location-provi
 import { createPickupEtaProvider } from './infrastructure/pickup-eta.mjs';
 import { createDispatchConfig } from './infrastructure/dispatch-config.mjs';
 import { readMatchingFastConfig } from './infrastructure/matching-fast-config.mjs';
-import { createDispatchRepository, createMatchingRepository } from './modules/dispatch/repository.mjs';
+import { createDispatchRepository, createMatchingRepository, createDispatchPerformanceRepository } from './modules/dispatch/repository.mjs';
 import { createMatchingReadModel } from './modules/dispatch/matching-read-model.mjs';
 import { createDispatchService } from './modules/dispatch/service.mjs';
+import { createDispatchPerformanceService } from './modules/dispatch/performance.mjs';
+import { readDispatchMlConfig } from './infrastructure/dispatch-ml-config.mjs';
+import { loadDispatchMlArtifact } from './infrastructure/dispatch-ml-artifact.mjs';
+import { createDispatchMlRepository } from './modules/dispatch/ml/repository.mjs';
+import { createDispatchMlRanker } from './modules/dispatch/ml-ranker.mjs';
 import { createLocationsRepository, createFoodTrackingRepository } from './modules/locations/repository.mjs';
 import { createLocationsService } from './modules/locations/service.mjs';
 import { createBackgroundLocationRepository } from './modules/background-locations/repository.mjs';
@@ -105,6 +127,15 @@ import { createAdminComplianceRepository } from './modules/admin-compliance/repo
 import { createAdminComplianceService } from './modules/admin-compliance/service.mjs';
 import { createAdminDemandRepository } from './modules/admin-demand/repository.mjs';
 import { createAdminDemandService } from './modules/admin-demand/service.mjs';
+import { createAdminMatchingRepository } from './modules/admin-matching/repository.mjs';
+import { createAdminMatchingService } from './modules/admin-matching/service.mjs';
+import { createAdminAcceptanceRepository } from './modules/admin-acceptance/repository.mjs';
+import { createAdminAcceptanceService } from './modules/admin-acceptance/service.mjs';
+import { createMobileOperationsRepository } from './modules/mobile-operations/repository.mjs';
+import { createMobileOperationsService } from './modules/mobile-operations/service.mjs';
+import { readMobileReleasePolicy } from './modules/mobile-operations/domain.mjs';
+import { createAdminMobileRepository } from './modules/admin-mobile/repository.mjs';
+import { createAdminMobileService } from './modules/admin-mobile/service.mjs';
 import { createAnnouncementsRepository } from './modules/announcements/repository.mjs';
 import { createAnnouncementsService } from './modules/announcements/service.mjs';
 
@@ -118,13 +149,17 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
     return { tiles, attribution: tiles ? '© OpenStreetMap contributors' : '' };
   },
   ridePilot = createRidePilotConfig(), dispatchProfiler = null, matchingFast = readMatchingFastConfig(),
-  dispatchConfig = createDispatchConfig(), workerConfig = createWorkerConfig(), staffMfa = createStaffMfaConfig(),
-  driverFaceProvider = createDriverFaceProvider({ config: readDriverFaceConfig({}) }),
+  dispatchConfig = createDispatchConfig(), dispatchMlConfig = readDispatchMlConfig(), dispatchMlModel = loadDispatchMlArtifact(dispatchMlConfig),
+  workerConfig = createWorkerConfig(), staffMfa = createStaffMfaConfig(),
+  driverFaceProvider = createDriverFaceProvider({ config: readDriverFaceConfig() }),
   safetyAlertProvider = createSafetyAlertProvider(), accountMail = createAccountMail(), pushProvider = createPushProvider(), vehicleVisionProvider = createVehicleVisionProvider(),
   googleProvider = createGoogleProvider({ config: createGoogleConfig({}), clock }) }) {
   db = asAsyncDatabase(db);
   if (dispatchProfiler) db = dispatchProfiler.wrap(db);
   const unitOfWork = async (run) => (await db.transaction(run));
+  const dispatchWorkerUnitOfWork = async (run, region) => (await db.transaction(run, {
+    isolation: matchingFast.includesRegion(region) ? 'READ COMMITTED' : 'SERIALIZABLE',
+  }));
   const audit = createAudit(db);
   const realtime = createRealtimeService({ repository: createRealtimeRepository(db), clock });
   const workerCoordinator = createWorkerCoordinator({ repository: createWorkerCoordinationRepository(db),
@@ -135,9 +170,9 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
   const guestRepository = createGuestRidesRepository(db);
   const deliveryRepository = createDeliveriesRepository(db);
   const parcelRepository = createParcelTrackingRepository(db);
-  const eatsRepository = createEatsRepository(db, { deliveryAreas, legacyAreaIds: EATS_LEGACY_AREA_IDS, distanceMeters });
+  const eatsRepository = createEatsRepository(db, { deliveryAreas, legacyAreaIds: EATS_LEGACY_AREA_IDS, distanceMeters, clock });
   const hasDriverWork = async (id) => (await rideRepository.hasDriverWork(id)) || (await eatsRepository.hasWork(id));
-  let drivers, devices, accountEmail;
+  let drivers, devices, accountEmail, accountControls;
   const accounts = createAccountsService({ repository: accountRepository,
     driverProfiles: { insert: driverRepository.insert, remove: driverRepository.remove,
       version: async (id) => (await driverRepository.application(id))?.version, hasWork: hasDriverWork,
@@ -146,19 +181,23 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
       const driver = (await driverRepository.find(id));
       return driver ? { ...driver, eligibility: (await drivers.eligibilityFor(id)) } : null;
     } },
+    restrictionsFor: id => accountControls ? accountControls.summary(id) : Promise.resolve({scopes:[],notices:[],moreNotices:false}),
     passwords, tokens, unitOfWork, audit, revokeDevices: async (id) => (await devices.revokeUser(id)),
     revokeRecoveryLinks: async (id) => {
       const recovery = createAccountEmailRepository(db);
       await recovery.deleteUserTokens(id); await recovery.deleteUserJobs(id);
     },
-    onRegistered: async (id) => (await accountEmail.onRegistered(id)), hasRideHistory: rideRepository.hasHistory, clock });
+    onRegistered: async (id, context) => (await accountEmail.onRegistered(id, context)), hasRideHistory: rideRepository.hasHistory, clock });
   devices = createDeviceSessionsService({ repository: createDeviceSessionsRepository(db),
     authenticate: accounts.login, validatePasswordLogin: accounts.validatePasswordLogin, consumePasswordLogin: accounts.consumePasswordLogin,
     getAccount: accounts.profile, tokens, unitOfWork, audit, clock });
+  const mobileOperations = createMobileOperationsService({ repository: createMobileOperationsRepository(db), clock,
+    sampleEvery: Number(process.env.TAXI_AI_MOBILE_API_SAMPLE_EVERY ?? 20) });
   drivers = createDriversService({ repository: driverRepository,
     getAccount: accounts.profile, hasDriverWork, codec: createDriverDocumentCodec(MAX_DRIVER_FILE_BYTES),
     faceProvider: driverFaceProvider, faceChecksFactory: createDriverFaceChecks, tokens, unitOfWork, audit, clock });
   let calls, locations, foodTracking, payments, checkoutPayments, safety, guestRides, parcelTracking, notifications, deliveryUpdates, family, familyDelivery, adminCases;
+  let deliveryOperations;
   const staffAccess = createStaffAccessService({ repository: createStaffAccessRepository(db), getAccount: accounts.profile,
     getAccountByEmail: async email => {
       const record = await accountRepository.findByEmail(email);
@@ -175,11 +214,14 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
   const pickupEta = createPickupEtaProvider({ mapProvider, now: clock });
   const matching = matchingFast.enabled ? createMatchingReadModel({ repository: createMatchingRepository(db),
     driverEligibility: eligibility, clock, allowSimulation, includesRegion: matchingFast.includesRegion }) : null;
+  const dispatchMl = createDispatchMlRanker({ config: dispatchMlConfig, model: dispatchMlModel,
+    repository: createDispatchMlRepository(db), tokens, clock });
+  const dispatchPerformance = createDispatchPerformanceService({ repository: createDispatchPerformanceRepository(db), tokens, clock });
   const dispatch = createDispatchService({ repository: createDispatchRepository(db), getAccount: accounts.profile, coordinator: workerCoordinator,
     candidates: async (now, options) => (await rides.dispatchCandidates(now, options)), candidateFor: async (rideId, driverId, now) => (await rides.dispatchCandidateFor(rideId, driverId, now)),
     ...(matching ? { candidatesFor: (edges, now) => rides.dispatchCandidatesFor(edges, now),
       attemptedMany: matching.attemptedMany, batchEnabledFor: matching.enabledFor } : {}),
-    estimateMany: pickupEta.estimateMany, config: dispatchConfig, unitOfWork, tokens, audit, clock, profile: dispatchProfiler,
+    estimateMany: pickupEta.estimateMany, config: dispatchConfig, unitOfWork, workerUnitOfWork: dispatchWorkerUnitOfWork, tokens, audit, clock, profile: dispatchProfiler, ranker: dispatchMl,
     onOffer: async (offer) => (await notifications.publish({ userId: offer.driverId, rideId: offer.rideId, kind: 'request',
       mode: 'work', eventKey: `dispatch:${offer.id}`, now: offer.createdAt })) });
   const rides = createRidesService({ repository: rideRepository,
@@ -189,7 +231,12 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
     passengerForRide: guestRepository.passenger, savePassenger: guestRepository.savePassenger,
     hasOtherWork: eatsRepository.hasWork,
     getAccount: accounts.profile, unitOfWork, audit, tokens, clock,
-    deliveries: createDeliveriesService({ repository: deliveryRepository, tokens }),
+    deliveries: createDeliveriesService({ repository: deliveryRepository, tokens,
+      requireHandover: id => deliveryOperations.requireHandover(id),
+      handoverContext: async (id, now) => {
+        const ride = await rideRepository.find(id);
+        return { courierId: ride.driverId, position: await locations.freshPositionFor(ride.driverId, id, now) };
+      } }),
     routeForRide: async (id) => (await locations.routeForRide(id)),
     quoteForRide: async (userId, id, now) => (await locations.quoteForRide(userId, id, now)),
     bindQuote: async (userId, id, rideId, now) => (await locations.bindQuote(userId, id, rideId, now)),
@@ -247,7 +294,8 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
   accountEmail = createAccountEmailService({ repository: createAccountEmailRepository(db), accounts, mail: accountMail,
     passwords, tokens, unitOfWork, rateLimiter, audit, clock });
   calls = createCallsService({ repository: createCallsRepository(db), getAccount: accounts.profile,
-    sessionOwner: accounts.sessionOwner, getRideContext: rides.conversationContext, unitOfWork, audit, tokens, clock, config: callConfig });
+    sessionOwner: async (key) => typeof key === 'string' && key.startsWith('native:') ? devices.sessionOwner(key.slice(7)) : accounts.sessionOwner(key),
+    getRideContext: rides.conversationContext, unitOfWork, audit, tokens, clock, config: callConfig });
   locations = createLocationsService({ repository: createLocationsRepository(db), provider: mapProvider,
     ridePilot,
     getAccount: accounts.profile, sessionOwner: accounts.sessionOwner, nativeAccessOwner: devices.accessOwner, nativeSessionOwner: devices.sessionOwner,
@@ -266,7 +314,7 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
     onIncidentReviewed: async data => await adminCases.syncIncident(data) });
   const safetyMonitoring = createSafetyMonitoringService({repository:createSafetyMonitoringRepository(db),provider:safetyAlertProvider,
     getAccount:accounts.profile,getTrip:rides.guestContext,locationForTrip:locations.safetyPosition,routeForTrip:locations.routeForRide,
-    sessionOwner:accounts.sessionOwner,nativeSessionOwner:devices.sessionOwner,unitOfWork,tokens,audit,clock});
+    sessionOwner:accounts.sessionOwner,nativeSessionOwner:devices.sessionOwner,unitOfWork,tokens,audit,clock,simulation:allowSimulation});
   guestRides = createGuestRidesService({ repository: guestRepository, getAccount: accounts.profile, getTrip: rides.guestContext,
     locationForTrip: locations.safetyPosition, sessionOwner: accounts.sessionOwner, nativeSessionOwner: devices.sessionOwner, unitOfWork, tokens, audit, clock });
   parcelTracking = createParcelTrackingService({ repository: parcelRepository, getAccount: accounts.profile,
@@ -276,6 +324,18 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
         status: ride.status, destination: ride.destination.name, driver: ride.driver,
         delivery: ride.delivery, updatedAt: ride.updatedAt };
     }, locationForTrip: locations.safetyPosition, unitOfWork, tokens, audit, clock });
+  deliveryOperations = createDeliveryOperationsService({ repository: createDeliveryOperationsRepository(db),
+    getAccount: accounts.profile,
+    getTrip: async id => {
+      const ride = await rideRepository.find(id);
+      if (!ride) return null;
+      const trip = await rideRepository.findTrip(id);
+      return { ...ride, status: trip?.status ?? ride.status, delivery: Boolean(await deliveryRepository.find(id)) };
+    },
+    isVerifiedRecipient: async (userId, id) => {
+      try { await parcelTracking.received(userId, id); return true; }
+      catch (error) { if (['NOT_FOUND', 'FORBIDDEN', 'UNAUTHENTICATED'].includes(error.code)) return false; throw error; }
+    }, closeReturn: rides.closeReturnedDelivery, unitOfWork, tokens, audit, clock });
   family = createFamilyService({ repository: createFamilyRepository(db), getAccount: accounts.profile,
     getAccountByEmail: async (email) => {
       const account = await accountRepository.findByEmail(email);
@@ -293,6 +353,31 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
     familyTargets: notifications.familyTargets, validFamilyTarget: notifications.validFamilyTarget,
     disableTarget: notifications.disableFamilyTarget, dispatchable: family.dispatchable,
     unitOfWork, tokens, clock, onChanged: async (userId) => await realtime.publish([userId]) });
+  accountControls = createAccountControlsService({repository:createAccountControlsRepository(db),requirePermission:staffAccess.requirePermission,unitOfWork,tokens,audit,clock,
+    onRestricted:async(userId,scope,now)=>{
+      if(['driver','vehicle','account'].includes(scope))await availability.onProfileDeleted(userId,now);
+      if(['customer','driver','vehicle','account'].includes(scope))await dispatch.withdrawForUser(userId,now,scope);
+    },revokeSessions:async id=>{await accountRepository.deleteUserSessions(id);await devices.revokeUser(id);},publish:realtime.publish});
+  const transactionRepository = createAdminTransactionsRepository(db);
+  const adminWork = createAdminWorkService({repository:createAdminWorkRepository(db),requirePermission:staffAccess.requirePermission,
+    listEligible:staffAccess.listEligible,unitOfWork,tokens,audit,clock});
+  const adminInsights = createAdminInsightsService({repository:createAdminInsightsRepository(db),requirePermission:staffAccess.requirePermission,
+    readSummary:(query,now)=>transactionSummary(transactionRepository.facts(transactionFilters(query,now),now)),validateFilters:transactionFilters,
+    configuration:()=>({maps:mapProvider.describe().mode,calls:callConfig.describe().mode,
+      accountEmail:accountMail.enabled===true,payments:paystackProvider.enabled?paystackProvider.mode:'off',
+      push:pushProvider.enabled===true,passengerRides:ridePilot.describe?.()??{paused:ridePilot.paused},
+      staffMfaConfigured:Boolean(staffMfa.factor?.available)}),unitOfWork,audit,tokens,clock});
+  const adminInvestigations = createAdminInvestigationsService({ repository: createAdminInvestigationsRepository(db),
+    requirePermission: staffAccess.requirePermission, audit, unitOfWork, tokens, clock,
+    archiveCodec: { zip: evidenceZip, sha256: evidenceSha256 } });
+  const adminTransactions = createAdminTransactionsService({ repository: createAdminTransactionsRepository(db),
+    requirePermission: staffAccess.requirePermission, audit, unitOfWork, clock,
+    deliveryStateFor: deliveryOperationState,
+    driverProfile: async id => (await accounts.profile(id))?.driver ?? null,
+    mapSettings: () => mapProvider.describe(),
+    restrictionScopes: async id => (await accountControls.summary(id)).scopes,
+    isStoreRestricted: id => createAccountControlsRepository(db).storeBlocked(id,clock()),
+    locationFor: (kind,id) => kind === 'food' ? foodTracking.safetyPosition(id) : locations.safetyPosition(id) });
   const adminConsole = createAdminConsoleService({ repository: createAdminConsoleRepository(db), audit, clock, unitOfWork,
     requirePermission: async (user, permission) => await staffAccess.requirePermission(user.id, permission) });
   adminCases = createAdminCasesService({ repository: createAdminCasesRepository(db),
@@ -308,10 +393,42 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
   const adminFinance = createAdminFinanceService({ repository: createAdminFinanceRepository(db),
     requirePermission: staffAccess.requirePermission, unitOfWork, clock, audit });
   const adminCompliance = createAdminComplianceService({ repository: createAdminComplianceRepository(db),
-    getEligibility: drivers.eligibilityFor, requirePermission: staffAccess.requirePermission,
-    unitOfWork, tokens, audit, clock });
+    getEligibility: drivers.eligibilityFor, getFaceCheck: drivers.faceStatusFor,
+    approveDriverException: async ({ userId, id, expectedVersion, key }) => drivers.command(await accounts.profile(userId), id, 'approve-exception', { expectedVersion }, key),
+    readDriverDocument: async ({ userId, driverId, documentId }) => {
+      const result = await drivers.download(await accounts.profile(userId), documentId);
+      check(result.document.driverId === driverId, 'NOT_FOUND', 'Driver document not found.'); return result;
+    },
+    requirePermission: staffAccess.requirePermission, unitOfWork, tokens, audit, clock });
   const adminDemand = createAdminDemandService({ repository: createAdminDemandRepository(db),
     requirePermission: staffAccess.requirePermission, unitOfWork, clock, allowSimulation });
+  const adminMatching = createAdminMatchingService({ repository: createAdminMatchingRepository(db),
+    requirePermission: staffAccess.requirePermission, unitOfWork, clock,
+    configuration: () => ({ fastEnabled: matchingFast.enabled, fastRegions: matchingFast.regions ?? [], dispatchMode: dispatchConfig.mode,
+      mlMode: dispatchMlConfig.mode, mlModel: dispatchMlModel?.version ?? null, mlRegions: dispatchMlConfig.regions ?? [],
+      mlLive: dispatchMlConfig.mode === 'live', modelArtifact: dispatchMlModel ?? null }) });
+  const adminMobile = createAdminMobileService({ repository: createAdminMobileRepository(db), requirePermission: staffAccess.requirePermission,
+    unitOfWork, audit, clock, releasePolicy: readMobileReleasePolicy(process.env), sampleEvery: mobileOperations.sampleEvery });
+  const adminAcceptance = createAdminAcceptanceService({ repository: createAdminAcceptanceRepository(db),
+    requirePermission: staffAccess.requirePermission, unitOfWork, tokens, audit, clock,
+    automaticChecks: async () => ({
+      'platform.postgres': { passed: db.kind === 'postgres' && await db.healthy(), evidenceRef: 'runtime:postgres-current-schema',
+        note: 'Current application database health and schema verification.' },
+      'platform.fast_matching': { passed: matchingFast.includesRegion('ng:181:148'), evidenceRef: 'runtime:fast:ng:181:148',
+        note: 'Controlled fast-matching pilot configuration for the Abuja grid cell.' },
+      'platform.ml_shadow': { passed: dispatchMlConfig.mode === 'shadow' && dispatchMlConfig.includesRegion('ng:181:148'), evidenceRef: `runtime:ml:${dispatchMlModel?.version ?? 'none'}`,
+        note: 'ML is scoring the pilot region in shadow mode and has no live dispatch authority.' },
+      'accounts.google_web_configured': { passed: googleProvider.config?.enabled === true, evidenceRef: 'runtime:google-web',
+        note: 'Google web OAuth configuration is present. This does not prove a device sign-in flow.' },
+      'providers.push_configured': { passed: pushProvider.enabled === true, evidenceRef: 'runtime:push',
+        note: 'Push provider configuration is enabled. Background delivery must still be accepted on a real device.' },
+      'providers.call_relay_configured': { passed: callConfig.mode === 'relay', evidenceRef: `runtime:calls:${callConfig.mode}`,
+        note: 'Hosted audio relay configuration status. A real two-phone call remains a separate acceptance test.' },
+      'providers.paystack_live_configured': { passed: paystackProvider.enabled === true && paystackProvider.mode === 'live', evidenceRef: `runtime:paystack:${paystackProvider.mode}`,
+        note: 'Live Paystack configuration status. A real low-value payment remains a separate acceptance test.' },
+      'providers.native_google_configured': { passed: (googleProvider.config?.nativeClientIds?.length ?? 0) > 0, evidenceRef: 'runtime:google-native',
+        note: 'Native Google OAuth client configuration status. Android/iOS acceptance remains separate.' },
+    }) });
   const eats = createEatsService({ repository: eatsRepository, paymentsEnabled: paystackProvider.enabled,
     onDeliveryEvent: async ({ order, phase, eventKey, now }) => {
       const from = phase === 'picked_up' ? await foodTracking.freshPositionFor(order.courierId, order.id, now) : null;
@@ -324,6 +441,7 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
       update: (...args) => foodTracking.update(...args), freshPositionFor: (...args) => foodTracking.freshPositionFor(...args),
       closeRide: (...args) => foodTracking.closeRide(...args),
     },
+    assertStoreAvailable: id => accountControls.assertStore(id),
     resolveDeliveryLocation, deliveryMapSettings,
     hasOtherWork: async (id) => (await rideRepository.hasDriverWork(id)) || (await rideRepository.hasCustomerWork(id, clock())),
     availabilityFor: availability.positionFor, onClaim: availability.onClaim, tokens, unitOfWork, audit, clock, normalisePhoto: normaliseFoodPhoto });
@@ -369,5 +487,16 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
     trackerFor: kind => kind === 'food' ? foodTracking : locations, nativeSessionOwner: devices.sessionOwner, unitOfWork, tokens, clock });
   const googleAuth = createGoogleAuthService({ repository: createGoogleAuthRepository(db), provider: googleProvider,
     accounts, devices, tokens, unitOfWork, clock });
-  return Object.freeze({ accounts, devices, drivers, rides, dispatch, eats, chat, calls, locations, foodTracking, backgroundLocations, availability, payments, checkoutPayments, safety, safetyMonitoring, guestRides, parcelTracking, family, familyDelivery, vehicleChecks, adminConsole, staffAccess, adminCases, adminOperations, adminFinance, adminCompliance, adminDemand, announcements, googleAuth, accountEmail, notifications, deliveryUpdates, rateLimiter, realtime, workerCoordinator, clock });
+  const adminSafetyAlerts = createAdminSafetyAlertsService({ repository: createAdminSafetyAlertsRepository(db),
+    requirePermission: staffAccess.requirePermission, getAccount: accounts.profile,
+    getTrip: async id => { const ride = await rideRepository.find(id); if (!ride) return null;
+      const trip = await rideRepository.findTrip(id); return { customerId: ride.customerId, driverId: ride.driverId, status: trip?.status ?? ride.status }; },
+    getPassenger: guestRepository.passenger, locationForTrip: locations.safetyPosition,
+    mapSettings: () => ({ enabled: mapProvider.mode !== 'off', tiles: mapProvider.describe?.().tiles ?? null }),
+    providerReadiness: () => ({ vehicleVisionConfigured: vehicleVisionProvider.enabled === true,
+      faceComparisonConfigured: driverFaceProvider.enabled === true, notificationGatewayConfigured: safetyAlertProvider.available === true,
+      emergencyPartnerConfigured: Boolean(safetyAlertProvider.available && safetyAlertProvider.emergencyService),
+      liveAcceptanceVerified: false, notice: 'Configuration flags only. Real-device and provider acceptance must be verified separately.' }),
+    unitOfWork, tokens, audit, clock });
+  return Object.freeze({ adminSafetyAlerts, accountControls, adminInvestigations, adminTransactions, adminWork, adminInsights, accounts, devices, mobileOperations, drivers, rides, dispatch, dispatchMl, dispatchPerformance, eats, chat, calls, locations, foodTracking, backgroundLocations, availability, payments, checkoutPayments, safety, safetyMonitoring, guestRides, parcelTracking, deliveryOperations, family, familyDelivery, vehicleChecks, adminConsole, staffAccess, adminCases, adminOperations, adminFinance, adminCompliance, adminDemand, adminMatching, adminMobile, adminAcceptance, announcements, googleAuth, accountEmail, notifications, deliveryUpdates, rateLimiter, realtime, workerCoordinator, clock });
 }

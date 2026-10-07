@@ -10,6 +10,7 @@ import { createWorkerConfig } from '../src/infrastructure/worker-config.mjs';
 import { createCallConfig } from '../src/infrastructure/call-config.mjs';
 import { createMapProvider } from '../src/infrastructure/map-provider.mjs';
 import { submitApplication, approveApplication } from './driver-fixtures.mjs';
+import { DRIVER_REQUIRED_DOCUMENTS } from '../../../packages/shared/src/driver-onboarding.mjs';
 
 const connectionString = process.env.TAXI_AI_TEST_POSTGRES_URL;
 const password = 'Postgres integration test password 123';
@@ -136,7 +137,9 @@ test('PostgreSQL HTTP: shared sessions, account invalidations, Eats photos and a
       await submitApplication(driverApi); await approveApplication(staffApi, driver.state.user.id);
       const login = must(await native(1, '/auth/login', null, { email: driver.state.user.email, password, deviceName: 'Driver PG phone' }));
       const onboarding = must(await native(0, '/driver/onboarding', login.credentials.accessToken));
-      assert.equal(onboarding.application.status, 'approved'); assert.equal(onboarding.application.documents.length, 5);
+      assert.equal(onboarding.application.status, 'approved');
+      assert.equal(onboarding.application.documents.length, DRIVER_REQUIRED_DOCUMENTS.length);
+      assert.ok(DRIVER_REQUIRED_DOCUMENTS.every((kind) => onboarding.application.documents.some((doc) => doc.kind === kind)));
       const work = must(await native(1, `/work?clientId=${randomUUID()}`, login.credentials.accessToken));
       assert.ok(Array.isArray(work.available));
     });

@@ -43,7 +43,16 @@ export function createAccountEmailService({ repository, accounts, mail, password
     if ((await allowance(state.email,'verify')) && !state.verified) (await enqueue(userId,'verify',state.email));
     return accepted();
   }
-  async function onRegistered(userId) { if (mail.enabled) (await requestVerification(userId)); }
+  async function queueWelcome(userId) {
+    if (!mail.enabled) return false;
+    const state = await accounts.emailState(userId); if (!state) return false;
+    return enqueue(userId, 'welcome', state.email);
+  }
+  async function onRegistered(userId, { emailVerified = false } = {}) {
+    if (!mail.enabled) return;
+    if (emailVerified) await queueWelcome(userId);
+    else await requestVerification(userId);
+  }
   async function readToken(value, purpose) {
     if (typeof value !== 'string' || !/^[a-f0-9]{64}$/.test(value)) return invalid();
     const hash = tokens.digest(value), record = (await repository.token(hash,purpose,clock()));
@@ -58,6 +67,7 @@ export function createAccountEmailService({ repository, accounts, mail, password
       const { hash, record } = (await readToken(data.token,'verify'));
       (await accounts.confirmEmail(record.userId, record.email));
       (await repository.deleteToken(hash));
+      if (mail.enabled) (await repository.enqueue(tokens.id(),record.userId,'welcome',record.email,clock()));
       (await audit.record(record.userId,'account.email_verified',record.userId,clock()));
       return { verified: true };
     }));
@@ -91,7 +101,7 @@ export function createAccountEmailService({ repository, accounts, mail, password
             || (job.purpose === 'verify' && state.verified) || (job.purpose === 'reset' && !state.passwordEnabled)) {
             (await repository.deleteJob(job.id)); return { skipped: true };
           }
-          const lease = tokens.generate(), token = job.purpose === 'changed' ? null : tokens.generate();
+          const lease = tokens.generate(), token = ['verify','reset'].includes(job.purpose) ? tokens.generate() : null;
           if (!await repository.claim(job.id,lease,clock())) return { skipped: true };
           if (token) (await repository.putToken({ hash: tokens.digest(token), userId: job.userId, purpose: job.purpose,
             email: state.email, credentialHash: state.passwordHash, expiresAt: clock() + (job.purpose === 'reset' ? HOUR / 2 : 24 * HOUR) }));
@@ -101,7 +111,9 @@ export function createAccountEmailService({ repository, accounts, mail, password
         if (delivery.skipped) continue;
         const { job, lease, token } = delivery;
         let sent = false;
-        try { await mail.send({ email: job.email, purpose: job.purpose, token }); sent = true; } catch { /* Never log provider errors, recipients or links. */ }
+        try { const state = await accounts.emailState(job.userId);
+          await mail.send({ email: job.email, purpose: job.purpose, token, name: state?.name, intent: state?.startingExperience }); sent = true;
+        } catch { /* Never log provider errors, recipients or links. */ }
         if (stopped) break;
         (await unitOfWork(async () => {
           if (!(await repository.owns(job.id,lease))) return;

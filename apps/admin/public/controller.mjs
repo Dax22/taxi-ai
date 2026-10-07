@@ -41,20 +41,23 @@ export function createAdminController({ client, view, route, navigate = (path) =
     if (busy) return;
     if (!retry) pending = { path, data, key: makeKey(), identity: acceptedIdentity };
     if (!pending) return;
-    const action = pending, { epoch, signal } = start(); let refresh = false;
+    const action = pending, { epoch, signal } = start(); let refresh = false, evidence = null;
     try {
       const first = await client.session(signal); if (epoch !== generation || !check(first)) return;
       if (!action.identity || identity(first) !== action.identity) throw changed();
-      await client.request(action.path, { data: action.data, key: action.key, signal }); if (epoch !== generation) return;
+      if (action.path === '/api/admin/console/investigations/export') evidence = await client.evidenceExport(action.path, { data: action.data, key: action.key, signal });
+      else await client.request(action.path, { data: action.data, key: action.key, signal });
+      if (epoch !== generation) return;
       const last = await client.session(signal); if (epoch !== generation) return;
       if (identity(first) !== identity(last)) throw changed();
       pending = null; refresh = true;
     } catch (error) {
       if (epoch !== generation) return;
-      if (!error.status || error.status >= 500) view.actionError?.('The action could not be confirmed. Retry the same action to check its result safely.');
+      if (action.path === '/api/admin/console/investigations/export' && (!error.status || error.status >= 500)) { pending = null; view.actionError?.('The export result is uncertain. Review the case export history before preparing another archive; every generation is separately audited.'); }
+      else if (!error.status || error.status >= 500) view.actionError?.('The action could not be confirmed. Retry the same action to check its result safely.');
       else { pending = null; fail(error); }
     } finally { if (epoch === generation) { busy = false; view.loading(false); } }
-    if (refresh) await load();
+    if (refresh) { await load(); if (evidence && acceptedIdentity === action.identity) view.deliverEvidence?.(evidence); }
   }
   return Object.freeze({ load, login: (credentials) => load(credentials), mutate,
     retry: () => pending ? mutate(pending.path, pending.data, true) : Promise.resolve(),

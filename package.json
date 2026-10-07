@@ -11,6 +11,7 @@
     "dev": "node --env-file-if-exists=.env --experimental-sqlite apps/web/server.mjs",
     "start": "node --env-file-if-exists=.env --experimental-sqlite apps/web/server.mjs",
     "config:check": "node --env-file-if-exists=.env --experimental-sqlite scripts/config-check.mjs",
+    "tracking:launch-check": "node scripts/tracking-launch-check.mjs",
     "staging:access": "node --experimental-sqlite scripts/staging-access.mjs",
     "backup": "node --env-file-if-exists=.env --experimental-sqlite scripts/database-snapshot.mjs backup",
     "restore": "node --env-file-if-exists=.env --experimental-sqlite scripts/database-snapshot.mjs restore",
@@ -28,7 +29,10 @@
     "mobile:verify": "npm --prefix apps/mobile run verify",
     "load:test": "node --experimental-sqlite scripts/load-test.mjs",
     "db:postgres:migrate": "node --env-file-if-exists=.env --experimental-sqlite scripts/postgres-migrate.mjs",
-    "db:postgres:import": "node --env-file-if-exists=.env --experimental-sqlite scripts/postgres-import.mjs"
+    "db:postgres:import": "node --env-file-if-exists=.env --experimental-sqlite scripts/postgres-import.mjs",
+    "matching:scale": "node --experimental-sqlite scripts/matching-scale-profile.mjs",
+    "mobile:release:check": "npm --prefix apps/mobile run release:check --",
+    "mobile:acceptance": "npm --prefix apps/mobile run acceptance:prepare --"
   },
   "dependencies": {
     "@aws-sdk/client-rekognition": "3.1141.0",

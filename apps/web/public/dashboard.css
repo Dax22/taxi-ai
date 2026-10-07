@@ -751,3 +751,9 @@
     .dashboard-photo-page .request-row { padding: 14px; }
   }
 }
+
+/* Keep Google as the secondary sign-in option below the primary Taxi Ai action. */
+.google-auth-below { margin-top: 20px; }
+.google-auth-below .auth-divider { margin: 0 0 18px; }
+.google-auth-below .google-button { margin-top: 0; }
+.google-auth-note { margin: 12px 0 0; text-align: center; }

@@ -2,7 +2,7 @@
   admin off
 }
 
-{$TAXI_AI_DOMAIN} {
+{$TAXI_AI_DOMAIN}, staging.taxiai.app {
   # Keep public health routes private; Docker probes the app over loopback.
   @health path /health/*
   respond @health 404

@@ -10,6 +10,7 @@ keyboard, accessibility and tablet QA remain pending.
 
 - In-app account creation and sign-in, one-time Customer or Driver setup saved securely per account on this phone, session restore and per-device sign-out.
 - Customer Home or Driver tab, plus Activity, Updates and Account; driver application, booking and journey screens. The app does not switch between Customer and Driver after setup.
+- **Map-first native home**: Customer opens to an Apple Maps (iOS) or Google Maps (Android) surface with Where to?, Ride/SUV, Eats and Courier actions; Driver opens to the same native map-first pattern with online/offline state, current route and timed offers in a bottom panel. Route previews and active trip tracking open their maps immediately instead of requiring an extra reveal tap.
 - **Book a ride or delivery**: Standard/SUV passenger trips and car/van/truck/motorcycle
   parcels with recipient details, category pricing and approved capacity matching; explicit Nigeria-wide address search, route/fare review, shared ride requests,
   same-command retries, current status, registered vehicle and pre-start cancellation.
@@ -46,8 +47,10 @@ keyboard, accessibility and tablet QA remain pending.
   fresh driver-shared location and the handover code. No SMS is sent automatically.
   Tracking polls every five seconds in the foreground, uses the configured native
   Apple/Google map, and clears private snapshots on failed permission checks,
-  backgrounding and account changes. Drivers must opt in to location sharing and
-  keep Taxi Ai open; continuous background GPS is not implemented.
+  backgrounding and account changes. Drivers explicitly enable native background
+  location for active work. Short transient upload failures now use bounded retries
+  with fresh GPS; permission loss, stop, job closure and the existing sharing-lease
+  expiry still stop collection. Signed-device and screen-lock acceptance remain pending.
 - Completed-trip test payments, saved receipts and a paginated Driver earnings preview use the same records as the website. Payment simulation only runs on the local development server; no money moves.
 - **Taxi Ai Eats** on Home, **My food orders** in Activity, **My store** in Account
   and **Food deliveries** in Work, with the same restaurant/menu/order records as
@@ -77,11 +80,29 @@ claiming. Both participants negotiate fares, chat and finish rides/deliveries in
 app, including pickup and drop-off verification. Updates has a durable inbox and
 optional configured Expo phone alerts. See [native journeys and push setup](../../docs/mobile-journeys.md).
 Native Safety / SOS now opens trusted contacts, revocable trip links and private test incident records. See [mobile safety](../../docs/mobile-safety.md).
-The driver can explicitly share foreground trip GPS from Journey or Safety; the customer and active trip links receive the latest position. See [native trip location](../../docs/mobile-trip-location.md).
+The driver can explicitly share trip GPS from Journey or Safety, including the configured background task in an installed build; the customer and active trip links receive the latest permitted position. Real-device acceptance remains required. See [tracking hardening](../../docs/tracking-hardening.md).
 Booking and shared-driver-location views can show Google Maps on Android and Apple Maps on iOS. Android signed builds need the restricted Maps SDK key; see [native maps](../../docs/mobile-maps.md).
 Native in-app audio calls and staff tools remain separate milestones. Real payment processing and automatic crash detection are unavailable on both clients. Eats has a polling order timeline; its live courier
 map and phone alerts remain future work.
 This is a connected foundation, not a store-ready transport service.
+
+## Signed iPhone and Android acceptance builds
+
+The repository now has a fail-closed EAS `acceptance` profile for physical-device testing against `https://taxiai.app`. It uses internal distribution and automatically increments the native build number. Before a cloud build is queued, the release gate validates the production API origin, EAS project UUID, native OAuth IDs, Android Maps key presence and Firebase Android package binding without printing key material.
+
+From `apps/mobile` on a trusted machine linked to the Taxi Ai Expo project:
+
+```bash
+npm run acceptance:prepare -- --platform all
+```
+
+That command performs account/project/environment checks but does **not** consume EAS build quota. After reviewing EAS usage/build charges and registering the physical iPhone, queue signed internal builds explicitly:
+
+```bash
+npm run acceptance:build -- --platform all --run
+```
+
+Every EAS build embeds non-secret provenance. Open **Account → Build identity** on the installed phone and use its `mobile:<platform>:<build-id>` evidence reference in **Admin → Production acceptance**. Full setup and two-phone test steps are in [mobile production acceptance](../../docs/mobile-production-acceptance.md).
 
 ## Run locally on your Mac
 
