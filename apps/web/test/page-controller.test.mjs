@@ -329,3 +329,19 @@ test('ride and parcel progress require a fresh shared position and guide the dri
   await h.page.rideCommand(`/api/rides/${ride.id}/complete`, {}); await h.page.rideCommand(`/api/rides/${ride.id}/cancel`, {});
   assert.equal(h.commands.length, 3); assert.equal(focused, 4);
 });
+
+
+test('fresh closed journey state replaces stale media context and reaches call teardown immediately', async () => {
+  const h = setup(); await h.page.refresh();
+  h.calls.hasMedia = () => true;
+  h.calls.snapshot = () => ({ selected: ride });
+  const completed = { ...ride, status: 'completed', version: 9 };
+  h.intercept(async path => path.startsWith('/api/rides?')
+    ? { rides: [completed], available: [], matchingSettings: { allowSimulation: false,
+        passengerRides: { paused: true, coverage: 'nigeria' } } } : undefined);
+  await h.page.refresh();
+  assert.equal(h.contexts.filter(([name]) => name === 'calls').at(-1)[2].status, 'completed');
+  assert.deepEqual(h.page.snapshot().passengerRides, { paused: true, coverage: 'nigeria' });
+  h.session(session(null)); await h.page.refresh();
+  assert.equal(h.page.snapshot().passengerRides, null);
+});

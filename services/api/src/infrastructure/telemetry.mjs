@@ -29,7 +29,7 @@ export function createTelemetry({ write = (line) => process.stdout.write(line + 
     event(name) {
       if (['server_started', 'server_stopping', 'maintenance_failed', 'server_failed', 'shutdown_timeout',
         'worker_lease_renewal_failed', 'worker_job_failed', 'worker_tick_failed',
-        'worker_wakeup_connection_failed', 'worker_wakeup_lookup_failed'].includes(name)) emit({ event: name, at: new Date().toISOString() });
+        'worker_wakeup_connection_failed', 'worker_wakeup_lookup_failed', 'dispatch_ml_retention_failed', 'dispatch_profile_retention_failed'].includes(name)) emit({ event: name, at: new Date().toISOString() });
     },
   });
 }

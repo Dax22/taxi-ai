@@ -10,7 +10,7 @@ export function createPaystackProvider({ config, fetchImpl = fetch, timeoutMs = 
   let active = 0;
   const enabled = config.enabled === true, configured = config.configured === true;
   async function request(path, method = 'GET', body) {
-    check(configured, 'PAYMENTS_DISABLED', 'Paystack test checkout is not configured.');
+    check(configured, 'PAYMENTS_DISABLED', 'Paystack checkout is not configured.');
     check(active < 8, 'PAYSTACK_BUSY', 'Payment requests are busy. Check again shortly.');
     active++;
     try {
@@ -59,5 +59,5 @@ export function createPaystackProvider({ config, fetchImpl = fetch, timeoutMs = 
     const expected = createHmac('sha512', config.secretKey).update(raw).digest();
     return timingSafeEqual(expected, Buffer.from(signature, 'hex'));
   }
-  return Object.freeze({ enabled, configured, mode: 'test', initialize, verify, verifyWebhook });
+  return Object.freeze({ enabled, configured, mode: config.mode, wallets: Object.freeze([...(config.wallets ?? [])]), initialize, verify, verifyWebhook });
 }

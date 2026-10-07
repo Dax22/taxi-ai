@@ -1,6 +1,6 @@
 import { check } from '../../shared/errors.mjs';
 import { fields, label } from '../../shared/validation.mjs';
-import { DRIVER_DOCUMENTS, driverDocumentDeadline } from '../../../../../packages/shared/src/driver-onboarding.mjs';
+import { DRIVER_DOCUMENTS, DRIVER_REQUIRED_DOCUMENTS, driverDocumentDeadline } from '../../../../../packages/shared/src/driver-onboarding.mjs';
 import { isVehicleRegistrationYear, vehicleYearMessage } from '../../../../../packages/shared/src/vehicle-registration.mjs';
 import { transportCategory, validPayload } from '../../../../../packages/shared/src/transport-categories.mjs';
 
@@ -37,12 +37,17 @@ export function documentExpiry(kind, value) {
 }
 
 export function eligibility(application, documents, now) {
-  const missing = Object.keys(DRIVER_DOCUMENTS).filter((kind) => !documents.some((doc) => doc.kind === kind));
-  const expired = documents.filter((doc) => DRIVER_DOCUMENTS[doc.kind].expires
+  const required = new Set(DRIVER_REQUIRED_DOCUMENTS);
+  const missing = DRIVER_REQUIRED_DOCUMENTS.filter((kind) => !documents.some((doc) => doc.kind === kind));
+  const expired = documents.filter((doc) => required.has(doc.kind) && DRIVER_DOCUMENTS[doc.kind]?.expires
     && (driverDocumentDeadline(doc.expiresOn) ?? 0) <= now).map((doc) => doc.kind);
-  const deadlines = documents.filter((doc) => DRIVER_DOCUMENTS[doc.kind].expires).map((doc) => driverDocumentDeadline(doc.expiresOn) ?? 0);
-  return { eligible: Boolean(application?.status === 'approved' && application.details && application.verification && !missing.length && !expired.length),
-    reviewStatus: application?.status ?? 'draft', missing, expired, validUntil: deadlines.length ? Math.min(...deadlines) : null };
+  const deadlines = documents.filter((doc) => required.has(doc.kind) && DRIVER_DOCUMENTS[doc.kind]?.expires)
+    .map((doc) => driverDocumentDeadline(doc.expiresOn) ?? 0);
+  const manualException = application?.verification?.method === 'admin_exception';
+  return { eligible: Boolean(application?.status === 'approved' && application.details && application.verification
+      && (manualException || (!missing.length && !expired.length))),
+    manualException, reviewStatus: application?.status ?? 'draft', missing, expired,
+    validUntil: deadlines.length ? Math.min(...deadlines) : null };
 }
 
 export function canonical(value) {

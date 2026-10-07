@@ -39,7 +39,7 @@ test('automatic match needs explicit consent and current images, never grants ap
   assert.equal(app.version, payload.expectedVersion + 2); assert.equal(app.faceCheck.status, 'matched');
   assert.equal(app.status, 'draft'); assert.equal(app.eligibility.eligible, false);
   const attempt = h.db.prepare('SELECT * FROM driver_face_checks').get();
-  assert.equal(attempt.consent_version, 'driver-face-match-v1'); assert.equal(attempt.consented_at, h.now);
+  assert.equal(attempt.consent_version, 'driver-face-match-v2'); assert.equal(attempt.consented_at, h.now);
   assert.equal(JSON.parse(attempt.documents_json).length, 2); assert.ok(!JSON.stringify(attempt).includes(IMAGE.base64));
   app = await change(driver, 'submit'); assert.equal(app.faceCheck.status, 'matched');
   result = await driver.post('/api/driver/application/face-check', payload, key);

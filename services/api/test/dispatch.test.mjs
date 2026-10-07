@@ -83,9 +83,10 @@ test('road pickup time can select a farther driver and exposes only that driver\
   assert.equal(requests[0].offer.etaSource, 'road');
   assert.equal(requests[0].offer.expiresAt, h.now + 20_000);
   assert.equal((await customer.send(`/api/rides/${ride.id}`)).body.ride.status, 'requested');
-  for (const value of ['Private dispatch', 'customerId', 'position', customer.user.email, String(pickup.lat)]) {
+  for (const value of [pickup.name, 'customerId', 'position', customer.user.email, String(pickup.lat)]) {
     assert.ok(!JSON.stringify(requests).includes(value), value);
   }
+  assert.equal(requests[0].destination.name,destination.name,'An eligible offered driver receives the submitted destination label.');
   rejectsCommand(await claim(drivers[0], ride, requests[0].offer));
   assert.equal((await claim(drivers[1], requests[0])).status, 200);
 });

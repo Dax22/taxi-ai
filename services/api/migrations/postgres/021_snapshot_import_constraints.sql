@@ -1,0 +1,11 @@
+-- Snapshot import validates all foreign keys at commit after copying tables in
+-- deterministic order. Keep ordinary runtime writes checked immediately.
+ALTER TABLE account_kemmy_setup ALTER CONSTRAINT account_kemmy_setup_user_id_fkey DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE admin_announcements ALTER CONSTRAINT admin_announcements_created_by_fkey DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE admin_announcements ALTER CONSTRAINT admin_announcements_published_by_fkey DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE admin_announcement_reads ALTER CONSTRAINT admin_announcement_reads_announcement_id_fkey DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE admin_announcement_reads ALTER CONSTRAINT admin_announcement_reads_user_id_fkey DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE admin_announcement_commands ALTER CONSTRAINT admin_announcement_commands_actor_id_fkey DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE announcement_push_jobs ALTER CONSTRAINT announcement_push_jobs_announcement_id_fkey DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE announcement_push_jobs ALTER CONSTRAINT announcement_push_jobs_session_id_fkey DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE announcement_push_jobs ALTER CONSTRAINT announcement_push_jobs_user_id_fkey DEFERRABLE INITIALLY IMMEDIATE;

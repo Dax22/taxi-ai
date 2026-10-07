@@ -16,6 +16,7 @@ export function createDispatchRepository(db) {
       regionCursor = rows.at(-1)?.region ?? '';
       return rows.map((row) => row.region);
     },
+    pendingForUser: async userId => db.prepare(`SELECT ${columns} FROM dispatch_offers WHERE status='pending' AND (driver_id=? OR ride_id IN (SELECT id FROM rides WHERE customer_id=?)) ORDER BY created_at,id`).all(userId,userId),
     find: async (id) => await db.prepare(`SELECT ${columns} FROM dispatch_offers WHERE id=?`).get(id) ?? null,
     pending: (region = null) => db.prepare(`SELECT ${columns} FROM dispatch_offers WHERE status='pending'
       ${region !== null ? 'AND ride_id IN (SELECT id FROM rides WHERE dispatch_region=?)' : ''} ORDER BY created_at,id LIMIT 2048`).all(...(region !== null ? [region] : [])),
@@ -70,6 +71,7 @@ export function createMatchingRepository(db) {
         v.native_session_id AS nativeSessionId,
         EXISTS(SELECT 1 FROM account_capabilities c WHERE c.user_id=u.id AND c.capability='driver') AS driverCapability,
         EXISTS(SELECT 1 FROM account_capabilities c WHERE c.user_id=u.id AND c.capability='customer') AS customerCapability,
+        EXISTS(SELECT 1 FROM account_restrictions x WHERE x.subject_type='account' AND x.subject_id=u.id AND x.kind='suspension' AND x.status='active' AND x.scope IN ('driver','vehicle','account') AND (x.expires_at IS NULL OR x.expires_at>?)) AS workRestricted,
         CASE WHEN v.native_session_id IS NOT NULL THEN
           EXISTS(SELECT 1 FROM device_sessions s WHERE s.id=v.native_session_id AND s.user_id=u.id
             AND s.revoked_at IS NULL AND s.expires_at>? AND s.idle_expires_at>?)
@@ -83,7 +85,7 @@ export function createMatchingRepository(db) {
         FROM users u JOIN drivers d ON d.user_id=u.id
         LEFT JOIN driver_applications a ON a.driver_id=u.id
         JOIN driver_availability v ON v.driver_id=u.id AND v.active=1 WHERE u.id IN (${marks(page)})`)
-        .all(sessionNow, sessionNow, sessionNow, now, ...page);
+        .all(now, sessionNow, sessionNow, sessionNow, now, ...page);
       return rows;
     },
     async documents(page) {
@@ -91,7 +93,7 @@ export function createMatchingRepository(db) {
         FROM driver_documents WHERE driver_id IN (${marks(page)})`).all(...page);
       return documents;
     },
-    async rideRows(page) {
+    async rideRows(page, now) {
       const rows = await db.prepare(`SELECT r.id, r.customer_id AS customerId, r.pickup_id AS pickupId,
         r.dispatch_region AS dispatchRegion, r.vehicle_category AS vehicleCategory, r.status, r.version,
         r.created_at AS createdAt, r.request_expires_at AS requestExpiresAt,
@@ -99,7 +101,7 @@ export function createMatchingRepository(db) {
         FROM rides r LEFT JOIN location_quotes q ON q.ride_id=r.id
         LEFT JOIN delivery_orders d ON d.ride_id=r.id
         LEFT JOIN parcel_tracking_links p ON p.ride_id=r.id AND p.active=1
-        WHERE r.id IN (${marks(page)})`).all(...page);
+        WHERE r.id IN (${marks(page)}) AND NOT EXISTS(SELECT 1 FROM account_restrictions x WHERE x.subject_type='account' AND x.subject_id=r.customer_id AND x.kind='suspension' AND x.status='active' AND x.scope IN ('customer','account') AND (x.expires_at IS NULL OR x.expires_at>?))`).all(...page,now);
       return rows;
     },
     async attemptedRows(page) {
@@ -107,6 +109,21 @@ export function createMatchingRepository(db) {
         SELECT o.ride_id AS rideId,o.driver_id AS driverId FROM dispatch_offers o
         JOIN requested p ON p.ride_id=o.ride_id AND p.driver_id=o.driver_id`).all(...page.flatMap(e => [e.rideId, e.driverId]));
       return rows;
+    },
+  });
+}
+
+/** Bounded, aggregate-only runtime samples for Matching Intelligence. */
+export function createDispatchPerformanceRepository(db) {
+  return Object.freeze({
+    insert: row => db.prepare(`INSERT INTO dispatch_profile_samples
+      (id,region,sample_every,duration_ms,query_count,query_ms,query_errors,transactions,retries,failed,discovery_ms,routing_ms,commit_ms,created_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(row.id,row.region,row.sampleEvery,row.durationMs,row.queryCount,row.queryMs,row.queryErrors,
+        row.transactions,row.retries,row.failed,row.discoveryMs,row.routingMs,row.commitMs,row.createdAt),
+    async sweep(before, limit = 1000) {
+      const bounded=Math.max(1,Math.min(5000,Number.isSafeInteger(limit)?limit:1000));
+      return (await db.prepare(`DELETE FROM dispatch_profile_samples WHERE id IN
+        (SELECT id FROM dispatch_profile_samples WHERE created_at<? ORDER BY created_at,id LIMIT ?)`).run(before,bounded)).changes;
     },
   });
 }

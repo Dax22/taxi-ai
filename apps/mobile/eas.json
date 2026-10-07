@@ -1,13 +1,38 @@
 {
+  "cli": {
+    "version": ">=24.0.0",
+    "appVersionSource": "local"
+  },
   "build": {
     "preview": {
       "distribution": "internal",
       "environment": "preview",
-      "android": { "buildType": "apk" }
+      "autoIncrement": true,
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "acceptance": {
+      "extends": "preview",
+      "environment": "preview",
+      "env": {
+        "TAXI_AI_ACCEPTANCE_BUILD": "true"
+      }
     },
     "simulator": {
       "extends": "preview",
-      "ios": { "simulator": true }
+      "autoIncrement": false,
+      "ios": {
+        "simulator": true
+      }
+    },
+    "production": {
+      "distribution": "store",
+      "environment": "production",
+      "autoIncrement": true,
+      "env": {
+        "TAXI_AI_PRODUCTION_BUILD": "true"
+      }
     }
   }
 }

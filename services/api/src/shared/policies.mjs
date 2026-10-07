@@ -15,5 +15,5 @@ export function requireRole(user, role) {
 
 export function requireEligibleDriver(user) {
   requireRole(user, 'driver');
-  check(user.driver.eligibility?.eligible === true, 'DRIVER_NOT_ELIGIBLE', 'A reviewed application and current documents are required before accepting or starting a ride.');
+  check(user.driver.eligibility?.eligible === true, 'DRIVER_NOT_ELIGIBLE', 'A reviewed application and current required documents, or an administrator approval exception, are required before accepting or starting a ride.');
 }

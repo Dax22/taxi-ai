@@ -104,3 +104,16 @@ test('idle and absolute deadlines, device limit and invalid payloads fail closed
   assert.equal((await send(h, '/auth/login', { data: { email: web.user.email, password: PASSWORD, deviceName: 'Sixth' } })).body.error.code, 'DEVICE_LIMIT');
   for (const data of [{}, { refreshToken: 'bad' }, { refreshToken: 'f'.repeat(64), userId: web.user.id }]) assert.ok((await send(h, '/auth/refresh', { data })).status >= 400);
 });
+
+test('native device health heartbeat is session-bound, strict and contains no credential or GPS payload', async (t) => {
+  const h = await harness(t), web = h.client(); await web.register('mobile-health');
+  const auth = await login(h, web.user.email, 'Health phone'), buildId = randomUUID();
+  const data = { platform: 'android', appVersion: '0.9.0', nativeBuild: 14, easBuildId: buildId, buildProfile: 'acceptance', gitCommit: 'a'.repeat(40), osVersion: '15',
+    locationPermission: 'granted', backgroundLocationPermission: 'denied', notificationPermission: 'granted' };
+  assert.equal((await send(h, '/device/heartbeat', { token: auth.credentials.accessToken, data })).status, 200);
+  const row = h.db.prepare('SELECT * FROM mobile_device_health WHERE session_id=?').get(auth.credentials.sessionId);
+  assert.equal(row.user_id, web.user.id); assert.equal(row.native_build, 14); assert.equal(row.eas_build_id, buildId);
+  assert.equal(JSON.stringify(row).includes(auth.credentials.accessToken), false); assert.equal(JSON.stringify(row).includes(auth.credentials.refreshToken), false);
+  assert.equal((await send(h, '/device/heartbeat', { data })).status, 401);
+  assert.equal((await send(h, '/device/heartbeat', { token: auth.credentials.accessToken, data: { ...data, latitude: 9.1 } })).status, 400);
+});

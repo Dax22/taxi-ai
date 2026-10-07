@@ -28,7 +28,8 @@ export function createLocationsService({ repository, provider, getAccount, sessi
     return { user, userId: user.id, sessionHash, clientHash };
   }
   const planningContext = async (input) => (await context(input, false, true));
-  async function settings(input) { (await planningContext(input)); return { ...provider.describe(), bounds: NIGERIA_BOUNDS, quoteSeconds: QUOTE_MS / 1000 }; }
+  async function settings(input) { (await planningContext(input)); return { ...provider.describe(), bounds: NIGERIA_BOUNDS, quoteSeconds: QUOTE_MS / 1000,
+      passengerRides: ridePilot.describe?.() ?? { paused: ridePilot.paused, coverage: ridePilot.bounds ? 'pilot' : 'local' } }; }
   async function search(input, data) {
     (await planningContext(input)); fields(data, ['query']);
     const query = label(data.query, 'Address search', 3, 160);

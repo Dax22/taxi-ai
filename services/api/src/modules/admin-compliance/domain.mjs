@@ -1,6 +1,6 @@
 import { check } from '../../shared/errors.mjs';
 import { fields, label } from '../../shared/validation.mjs';
-import { DRIVER_DOCUMENTS, driverDocumentDeadline } from '../../../../../packages/shared/src/driver-onboarding.mjs';
+import { DRIVER_DOCUMENTS, DRIVER_REQUIRED_DOCUMENTS, driverDocumentDeadline } from '../../../../../packages/shared/src/driver-onboarding.mjs';
 
 export const EXPIRING_WINDOW = 30 * 86_400_000;
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
@@ -39,18 +39,21 @@ export function followUp(row, now) {
     overdue: row.followupStatus === 'open' && row.dueAt <= now };
 }
 export function documents(rows, now) {
-  return Object.entries(DRIVER_DOCUMENTS).map(([kind, definition]) => {
-    const row = rows.find((doc) => doc.kind === kind), deadline = definition.expires && row ? driverDocumentDeadline(row.expiresOn) : null;
-    const state = !row ? 'missing' : definition.expires && (deadline ?? 0) <= now ? 'expired'
-      : deadline !== null && deadline <= now + EXPIRING_WINDOW ? 'expiring' : 'current';
-    return { kind, label: definition.label, expiresOn: row?.expiresOn ?? null, state, deadline };
+  const kinds = [...DRIVER_REQUIRED_DOCUMENTS, ...rows.map((row) => row.kind).filter((kind) => !DRIVER_REQUIRED_DOCUMENTS.includes(kind) && DRIVER_DOCUMENTS[kind])];
+  return kinds.map((kind) => {
+    const definition = DRIVER_DOCUMENTS[kind], row = rows.find((doc) => doc.kind === kind), required = definition.required !== false;
+    const deadline = definition.expires && row ? driverDocumentDeadline(row.expiresOn) : null;
+    const state = !row ? required ? 'missing' : 'optional' : required && definition.expires && (deadline ?? 0) <= now ? 'expired'
+      : required && deadline !== null && deadline <= now + EXPIRING_WINDOW ? 'expiring' : 'current';
+    return { id: row?.id ?? null, kind, label: definition.label, required, expiresOn: row?.expiresOn ?? null, state, deadline };
   });
 }
 export function summary(row, eligibility, docs, now, canManage) {
   return { id: row.id, name: row.name, vehicle: { model: row.vehicleModel, plate: row.vehiclePlate },
     applicationStatus: row.applicationStatus, updatedAt: row.updatedAt,
-    eligibility: { eligible: eligibility.eligible, reviewStatus: eligibility.reviewStatus,
+    eligibility: { eligible: eligibility.eligible, manualException: Boolean(eligibility.manualException), reviewStatus: eligibility.reviewStatus,
       missing: eligibility.missing, expired: eligibility.expired, validUntil: eligibility.validUntil },
+    applicationVersion: row.applicationVersion,
     expiring: docs.filter((doc) => doc.state === 'expiring').map((doc) => doc.kind), followUp: followUp(row, now), capabilities: { canManage } };
 }
 export function actionData(action, data, now) {

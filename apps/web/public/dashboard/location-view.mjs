@@ -161,6 +161,8 @@ export function createLocationView({ onEnable, onUsePickup, onSearch, onFindRide
       : activeTrip ? 'Your assigned driver must share live location during this job. Positions are device-reported and may be inaccurate. Stale positions are marked as last known.'
         : 'Location sharing is available only during an active assigned job.';
     const route = state.ride.route;
+    $('delivery-operations-open').hidden = !state.ride.delivery;
+    $('delivery-operations-open').href = state.ride.delivery ? `/parcel-operations?id=${state.ride.id}` : '/app';
     $('tracking-route-summary').textContent = `Journey ${state.ride.id.slice(0, 8).toUpperCase()} · ${state.ride.pickup?.name ?? 'Pickup'} → ${state.ride.destination?.name ?? 'Destination'} · ` + (route?.distanceKind === 'straight_line' ? `${(route.distanceMeters / 1000).toFixed(1)} km in a straight line · no driving route or ETA` : route ? `${(route.distanceMeters / 1000).toFixed(1)} km · ${update?.tripMinutes ?? Math.ceil(route.durationSeconds / 60)} min ${state.ride.status === 'completed' ? 'planned driving time' : 'estimated driving'} · excludes live traffic and pickup arrival time`
       : 'Sample-area journey; no saved road route.');
     $('tracking-eta').textContent = update?.pickupMinutes ? `Estimated pickup: about ${update.pickupMinutes} min from the latest driver GPS. Straight-line estimate at a fixed speed; roads and traffic may change it.`

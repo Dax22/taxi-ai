@@ -65,3 +65,16 @@ test('food tracking stays on food endpoints and background grants must match the
   assert.equal(grant.background.kind, 'food'); assert.equal(stored.includes(grant.background.token), false);
   badGrant = true; await assert.rejects(app.enableBackgroundTracking('food', id(1), id(2), id(3), 'grant-key'), { code: 'INVALID_RESPONSE' });
 });
+
+test('headless transport distinguishes transient outages, Retry-After and malformed success responses', async () => {
+  const token = 'c'.repeat(64);
+  const apiFor = (fetchImpl: typeof fetch) => createBackgroundTrackingApi({ origin: 'https://taxi.example.test', fetchImpl });
+  const offline = apiFor((async () => { throw new TypeError('Fixture network disconnected'); }) as typeof fetch);
+  await assert.rejects(offline.position(token, 2, position), { code: 'CONNECTION_INTERRUPTED' });
+  const limited = apiFor((async () => new Response('busy', { status: 429, headers: { 'Retry-After': '20' } })) as typeof fetch);
+  await assert.rejects(limited.position(token, 2, position), (error: any) => error.status === 429 && error.retryAfterMs === 20_000);
+  const unavailable = apiFor((async () => new Response('gateway unavailable', { status: 503 })) as typeof fetch);
+  await assert.rejects(unavailable.position(token, 2, position), (error: any) => error.status === 503);
+  const malformed = apiFor((async () => new Response('not json', { status: 200 })) as typeof fetch);
+  await assert.rejects(malformed.position(token, 2, position), { code: 'INVALID_RESPONSE' });
+});

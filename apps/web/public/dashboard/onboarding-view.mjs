@@ -1,5 +1,5 @@
 import { $, element } from './dom.mjs';
-import { DRIVER_DOCUMENTS, DRIVER_REVIEW_CHECKS, DRIVER_APPLICATION_LABELS } from '/shared/driver-onboarding.mjs';
+import { DRIVER_DOCUMENTS, DRIVER_REQUIRED_DOCUMENTS, DRIVER_REVIEW_CHECKS, DRIVER_APPLICATION_LABELS } from '/shared/driver-onboarding.mjs';
 import { renderVehicleCard } from './vehicle-card.mjs';
 import { createVehicleFields } from './vehicle-fields.mjs';
 import { createDriverFaceView } from './driver-face-view.mjs';
@@ -14,7 +14,7 @@ export function createOnboardingView({ onAction, onDownload, onClose }) {
   function changedDetails() { dirty = true; notice = ''; if (lastState) render(lastState); }
   const vehicleFields = createVehicleFields({ onChange: changedDetails });
   const faceView = createDriverFaceView({ onAction });
-  for (const [kind, spec] of Object.entries(DRIVER_DOCUMENTS)) {
+  for (const kind of DRIVER_REQUIRED_DOCUMENTS) { const spec = DRIVER_DOCUMENTS[kind];
     const option = element('option', spec.label); option.value = kind; input('kind').append(option);
   }
   for (const [key, text] of Object.entries(DRIVER_REVIEW_CHECKS)) {
@@ -141,7 +141,7 @@ export function createOnboardingView({ onAction, onDownload, onClose }) {
       : app.eligibility.eligible ? 'Manual checks recorded. Current documents allow you to go online.'
         : app.eligibility.expired.length ? 'A document has expired. Reopen the application, replace it and submit for a new review.'
           : app.status === 'submitted' ? 'Submitted. An administrator must inspect the documents and record their checks.'
-            : 'Complete your details and all five documents, then submit for review.';
+            : 'Complete your details and all required documents, then submit for review.';
     input('stale').hidden = !dirty || formVersion === app.version;
     input('reload').disabled = pending;
     vehicleFields.setDisabled(!canEdit || pending || !editorOpen);
@@ -165,7 +165,7 @@ export function createOnboardingView({ onAction, onDownload, onClose }) {
     input('close').hidden = owner; input('close').disabled = pending;
     input('review-form').hidden = owner || app.status !== 'submitted'; input('review-fields').disabled = pending || app.busy;
     input('documents').replaceChildren();
-    for (const [kind, spec] of Object.entries(DRIVER_DOCUMENTS)) {
+    for (const kind of DRIVER_REQUIRED_DOCUMENTS) { const spec = DRIVER_DOCUMENTS[kind];
       const doc = app.documents.find((item) => item.kind === kind), row = element('li', undefined, 'onboarding-document');
       const content = element('div'); content.append(element('strong', spec.label));
       content.append(element('p', doc ? `${doc.name} · ${Math.ceil(doc.sizeBytes / 1024)} KiB${doc.expiresOn ? ` · expires ${doc.expiresOn} (WAT)` : ''}` : 'Not uploaded', 'small-note'));

@@ -25,6 +25,8 @@ function fixture(t) {
   const repository = createAdminComplianceRepository(db), audit = createAudit(db);
   const service = createAdminComplianceService({ repository, tokens, unitOfWork: (run) => db.transaction(run), clock: () => now,
     getEligibility: async (id) => eligibility(await drivers.application(id), await drivers.documents(id), now),
+    getFaceCheck: async () => ({ available:false, provider:'off', status:'unavailable', reason:'Automatic face comparison is unavailable.', checkedAt:null, similarity:null, threshold:null, consentVersion:'driver-face-match-v2', retryAfter:null }),
+    approveDriverException: async () => ({ application: null, replayed:false }), readDriverDocument: async () => { throw new Error('not used in this fixture'); },
     requirePermission: async (id, permission) => { if (!grants.get(id)?.includes(permission)) throw new ApplicationError('FORBIDDEN', 'No access.'); },
     audit: { record: async (...args) => { if (failAudit) throw new Error('Audit storage unavailable'); return audit.record(...args); } } });
   function driver({ status = 'approved', name = 'Test driver', plate = 'ABC-123', expiry = '2027-01-01', missing = [], verified = true, active = true } = {}) {
@@ -75,11 +77,11 @@ test('expiry queues match canonical Nigeria end-of-day validity and a rolling 30
   assert.equal(result.drivers.length, 1); assert.ok(result.page.next);
   let record = await h.service.get(h.users.operations, today);
   assert.equal(record.driver.eligibility.eligible, true);
-  assert.equal(record.documents.find((doc) => doc.kind === 'insurance').deadline, Date.parse('2026-09-25T23:00:00Z'));
+  assert.equal(record.documents.find((doc) => doc.kind === 'driving_licence').deadline, Date.parse('2026-09-25T23:00:00Z'));
   h.setNow(Date.parse('2026-09-25T23:00:00Z'));
   record = await h.service.get(h.users.operations, today);
   assert.equal(record.driver.eligibility.eligible, false);
-  assert.equal(record.documents.find((doc) => doc.kind === 'insurance').state, 'expired');
+  assert.equal(record.documents.find((doc) => doc.kind === 'driving_licence').state, 'expired');
   result = await h.service.list(h.users.operations, { queue: 'expiring' });
   assert.deepEqual(new Set(result.drivers.map((row) => row.id)), new Set([near, beyond]));
   assert.equal(result.summary.expired, 2);

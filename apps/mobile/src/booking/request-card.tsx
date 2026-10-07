@@ -25,6 +25,5 @@ export function RequestCard({ ride, now, disabled, onCancel }: {
     {ride.driver && <><Text style={styles.body}>Driver · {ride.driver.name}</Text><VehicleCard vehicle={ride.driver.vehicle} label="VEHICLE FOR THIS JOURNEY" compact/></>}
     <Button title={open ? 'Open journey and chat' : 'View journey'} disabled={disabled} onPress={() => router.push({ pathname: '/journey', params: { id: ride.id } })}/>
     {ride.canCancel && <Button title={waiting ? 'Cancel request' : 'Cancel journey'} secondary disabled={disabled} onPress={onCancel}/>}
-    <Text style={styles.small}>Development preview · no live transport.</Text>
   </Card>;
 }

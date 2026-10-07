@@ -82,7 +82,7 @@ test('recipient permission snapshots require the native server clock', async () 
 
 test('sender invitations share only fresh secrets and remove them after claim, revoke or background', async () => {
   const f = fixture(), c = new ParcelLinkController(f.api, id, () => 'link-key'); c.activate(); await settle();
-  f.api.parcels = async () => ({ ...env, invitation: { ...invitation, link }, token }); await c.create(null);
+  f.api.parcels = async () => ({ ...env, invitation: { ...invitation, link }, token }); await c.create(null, 'recipient@example.test');
   assert.equal(c.snapshot().token, token);
   f.api.parcels = async () => ({ ...env, invitation: { ...invitation, link: { ...link, claimed: true } } }); await c.refresh();
   assert.equal(c.snapshot().token, ''); assert.equal(c.snapshot().value?.link?.claimed, true);
@@ -94,7 +94,7 @@ test('sender invitations share only fresh secrets and remove them after claim, r
 test('lost create response retries one action and cannot redisclose a token from idempotency replay', async () => {
   const f = fixture(), c = new ParcelLinkController(f.api, id, () => 'link-key'); c.activate(); await settle();
   const attempts: unknown[] = []; f.api.parcels = async (path, data, key) => { attempts.push({ path, data, key }); throw new Error('Offline'); };
-  await c.create(null); assert.equal(c.snapshot().uncertain, true); await c.create(null); assert.equal(attempts.length, 1);
+  await c.create(null, 'recipient@example.test'); assert.equal(c.snapshot().uncertain, true); await c.create(null, 'other@example.test'); assert.equal(attempts.length, 1);
   f.api.parcels = async (path, data, key) => { attempts.push({ path, data, key }); return { ...env, invitation: { ...invitation, link }, replayed: true }; };
   await c.retry(); assert.deepEqual(attempts[0], attempts[1]); assert.equal(c.snapshot().token, ''); assert.equal(c.snapshot().uncertain, false); c.dispose();
 });

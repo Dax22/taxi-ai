@@ -8,7 +8,7 @@ import { asyncMap } from '../../shared/async-collections.mjs';
 
 /** Consent, countdown and dispatch are separate from the legacy SOS simulator. */
 export function createSafetyMonitoringService({ repository: r, getAccount, getTrip, locationForTrip, routeForTrip,
-  sessionOwner, nativeSessionOwner, provider, unitOfWork, tokens, audit, clock }) {
+  sessionOwner, nativeSessionOwner, provider, unitOfWork, tokens, audit, clock, simulation = false }) {
   let running = null, stopped = false;
   const settings = () => ({ delivery: provider.available ? 'configured' : 'unavailable', emergencyService: provider.emergencyService ?? null,
     countdownSeconds: SAFETY_COUNTDOWN_MS / 1000, experimental: true, foregroundOnly: true });
@@ -76,7 +76,7 @@ export function createSafetyMonitoringService({ repository: r, getAccount, getTr
         }
         const customer=(await getAccount(ride.customerId)), passenger=ride.passenger?.kind==='guest'
           ? {kind:'guest',name:ride.passenger.name} : {kind:'account',id:customer.id,name:customer.name};
-        const snapshot={rideId:c.rideId,passenger,driver:{id:ride.driver.id,name:ride.driver.name,vehicle:ride.driver.vehicle},
+        const snapshot={rideId:c.rideId,passenger,customer:{id:customer.id,name:customer.name},isTest:simulation === true ? true : null,driver:{id:ride.driver.id,name:ride.driver.name,vehicle:ride.driver.vehicle},
           reporter:{id:user.id,name:user.name},pickup:ride.pickup,destination:ride.destination,location:position,recordedAt:now};
         const id=tokens.id(); (await r.addAlert({id,ownerId:user.id,rideId:c.rideId,kind:signal.kind,signal,snapshot,now,dueAt:now+SAFETY_COUNTDOWN_MS}));
         for(const contact of contacts) (await r.addJob(tokens.id(),id,contact.id,{kind:'family',name:contact.name,phone:contact.phone,version:contact.version},now+SAFETY_COUNTDOWN_MS,provider.available));
@@ -129,7 +129,9 @@ export function createSafetyMonitoringService({ repository: r, getAccount, getTr
       try {
         const snapshot=JSON.parse(a.snapshotJson);
         if(snapshot.location)snapshot.location.stale=clock()-snapshot.location.capturedAt>30_000;
-        const result=await provider.send({idempotencyKey:job.id,recipient:JSON.parse(job.recipientJson),alert:{id:a.id,kind:a.kind,unverified:true,...snapshot}});
+        // Staff-only snapshot fields do not widen the external notification payload.
+        const {rideId,passenger,driver,reporter,pickup,destination,location,recordedAt}=snapshot;
+        const result=await provider.send({idempotencyKey:job.id,recipient:JSON.parse(job.recipientJson),alert:{id:a.id,kind:a.kind,unverified:true,rideId,passenger,driver,reporter,pickup,destination,location,recordedAt}});
         // Acceptance is not delivery or emergency dispatch.
         (await r.jobState(job.id,'accepted',clock(),result.reference,job.attempts+1));
       } catch {

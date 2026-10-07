@@ -33,6 +33,17 @@ migrations.push('044_eats_live_tracking.sql');
 migrations.push('045_background_location_tokens.sql');
 migrations.push('046_checkout_payments.sql');
 migrations.push('047_delivery_updates.sql');
+migrations.push('048_parcel_hardening.sql');
+migrations.push('049_admin_command_center.sql');
+migrations.push('050_account_controls.sql');
+migrations.push('051_admin_safety_alerts.sql');
+migrations.push('052_account_welcome_email.sql');
+migrations.push('053_paystack_live_mode.sql');
+migrations.push('054_dispatch_ml_ranking.sql');
+migrations.push('055_matching_intelligence.sql');
+migrations.push('056_production_acceptance.sql');
+migrations.push('057_mobile_operations.sql');
+migrations.push('058_investigation_exports.sql');
 export const SCHEMA_VERSION = migrations.length;
 
 export function transaction(db, run) {

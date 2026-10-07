@@ -20,7 +20,8 @@ test('snapshots preserve parcel records but revoke recipient tracking grants onl
     delivery: { description: 'Sealed parcel', weightKg: 2, recipientName: 'Recipient' } });
   assert.equal(requested.status, 201, JSON.stringify(requested.body));
   const rideId = requested.body.ride.id;
-  const invitation = await sender.post(`/api/parcels/${rideId}/link`, { expectedLinkId: null });
+  h.db.prepare('INSERT INTO account_email_verifications VALUES (?,?,?)').run(recipient.user.id, recipient.user.email, h.now);
+  const invitation = await sender.post(`/api/parcels/${rideId}/link`, { expectedLinkId: null, recipientEmail: recipient.user.email });
   assert.equal(invitation.status, 200, JSON.stringify(invitation.body));
   assert.equal((await recipient.post('/api/parcels/accept', { token: invitation.body.token })).status, 200);
   const source = h.db.prepare('SELECT * FROM parcel_tracking_links').get();
@@ -47,6 +48,15 @@ test('a live WAL snapshot preserves rides and chat, clears transient data only i
   const pin = ride.trip.pickupPin;
   const chat = await customer.post(`/api/rides/${ride.id}/chat/messages`, { body: 'Keep this saved message.' });
   assert.equal(chat.status, 201, JSON.stringify(chat.body));
+  const native = await fetch(h.base + '/api/mobile/v1/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: customer.user.email, password: PASSWORD, deviceName: 'Snapshot phone' }) });
+  assert.equal(native.status, 200); await native.json();
+  const spare = h.client(); await spare.register('spare-driver', 'driver');
+  await submitApplication(fixtureApi(spare));
+  await approveApplication(fixtureApi(admin), spare.user.id);
+  const available = await spare.online({ mode: 'gps', lat: 9.087654, lng: 7.412345 });
+  // Finish HTTP setup before inserting deliberately invalid transient fixtures.
+  // No await is allowed between these inserts and the synchronous snapshot: the
+  // maintenance worker would legitimately expire their dummy sessions otherwise.
   h.db.prepare(`INSERT INTO voice_calls (id, ride_id, caller_id, callee_id, status, mode, created_at, caller_session, caller_client, caller_seen_at, offer_sdp)
     VALUES ('call', ?, ?, ?, 'ringing', 'local', 1000, 'session-sensitive', 'window-sensitive', 1000, 'sdp-sensitive')`).run(ride.id, customer.user.id, driver.user.id);
   h.db.prepare("INSERT INTO voice_participants (user_id, call_id) VALUES (?, 'call')").run(customer.user.id);
@@ -58,18 +68,13 @@ test('a live WAL snapshot preserves rides and chat, clears transient data only i
     h.db.prepare('INSERT INTO location_quote_commands (actor_id, key, fingerprint, quote_id) VALUES (?, ?, ?, ?)')
       .run(customer.user.id, id + '-command', 'fixture', id);
   }
-  const native = await fetch(h.base + '/api/mobile/v1/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: customer.user.email, password: PASSWORD, deviceName: 'Snapshot phone' }) });
-  assert.equal(native.status, 200); await native.json();
-  const spare = h.client(); await spare.register('spare-driver', 'driver');
   h.db.prepare("INSERT INTO account_identities VALUES ('google','snapshot-subject',?,?)").run(customer.user.id, TEST_NOW);
   h.db.prepare(`INSERT INTO google_auth_attempts(state_hash,binding_hash,nonce,verifier,channel,intent,expires_at)
     VALUES ('snapshot-state','snapshot-binding','snapshot-nonce','private-pkce-verifier','web','login',?)`).run(TEST_NOW + 600_000);
   h.db.prepare('INSERT INTO account_email_verifications VALUES (?,?,?)').run(customer.user.id,customer.user.email,TEST_NOW);
   h.db.prepare("INSERT INTO account_email_tokens VALUES ('private-email-digest',?,'reset',?,'private-credential-binding',?)").run(customer.user.id,customer.user.email,TEST_NOW+600_000);
   h.db.prepare("INSERT INTO account_email_jobs(id,user_id,purpose,email,created_at,next_attempt_at) VALUES ('pending-email',?,'reset',?,?,?)").run(customer.user.id,customer.user.email,TEST_NOW,TEST_NOW);
-  await submitApplication(fixtureApi(spare));
-  await approveApplication(fixtureApi(admin), spare.user.id);
-  const available = await spare.online({ mode: 'gps', lat: 9.087654, lng: 7.412345 });
+  assert.equal(h.db.prepare("SELECT status FROM voice_calls WHERE id='call'").get().status, 'ringing');
   const tables = h.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all().map((r) => r.name);
   const sourceRows = new Map(tables.map((name) => [name, JSON.stringify(h.db.prepare(`SELECT * FROM ${name}`).all())]));
   const path = join(dir, 'backup.sqlite'); saveSnapshot(h.filename, path, { now: 12345 });

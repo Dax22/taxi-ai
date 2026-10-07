@@ -47,7 +47,7 @@ test('native onboarding completes the same application, rejects cross-device sta
   }
   const oldDocument = app.documents[0];
   app = parseOnboarding((await api.send('/driver/application/remove',{ expectedVersion:app.version,documentId:oldDocument.id })).body);
-  assert.equal(app.documents.length,4);
+  assert.equal(app.documents.length,3);
   assert.equal((await api.send('/driver/application/submit',{ expectedVersion:app.version })).body.error.code,'APPLICATION_INCOMPLETE');
   app = parseOnboarding((await api.send('/driver/application/upload',{ expectedVersion:app.version,kind:oldDocument.kind,...IMAGE,expiresOn:oldDocument.expiresOn })).body);
   assert.ok(!app.documents.some((d) => d.id === oldDocument.id));
@@ -84,7 +84,7 @@ test('approved vehicle identity is snapshotted for both native and web journeys;
   const pending = (await driverPhone.send('/session')).body.user;
   assert.equal(pending.driver.status,'pending'); assert.equal(pending.driver.vehicle.colour,undefined);
   assert.deepEqual(app.documents.map((d) => d.kind).sort(), ['driving_licence', 'profile_photo']);
-  for (const kind of ['vehicle_registration', 'insurance', 'vehicle_photo']) {
+  for (const kind of ['vehicle_registration', 'vehicle_photo']) {
     app = parseOnboarding((await driverPhone.send('/driver/application/upload', { expectedVersion: app.version, kind, ...IMAGE, expiresOn: kind.endsWith('photo') ? null : '2099-12-31' })).body);
   }
   app = parseOnboarding((await driverPhone.send('/driver/application/submit',{ expectedVersion:app.version })).body);

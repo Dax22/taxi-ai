@@ -122,7 +122,9 @@ test('GPS matching expands from five to ten kilometres at one minute, with fresh
   const available = await list(wider); assert.equal(available.length, 1); assert.equal(available[0].approximateDistanceKm, 7);
   await outside.online(choices[2]); assert.deepEqual(await list(outside), []);
   const serialized = JSON.stringify(available);
-  for (const value of ['Private test', String(pickup.lat), 'coordinates', 'customerId', 'position', '@example.test']) assert.ok(!serialized.includes(value), value);
+  assert.equal(available[0].destination.name, destination.name, 'eligible driver sees the submitted destination before negotiation');
+  assert.deepEqual(Object.keys(available[0].destination), ['name']);
+  for (const value of ['Private test pickup', String(pickup.lat), 'coordinates', 'customerId', 'position', '@example.test']) assert.ok(!serialized.includes(value), value);
   assert.equal((await wider.send(`/api/rides/${ride.id}`)).status, 404);
   const matched = await claim(wider, ride); assert.equal(matched.status, 200); assert.equal(matched.body.ride.negotiation.agreement, null);
   assert.equal((await wider.send('/api/availability')).body.availability, null);

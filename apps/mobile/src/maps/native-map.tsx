@@ -16,14 +16,14 @@ class MapBoundary extends Component<PropsWithChildren, { failed: boolean }> {
   render() { return this.state.failed ? <Text style={styles.body}>The map could not open. Your journey details are still available.</Text> : this.props.children; }
 }
 /** Display only: never starts phone GPS or makes booking/routing decisions. */
-export function NativeMap({ pins, route = [], direct = false, summary, fallback }: { pins: MapPin[]; route?: MapPoint[]; direct?: boolean; summary: string; fallback?: ReactNode }) {
+export function NativeMap({ pins, route = [], direct = false, summary, fallback, eager = false, height = 280 }: { pins: MapPin[]; route?: MapPoint[]; direct?: boolean; summary: string; fallback?: ReactNode; eager?: boolean; height?: number }) {
   const { blocked } = useSession();
-  const [shown, setShown] = useState(false), [focused, setFocused] = useState(false);
+  const [shown, setShown] = useState(eager), [focused, setFocused] = useState(false);
   const [foreground, setForeground] = useState(AppState.currentState === 'active');
   const map = useRef<MapView>(null);
   const policy = nativeMapPolicy(Platform.OS, Constants.expoConfig?.extra?.nativeMaps?.androidConfigured === true,
     Constants.executionEnvironment === ExecutionEnvironment.StoreClient);
-  useFocusEffect(useCallback(() => { setFocused(true); return () => { setFocused(false); setShown(false); }; }, []));
+  useFocusEffect(useCallback(() => { setFocused(true); if (eager) setShown(true); return () => { setFocused(false); setShown(false); }; }, [eager]));
   useEffect(() => {
     const listener = AppState.addEventListener('change', next => { setForeground(next === 'active'); if (next !== 'active') setShown(false); });
     return () => listener.remove();
@@ -36,7 +36,7 @@ export function NativeMap({ pins, route = [], direct = false, summary, fallback 
   return <View style={styles.stack}>
     <Text style={styles.small}>{policy.label} displays the area you choose to view. Opening the map sends that area to the map provider and does not start location sharing.</Text>
     {!visible ? <>{fallback}<Button title={`Show ${policy.label}`} secondary disabled={blocked || !foreground || !focused} onPress={() => setShown(true)}/></>
-      : <><MapBoundary><View style={look.map}>
+      : <><MapBoundary><View style={[look.map, { height }]}>
         <MapView ref={map} style={StyleSheet.absoluteFill} provider={policy.provider} initialRegion={region}
           accessibilityLabel={summary} mapType="standard" showsUserLocation={false} showsMyLocationButton={false}
           toolbarEnabled={false} showsTraffic={false} showsPointsOfInterests={false} rotateEnabled={false} pitchEnabled={false}>

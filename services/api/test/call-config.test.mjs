@@ -22,3 +22,29 @@ test('relay configuration fails closed and issues expiring per-call credentials 
   assert.ok(!JSON.stringify([config, config.describe(), rtc]).includes(env.TAXI_AI_TURN_SECRET));
   assert.deepEqual(createCallConfig({}).rtc('call', 'user', 0).iceServers, []);
 });
+
+
+test('hosted calls cannot accidentally enable local-only media; malformed secrets fail closed', () => {
+  for (const hosted of [{ NODE_ENV: 'production' }, { TAXI_AI_MODE: 'staging' }]) {
+    assert.equal(createCallConfig(hosted).mode, 'off');
+    assert.throws(() => createCallConfig({ ...hosted, TAXI_AI_CALLS_MODE: 'local' }), /configured relay/);
+  }
+  for (const secret of ['a'.repeat(32) + '\nno-auth', 'a'.repeat(32) + '\0', 'a'.repeat(1025), 'a'.repeat(31) + ' ']) {
+    assert.throws(() => createCallConfig({ TAXI_AI_CALLS_MODE: 'relay',
+      TAXI_AI_TURN_URLS: 'turns:relay.example.test:5349?transport=tcp', TAXI_AI_TURN_SECRET: secret }));
+  }
+});
+
+
+test('relay can read the shared secret from the fixed Docker secret path without exposing it', () => {
+  const secret='file-only-turn-shared-secret-32-characters';
+  const env={TAXI_AI_CALLS_MODE:'relay',TAXI_AI_TURN_URLS:'turn:taxiai.app:3478?transport=udp',TAXI_AI_TURN_SECRET_FILE:'/run/secrets/turn_secret'};
+  const config=createCallConfig(env,{readSecret:(path)=>{assert.equal(path,'/run/secrets/turn_secret');return secret+'\n';}});
+  const rtc=config.rtc('call-file','user-file',10_000);
+  assert.equal(config.describe().mode,'relay');
+  assert.equal(rtc.iceServers[0].credential,createHmac('sha1',secret).update(rtc.iceServers[0].username).digest('base64'));
+  assert.ok(!JSON.stringify([config,config.describe(),rtc]).includes(secret));
+  assert.throws(()=>createCallConfig({...env,TAXI_AI_TURN_SECRET:'another-secret-that-is-long-enough'},{readSecret:()=>secret}),/either inline or as a Docker secret/);
+  assert.throws(()=>createCallConfig({...env,TAXI_AI_TURN_SECRET_FILE:'/tmp/turn'},{readSecret:()=>secret}),/run\/secrets\/turn_secret/);
+  assert.throws(()=>createCallConfig(env,{readSecret:()=>{throw new Error('missing');}}),/secret file is unavailable/);
+});

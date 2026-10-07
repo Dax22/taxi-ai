@@ -1,3 +1,9 @@
+import { adminAccountControlRoutes, accountNoticeRoutes } from '../modules/account-controls/routes.mjs';
+import { adminWorkRoutes } from '../modules/admin-work-items/routes.mjs';
+import { adminInsightRoutes } from '../modules/admin-insights/routes.mjs';
+import { adminTransactionRoutes } from '../modules/admin-transactions/routes.mjs';
+import { adminInvestigationRoutes } from '../modules/admin-investigations/routes.mjs';
+import { adminSafetyAlertRoutes } from '../modules/admin-safety-alerts/routes.mjs';
 import { checkoutPaymentRoutes } from '../modules/checkout-payments/routes.mjs';
 import { deliveryUpdateRoutes } from '../modules/delivery-updates/routes.mjs';
 import { safetyMonitoringRoutes } from '../modules/safety-monitoring/routes.mjs';
@@ -32,7 +38,11 @@ import { adminOperationsRoutes } from '../modules/admin-operations/routes.mjs';
 import { adminFinanceRoutes } from '../modules/admin-finance/routes.mjs';
 import { adminComplianceRoutes } from '../modules/admin-compliance/routes.mjs';
 import { adminDemandRoutes } from '../modules/admin-demand/routes.mjs';
+import { adminMatchingRoutes } from '../modules/admin-matching/routes.mjs';
+import { adminAcceptanceRoutes } from '../modules/admin-acceptance/routes.mjs';
+import { adminMobileRoutes } from '../modules/admin-mobile/routes.mjs';
 import { parcelTrackingRoutes } from '../modules/parcel-tracking/routes.mjs';
+import { deliveryOperationsRoutes } from '../modules/delivery-operations/routes.mjs';
 import { announcementRoutes } from '../modules/announcements/routes.mjs';
 
 /** HTTP owns parsing, cookies, CSRF and response codes; services own decisions. */
@@ -40,15 +50,19 @@ export function createApiRouter(application, { secure = false } = {}) {
   const { accounts, devices, drivers, rides, chat, calls, locations, availability, payments, safety, rateLimiter, clock } = application;
   const cookie = (token, age) => sessionCookie(token, age, secure);
   const routes = [...accountEmailRoutes(application.accountEmail, cookie), ...googleAuthRoutes(application.googleAuth, accounts, secure), ...adminConsoleRoutes(application.adminConsole, accounts, cookie, application.staffAccess), ...deviceSessionRoutes(devices), ...accountRoutes(accounts, cookie), ...driverRoutes(drivers), ...rideRoutes(rides, application.dispatch), ...dispatchRoutes(application.dispatch), ...chatRoutes(chat), ...callRoutes(calls), ...locationRoutes(locations), ...availabilityRoutes(availability), ...paymentRoutes(payments), ...safetyRoutes(safety)];
+  routes.push(...adminAccountControlRoutes(application.accountControls), ...accountNoticeRoutes(application.accountControls));
+  routes.push(...adminTransactionRoutes(application.adminTransactions), ...adminInvestigationRoutes(application.adminInvestigations), ...adminWorkRoutes(application.adminWork), ...adminInsightRoutes(application.adminInsights));
+  routes.push(...adminSafetyAlertRoutes(application.adminSafetyAlerts));
   routes.push(...checkoutPaymentRoutes(application.checkoutPayments));
   routes.push(...deliveryUpdateRoutes(application.deliveryUpdates));
   routes.push(...staffAccessRoutes(application.staffAccess), ...adminCasesRoutes(application.adminCases), ...adminOperationsRoutes(application.adminOperations));
-  routes.push(...adminFinanceRoutes(application.adminFinance), ...adminComplianceRoutes(application.adminCompliance), ...adminDemandRoutes(application.adminDemand));
+  routes.push(...adminFinanceRoutes(application.adminFinance), ...adminComplianceRoutes(application.adminCompliance), ...adminDemandRoutes(application.adminDemand), ...adminMatchingRoutes(application.adminMatching), ...adminMobileRoutes(application.adminMobile), ...adminAcceptanceRoutes(application.adminAcceptance));
   routes.push(...safetyMonitoringRoutes(application.safetyMonitoring));
   routes.push(...vehicleCheckRoutes(application.vehicleChecks));
   routes.push(...eatsRoutes(application.eats));
   routes.push(...guestRideRoutes(application.guestRides));
   routes.push(...parcelTrackingRoutes(application.parcelTracking));
+  routes.push(...deliveryOperationsRoutes(application.deliveryOperations));
   routes.push(...familyRoutes(application.family));
   routes.push(...announcementRoutes(application.announcements));
   return async function handleApi({ request, response, pathname, origin, clientAddress }) {
@@ -63,6 +77,7 @@ export function createApiRouter(application, { secure = false } = {}) {
       data = await readBody(request, 1024);
     } else if (route?.access === 'auth') {
       (await rateLimiter.consume(`auth:${clientAddress}`, clock(), 30, 10 * 60_000));
+      if (pathname === '/api/auth/register') await rateLimiter.consume(`register:${clientAddress}`, clock(), 5, 60 * 60_000);
       data = await readBody(request);
     } else {
       session = (await accounts.sessionFor(token));
@@ -97,6 +112,7 @@ export function createApiRouter(application, { secure = false } = {}) {
     const staffRequest = staffPermission(pathname, session?.user);
     if (staffRequest) {
       await rateLimiter.consume(`staff-read:${session.user.id}`, clock(), 120, 60_000);
+      if (pathname === '/api/admin/console/investigations/export') await rateLimiter.consume(`investigation-export:${session.user.id}`, clock(), 5, 60 * 60_000);
       if (write && pathname.includes('/staff/mfa/')) await rateLimiter.consume(`staff-factor:${session.user.id}`, clock(), 5, 5 * 60_000);
       await authorizeStaffRequest(application.staffAccess, session.user, token, pathname);
     }
@@ -115,6 +131,16 @@ export function createApiRouter(application, { secure = false } = {}) {
       await authorizeStaffRequest(application.staffAccess, fresh.user, token, pathname);
     }
     if (result.cookie) response.setHeader('Set-Cookie', result.cookie);
+    if (result.archive) {
+      const archive = result.archive;
+      check(Buffer.isBuffer(archive.content) && archive.content.length <= 15*1024*1024,'EXPORT_TOO_LARGE','The investigation evidence archive exceeds the download limit.');
+      response.writeHead(200, { 'Content-Type': 'application/zip', 'Content-Length': archive.content.length,
+        'Content-Disposition': `attachment; filename="${archive.filename}"`,
+        'Cache-Control': 'private, no-store, max-age=0', 'Pragma': 'no-cache',
+        'X-Content-Type-Options': 'nosniff', 'X-Evidence-SHA256': archive.sha256,
+        'X-Evidence-Export-ID': archive.exportId });
+      response.end(archive.content); return;
+    }
     if (result.image) {
       response.writeHead(200, { 'Content-Type': result.image.mimeType, 'Content-Length': result.image.content.length });
       response.end(result.image.content); return;

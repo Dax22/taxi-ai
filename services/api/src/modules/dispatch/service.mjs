@@ -7,14 +7,15 @@ import { matchingPairKey } from '../../shared/matching-pair-key.mjs';
 
 /** Bounded invitations. Routing happens outside transactions; leases fence writes after routing. */
 export function createDispatchService({ repository, candidates, candidateFor, getAccount, estimateMany,
-  unitOfWork, tokens, audit, clock, onOffer = () => {}, config, coordinator = null, profile = null,
-  candidatesFor = null, attemptedMany = null, batchEnabledFor = () => false }) {
+  unitOfWork, workerUnitOfWork = null, tokens, audit, clock, onOffer = () => {}, config, coordinator = null, profile = null,
+  candidatesFor = null, attemptedMany = null, batchEnabledFor = () => false, ranker = null }) {
   const mode = config.mode;
   check(['legacy', 'sequential', 'batch'].includes(mode), 'INVALID_DISPATCH_CONFIG', 'Choose a valid matching policy.');
   const batchWindowMs = config.batchWindowMs ?? 2000;
   check(Number.isInteger(batchWindowMs) && batchWindowMs >= 0 && batchWindowMs <= 5000,
     'INVALID_DISPATCH_CONFIG', 'The batch window must be between zero and five seconds.');
   const running = new Map();
+  const workerWork = (action, region) => workerUnitOfWork ? workerUnitOfWork(action, region) : unitOfWork(action);
   let stopped = false;
   const enabled = mode !== 'legacy';
   const valid = async (offer, now) => offer?.status === 'pending' && now < offer.expiresAt
@@ -32,10 +33,10 @@ export function createDispatchService({ repository, candidates, candidateFor, ge
     }
   }
   async function sweep(region = null) {
-    if (enabled && !stopped) await unitOfWork(() => sweepInside(clock(), region));
+    if (enabled && !stopped) await workerWork(() => sweepInside(clock(), region), region);
   }
   const measure = (name, action) => profile ? profile.phase(name, action) : action();
-  const run = (region, lease) => profile ? profile.cycle(() => runCycle(region, lease)) : runCycle(region, lease);
+  const run = (region, lease) => profile ? profile.cycle(() => runCycle(region, lease), { region }) : runCycle(region, lease);
   async function runCycle(region, suppliedLease) {
     if (suppliedLease && suppliedLease.name !== `dispatch:${region}`) throw new Error('A dispatch lease belongs to a different region.');
     const lease = suppliedLease ?? (coordinator ? await coordinator.acquire(`dispatch:${region}`) : null);
@@ -64,7 +65,12 @@ export function createDispatchService({ repository, candidates, candidateFor, ge
       try { estimates = await measure('routing', () => estimateMany(roadEdges.map(({ from, to }) => ({ from, to })))); } catch { /* Explicit fallback below. */ }
       if (stopped) return;
       const withEstimates = new Map(roadEdges.map((edge,i) => [edge, estimates[i]]));
-      await measure('commit', () => unitOfWork(async () => {
+      let rankingHistory = null;
+      if (ranker?.enabled && region !== null) {
+        try { rankingHistory = await measure('ml_features', () => ranker.prefetch(bounded, clock(), region)); }
+        catch { rankingHistory = null; } // Ranking failure must never block deterministic dispatch.
+      }
+      const committed = await measure('commit', () => workerWork(async () => {
         // A resumed, expired worker must not publish stale offers. The guard locks
         // this lease row until commit, so a new holder cannot overtake these writes.
         if (coordinator && !await coordinator.guard(lease)) return;
@@ -88,18 +94,33 @@ export function createDispatchService({ repository, candidates, candidateFor, ge
             && estimate.estimatedAt <= commitNow && commitNow - estimate.estimatedAt < 30_000;
           eligible.push({ ...live, pickupEtaSeconds: road ? estimate.durationSeconds : null, estimatedAt: road ? estimate.estimatedAt : null });
         }
-        for (const edge of allocateDispatchOffers(eligible, commitNow, { mode })) {
+        const mlPlan = ranker?.plan(eligible, commitNow, region, rankingHistory) ?? null;
+        const controlOffers = allocateDispatchOffers(eligible, commitNow, { mode });
+        const modelOffers = mlPlan ? allocateDispatchOffers(eligible, commitNow, { mode, costForCandidate: mlPlan.costFor }) : controlOffers;
+        const useModel = Boolean(mlPlan && ranker.liveFor(region));
+        const chosen = useModel ? modelOffers.map(edge => ({ ...edge, dispatch: { ...edge.dispatch,
+          policyVersion: `ml:${mlPlan.modelVersion}`, algorithm: 'ml_ranker' } })) : controlOffers;
+        const inserted = [];
+        for (const edge of chosen) {
           const offer = { id: tokens.id(), rideId: edge.rideId, driverId: edge.driverId, availabilityId: edge.availabilityId,
             mode, policyVersion: edge.dispatch.policyVersion, etaSource: edge.dispatch.etaSource,
             pickupEtaSeconds: edge.pickupEtaSeconds, estimatedAt: edge.estimatedAt, createdAt: commitNow, expiresAt: edge.offerExpiresAt };
           // Global ride/driver unique pending indexes arbitrate drivers visible in
           // neighbouring geographic partitions without creating double offers.
           if (await repository.insert(offer)) {
+            inserted.push(offer);
             await audit.record(offer.driverId, 'dispatch.offered', offer.id, commitNow);
             await onOffer(offer);
           }
         }
-      }));
+        return mlPlan ? { mlPlan, eligible, controlOffers, modelOffers, inserted, commitNow } : null;
+      }, region));
+      // Shadow/training telemetry is intentionally best-effort and isolated from
+      // the assignment transaction. A logging failure never rolls back an offer.
+      if (committed?.mlPlan) {
+        try { await workerWork(() => ranker.record(committed.mlPlan, committed.eligible, committed.controlOffers,
+          committed.modelOffers, committed.inserted, committed.commitNow), region); } catch { /* deterministic/live offer already committed */ }
+      }
     } finally { if (coordinator && lease && !suppliedLease) await coordinator.release(lease); }
   }
   function refresh({ region = null, lease = null } = {}) {
@@ -150,9 +171,17 @@ export function createDispatchService({ repository, candidates, candidateFor, ge
   async function metrics(user) {
     requireRole(user, 'admin');
     const since = Math.max(0, clock() - 30 * 24 * 60 * 60_000);
-    return { mode, since, offerTtlMs: DISPATCH_POLICY.offerTtlMs, ...await repository.metrics(since) };
+    return { mode, since, offerTtlMs: DISPATCH_POLICY.offerTtlMs, ...await repository.metrics(since),
+      mlRanking: ranker ? { enabled: ranker.enabled, mode: ranker.mode, modelVersion: ranker.version, cohorts: await ranker.metrics(since) } : { enabled: false, mode: 'off', modelVersion: null, cohorts: [] } };
   }
   return Object.freeze({ mode, enabled, refresh, sweep, forDriver, accept, decline, metrics,
+    withdrawForUser: async (userId,now,scope='account') => {
+      check(['customer','driver','vehicle','account'].includes(scope),'INVALID_INPUT','Invalid dispatch restriction scope.');
+      for(const offer of await repository.pendingForUser(userId)) {
+        const applies=scope==='account'||(scope==='customer'?offer.driverId!==userId:offer.driverId===userId);
+        if(applies)await close(offer,'revoked',now);
+      }
+    },
     regions: () => repository.activeRegions(clock()),
     observe: (event) => repository.observe({ ...event, mode }),
     stop: async () => { stopped = true; await Promise.allSettled([...running.values()]); } });

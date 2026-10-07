@@ -24,7 +24,7 @@ export function createRidesRepository(db) {
     async listAvailable({ region = null, after = null, limit = 200, now = null } = {}) {
       const clauses = ["status = 'requested'"], args = [];
       if (region !== null) { clauses.push('dispatch_region = ?'); args.push(region); }
-      if (now !== null) { clauses.push('request_expires_at > ?'); args.push(now); }
+      if (now !== null) { clauses.push("request_expires_at > ? AND NOT EXISTS(SELECT 1 FROM account_restrictions x WHERE x.subject_type='account' AND x.subject_id=rides.customer_id AND x.kind='suspension' AND x.status='active' AND x.scope IN ('customer','account') AND (x.expires_at IS NULL OR x.expires_at>?))"); args.push(now,now); }
       if (after) { clauses.push('(created_at > ? OR (created_at = ? AND id > ?))'); args.push(after.createdAt, after.createdAt, after.id); }
       return await db.prepare(`SELECT ${columns} FROM rides WHERE ${clauses.join(' AND ')} ORDER BY created_at, id LIMIT ?`)
         .all(...args, Math.max(1, Math.min(200, Number.isSafeInteger(limit) ? limit : 200)));

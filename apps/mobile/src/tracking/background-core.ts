@@ -1,12 +1,14 @@
 import type { Position } from './contracts.ts';
 import type { BackgroundBinding, BackgroundConnection, BackgroundGrant, BackgroundLease, BackgroundNative, BackgroundTrackingApi, BackgroundVault } from './background-contracts.ts';
 import { insideNigeria } from '../../../../packages/shared/src/locations.mjs';
+import { retryableLocationFailure, locationRetryDelay } from './recovery.ts';
 
 const MAX_LEASE = 12 * 60 * 60_000, FRESH = 30_000, SHARE_LEASE = 60_000, INTERVAL = 10_000;
+type RecoveringLease = BackgroundLease & { failures?: number; nextAttemptAt?: number };
 const uuid = (v: unknown) => typeof v === 'string' && /^[a-f0-9-]{36}$/.test(v);
 const integer = (v: unknown) => Number.isSafeInteger(v) && Number(v) >= 0;
 const grantFields = ['token', 'expiresAt', 'kind', 'jobId', 'shareId', 'clientId', 'sequence'];
-const leaseFields = new Set([...grantFields, 'version', 'savedAt', 'serverNow', 'lastSuccessAt', 'connection']);
+const leaseFields = new Set([...grantFields, 'version', 'savedAt', 'serverNow', 'lastSuccessAt', 'connection', 'failures', 'nextAttemptAt']);
 function connection(value: any): value is BackgroundConnection {
   if (!(value && typeof value.origin === 'string' && value.origin.length <= 512
     && Object.keys(value).every(key => key === 'origin' || key === 'previewAccess')
@@ -22,18 +24,20 @@ function grant(value: any): boolean {
     && typeof value.token === 'string' && value.token.length >= 24 && value.token.length <= 1024
     && integer(value.expiresAt) && integer(value.sequence);
 }
-export function readBackgroundLease(raw: string | null): BackgroundLease | null {
+export function readBackgroundLease(raw: string | null): RecoveringLease | null {
   if (!raw || raw.length > 4096) return null;
   try {
     const v = JSON.parse(raw);
     return grant(v) && Object.keys(v).every(key => leaseFields.has(key)) && (v.connection === undefined || connection(v.connection))
       && v.version === 1 && integer(v.savedAt) && integer(v.serverNow) && integer(v.lastSuccessAt)
+      && (v.failures === undefined || integer(v.failures) && v.failures <= 12)
+      && (v.nextAttemptAt === undefined || integer(v.nextAttemptAt) && v.nextAttemptAt < v.lastSuccessAt + SHARE_LEASE)
       && v.expiresAt > v.serverNow && v.expiresAt - v.serverNow <= MAX_LEASE ? v : null;
   } catch { return null; }
 }
 const matches = (a: BackgroundBinding, b: BackgroundBinding) => a.kind === b.kind && a.jobId === b.jobId && a.clientId === b.clientId;
 
-/** One scoped publisher for foreground and headless callbacks. Failed sends never queue GPS for replay. */
+/** One scoped publisher. Recovery retains authority, not coordinates, within the existing server lease. */
 export class BackgroundLocationManager {
   private vault: BackgroundVault;
   private native: BackgroundNative;
@@ -41,7 +45,7 @@ export class BackgroundLocationManager {
   private clock: () => number;
   private generation = 0;
   private queue: Promise<unknown> = Promise.resolve();
-  private known: BackgroundLease | null = null;
+  private known: RecoveringLease | null = null;
   private disabled = false;
   constructor(options: { vault: BackgroundVault; native: BackgroundNative; api: BackgroundTrackingApi; clock?: () => number }) {
     this.vault = options.vault; this.native = options.native; this.api = options.api; this.clock = options.clock ?? Date.now;
@@ -59,17 +63,16 @@ export class BackgroundLocationManager {
   private async clear(lease: BackgroundLease | null) {
     this.disabled = true;
     this.known = null;
-    // Erase publication authority before waiting on OS or remote cleanup.
     try { await this.vault.clear(); }
     finally {
       await this.native.stop().catch(() => {});
       if (lease) await this.api.stop(lease.token, lease.connection).catch(() => {});
     }
   }
-  async current(): Promise<BackgroundLease | null> {
+  async current(): Promise<RecoveringLease | null> {
     return this.serial(async () => {
       if (this.disabled) return null;
-      let lease: BackgroundLease | null = this.known;
+      let lease: RecoveringLease | null = this.known;
       try {
         lease = readBackgroundLease(await this.vault.read());
         if (!lease || !this.valid(lease) || !await this.native.permissions()) { await this.clear(lease); return null; }
@@ -108,18 +111,12 @@ export class BackgroundLocationManager {
       } catch (error) { await this.clear(lease); throw error; }
     });
   }
-  /** Invalidates in-flight callbacks synchronously, including callbacks waiting on a network response. */
   stop(expected?: BackgroundBinding): Promise<void> {
     if (expected && this.known && !matches(expected, this.known)) return Promise.resolve();
     if (expected && !this.known) return this.serial(async () => {
       let lease: BackgroundLease | null = null;
       try { lease = readBackgroundLease(await this.vault.read()); }
-      catch {
-        // Ownership cannot be recovered from unreadable storage. Erase authority rather than leave a headless task running.
-        this.generation++;
-        await this.clear(null);
-        return;
-      }
+      catch { this.generation++; await this.clear(null); return; }
       if (!lease || !matches(expected, lease)) return;
       this.generation++;
       await this.clear(lease);
@@ -130,7 +127,7 @@ export class BackgroundLocationManager {
     void this.native.stop().catch(() => {});
     return this.serial(async () => {
       let lease: BackgroundLease | null = known;
-      try { lease = readBackgroundLease(await this.vault.read()) ?? known; } catch { /* Known capability still permits revocation if storage reads fail. */ }
+      try { lease = readBackgroundLease(await this.vault.read()) ?? known; } catch { /* Revoke known authority on unreadable storage. */ }
       if (expected && lease && !matches(expected, lease)) return;
       await this.clear(lease);
     });
@@ -139,7 +136,7 @@ export class BackgroundLocationManager {
     const epoch = this.generation;
     return this.serial(async () => {
       if (epoch !== this.generation || this.disabled) return;
-      let lease: BackgroundLease | null = this.known;
+      let lease: RecoveringLease | null = this.known;
       try {
         lease = readBackgroundLease(await this.vault.read());
         if (!lease || !this.valid(lease) || !await this.native.permissions()) { await this.clear(lease); return; }
@@ -149,15 +146,33 @@ export class BackgroundLocationManager {
         const fix = positions.filter(p => p && Number.isFinite(p.lat) && Number.isFinite(p.lng) && insideNigeria(p)
           && Number.isFinite(p.accuracy) && p.accuracy > 0 && p.accuracy <= 200 && integer(p.capturedAt)
           && now - p.capturedAt >= -5000 && now - p.capturedAt < FRESH).sort((a, b) => b.capturedAt - a.capturedAt)[0];
-        if (!fix || now - lease.lastSuccessAt < INTERVAL) return;
-        const result = await this.api.position(lease.token, lease.sequence + 1,
-          { ...fix, capturedAt: Math.round(lease.serverNow + elapsed - Math.max(0, now - fix.capturedAt)) }, lease.connection);
+        if (!fix || now - lease.lastSuccessAt < INTERVAL || now < (lease.nextAttemptAt ?? 0)) return;
+        const sequence = lease.sequence + 1;
+        let result: Awaited<ReturnType<BackgroundTrackingApi['position']>>;
+        try {
+          result = await this.api.position(lease.token, sequence,
+            { ...fix, capturedAt: Math.round(lease.serverNow + elapsed - Math.max(0, now - fix.capturedAt)) }, lease.connection);
+        } catch (error) {
+          if (epoch !== this.generation) return;
+          if (!retryableLocationFailure(error) || !this.valid(lease)) throw error;
+          const failures = (lease.failures ?? 0) + 1;
+          const nextAttemptAt = this.clock() + locationRetryDelay(failures, error);
+          if (failures > 12 || nextAttemptAt >= lease.lastSuccessAt + SHARE_LEASE) throw error;
+          // The response may have been lost after the server saved this sequence.
+          // Skip it next time; no failed coordinates or account credentials are stored.
+          const recovering: RecoveringLease = { ...lease, sequence, failures, nextAttemptAt };
+          await this.vault.write(JSON.stringify(recovering));
+          if (epoch !== this.generation) return;
+          this.known = recovering;
+          return;
+        }
         if (epoch !== this.generation) return;
         if (result.share.id !== lease.shareId || result.share.rideId !== lease.jobId || !result.share.active
-          || !result.share.owned || result.share.sequence !== lease.sequence + 1 || !integer(result.serverNow)) {
+          || !result.share.owned || result.share.sequence !== sequence || !integer(result.serverNow)) {
           await this.clear(lease); return;
         }
-        const accepted: BackgroundLease = { ...lease, sequence: result.share.sequence, lastSuccessAt: this.clock() };
+        const { failures: _failures, nextAttemptAt: _retryAt, ...healthy } = lease;
+        const accepted: RecoveringLease = { ...healthy, sequence: result.share.sequence, lastSuccessAt: this.clock() };
         await this.vault.write(JSON.stringify(accepted));
         if (epoch !== this.generation) { await this.clear(accepted); return; }
         this.known = accepted;

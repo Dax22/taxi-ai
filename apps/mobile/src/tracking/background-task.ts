@@ -73,6 +73,7 @@ export function controllerBackground(client: MobileClient, kind: TrackingKind, j
       await manager.begin({ ...result, connection }, isCurrent);
     },
     stop: () => manager.stop(binding),
+    recovering: async () => Boolean((await manager.current())?.failures),
     active: async () => {
       const lease = await manager.current();
       return Boolean(lease && lease.kind === kind && lease.jobId === jobId && lease.clientId === clientId);

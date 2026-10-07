@@ -1,3 +1,4 @@
+import { isRestricted, requireUnrestricted, requireNewDriverWork } from '../../shared/service-restrictions.mjs';
 import { createDemoQuote } from '../../../../../packages/shared/src/demo-booking.mjs';
 import { TRIP_TRANSITIONS, CANCELLATION_REASONS, canCancelRide } from '../../../../../packages/shared/src/trip-lifecycle.mjs';
 import { distanceMeters } from '../../../../../packages/shared/src/locations.mjs';
@@ -131,20 +132,22 @@ export function createRidesService({ repository, deliveries, passengerForRide, s
     requireMode(user, mode);
     await expireTarget(user.id);
     const now = clock();
-    const position = mode !== 'customer' && hasCapability(user, 'driver') && user.driver?.status === 'approved' ? (await availabilityFor(user.id, now)) : null;
+    const position = mode !== 'customer' && hasCapability(user, 'driver') && user.driver?.status === 'approved'
+      && user.driver?.eligibility?.eligible === true ? (await availabilityFor(user.id, now)) : null;
     const offer = position ? (await dispatch?.forDriver(user.id, now)) : null;
     const open = dispatch?.enabled ? (offer ? [(await repository.find(offer.rideId))].filter(Boolean) : []) : position ? (await repository.listAvailable({ now })) : [];
     const candidates = position ? (await asyncMap((await asyncFilter(open, async (ride) => ride.customerId !== user.id && !(await isParcelRecipient(user.id, ride.id)) && (await deliveries.matches(ride, user.driver.vehicle)))), async (ride) => ({ ride, metres: (await matchDistance(ride, position, now)) }))).filter((item) => item.metres !== null)
       .map(({ ride, metres }) => ({ ride, id: ride.id, createdAt: ride.createdAt, expiresAt: ride.requestExpiresAt,
         distanceMeters: position.mode === 'sample' ? null : metres })) : [];
     const available = rankEligibleMatches(candidates, now).slice(0, 50);
-    return { matchingSettings: { allowSimulation, dispatchMode: dispatch?.mode ?? 'legacy' },
+    return { matchingSettings: { allowSimulation, dispatchMode: dispatch?.mode ?? 'legacy',
+      passengerRides: ridePilot.describe?.() ?? { paused: ridePilot.paused, coverage: ridePilot.bounds ? 'pilot' : 'local' } },
       activeElsewhere: (await asyncMap((await repository.activeFor(user.id)).filter((ride) => !inMode(ride, user, mode)), async (ride) => ({
         id: ride.id, mode: ride.customerId === user.id ? 'customer' : 'work', status: (await repository.findTrip(ride.id))?.status ?? ride.status }))),
       rides: (await asyncMap((await repository.listFor(user.id, mode)), async (ride) => (await view(ride, user)))), available: (await asyncMap(available, async ({ ride, distanceMeters, recommendation }) => {
       const route = (await routeForRide(ride.id));
       const area = (point) => ({ name: `Near ${point.lat.toFixed(2)}, ${point.lng.toFixed(2)} (approximate area)` });
-      const quote = route ? { pickup: area(route.pickup), destination: area(route.destination) }
+      const quote = route ? { pickup: area(route.pickup), destination: { name: route.destination.name } }
         : createDemoQuote(ride.pickupId, ride.destinationId);
       return { id: ride.id, version: ride.version, vehicleCategory: ride.vehicleCategory, service: (await deliveries.isDelivery(ride.id)) ? 'delivery' : 'ride', pickup: quote.pickup, destination: quote.destination,
         suggestedFareKobo: ride.suggestedFareKobo, currency: 'NGN', isDemo: true, hasRoute: Boolean(route), createdAt: ride.createdAt,
@@ -156,7 +159,7 @@ export function createRidesService({ repository, deliveries, passengerForRide, s
   }
 
   async function matchDistance(ride, availability, now) {
-    if (ride.status !== 'requested' || now >= ride.requestExpiresAt) return null;
+    if (ride.status !== 'requested' || now >= ride.requestExpiresAt || isRestricted(await getAccount(ride.customerId),'customer')) return null;
     const route = (await routeForRide(ride.id));
     if (!route) return availability.mode === 'sample' && availability.areaId === ride.pickupId ? 0 : null;
     if (availability.mode !== 'gps') return null;
@@ -302,7 +305,7 @@ export function createRidesService({ repository, deliveries, passengerForRide, s
   }
 
   async function create(user, data, now) {
-    requireRole(user, 'customer');
+    requireRole(user, 'customer'); requireUnrestricted(user,'customer');
     const routed = Boolean(data && Object.hasOwn(data, 'quoteId'));
     const required = routed ? ['quoteId'] : ['pickupId', 'destinationId'];
     fields(data, [...required, 'vehicleCategory', 'delivery', 'passenger'], required);
@@ -339,10 +342,11 @@ export function createRidesService({ repository, deliveries, passengerForRide, s
   }
 
   async function claim(user, id, data, now) {
-    requireEligibleDriver(user);
+    requireEligibleDriver(user); requireNewDriverWork(user);
     fields(data, ['expectedVersion', 'offerId'], ['expectedVersion']);
     const ride = (await record(id));
     check(ride.customerId !== user.id, 'FORBIDDEN', 'You cannot drive your own request.');
+    requireUnrestricted(await getAccount(ride.customerId),'customer');
     check(!(await isParcelRecipient(user.id, id)), 'FORBIDDEN', 'You cannot deliver a parcel that you are receiving.');
     check((await deliveries.matches(ride, user.driver.vehicle)), 'VEHICLE_MISMATCH', 'This request needs a different approved vehicle category or load capacity.');
     check(ride.status === 'requested', 'REQUEST_UNAVAILABLE', 'Another driver took this request, or it is no longer open.');
@@ -370,6 +374,7 @@ export function createRidesService({ repository, deliveries, passengerForRide, s
     requireVersion(ride, data.expectedVersion);
     check(['requested', 'negotiating'].includes(ride.status), 'REQUEST_CLOSED', 'This request has already ended.');
     check(ride.status === 'negotiating', 'NO_DRIVER', 'Wait for a driver before negotiating a fare.');
+    requireUnrestricted(await getAccount(ride.customerId),'customer'); requireNewDriverWork(await getAccount(ride.driverId));
     const negotiation = (await negotiationFor(ride));
     const current = negotiation.snapshot();
     check(action !== 'propose' || current.offers.length < 100,
@@ -411,11 +416,11 @@ export function createRidesService({ repository, deliveries, passengerForRide, s
     let next;
     let reason = null;
     if (action === 'confirm') {
-      requireRole(user, 'customer');
+      requireRole(user, 'customer'); requireUnrestricted(user,'customer');
       check(ride.customerId === user.id, 'FORBIDDEN', 'Only the booking account can confirm this trip.');
       check(ride.status === 'agreed' && !ride.trip, 'INVALID_TRIP_STATE', 'An agreed fare is required before confirming this booking.');
       const driver = (await getAccount(ride.driverId));
-      requireEligibleDriver(driver);
+      requireEligibleDriver(driver); requireNewDriverWork(driver);
       check((await deliveries.matches(ride, driver.driver.vehicle)), 'VEHICLE_MISMATCH', 'The approved vehicle no longer matches this request.');
       check(!(await repository.hasOpenRequest(user.id)), 'OPEN_REQUEST_EXISTS', 'Finish or cancel your other request or trip before confirming.');
       check(!(await repository.hasNegotiation(ride.driverId)) && !(await hasOtherWork(ride.driverId)), 'DRIVER_BUSY', 'This driver has another negotiation, trip or food delivery. Ask them to finish it before confirming.');
@@ -575,6 +580,27 @@ export function createRidesService({ repository, deliveries, passengerForRide, s
       pickupPin: ride.trip?.pickupPin ?? null };
   }
   // Minimal read port for family observers; never pass the passenger's pickup PIN.
+  async function closeReturnedDelivery(user, id, expectedVersion, now) {
+    const ride = await record(id);
+    requireRole(user, 'customer');
+    check(ride.customerId === user.id && ride.trip?.status === 'in_progress' && await deliveries.isDelivery(id),
+      'INVALID_TRIP_STATE', 'Only the sender can confirm an active parcel return.');
+    requireVersion(ride, expectedVersion);
+    await repository.updateTrip(id, 'cancelled', now);
+    await deliveries.cancel(id);
+    check(await repository.updateState({ id, status: 'cancelled', expectedVersion, now }),
+      'STALE_VERSION', 'The parcel changed. Refresh its return record.');
+    await repository.appendActivity(id, user.id, 'cancelled', now, 'other');
+    await audit.record(user.id, 'delivery.returned_to_sender', id, now);
+    if (ride.trip.paymentMode === 'paystack_test') {
+      check(typeof checkoutPayments?.close === 'function', 'PAYMENT_NOT_READY', 'Payment reconciliation is unavailable.');
+      await checkoutPayments.close({ ...checkoutContext(ride, 'cancelled'), closedAt: now });
+    }
+    await onRideClosed(id, now);
+    await onEvent({ kind: 'cancel', ride: await record(id), actorId: user.id,
+      eventKey: `returned:${id}:${expectedVersion + 1}`, now });
+    // No successful-completion payment or delivered notification is emitted.
+  }
   async function familyContext(user, id) {
     const ride = await record(id); requireParticipant(ride, user);
     const context = await safetyContext(user, id);
@@ -585,6 +611,6 @@ export function createRidesService({ repository, deliveries, passengerForRide, s
       service: (await deliveries.isDelivery(id)) ? 'delivery' : 'ride',
       completedAt: ride.trip?.completedAt ?? null };
   }
-  return Object.freeze({ get, list, history, mutate, rate, conversationContext, conversationIds, paymentContext, checkoutPaymentContext, safetyContext, guestContext, familyContext, sweep,
+  return Object.freeze({ get, list, history, mutate, rate, conversationContext, conversationIds, paymentContext, checkoutPaymentContext, safetyContext, guestContext, familyContext, sweep, closeReturnedDelivery,
     dispatchCandidates, dispatchCandidatesFor, dispatchCandidateFor: async (rideId, driverId, now) => (await dispatchCandidate((await repository.find(rideId)), driverId, now)) });
 }

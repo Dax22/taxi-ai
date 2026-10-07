@@ -77,9 +77,12 @@ export async function importSqliteToPostgres(db, sourcePath, { onProgress = () =
       }
       // Force all foreign-key validation before recording success.
       await db.exec('SET CONSTRAINTS ALL IMMEDIATE');
-      const identities = (await db.query(`SELECT table_name,column_name FROM information_schema.columns
-        WHERE table_schema=$1 AND is_identity='YES'`, [db.schema])).rows;
-      for (const { table_name: table, column_name: column } of identities) {
+      // Explicit imported IDs do not advance either identity or SERIAL sequences.
+      // Inspect owned sequences only on imported tables, including BIGSERIAL IDs.
+      const generatedColumns = (await db.query(`SELECT table_name,column_name FROM information_schema.columns
+        WHERE table_schema=$1 AND table_name=ANY($2::text[])
+          AND pg_get_serial_sequence(format('%I.%I',table_schema,table_name),column_name) IS NOT NULL`, [db.schema, tables])).rows;
+      for (const { table_name: table, column_name: column } of generatedColumns) {
         await db.query(`SELECT setval(pg_get_serial_sequence($1,$2),COALESCE(MAX(${identifier(column)}),1),COUNT(*)>0) FROM ${identifier(table)}`, [`${db.schema}.${table}`, column]);
       }
       for (const table of tables.filter((name) => name !== 'account_revisions')) {

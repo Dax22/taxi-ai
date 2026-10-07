@@ -20,7 +20,7 @@ export const DISPATCH_REASON_LABELS = Object.freeze({
 const compareId = (a, b) => a < b ? -1 : a > b ? 1 : 0;
 const validId = (id) => typeof id === 'string' && id.length > 0 && id.length <= 128;
 
-function scoreEdge(candidate, now) {
+function scoreEdge(candidate, now, costForCandidate = null) {
   const p = DISPATCH_POLICY;
   if (candidate === null || typeof candidate !== 'object'
     || !validId(candidate.driverId) || !validId(candidate.rideId)
@@ -44,7 +44,14 @@ function scoreEdge(candidate, now) {
     + (priority ? p.maxPickupEtaSeconds : 0);
   const reasons = [etaSource === 'road' ? 'road_pickup_eta' : etaSource === 'sample' ? 'sample_area' : 'distance_fallback'];
   if (priority) reasons.push('waiting_priority');
-  return { candidate, etaSource, reasons, cost: Math.round((pickupCost - waitingCredit) * 1000) };
+  const learned = typeof costForCandidate === 'function' ? costForCandidate(candidate) : null;
+  // A learned ranker may replace only the relative candidate cost. The existing
+  // two-minute waiting priority remains a deterministic guard, and any missing
+  // or invalid model score falls back to the reviewed deterministic policy.
+  const cost = Number.isFinite(learned) && Math.abs(learned) <= 1_000_000_000
+    ? Math.round(learned) - (priority ? 2_000_000_000 : 0)
+    : Math.round((pickupCost - waitingCredit) * 1000);
+  return { candidate, etaSource, reasons, cost };
 }
 
 const compareEdges = (a, b) => a.cost - b.cost || a.candidate.createdAt - b.candidate.createdAt
@@ -53,8 +60,8 @@ const compareEdges = (a, b) => a.cost - b.cost || a.candidate.createdAt - b.cand
   || (a.candidate.pickupEtaSeconds ?? Infinity) - (b.candidate.pickupEtaSeconds ?? Infinity)
   || (a.candidate.distanceMeters ?? Infinity) - (b.candidate.distanceMeters ?? Infinity);
 
-function boundedEdges(candidates, now) {
-  const scored = candidates.map((candidate) => scoreEdge(candidate, now)).filter(Boolean);
+function boundedEdges(candidates, now, costForCandidate = null) {
+  const scored = candidates.map((candidate) => scoreEdge(candidate, now, costForCandidate)).filter(Boolean);
   // When a city exceeds this worker's budget, retain the oldest eligible rides.
   // The guarantee below applies to this bounded graph, not every city request.
   const oldest = [...scored].sort((a, b) => a.candidate.createdAt - b.candidate.createdAt
@@ -204,10 +211,11 @@ export function boundedDispatchCandidates(candidates, now) {
  * the bounded graph. Waiting credits improve priority; availability, graph caps
  * and expiring requests mean this cannot guarantee that every rider is served.
  */
-export function allocateDispatchOffers(candidates, now, { mode = 'sequential' } = {}) {
+export function allocateDispatchOffers(candidates, now, { mode = 'sequential', costForCandidate = null } = {}) {
   validateInput(candidates, now);
   if (!['sequential', 'batch'].includes(mode)) throw new TypeError('Unknown dispatch mode.');
-  const edges = boundedEdges(candidates, now);
+  if (costForCandidate !== null && typeof costForCandidate !== 'function') throw new TypeError('Dispatch candidate cost must be a function.');
+  const edges = boundedEdges(candidates, now, costForCandidate);
   const chosen = mode === 'batch' ? batchAllocation(edges) : greedyAllocation(edges);
   return chosen.sort(compareEdges).map(({ candidate, etaSource, reasons }) => ({ ...candidate,
     offerExpiresAt: Math.min(now + DISPATCH_POLICY.offerTtlMs, candidate.expiresAt),

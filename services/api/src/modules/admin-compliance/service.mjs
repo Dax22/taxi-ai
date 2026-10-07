@@ -1,8 +1,8 @@
 import { check } from '../../shared/errors.mjs';
 import { actionData, canonical, documents, filters, identifier, summary } from './domain.mjs';
 
-/** Compliance work never edits application approval or delivers external notifications. */
-export function createAdminComplianceService({ repository, getEligibility, requirePermission, unitOfWork, tokens, audit, clock }) {
+/** Compliance work records follow-ups and audited Admin approval exceptions; it never delivers external notifications. */
+export function createAdminComplianceService({ repository, getEligibility, getFaceCheck, approveDriverException, readDriverDocument, requirePermission, unitOfWork, tokens, audit, clock }) {
   async function canManage(userId) {
     try { await requirePermission(userId, 'compliance.manage'); return true; }
     catch (error) { if (error.code === 'FORBIDDEN') return false; throw error; }
@@ -14,7 +14,7 @@ export function createAdminComplianceService({ repository, getEligibility, requi
   }
   async function projection(row, now, manage) {
     const docs = documents(await repository.documents(row.id), now);
-    return { driver: summary(row, await getEligibility(row.id), docs, now, manage), documents: docs };
+    return { driver: summary(row, await getEligibility(row.id), docs, now, manage), documents: docs, faceCheck: await getFaceCheck(row.id) };
   }
   async function detail(userId, row, filter, now, manage) {
     const history = await repository.events(row.id, filter), events = history.slice(0, filter.limit), last = events.at(-1);
@@ -44,6 +44,25 @@ export function createAdminComplianceService({ repository, getEligibility, requi
       return detail(userId, row, filter, now, await canManage(userId));
     });
   }
+
+  async function approveException({ userId, id, data, key }) {
+    identifier(id);
+    check(typeof key === 'string' && /^[A-Za-z0-9_-]{16,128}$/.test(key), 'INVALID_IDEMPOTENCY_KEY', 'A unique command key is required.');
+    check(data && Object.keys(data).every((field) => field === 'expectedApplicationVersion'), 'INVALID_FIELDS', 'This approval accepts only the application version.');
+    check(Number.isSafeInteger(data.expectedApplicationVersion) && data.expectedApplicationVersion >= 0, 'INVALID_VERSION', 'Refresh the driver before approving.');
+    await requirePermission(userId, 'compliance.read'); await requirePermission(userId, 'compliance.manage');
+    const row = await current(id);
+    check(row.applicationVersion === data.expectedApplicationVersion, 'STALE_VERSION', 'The driver application changed. Refresh before approving.');
+    await approveDriverException({ userId, id, expectedVersion: data.expectedApplicationVersion, key });
+    const now = clock();
+    return detail(userId, await current(id), filters({}, true), now, true);
+  }
+  async function document(userId, id, documentId) {
+    identifier(id); identifier(documentId); await requirePermission(userId, 'compliance.read');
+    await current(id); const result = await readDriverDocument({ userId, driverId: id, documentId });
+    return { viewerId: userId, serverNow: clock(), driverId: id, document: result.document, base64: result.base64 };
+  }
+
   async function command({ userId, id, action, data, key }) {
     identifier(id);
     check(typeof key === 'string' && /^[A-Za-z0-9_-]{16,128}$/.test(key), 'INVALID_IDEMPOTENCY_KEY', 'A unique command key is required.');
@@ -70,5 +89,5 @@ export function createAdminComplianceService({ repository, getEligibility, requi
       return { ...(await detail(userId, await current(id), filters({}, true), now, true)), replayed: false };
     });
   }
-  return Object.freeze({ list, get, command });
+  return Object.freeze({ list, get, command, approveException, document });
 }

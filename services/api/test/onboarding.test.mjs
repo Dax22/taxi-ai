@@ -70,7 +70,7 @@ test('private application submission, document inspection and manual evidence ar
   assert.equal((await review(admin, application, { ...approval, reference: '' })).status, 400);
   application = (await review(admin, application, approval)).body.application;
   assert.equal(application.eligibility.eligible, true); assert.equal(application.verification.method, 'manual');
-  assert.equal(application.verification.documents.length, 5); assert.equal(application.reviewedBy, admin.user.id);
+  assert.equal(application.verification.documents.length, 4); assert.equal(application.reviewedBy, admin.user.id);
   await driver.online(); await h.restart();
   assert.deepEqual((await app(driver)).verification, application.verification);
   assert.equal((await admin.send(`/api/admin/drivers/${driver.user.id}`)).body.application.events[0].action, 'approved');
@@ -184,7 +184,7 @@ test('Abuja expiry is exact, impossible dates fail, and expiry blocks online, cl
   let ride = await claimRide(driver, await requestRide(customer));
   ride = await rideStep(driver, ride, 'offers', { amountKobo: 450000 }); ride = await rideStep(customer, ride, 'accept', { offerId: ride.negotiation.currentOffer.id });
   // Move expiry to an exact boundary without advancing beyond the session lifetime.
-  h.db.prepare("UPDATE driver_documents SET expires_on='2026-01-01' WHERE driver_id=? AND kind='insurance'").run(driver.user.id);
+  h.db.prepare("UPDATE driver_documents SET expires_on='2026-01-01' WHERE driver_id=? AND kind='driving_licence'").run(driver.user.id);
   h.advance(driverDocumentDeadline('2026-01-01') - TEST_NOW - 1);
   await driver.post('/api/auth/login', { email: driver.user.email, password: PASSWORD });
   await customer.post('/api/auth/login', { email: customer.user.email, password: PASSWORD });
@@ -205,11 +205,11 @@ test('application edits are blocked throughout assigned work; expired documents 
   ride = await rideStep(customer, ride, 'accept', { offerId: ride.negotiation.currentOffer.id }); await blocked();
   ride = await rideStep(customer, ride, 'confirm'); const pin = ride.trip.pickupPin; await blocked();
   ride = await rideStep(driver, ride, 'depart'); ride = await rideStep(driver, ride, 'arrive');
-  h.db.prepare("UPDATE driver_documents SET expires_on='1969-12-31' WHERE driver_id=? AND kind='insurance'").run(driver.user.id);
+  h.db.prepare("UPDATE driver_documents SET expires_on='1969-12-31' WHERE driver_id=? AND kind='driving_licence'").run(driver.user.id);
   assert.equal((await driver.post(`/api/rides/${ride.id}/start`, { expectedVersion: ride.version, pickupPin: pin })).body.error.code, 'DRIVER_NOT_ELIGIBLE');
-  h.db.prepare("UPDATE driver_documents SET expires_on='2099-12-31' WHERE driver_id=? AND kind='insurance'").run(driver.user.id);
+  h.db.prepare("UPDATE driver_documents SET expires_on='2099-12-31' WHERE driver_id=? AND kind='driving_licence'").run(driver.user.id);
   ride = await rideStep(driver, ride, 'start', { pickupPin: pin }); await blocked();
-  h.db.prepare("UPDATE driver_documents SET expires_on='1969-12-31' WHERE driver_id=? AND kind='insurance'").run(driver.user.id);
+  h.db.prepare("UPDATE driver_documents SET expires_on='1969-12-31' WHERE driver_id=? AND kind='driving_licence'").run(driver.user.id);
   ride = await rideStep(driver, ride, 'complete'); assert.equal(ride.status, 'completed');
   assert.equal((await driver.send('/api/driver/earnings')).status, 200);
   assert.equal((await driver.send('/api/rides/history')).body.rides[0].id, ride.id);
@@ -226,11 +226,45 @@ test('reopening immediately removes new-work eligibility and later vehicle chang
   let replacement = (await driver.send('/api/driver/application')).body.application;
   assert.deepEqual(replacement.documents.map((d) => d.kind).sort(), ['driving_licence', 'profile_photo']);
   assert.equal((await driver.post('/api/driver/application/submit', { expectedVersion: replacement.version })).body.error.code, 'APPLICATION_INCOMPLETE');
-  for (const kind of ['vehicle_registration', 'insurance', 'vehicle_photo']) {
+  for (const kind of ['vehicle_registration', 'vehicle_photo']) {
     replacement = await change(driver, 'upload', { kind, ...IMAGE, expiresOn: kind.endsWith('photo') ? null : '2099-12-31' });
   }
   await change(driver, 'submit'); await approveApplication(fixtureApi(admin), driver.user.id);
   assert.equal((await driver.send('/api/session')).body.user.driver.vehicle.plate, 'NEW-123');
   assert.deepEqual((await customer.send(`/api/rides/${ride.id}`)).body.ride.driver, original);
   const history = (await customer.send('/api/rides/history')).body.rides[0]; assert.deepEqual(history.driver, original);
+});
+
+test('Owner can approve an incomplete driver with one audited exception and explicitly view the saved licence', async (t) => {
+  const h = await harness(t), driver = h.client(), admin = h.client();
+  await driver.register('exception-driver', 'driver'); await admin.register('exception-owner');
+  await bootstrapAdmin(h.db, admin.user.email); assert.equal((await admin.post('/api/auth/login', { email: admin.user.email, password: PASSWORD })).status, 200);
+  let application = await change(driver, 'save', { details: DETAILS });
+  application = await change(driver, 'upload', { ...IMAGE, kind: 'driving_licence', expiresOn: '2099-12-31' });
+  const licence = application.documents.find((doc) => doc.kind === 'driving_licence');
+  assert.ok(licence); assert.deepEqual(new Set(application.eligibility.missing), new Set(['profile_photo','vehicle_registration','vehicle_photo']));
+  const ordinary = await admin.send(`/api/admin/console/compliance/${driver.user.id}`);
+  assert.equal(ordinary.status, 200, JSON.stringify(ordinary.body));
+  assert.equal(JSON.stringify(ordinary.body).includes(IMAGE.base64), false, 'ordinary compliance response never includes document bytes');
+  const viewed = await admin.send(`/api/admin/console/compliance/${driver.user.id}/documents/${licence.id}`);
+  assert.equal(viewed.status, 200, JSON.stringify(viewed.body)); assert.equal(viewed.body.base64, IMAGE.base64); assert.equal(viewed.body.document.kind, 'driving_licence');
+  assert.equal(h.db.prepare("SELECT count(*) AS n FROM audit_events WHERE kind='driver.document.downloaded' AND subject_id=?").get(licence.id).n, 1);
+  const approved = await admin.post(`/api/admin/console/compliance/${driver.user.id}/approve-exception`, { expectedApplicationVersion: application.version });
+  assert.equal(approved.status, 200, JSON.stringify(approved.body));
+  application = await app(driver); assert.equal(application.status, 'approved'); assert.equal(application.eligibility.eligible, true);
+  assert.equal(application.eligibility.manualException, true); assert.equal(application.verification.method, 'admin_exception');
+  assert.deepEqual(new Set(application.verification.missing), new Set(['profile_photo','vehicle_registration','vehicle_photo']));
+  assert.equal(h.db.prepare("SELECT count(*) AS n FROM audit_events WHERE kind='driver.application.approved_exception' AND subject_id=?").get(driver.user.id).n, 1);
+  assert.equal((await driver.availability('/api/availability/online', { mode: 'sample', areaId: 'wuse-ii' })).status, 200);
+});
+
+test('insurance is optional legacy evidence and never blocks eligibility when missing or expired', async (t) => {
+  const h = await harness(t), { driver } = await participants(h, 1, { online: false });
+  let application = await app(driver); assert.equal(application.documents.some((doc) => doc.kind === 'insurance'), false);
+  assert.equal(application.eligibility.eligible, true);
+  application = await change(driver, 'reopen');
+  application = await change(driver, 'upload', { ...IMAGE, kind: 'insurance', expiresOn: '1969-12-31' });
+  await change(driver, 'submit');
+  // Optional legacy insurance can be present/expired, but regular required-doc eligibility still depends only on the four required categories.
+  application = await app(driver); assert.equal(application.eligibility.expired.includes('insurance'), false);
 });

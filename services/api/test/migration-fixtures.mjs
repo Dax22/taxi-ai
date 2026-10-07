@@ -219,6 +219,7 @@ export function removeCheckoutPaymentFixtureTables(db) {
 
 /** Old-schema fixtures must not discard a real delivery milestone or inbox. */
 export function removeDeliveryUpdatesFixtureTables(db) {
+  removeParcelHardeningFixtureTables(db);
   for (const table of ['delivery_update_push_jobs','delivery_updates']) {
     if (!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(table)) continue;
     if (db.prepare(`SELECT count(*) AS n FROM ${table}`).get().n) throw new Error(`Cannot downgrade a populated ${table} fixture.`);
@@ -227,5 +228,29 @@ export function removeDeliveryUpdatesFixtureTables(db) {
   if (db.prepare('PRAGMA table_info(delivery_orders)').all().some(row => row.name === 'arrived_at')) {
     if (db.prepare('SELECT count(*) AS n FROM delivery_orders WHERE arrived_at IS NOT NULL').get().n) throw new Error('Cannot downgrade a parcel arrival fixture.');
     db.exec('ALTER TABLE delivery_orders DROP COLUMN arrived_at');
+  }
+}
+
+/** Test-only reconstruction: never discard recorded handovers, exceptions or bound invitations. */
+export function removeParcelHardeningFixtureTables(db) {
+  for (const name of ['safety_alert_review_events','safety_alert_reviews']) {
+    if (!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(name)) continue;
+    if (db.prepare(`SELECT count(*) AS n FROM ${name}`).get().n) throw new Error('Cannot downgrade populated safety review evidence.');
+    db.exec(`DROP TABLE ${name}`);
+  }
+  db.exec('DROP INDEX IF EXISTS safety_alerts_admin_queue; DROP INDEX IF EXISTS safety_alerts_admin_kind;');
+  const exists = table => Boolean(db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(table));
+  const tables = ['delivery_exception_events', 'delivery_handover_evidence'];
+  for (const table of tables) {
+    if (exists(table) && db.prepare(`SELECT count(*) AS n FROM ${table}`).get().n) throw new Error(`Cannot downgrade a populated ${table} fixture.`);
+  }
+  const columns = exists('parcel_tracking_links') ? db.prepare('PRAGMA table_info(parcel_tracking_links)').all().map(row => row.name) : [];
+  for (const column of ['intended_email_hash', 'recipient_verified_at']) {
+    if (columns.includes(column) && db.prepare(`SELECT count(*) AS n FROM parcel_tracking_links WHERE ${column} IS NOT NULL`).get().n)
+      throw new Error('Cannot downgrade a verified-recipient fixture.');
+  }
+  for (const table of tables) if (exists(table)) db.exec(`DROP TABLE ${table}`);
+  for (const column of ['intended_email_hash', 'recipient_verified_at']) {
+    if (columns.includes(column)) db.exec(`ALTER TABLE parcel_tracking_links DROP COLUMN ${column}`);
   }
 }

@@ -3,9 +3,10 @@ import { readReceivedParcelsResponse, readParcelResponse } from '/shared/parcels
 /** Recipient reads are session-scoped; possession of a link alone never displays a parcel. */
 export function createParcelsController({ client, view, token = '', initialId = null, onAccepted = () => {}, now = Date.now }) {
   let identity = null, user = null, parcels = [], selectedId = null, settings = null, busy = false, error = '', epoch = 0, paused = false;
+  let preview = null, previewAt = -Infinity;
   let loading = false, loadId = 0, actionId = 0, validUntil = 0;
   const identityOf = (session) => session.user ? `${session.user.id}:${session.csrfToken}` : null;
-  function render() { view.render({ identity, user, parcels, selectedId, settings, busy, loading, error, hasInvitation: Boolean(token) }); }
+  function render() { view.render({ identity, user, parcels, selectedId, settings, busy, loading, error, preview, hasInvitation: Boolean(token) }); }
   function session(value) {
     const next = identityOf(value);
     if (next !== identity) { epoch++; parcels = []; selectedId = null; settings = null; validUntil = 0; client.reset(); }
@@ -19,7 +20,19 @@ export function createParcelsController({ client, view, token = '', initialId = 
       const account = await client.request('/api/session');
       if (paused || start !== epoch) return;
       session(account); start = epoch;
-      if (!user) return;
+      if (!user) {
+        if (token && now() - previewAt >= 60_000) {
+          previewAt = now(); preview = null;
+          const result = await client.request('/api/parcels/preview', { method: 'POST', data: { token } });
+          if (paused || start !== epoch) return;
+          const p = result.preview;
+          if (!p || Object.keys(p).some(key => !['reference', 'status', 'updatedAt', 'requiresVerifiedAccount'].includes(key))
+            || !/^PARCEL-[A-F0-9]{8}$/.test(p.reference) || typeof p.status !== 'string'
+            || !Number.isSafeInteger(p.updatedAt) || p.requiresVerifiedAccount !== true) throw new Error('Parcel status could not be verified.');
+          preview = p;
+        }
+        return;
+      }
       const key = identity;
       const [response, maps] = await Promise.all([client.request('/api/parcels/received'), client.request('/api/locations')]);
       if (paused || start !== epoch) return;
@@ -55,7 +68,7 @@ export function createParcelsController({ client, view, token = '', initialId = 
   }
   return Object.freeze({ refresh, accept,
     select(rideId) { if (parcels.some((parcel) => parcel.rideId === rideId)) { selectedId = rideId; render(); } },
-    pause() { paused = true; epoch++; loadId++; actionId++; loading = busy = false; parcels = []; selectedId = null; user = null; identity = null; settings = null; validUntil = 0; client.reset(); render(); },
+    pause() { paused = true; epoch++; loadId++; actionId++; loading = busy = false; parcels = []; preview = null; previewAt = -Infinity; selectedId = null; user = null; identity = null; settings = null; validUntil = 0; client.reset(); render(); },
     resume() { paused = false; return refresh(); },
     tick() { if (validUntil && now() >= validUntil) { validUntil = 0; parcels = []; selectedId = null; error = 'Tracking updates paused. Refresh to check your recipient access and delivery progress.'; render(); } },
     close() { token = ''; this.pause(); },

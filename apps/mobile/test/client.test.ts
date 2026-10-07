@@ -365,7 +365,7 @@ test('native face comparison sends consent and version once per request key with
   const result = { driverId: user.id, status: 'draft', version: 4, busy: false, details: null,
     vehicle: { model: 'Toyota Corolla', plate: 'TEST-123' }, documents: [], eligibility: { eligible: false, missing: [], expired: [] }, reviewReason: null,
     faceCheck: { available: true, provider: 'aws_rekognition', status: 'matched', reason: null, checkedAt: 1000, similarity: 98.75, threshold: 95,
-      consentVersion: 'driver-face-match-v1', retryAfter: 61000 } };
+      consentVersion: 'driver-face-match-v2', retryAfter: 61000 } };
   const calls: Array<{ url: string; options: RequestInit }> = [];
   const { app, storage } = client(async (url, options) => {
     if (url.endsWith('/auth/login')) return response(auth());
@@ -500,8 +500,8 @@ test('family read cancellation reaches the network and malformed observer payloa
 });
 
 const checkoutFixture = (kind: 'ride' | 'food' = 'food') => ({
-  settings: { provider: 'paystack', mode: 'test', enabled: true }, canStart: false, isPayer: true,
-  payment: { id, kind, targetId: id, status: 'pending', amountKobo: 125000, currency: 'NGN', version: 1,
+  settings: { provider: 'paystack', mode: 'test', enabled: true, walletStrategy: 'paystack_hosted', walletCandidates: ['apple_pay','google_pay'], walletAvailability: 'provider_device_eligibility' }, canStart: false, isPayer: true,
+  payment: { id, kind, targetId: id, status: 'pending', amountKobo: 125000, currency: 'NGN', providerMode: 'test', version: 1,
     checkoutUrl: 'https://checkout.paystack.com/test-example', reference: 'taxiai_test_reference', refundRequired: false,
     createdAt: 1000, updatedAt: 1000, paidAt: null, receipt: null },
 });

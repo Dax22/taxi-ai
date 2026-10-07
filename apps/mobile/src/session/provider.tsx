@@ -5,6 +5,7 @@ import { MobileClient, ApiError } from '../api/client.ts';
 import { secureVault, savedAppRole, saveAppRole } from './secure-vault';
 import { stopAllBackgroundTracking } from '../tracking/background-task';
 import { restoreSession } from './restore';
+import { mobileHeartbeat } from '../operations/heartbeat';
 import type { AppRole } from './secure-vault';
 import type { Account, Mode } from '../../../../packages/shared/src/mobile-contracts.mjs';
 
@@ -74,6 +75,11 @@ export function SessionProvider({ children }: PropsWithChildren) {
     if (user && ready && !blocked && AppState.currentState === 'active') client.resumeUpdates();
     else client.pauseUpdates();
     return () => client.pauseUpdates();
+  }, [client, user?.id, ready, blocked]);
+  useEffect(() => {
+    if (!user || !ready || blocked || AppState.currentState !== 'active') return;
+    let active=true; const send=()=>{ if(active&&client.account()?.id===user.id) void mobileHeartbeat(client).catch(()=>{}); };
+    send(); const timer=setInterval(send,5*60_000); return()=>{active=false;clearInterval(timer);};
   }, [client, user?.id, ready, blocked]);
   const logout = useCallback(async () => {
     setStartupError(''); setNotice('');

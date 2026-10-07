@@ -10,7 +10,7 @@ export function createParcelsView({ onSelect, onAccept, onRefresh, now = Date.no
   $('parcel-map-enable').addEventListener('click', () => { online = !online; render(current); });
   function render(state) {
     current = state;
-    const { user, parcels, selectedId, settings, busy, loading, error, hasInvitation } = state;
+    const { user, parcels, selectedId, settings, busy, loading, error, hasInvitation, preview } = state;
     $('parcel-auth').hidden = Boolean(user);
     $('parcel-identity').textContent = user ? `Signed in as ${user.name}` : '';
     $('parcel-invitation').hidden = !hasInvitation;
@@ -18,6 +18,7 @@ export function createParcelsView({ onSelect, onAccept, onRefresh, now = Date.no
     $('parcel-refresh').disabled = busy || loading;
     $('parcel-error').textContent = error;
     $('parcel-state').textContent = loading ? 'Updating your parcels…' : !user ? 'Sign in to receive and track your parcel.' : parcels.length ? 'Choose a delivery below.' : 'No incoming parcels yet. Open the private invitation sent by your sender.';
+    if (!loading && !user && preview) $('parcel-state').textContent = `${preview.reference}: ${statuses[preview.status] ?? 'Status unavailable'}. Last delivery update ${new Date(preview.updatedAt).toLocaleString()}. Sign in with the intended, verified email to accept the invitation and view precise tracking after collection.`;
     $('parcel-list').replaceChildren();
     for (const parcel of parcels) {
       const button = element('button', undefined, 'request-row'); button.type = 'button';
@@ -26,6 +27,8 @@ export function createParcelsView({ onSelect, onAccept, onRefresh, now = Date.no
       button.addEventListener('click', () => onSelect(parcel.rideId)); $('parcel-list').append(button);
     }
     const parcel = parcels.find((item) => item.rideId === selectedId);
+    $('parcel-operations-panel').hidden = !parcel;
+    $('parcel-operations-open').href = parcel ? `/parcel-operations?id=${parcel.rideId}` : '/parcels';
     $('parcel-detail').hidden = !parcel; $('parcel-details').replaceChildren();
     $('parcel-pin-panel').hidden = true; $('parcel-pin').textContent = '';
     $('parcel-map-enable').hidden = !parcel || parcel.status !== 'in_progress' || !settings?.enabled;

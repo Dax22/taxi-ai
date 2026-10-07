@@ -8,16 +8,20 @@ const secretKey = 'sk_test_' + 'a'.repeat(40);
 const config = createPaystackConfig({ TAXI_AI_PAYMENT_PROVIDER: 'paystack_test', PAYSTACK_SECRET_KEY: secretKey }, { mode: 'local', port: 3003 });
 const json = data => new Response(JSON.stringify({ status: true, data }), { headers: { 'Content-Type': 'application/json' } });
 
-test('configuration is off by default, refuses live credentials, and retains verification during rollout pause', async () => {
+test('configuration is off by default, live mode needs two explicit gates, and paused verification keeps its key mode', async () => {
   assert.equal(createPaystackConfig({}).enabled, false);
   assert.equal(config.callbackUrl, 'http://localhost:3003/payment-return');
-  assert.throws(() => createPaystackConfig({ TAXI_AI_PAYMENT_PROVIDER: 'paystack_live' }));
-  for (const mode of ['off', 'paystack_test']) assert.throws(() => createPaystackConfig({ TAXI_AI_PAYMENT_PROVIDER: mode, PAYSTACK_SECRET_KEY: 'sk_live_' + 'b'.repeat(40) }), /Live keys/);
+  const liveKey = 'sk_live_' + 'b'.repeat(40);
+  assert.throws(() => createPaystackConfig({ TAXI_AI_PAYMENT_PROVIDER: 'paystack_live', PAYSTACK_SECRET_KEY: liveKey }, { mode: 'staging', publicOrigin: 'https://taxiai.app' }), /LIVE_ENABLED/);
+  assert.throws(() => createPaystackConfig({ TAXI_AI_PAYMENT_PROVIDER: 'paystack_live', TAXI_AI_PAYSTACK_LIVE_ENABLED: 'true', PAYSTACK_SECRET_KEY: secretKey }, { mode: 'staging', publicOrigin: 'https://taxiai.app' }), /sk_live/);
+  const live = createPaystackConfig({ TAXI_AI_PAYMENT_PROVIDER: 'paystack_live', TAXI_AI_PAYSTACK_LIVE_ENABLED: 'true', PAYSTACK_SECRET_KEY: liveKey }, { mode: 'staging', publicOrigin: 'https://taxiai.app' });
+  assert.equal(live.enabled, true); assert.equal(live.mode, 'live'); assert.equal(live.callbackUrl, 'https://taxiai.app/payment-return');
+  assert.throws(() => createPaystackConfig({ TAXI_AI_PAYMENT_PROVIDER: 'paystack_test', PAYSTACK_SECRET_KEY: liveKey }), /sk_test/);
   assert.throws(() => createPaystackConfig({ TAXI_AI_PAYMENT_PROVIDER: 'paystack_test' }));
   assert.throws(() => createPaystackConfig({ TAXI_AI_PAYMENT_PROVIDER: 'paystack_test', PAYSTACK_SECRET_KEY: secretKey }, { mode: 'staging', publicOrigin: 'http://app.example.test' }));
   const paused = createPaystackProvider({ config: createPaystackConfig({ TAXI_AI_PAYMENT_PROVIDER: 'off', PAYSTACK_SECRET_KEY: secretKey }),
     fetchImpl: async () => json({ reference: 'TEST', status: 'pending', amount: 10000, currency: 'NGN', domain: 'test', id: 123 }) });
-  assert.equal(paused.enabled, false); assert.equal(paused.configured, true);
+  assert.equal(paused.enabled, false); assert.equal(paused.configured, true); assert.equal(paused.mode, 'test');
   assert.equal((await paused.verify('TEST')).status, 'pending');
   await assert.rejects(paused.initialize({}), { code: 'PAYMENTS_DISABLED' });
 });

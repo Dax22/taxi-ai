@@ -39,9 +39,13 @@ export class ParcelLinkController {
     } catch (e) { if (this.active && epoch === this.epoch) this.patch({ value: null, token: '', stale: true, error: e instanceof Error ? e.message : 'Could not refresh the parcel invitation.' }); }
     finally { if (epoch === this.epoch) this.patch({ loading: false }); }
   }
-  async create(expectedLinkId: string | null) {
+  async create(expectedLinkId: string | null, recipientEmail = '') {
     if (!this.available() || !this.state.value?.canCreate || (this.state.value.link?.id ?? null) !== expectedLinkId) return;
-    this.command = { action: 'link', data: { expectedLinkId }, key: this.key() }; await this.run();
+    recipientEmail = recipientEmail.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipientEmail)) {
+      this.patch({ error: 'Enter your recipient’s verified Taxi Ai account email.' }); return;
+    }
+    this.command = { action: 'link', data: { expectedLinkId, recipientEmail }, key: this.key() }; await this.run();
   }
   async revoke(linkId: string, expectedVersion: number) {
     const link = this.state.value?.link;

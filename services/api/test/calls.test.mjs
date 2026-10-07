@@ -219,3 +219,27 @@ test('redial limits, maximum duration and configuration changes cannot leave par
   assert.equal(h.db.prepare('SELECT offer_sdp FROM voice_calls WHERE id = ?').get(call.id).offer_sdp, null);
   assert.equal(h.db.prepare('SELECT count(*) AS n FROM voice_participants').get().n, 0);
 });
+
+test('native device sessions can own masked calls without exposing call ownership to another signed-in device', async (t) => {
+  const { h, customer, driver, ride } = await setup(t);
+  async function login(actor,name) {
+    const response=await fetch(h.base+'/api/mobile/v1/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:actor.user.email,password:PASSWORD,deviceName:name})});
+    assert.equal(response.status,200);return (await response.json()).credentials;
+  }
+  const customerPhone=await login(customer,'Customer native phone'),driverPhone=await login(driver,'Driver native phone'),otherCustomer=await login(customer,'Other customer phone');
+  const send=async(credentials,path,{data,key=randomUUID()}={})=>{
+    const response=await fetch(h.base+'/api/mobile/v1'+path,{method:data===undefined?'GET':'POST',headers:{Authorization:`Bearer ${credentials.accessToken}`,...(data===undefined?{}:{'Content-Type':'application/json','Idempotency-Key':key})},...(data===undefined?{}:{body:JSON.stringify(data)})});
+    return {status:response.status,body:await response.json()};
+  };
+  let started=await send(customerPhone,`/rides/${ride.id}/calls`,{data:{}});assert.equal(started.status,200,JSON.stringify(started.body));const call=started.body.call;assert.equal(call.owned,true);
+  const incoming=await send(driverPhone,'/calls');assert.equal(incoming.body.active.id,call.id);assert.equal(incoming.body.active.owned,false);
+  const other=await send(otherCustomer,'/calls');assert.equal(other.body.active.id,call.id);assert.equal(other.body.active.owned,false);
+  const accepted=await send(driverPhone,`/calls/${call.id}/accept`,{data:{expectedVersion:call.version}});assert.equal(accepted.status,200,JSON.stringify(accepted.body));
+  assert.equal((await send(otherCustomer,`/calls/${call.id}/media`)).body.error.code,'CALL_WINDOW');
+  const callerMedia=await send(customerPhone,`/calls/${call.id}/media`);assert.equal(callerMedia.status,200);assert.deepEqual(callerMedia.body.configuration.iceServers,[]);
+  const offer=await send(customerPhone,`/calls/${call.id}/signal`,{data:{type:'offer',sdp:SDP}});assert.equal(offer.status,200,JSON.stringify(offer.body));
+  const calleeMedia=await send(driverPhone,`/calls/${call.id}/media`);assert.deepEqual(calleeMedia.body.remoteDescription,{type:'offer',sdp:SDP});
+  const answerResult=await send(driverPhone,`/calls/${call.id}/signal`,{data:{type:'answer',sdp:SDP}});assert.equal(answerResult.status,200);
+  assert.equal((await send(customerPhone,`/calls/${call.id}/pulse`,{data:{connected:true}})).status,200);
+  assert.equal((await send(driverPhone,`/calls/${call.id}/pulse`,{data:{connected:true}})).body.call.status,'connected');
+});

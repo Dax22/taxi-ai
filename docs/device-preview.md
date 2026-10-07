@@ -1,5 +1,7 @@
 # Installing and accepting the device preview
 
+> **Current production acceptance path:** use [`mobile-production-acceptance.md`](mobile-production-acceptance.md) and the EAS `acceptance` profile for signed iOS/Android builds against `https://taxiai.app`. This document retains the deeper tracking/device scenarios. The old Alibaba staging references below are historical and are not the current production host.
+
 The `preview` EAS profile builds an Android APK or an iOS ad hoc app with a
 bundled JavaScript application. It does not require a Metro server. The
 `simulator` profile produces an iOS Simulator build, not a phone installation.
@@ -12,12 +14,7 @@ builds) Apple Developer account. Confirm ownership of the provisional
 `com.taxiai.app` identifier before registering it. Do not paste signing keys,
 service-account JSON, passwords or access tokens into chat or commit them.
 
-Deploy the private backend first using [staging.md](staging.md): an Alibaba
-server with persistent disk, Docker Compose and a DNS name pointing to it.
-Keep the invited-tester gate and only publish gateway ports 80/443. Take a
-backup before upgrading an existing database. Configure maps for hosted booking;
-the sample-area workflow is local-only. Hosting credentials and payment readiness
-have not been verified, and no host has been provisioned by this change.
+The current production backend is already hosted on Tencent Cloud and served at `https://taxiai.app`. Keep gateway exposure limited to HTTPS/HTTP, take a backup before database upgrades, and use the Production Acceptance Center for real-device/provider evidence. The sample-area workflow remains local-only.
 
 The staging Compose file now forwards `TAXI_AI_PUSH_ENABLED`,
 `TAXI_AI_EXPO_PROJECT_ID` and the optional backend-only

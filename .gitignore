@@ -30,3 +30,6 @@ secrets/
 backups/
 *.sqlite-journal
 .taxi-ai-snapshot-*/
+
+__pycache__/
+.taxi-ai-builds/

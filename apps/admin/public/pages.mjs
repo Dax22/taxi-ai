@@ -1,9 +1,17 @@
+import { transactions, transactionDetail, people, personDetail, businesses, businessDetail, transactionExport, liveTransaction, diagnosis, workItems, workDetail } from './command-center-pages.mjs';
+import { insights, brief, platform, savedReports, campaigns, accessAudit } from './command-center-insights.mjs';
+import { restrictions, restrictionImpact, restrictionDetail } from './moderation-pages.mjs';
+import { safetyAlerts, safetyAlertDetail } from './safety-alert-pages.mjs';
 import { operations } from './operations-page.mjs';
 import { staff, audit } from './staff-pages.mjs';
 import { cases, caseDetail } from './case-pages.mjs';
 import { finance, financeDetail } from './finance-pages.mjs';
-import { compliance, complianceDetail } from './compliance-pages.mjs';
+import { compliance, complianceDetail, complianceDocument } from './compliance-pages.mjs';
 import { demand } from './demand-page.mjs';
+import { matching } from './matching-page.mjs';
+import { mobile } from './mobile-page.mjs';
+import { acceptance } from './acceptance-page.mjs';
+import { investigations } from './investigations-page.mjs';
 import { coverage } from './coverage-page.mjs';
 import { announcements } from './announcements-page.mjs';
 import { el, link, badge, avatar, panel, cards, table, empty, pagination, filterForm, detailsList, person, money, count, percent, date } from './ui.mjs';
@@ -149,4 +157,4 @@ function analytics(data, route, access) {
   fragment.append(reportingNote(data.range), el('p', 'Completion and cancellation rates divide by all requests in this period. Expired requests are shown separately. The average fare is rounded down to a whole kobo.', 'definition-note'));
   return fragment;
 }
-export const renderPage = (route, data, access) => ({ overview, accounts, account, trips, trip, analytics, operations, staff, audit, cases, case: caseDetail, finance, financeDetail, compliance, complianceDetail, demand, coverage, announcements })[route.name](data, route, access);
+export const renderPage = (route, data, access) => ({ safetyAlerts, safetyAlertDetail, transactions, transactionDetail, people, personDetail, businesses, businessDetail, transactionExport, liveTransaction, diagnosis, workItems, workDetail, insights, brief, platform, savedReports, campaigns, accessAudit, restrictions, restrictionImpact, restrictionDetail, overview, accounts, account, trips, trip, analytics, operations, staff, audit, cases, case: caseDetail, finance, financeDetail, compliance, complianceDetail, complianceDocument, demand, matching, mobile, acceptance, investigations, coverage, announcements })[route.name](data, route, access);

@@ -91,3 +91,27 @@ See [roles, MFA setup and case workflows](../../docs/admin-workspace.md).
 Dedicated staff sessions/origin and operational readiness remain deployment work.
 Browser/device visual acceptance remains pending; DOM tests do not establish
 layout or accessibility on an actual browser.
+
+## Unified administration extension
+
+The development branch adds `/admin/transactions`, `/admin/people`, `/admin/businesses`,
+`/admin/restrictions`, `/admin/work`, `/admin/insights`, `/admin/brief`, `/admin/reports`,
+`/admin/campaigns`, `/admin/platform`, and `/admin/access-audit`.
+Transaction details use `/admin/transactions/{ride|courier|food}/{id}`. An authorized
+staff member may open a purpose-audited location view for a specific active transaction;
+this does not add raw GPS to the older reporting APIs or to Finance's permissions.
+
+Account notices and appeals are available on the customer website at `/account-notices`.
+Server-side restrictions apply to web and native service requests, including matching.
+Read [the implementation and acceptance boundaries](../../docs/admin-expansion.md)
+before enabling these controls. This is source implementation, not confirmation that
+the current production deployment contains the extension. SQLite migrations 49–50
+and PostgreSQL migrations 23–24 must be applied through a backed-up, verified release.
+
+Operational review forms do not execute refunds, reassign work, or change delivery
+facts. Promotion records are planning drafts and saved reports do not schedule email.
+The implementation guide lists every intentionally unavailable external or advanced action.
+
+The [admin acceptance checklist](../../docs/admin-acceptance-checklist.md) covers role-specific screens, cross-service filters, safe restriction/reinstatement, actual browser checks and production release boundaries.
+
+Recorded verification results are in [admin-validation.md](../../docs/admin-validation.md).

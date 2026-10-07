@@ -11,10 +11,10 @@ const viewSource = (await readFile(new URL('../public/dashboard/checkout-payment
   .replace("'/shared/payments.mjs'", JSON.stringify(shared('payments'))).replace("'/shared/checkout-payments.mjs'", JSON.stringify(shared('checkout-payments')));
 const { createCheckoutPaymentView } = await import(uri(viewSource));
 const uuid = (n) => `00000000-0000-4000-a000-${String(n).padStart(12, '0')}`;
-const user = { id: uuid(1), role: 'customer' }, target = { kind: 'food', targetId: uuid(2), title: 'Food test checkout', grouped: true };
-const settings = { provider: 'paystack', mode: 'test', enabled: true };
+const user = { id: uuid(1), role: 'customer' }, target = { kind: 'food', targetId: uuid(2), title: 'Food checkout', grouped: true };
+const settings = { provider: 'paystack', mode: 'test', enabled: true, walletStrategy: 'paystack_hosted', walletCandidates: ['apple_pay','google_pay'], walletAvailability: 'provider_device_eligibility' };
 const absent = { settings, payment: null, isPayer: true, canStart: true };
-const pending = { id: uuid(3), kind: 'food', targetId: uuid(2), status: 'pending', version: 1, amountKobo: 412501, currency: 'NGN', checkoutUrl: 'https://checkout.paystack.com/test-session', reference: 'PAYSTACK-TEST-ONE', refundRequired: false, createdAt: 1000, updatedAt: 1000, paidAt: null, receipt: null };
+const pending = { id: uuid(3), kind: 'food', targetId: uuid(2), status: 'pending', version: 1, amountKobo: 412501, currency: 'NGN', providerMode: 'test', checkoutUrl: 'https://checkout.paystack.com/test-session', reference: 'PAYSTACK-TEST-ONE', refundRequired: false, createdAt: 1000, updatedAt: 1000, paidAt: null, receipt: null };
 const saved = (payment, extra = {}) => ({ settings, payment, isPayer: true, canStart: false, ...extra });
 const paid = { ...pending, status: 'paid', version: 2, checkoutUrl: null, paidAt: 2000,
   receipt: { provider: 'paystack', mode: 'test', reference: pending.reference, amountKobo: pending.amountKobo, currency: 'NGN', paidAt: 2000, notice: 'PAYSTACK TEST RECEIPT — NO LIVE MONEY MOVED' } };
@@ -85,7 +85,7 @@ test('ride simulator remains available only for disabled legacy targets without 
   assert.equal(simState.hostedCheckout, true);
   f.response = { ...absent, canStart: false, settings: { ...settings, enabled: false } }; await payments.poll(); assert.equal(legacyReads, 1); assert.equal(simState.hostedCheckout, false);
   f.response = saved({ ...paid, kind: 'ride' }, { settings: { ...settings, enabled: false } }); await payments.poll(); assert.equal(simState.hostedCheckout, true); assert.equal(legacyReads, 1);
-  assert.equal(rideCheckoutTarget(user, { ...ride, status: 'booked', delivery: {} }).title, 'Courier test checkout');
+  assert.equal(rideCheckoutTarget(user, { ...ride, status: 'booked', delivery: {} }).title, 'Courier checkout');
   assert.equal(rideCheckoutTarget(user, { ...ride, status: 'cancelled', trip: null }), null, 'An unbooked cancellation has no payable trip.');
   assert.equal(rideCheckoutTarget(user, { ...ride, status: 'cancelled', trip: { paymentMode: 'paystack_test' } }).targetId, ride.id, 'Cancelled booked payments remain reviewable.');
 });
@@ -134,7 +134,7 @@ test('payment UI hides malformed checkout links, freezes uncertain actions and p
 
 test('hosted return page is neutral, has no query-driven script and directs users to authenticated verification', async () => {
   const html = await readFile(new URL('../public/payment-return.html', import.meta.url), 'utf8');
-  assert.match(html, /This page does not confirm payment/); assert.match(html, /Check payment/); assert.match(html, /No real money/);
+  assert.match(html, /This page does not confirm payment/); assert.match(html, /Check payment/); assert.match(html, /Paystack checkout/i);
   assert.doesNotMatch(html, /<script|URLSearchParams|transaction_status/i);
 });
 

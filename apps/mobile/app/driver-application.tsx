@@ -17,7 +17,7 @@ function Application() {
   const remove = (id: string) => Alert.alert('Remove this document?', 'You will need to upload a replacement before submitting.', [
     { text: 'Keep document', style: 'cancel' }, { text: 'Remove', style: 'destructive', onPress: () => void f.change('remove',id) },
   ]);
-  const reopen = () => Alert.alert('Edit / change vehicle?', 'This pauses new jobs until approval. Changing vehicle details removes its current vehicle document, insurance and vehicle photo so you can upload replacements. Your driver photo and licence stay in the application.', [
+  const reopen = () => Alert.alert('Edit / change vehicle?', 'This pauses new jobs until approval. Changing vehicle details removes its current vehicle document and vehicle photo so you can upload replacements. Your driver photo and licence stay in the application.', [
     { text: 'Keep current application', style: 'cancel' }, { text: 'Continue to edit vehicle', onPress: () => void f.change('reopen') },
   ]);
   return <Screen key={f.step}><Pill>DRIVE WITH TAXI AI</Pill><Heading title="Your vehicle. Your next chapter." subtitle="A guided application, saved to the same account on your phone and the web."/>

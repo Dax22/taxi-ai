@@ -29,6 +29,7 @@ class Node {
   querySelectorAll(query) { return all(this).filter((node) => query.startsWith('a[') && node.tag === 'a' && node.attributes.href?.startsWith('/admin')); }
   querySelector() { return null; }
   get elements() { return all(this).filter((node) => ['input', 'select', 'textarea'].includes(node.tag)).map((node) => ({ name: node.attributes.name, value: node.value, dataset: node.dataset })); }
+  addEventListener(type,handler) { this.handlers??={};this.handlers[type]=handler; }
   set innerHTML(value) { throw new Error('Unsafe HTML assignment: ' + value); }
 }
 const all = (node) => [node, ...node.children.flatMap(all)];
@@ -118,7 +119,7 @@ test('demand renders measured request cohorts, WAT heat values, denominator defi
 test('new pages keep scoped navigation and finance landing while denied pages never fetch protected data', async (t) => {
   const f = fixture(t), view = createAdminView(), access = { role: 'finance', permissions: ['finance.read', 'analytics.read'] };
   view.render(route('finance'), financeData(), { name: 'Finance A' }, access);
-  assert.deepEqual(f.nav.filter((node) => !node.hidden).map((node) => node.dataset.section), ['analytics', 'finance']);
+  assert.deepEqual(f.nav.filter((node) => !node.hidden).map((node) => node.dataset.section), ['insights', 'analytics', 'finance']);
   assert.equal(defaultPage(access), '/admin/finance'); assert.equal(f.nodes.get('legacy-review').hidden, true);
   assert.equal(route('finance/' + id).permission, 'finance.read'); assert.equal(route('compliance/' + id).permission, 'compliance.read'); assert.equal(route('demand').permission, 'demand.read');
   assert.throws(() => route('demand/' + id));
@@ -128,4 +129,30 @@ test('new pages keep scoped navigation and finance landing while denied pages ne
   assert.deepEqual(navigated, ['/admin/finance']); assert.equal(paths.length, 0);
   await createAdminController({ client, view: controllerView, route: route('compliance') }).load();
   assert.equal(paths.length, 0); assert.match(errors.at(-1), /does not have access/);
+});
+
+test('unified views preserve whole-cohort summaries, actionable links and explicit payment modes',t=>{
+ fixture(t);const item={id,service:'food',status:'placed',createdAt:now,updatedAt:now,customer:{id,name:'<script>buyer</script>'},worker:null,store:{id,name:'Kitchen'},pickup:'Kitchen',destination:'Maitama',amountKobo:'625000',paymentMode:'test',paymentStatus:'not_charged'};
+ const data={items:[item],nextBefore:null,summary:{total:3,groups:[{service:'food',paymentMode:'test',transactions:3,completed:1,cancelled:0,active:2,amountKobo:'1875000',unknownAmounts:0}],basis:'Source amounts, not revenue.'}};
+ const output=renderPage(route('transactions'),data,{permissions:['transactions.read','transactions.export']});
+ assert.match(text(output),/All matching transactions/);assert.match(text(output),/not_charged/);
+ assert.match(text(output),/<script>buyer<\/script>/);assert.equal(all(output).some(n=>n.tag==='script'),false);
+ assert.ok(all(output).some(n=>n.attributes.href==='/admin/transactions/food/'+id));
+ assert.ok(all(output).some(n=>n.attributes.href?.startsWith('/admin/transactions-export')));
+});
+test('moderation impact forms preserve versioned scope and never offer account session revocation during active work',t=>{
+ fixture(t);const output=renderPage(route('restriction-impact'),{asOf:now,subject:{id,name:'Test worker'},subjectType:'account',allowedScopes:['customer','driver','account'],impact:{activeJourneys:1,activeFoodOrders:0,total:1,policy:'Active jobs require supervised resolution.'}},{permissions:['moderation.manage']});
+ const form=all(output).find(n=>n.tag==='form');assert.equal(form.dataset.action,'/api/admin/console/restrictions');
+ const scopes=all(form).filter(n=>n.tag==='option').map(n=>n.attributes.value);
+ assert.ok(scopes.includes('driver'));assert.ok(!scopes.includes('account'));
+ const review=all(form).find(n=>n.attributes.name==='reviewAt');review.value='2026-09-26T10:30';
+ const expiry=all(form).find(n=>n.attributes.name==='expiresAt');expiry.value='';
+ assert.equal(formPayload(form).reviewAt,Date.parse('2026-09-26T09:30:00Z'));assert.equal(formPayload(form).expiresAt,null);
+ assert.match(text(output),/Existing|existing/);
+});
+test('typed admin detail routes reject arbitrary resource paths and use explicit permissions',()=>{
+ assert.equal(route('transactions/food/'+id).name,'transactionDetail');
+ assert.equal(route('live/courier/'+id).permission,'operations.location');
+ assert.equal(route('restrictions/'+id).permission,'moderation.read');
+ assert.throws(()=>route('live'));assert.throws(()=>route('transactions/unknown/'+id));assert.throws(()=>route('platform/'+id));
 });

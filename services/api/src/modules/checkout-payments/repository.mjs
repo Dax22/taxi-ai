@@ -1,4 +1,4 @@
-const columns = `id,kind,target_id AS targetId,customer_id AS customerId,amount_kobo AS amountKobo,currency,reference,status,version,
+const columns = `id,kind,target_id AS targetId,customer_id AS customerId,amount_kobo AS amountKobo,currency,reference,provider_mode AS providerMode,status,version,
   checkout_url AS checkoutUrl,receipt_json AS receiptJson,provider_transaction_id AS providerTransactionId,created_at AS createdAt,
   updated_at AS updatedAt,paid_at AS paidAt,closed_at AS closedAt,next_check_at AS nextCheckAt,check_count AS checkCount,
   lease_token AS leaseToken,lease_until AS leaseUntil,last_error AS lastError`;
@@ -9,9 +9,9 @@ export function createCheckoutPaymentsRepository(db) {
     byId: async id => await db.prepare(`SELECT ${columns} FROM checkout_payments WHERE id=?`).get(id) ?? null,
     byReference: async reference => await db.prepare(`SELECT ${columns} FROM checkout_payments WHERE reference=?`).get(reference) ?? null,
     async insert(row) {
-      return (await db.prepare(`INSERT INTO checkout_payments(id,kind,target_id,customer_id,amount_kobo,currency,reference,status,created_at,updated_at,next_check_at,lease_token,lease_until)
-        VALUES(?,?,?,?,?,?,?,'initializing',?,?,?,?,?) ON CONFLICT(kind,target_id) DO NOTHING`)
-        .run(row.id,row.kind,row.targetId,row.customerId,row.amountKobo,row.currency,row.reference,row.now,row.now,row.now+60_000,row.leaseToken,row.now+60_000)).changes === 1;
+      return (await db.prepare(`INSERT INTO checkout_payments(id,kind,target_id,customer_id,amount_kobo,currency,reference,provider_mode,status,created_at,updated_at,next_check_at,lease_token,lease_until)
+        VALUES(?,?,?,?,?,?,?,?,'initializing',?,?,?,?,?) ON CONFLICT(kind,target_id) DO NOTHING`)
+        .run(row.id,row.kind,row.targetId,row.customerId,row.amountKobo,row.currency,row.reference,row.providerMode,row.now,row.now,row.now+60_000,row.leaseToken,row.now+60_000)).changes === 1;
     },
     async initialized(id, leaseToken, url, now, error = null) {
       return (await db.prepare(`UPDATE checkout_payments SET status=?,checkout_url=?,last_error=?,updated_at=?,version=version+1,

@@ -8,6 +8,8 @@ async function reply(context, run) {
 }
 export function parcelTrackingRoutes(parcels) {
   return [
+    { method: 'POST', path: /^\/api\/parcels\/preview$/, access: 'auth',
+      handle: async context => ({ body: await parcels.preview(context.data) }) },
     { method: 'GET', path: /^\/api\/parcels\/received$/, access: 'read', handle: context => reply(context, () => parcels.list(context.user.id)) },
     { method: 'GET', path: /^\/api\/parcels\/received\/([a-f0-9-]{36})$/, access: 'read', handle: context => reply(context, () => parcels.received(context.user.id, context.match[1])) },
     { method: 'GET', path: /^\/api\/parcels\/([a-f0-9-]{36})\/invitation$/, access: 'read', handle: context => reply(context, () => parcels.get(context.user.id, context.match[1])) },

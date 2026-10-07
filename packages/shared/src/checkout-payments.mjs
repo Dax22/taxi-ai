@@ -3,7 +3,7 @@ const uuid = value => typeof value === 'string' && /^[a-f0-9]{8}-[a-f0-9]{4}-[a-
 const integer = value => Number.isSafeInteger(value) && value >= 0;
 const reference = value => typeof value === 'string' && value.length > 0 && value.length <= 160 && !/[\u0000-\u001f\u007f]/.test(value);
 const statuses = new Set(['initializing', 'pending', 'unknown', 'failed', 'paid', 'refund_required']);
-const receiptNotice = 'PAYSTACK TEST RECEIPT — NO LIVE MONEY MOVED';
+const receiptNotice = { test: 'PAYSTACK TEST RECEIPT — NO LIVE MONEY MOVED', live: 'PAYSTACK VERIFIED PAYMENT' };
 function check(condition) { if (!condition) throw new Error('Taxi Ai returned an incompatible test payment response. Refresh and try again.'); }
 
 /** An external checkout must stay on Paystack's exact HTTPS checkout origin. */
@@ -19,13 +19,17 @@ export function safeCheckoutUrl(value) {
 export function readCheckoutPaymentResponse(value, expected) {
   check(object(value) && object(value.settings));
   const { settings, payment: p, canStart, isPayer } = value;
-  check(settings.provider === 'paystack' && settings.mode === 'test' && typeof settings.enabled === 'boolean');
+  check(settings.provider === 'paystack' && ['test','live'].includes(settings.mode) && typeof settings.enabled === 'boolean'
+    && settings.walletStrategy === 'paystack_hosted'
+    && Array.isArray(settings.walletCandidates) && settings.walletCandidates.length === 2
+    && settings.walletCandidates[0] === 'apple_pay' && settings.walletCandidates[1] === 'google_pay'
+    && settings.walletAvailability === 'provider_device_eligibility');
   check(typeof canStart === 'boolean' && typeof isPayer === 'boolean' && (!canStart || settings.enabled && isPayer));
   check(value.replayed === undefined || typeof value.replayed === 'boolean');
   check(expected && ['ride', 'food'].includes(expected.kind) && uuid(expected.targetId));
   let payment = null;
   if (p !== null) {
-    check(object(p) && uuid(p.id) && p.kind === expected.kind && p.targetId === expected.targetId && statuses.has(p.status));
+    check(object(p) && uuid(p.id) && p.kind === expected.kind && p.targetId === expected.targetId && statuses.has(p.status) && ['test','live'].includes(p.providerMode));
     check(integer(p.version) && p.version >= 1 && integer(p.amountKobo) && p.amountKobo > 0 && p.currency === 'NGN');
     check(integer(p.createdAt) && integer(p.updatedAt) && (p.paidAt === null || integer(p.paidAt)) && typeof p.refundRequired === 'boolean');
     check(p.checkoutUrl === null || safeCheckoutUrl(p.checkoutUrl) !== null);
@@ -38,17 +42,18 @@ export function readCheckoutPaymentResponse(value, expected) {
       const r = p.receipt;
       check(object(r) && isPayer && ['paid', 'refund_required'].includes(p.status));
       check(reference(r.reference) && r.reference === p.reference && r.amountKobo === p.amountKobo && r.currency === 'NGN'
-        && integer(r.paidAt) && r.paidAt === p.paidAt && r.provider === 'paystack' && r.mode === 'test' && r.notice === receiptNotice);
+        && integer(r.paidAt) && r.paidAt === p.paidAt && r.provider === 'paystack' && r.mode === p.providerMode && r.notice === receiptNotice[p.providerMode]);
       receipt = { reference: r.reference, amountKobo: r.amountKobo, currency: r.currency, paidAt: r.paidAt,
         provider: r.provider, mode: r.mode, notice: r.notice };
     }
     check(!['paid', 'refund_required'].includes(p.status) || p.paidAt !== null && (!isPayer || receipt !== null));
     check(p.refundAmountKobo === undefined || p.refundAmountKobo === null || integer(p.refundAmountKobo) && p.refundAmountKobo <= p.amountKobo);
-    payment = { id: p.id, kind: p.kind, targetId: p.targetId, status: p.status, amountKobo: p.amountKobo, currency: p.currency,
+    payment = { id: p.id, kind: p.kind, targetId: p.targetId, status: p.status, amountKobo: p.amountKobo, currency: p.currency, providerMode: p.providerMode,
       version: p.version, checkoutUrl: p.checkoutUrl === null ? null : safeCheckoutUrl(p.checkoutUrl), reference: p.reference,
       refundRequired: p.refundRequired, createdAt: p.createdAt, updatedAt: p.updatedAt, paidAt: p.paidAt, receipt,
       ...(p.refundAmountKobo === undefined ? {} : { refundAmountKobo: p.refundAmountKobo }) };
   }
-  return { settings: { provider: 'paystack', mode: 'test', enabled: settings.enabled }, payment, canStart, isPayer,
+  return { settings: { provider: 'paystack', mode: settings.mode, enabled: settings.enabled, walletStrategy: 'paystack_hosted',
+      walletCandidates: ['apple_pay','google_pay'], walletAvailability: 'provider_device_eligibility' }, payment, canStart, isPayer,
     ...(value.replayed === undefined ? {} : { replayed: value.replayed }) };
 }

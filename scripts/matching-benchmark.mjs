@@ -98,15 +98,18 @@ async function childMain() {
   }
   process.once('disconnect', () => { void stop().catch(() => { process.exitCode = 1; }); });
   process.once('SIGTERM', () => { void stop().catch(() => { process.exitCode = 1; }); });
+  let stage = 'database_open';
   try {
     db = await openPostgresDatabase({ connectionString: validateLoadPostgresUrl(process.env.TAXI_AI_LOAD_POSTGRES_URL), schema,
       max: role === 'setup' ? 2 : Number(process.env.TAXI_AI_BENCH_POOL), migrate: role === 'setup' });
+    stage = 'application_compose';
     const options = { db, mapProvider: fixtureMap, callConfig: createCallConfig({ TAXI_AI_CALLS_MODE: 'off' }),
       workerConfig: createWorkerConfig({ TAXI_AI_PROCESS_ROLE: role === 'setup' ? 'api' : role,
         TAXI_AI_MATCHING_FAST_PATH: process.env.TAXI_AI_MATCHING_FAST_PATH }),
       dispatchConfig: { mode: 'sequential', requestRefresh: false }, allowSimulation: true };
     let actors;
     if (role === 'setup') {
+      stage = 'seed_actors';
       actors = await seedSyntheticActors(createApplication(options), Number(process.env.TAXI_AI_BENCH_ACTORS));
       const count = Number(process.env.TAXI_AI_BENCH_IDLE);
       for (let offset = 1; offset <= count; offset += 10000) {
@@ -115,10 +118,13 @@ async function childMain() {
           FROM generate_series($1::integer,$2::integer) n`, [offset, Math.min(count, offset + 9999), Date.now()]);
       }
       await db.exec('ANALYZE');
+      stage = 'ready';
     } else {
+      stage = 'server_start';
       server = createAppServer({ ...options, telemetry: createTelemetry({ enabled: false }),
         dispatchProfiler: createDispatchProfiler({ sampleEvery: 1, report: profiles.add }) });
       server.listen(0, '127.0.0.1'); await once(server, 'listening');
+      stage = 'ready';
     }
     lag.enable();
     statsTimer = setInterval(() => { const stats = db.stats(); peakWaiting = Math.max(peakWaiting, stats.waiting); peakConnections = Math.max(peakConnections, stats.total); }, 250);
@@ -131,7 +137,7 @@ async function childMain() {
     });
     process.send({ type: 'ready', ...(actors ? { actors } : { base: `http://127.0.0.1:${server.address().port}` }) });
   } catch (error) {
-    process.send?.({ type: 'error', code: /^[A-Z0-9_]{1,40}$/.test(error.code ?? '') ? error.code : 'SETUP_FAILED' });
+    process.send?.({ type: 'error', stage, code: /^[A-Z0-9_]{1,40}$/.test(error.code ?? '') ? error.code : 'SETUP_FAILED' });
     await stop(); process.exitCode = 1;
   }
 }
@@ -139,7 +145,7 @@ async function childMain() {
 function message(child, type, timeoutMs = 180000) {
   return new Promise((resolve, reject) => {
     const finish = (error, value) => { clearTimeout(timer); child.off('message', receive); child.off('exit', exited); child.off('error', failed); error ? reject(error) : resolve(value); };
-    const receive = (value) => { if (value.type === type) finish(null, value); else if (value.type === 'error') finish(new Error(`Benchmark child failed: ${value.code}`)); };
+    const receive = (value) => { if (value.type === type) finish(null, value); else if (value.type === 'error') finish(new Error(`Benchmark child failed: ${value.stage ?? 'unknown'}:${value.code}`)); };
     const exited = () => finish(new Error('Benchmark child stopped unexpectedly.'));
     const failed = () => finish(new Error('Benchmark child could not start.'));
     const timer = setTimeout(() => finish(new Error('Benchmark child timed out.')), timeoutMs);
@@ -173,8 +179,23 @@ export async function runMatchingBenchmark(options) {
       TAXI_AI_LOAD_POSTGRES_URL: postgresUrl, TAXI_AI_BENCH_POOL: String(options.poolSize), TAXI_AI_BENCH_ACTORS: String(options.actors),
       TAXI_AI_BENCH_IDLE: String(options.idleAccounts), TAXI_AI_MATCHING_FAST_PATH: String(options.fastPath),
       TAXI_AI_MAPS_MODE: 'off', TAXI_AI_CALLS_MODE: 'off', TAXI_AI_EMAIL_MODE: 'off',
-      TAXI_AI_PUSH_ENABLED: 'false', TAXI_AI_VEHICLE_VISION_MODE: 'off' } });
-    children.push(child); child.stdout.resume(); child.stderr.resume();
+      TAXI_AI_PUSH_ENABLED: 'false', TAXI_AI_VEHICLE_VISION_MODE: 'off', TAXI_AI_BENCH_DIAGNOSTICS: process.env.TAXI_AI_BENCH_DIAGNOSTICS ?? '' } });
+    children.push(child); child.stdout.resume();
+    if (process.env.TAXI_AI_BENCH_DIAGNOSTICS === 'safe-stage') {
+      child.stderr.setEncoding('utf8'); let diagnosticBuffer = '';
+      child.stderr.on('data', (chunk) => {
+        diagnosticBuffer += chunk;
+        const lines = diagnosticBuffer.split('\n'); diagnosticBuffer = lines.pop() ?? '';
+        for (const line of lines) if (/^BENCH_SERVER_ERROR=[A-Za-z][A-Za-z0-9_]{0,60}:[A-Z0-9_]{1,40}:[a-z_][a-z0-9_]{0,80}$/.test(line)) console.error(line);
+      });
+    } else child.stderr.resume();
+    if (process.env.TAXI_AI_BENCH_DIAGNOSTICS === 'safe-stage') child.on('message', (value) => {
+      if (value?.type === 'diagnostic' && value.kind === 'http_failure'
+        && /^[a-z_]{1,80}$/.test(value.operation ?? '') && Number.isInteger(value.status)
+        && /^[A-Z0-9_]{1,80}$/.test(value.code ?? '')) {
+        console.error(`BENCH_HTTP_FAILURE=${role}:${value.operation}:${value.status}:${value.code}`);
+      }
+    });
     return { child, ...await message(child, 'ready') };
   }
   let pumping = false, pumps = [];
@@ -192,7 +213,14 @@ export async function runMatchingBenchmark(options) {
             ...(data === undefined ? {} : { Origin: base, 'Content-Type': 'application/json', 'X-CSRF-Token': actor.csrf, 'Idempotency-Key': randomUUID() }) },
           ...(data === undefined ? {} : { body: JSON.stringify(data) }) });
         status = response.status; const body = await response.json();
-        if (!response.ok) { const error = new Error('Benchmark HTTP request failed.'); error.code = body.error?.code; throw error; }
+        if (!response.ok) {
+          const code = /^[A-Z0-9_]{1,80}$/.test(body.error?.code ?? '') ? body.error.code : 'HTTP_ERROR';
+          if (process.env.TAXI_AI_BENCH_DIAGNOSTICS === 'safe-stage' && /^[a-z_]{1,80}$/.test(operation)) {
+            console.error(`BENCH_HTTP_FAILURE=parent:${operation}:${status}:${code}`);
+            process.send?.({ type: 'diagnostic', kind: 'http_failure', operation, status, code });
+          }
+          const error = new Error('Benchmark HTTP request failed.'); error.code = code; throw error;
+        }
         return body;
       } finally { metrics.record(operation, status, performance.now() - begin); }
     }
@@ -303,6 +331,10 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       const options = parseMatchingOptions(process.argv.slice(2)), report = await runMatchingBenchmark(options), json = JSON.stringify(report, null, 2) + '\n';
       if (options.output) await writeFile(options.output, json, { flag: 'wx', mode: 0o600 });
       console.log(json); if (!report.passed) process.exitCode = 1;
-    } catch { console.error('Matching benchmark failed. Check the isolated database, options, and child process health; credentials and raw errors are omitted.'); process.exitCode = 1; }
+    } catch (error) {
+      if (process.env.TAXI_AI_BENCH_DIAGNOSTICS === 'safe-stage' && /^Benchmark child failed: [a-z_]+:[A-Z0-9_]+$/.test(error.message)) console.error(`BENCHMARK_FAILURE=${error.message}`);
+      else console.error('Matching benchmark failed. Check the isolated database, options, and child process health; credentials and raw errors are omitted.');
+      process.exitCode = 1;
+    }
   }
 }

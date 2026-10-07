@@ -50,6 +50,7 @@ function IncomingParcels() {
       </> : <Text style={styles.body}>{parcel.status === 'in_progress' ? 'Waiting for a recent location from the driver’s phone.' : parcel.status === 'completed' ? 'Delivery completed. Location sharing has ended.' : 'Driver location appears after the parcel is collected and the driver shares a recent position.'}</Text>}
       {parcel.dropoffPin && <><Text style={styles.label}>YOUR DELIVERY CODE</Text><Text selectable style={styles.title}>{parcel.dropoffPin}</Text><Text style={styles.body}>Give this code to the driver only after you receive and check your parcel. It confirms the handover.</Text></>}
       {parcel.verifiedAt && <Text style={styles.body}>Handover confirmed {new Date(parcel.verifiedAt).toLocaleString()}.</Text>}
+      <Button title="Delivery issues & handover record" secondary onPress={() => router.push({ pathname: '/parcel-operations', params: { id: parcel.rideId } })}/>
     </Card>}
     <Text style={styles.small}>Tracking refreshes every five seconds while this screen is open. Location depends on the driver sharing from their phone; it is never simulated.</Text>
   </Screen>;

@@ -21,7 +21,7 @@ async function fixture(t,options={}) {
   let verify=async reference=>({reference,amountKobo:context.amountKobo,currency:'NGN',domain:'test',status:'success',transactionId:'123456'});
   let apply=async record=>{ if(!record.eligible) return {applied:false}; await db.prepare('INSERT INTO test_fulfillment(target_id,applied_at) VALUES(?,?)').run(record.targetId,now);return {applied:true}; };
   const deps={repository,getAccount:async id=>users.get(id),contextFor:async(user,k,id)=>{check(id===targetId && k===kind && [customer.id,driver.id].includes(user.id),'NOT_FOUND','Not found');return {...context};},
-    onPaid:record=>apply(record),provider:{initialize:async args=>{assert.equal(inTransaction,0,'initialize outside transaction');initializeCalls++;return initialize(args);},verify:async reference=>{assert.equal(inTransaction,0,'verify outside transaction');verifyCalls++;return verify(reference);}},
+    onPaid:record=>apply(record),provider:{mode:options.mode??'test',initialize:async args=>{assert.equal(inTransaction,0,'initialize outside transaction');initializeCalls++;return initialize(args);},verify:async reference=>{assert.equal(inTransaction,0,'verify outside transaction');verifyCalls++;return verify(reference);}},
     unitOfWork:run=>db.transaction(async()=>{inTransaction++;try{return await run();}finally{inTransaction--;}}),
     tokens:{id:randomUUID,digest:value=>createHash('sha256').update(value).digest('hex')},audit:{record:async()=>{}},clock:()=>now,enabled:options.enabled??true};
   let service=createCheckoutPaymentsService(deps);
@@ -142,7 +142,7 @@ test('concurrent refresh and webhook verification use one leased provider reques
 
 test('reconciliation clamps an untrusted batch size to twenty-five rows',async t=>{
   const f=await fixture(t);for(let index=0;index<30;index++) {
-    const id=randomUUID();await f.repository.insert({id,kind:'ride',targetId:randomUUID(),customerId:f.customer.id,amountKobo:470001,currency:'NGN',reference:`TA-TEST-${id}`,now:f.now-60001,leaseToken:randomUUID()});
+    const id=randomUUID();await f.repository.insert({id,kind:'ride',targetId:randomUUID(),customerId:f.customer.id,amountKobo:470001,currency:'NGN',reference:`TA-TEST-${id}`,providerMode:'test',now:f.now-60001,leaseToken:randomUUID()});
   }
   f.setVerify(async reference=>({reference,amountKobo:470001,currency:'NGN',domain:'test',status:'pending'}));
   assert.equal((await f.service.reconcileDue({limit:10000})).checked,25);assert.equal(f.verifyCalls,25);
@@ -171,4 +171,18 @@ test('signed webhook hints for another application reference are ignored without
   assert.deepEqual(await f.service.handleVerifiedReference('TA-TEST-an-unrelated-reference'),{accepted:false});
   await assert.rejects(()=>f.service.handleVerifiedReference('malformed reference'),{code:'INVALID_INPUT'});
   assert.equal(f.verifyCalls,0);assert.equal(f.initializeCalls,0);
+});
+
+test('guarded live checkout keeps live references and receipts distinct from test money',async t=>{
+  const f=await fixture(t,{mode:'live'});
+  f.setVerify(async reference=>({reference,amountKobo:470001,currency:'NGN',domain:'test',status:'success',transactionId:'wrong-domain'}));
+  let result=await f.command('start',0);
+  assert.match(result.payment.reference,/^TA-LIVE-[a-f0-9-]{36}$/);
+  assert.equal(result.payment.providerMode,'live');assert.equal(result.settings.mode,'live');
+  result=await f.command('refresh',result.payment.version);
+  assert.equal(result.payment.status,'unknown');assert.equal(await f.count(),0);
+  f.setVerify(async reference=>({reference,amountKobo:470001,currency:'NGN',domain:'live',status:'success',transactionId:'live-123'}));
+  result=await f.command('refresh',result.payment.version);
+  assert.equal(result.payment.status,'paid');assert.equal(result.payment.receipt.mode,'live');
+  assert.equal(result.payment.receipt.notice,'PAYSTACK VERIFIED PAYMENT');assert.equal(await f.count(),1);
 });

@@ -58,7 +58,8 @@ async function parcelFixture(t, options = {}) {
   await step(people.customer, 'accept', { offerId: ride.negotiation.currentOffer.id });
   await step(people.customer, 'confirm');
   const pickupPin = ride.trip.pickupPin;
-  const link = ok(await people.customer.post(`/api/parcels/${ride.id}/link`, { expectedLinkId: null }));
+  h.db.prepare('INSERT INTO account_email_verifications VALUES (?,?,?)').run(recipient.user.id, recipient.user.email, h.now);
+  const link = ok(await people.customer.post(`/api/parcels/${ride.id}/link`, { expectedLinkId: null, recipientEmail: recipient.user.email }));
   ok(await recipient.post('/api/parcels/accept', { token: link.token }));
   await people.driver.shareTripLocation(ride.id);
   await step(people.driver, 'depart'); await step(people.driver, 'arrive');

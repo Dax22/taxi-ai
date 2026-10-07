@@ -1,13 +1,13 @@
 import { check } from '../../shared/errors.mjs';
 import { fields, label, emailAddress } from '../../shared/validation.mjs';
 
-export const PERMISSIONS = Object.freeze(['staff.manage','audit.read','operations.read','accounts.read','trips.read','analytics.read','finance.read','compliance.read','compliance.manage','demand.read','cases.support','cases.safety','announcements.manage','legacy.review']);
+export const PERMISSIONS = Object.freeze(['staff.manage','audit.read','operations.read','accounts.read','trips.read','analytics.read','finance.read','compliance.read','compliance.manage','demand.read','cases.support','cases.safety','announcements.manage','legacy.review','transactions.read','transactions.export','people.read','businesses.read','operations.location','platform.read','work.manage','reports.manage','growth.manage','moderation.read','moderation.manage','acceptance.read','acceptance.manage','mobile.read','mobile.manage','investigations.read','investigations.export']);
 export const ROLES = Object.freeze([
   { id: 'owner', label: 'Owner', permissions: PERMISSIONS },
-  { id: 'operations', label: 'Operations', permissions: ['operations.read','trips.read','compliance.read','compliance.manage','demand.read','announcements.manage'] },
-  { id: 'support', label: 'Support', permissions: ['cases.support','accounts.read','trips.read'] },
-  { id: 'safety', label: 'Safety', permissions: ['cases.safety','accounts.read','trips.read'] },
-  { id: 'finance', label: 'Finance', permissions: ['analytics.read','finance.read'] },
+  { id: 'operations', label: 'Operations', permissions: ['operations.read','trips.read','compliance.read','compliance.manage','demand.read','announcements.manage','transactions.read','people.read','businesses.read','operations.location','work.manage','moderation.read','moderation.manage','acceptance.read','acceptance.manage','mobile.read','mobile.manage'] },
+  { id: 'support', label: 'Support', permissions: ['cases.support','accounts.read','trips.read','transactions.read','people.read','businesses.read','work.manage'] },
+  { id: 'safety', label: 'Safety', permissions: ['cases.safety','accounts.read','trips.read','transactions.read','people.read','operations.location','work.manage','moderation.read','moderation.manage'] },
+  { id: 'finance', label: 'Finance', permissions: ['analytics.read','finance.read','work.manage'] },
 ].map((role) => Object.freeze({ ...role, permissions: Object.freeze(role.permissions) })));
 export const MFA_STEPUP_MS = 15 * 60_000;
 export const MFA_SETUP_MS = 10 * 60_000;

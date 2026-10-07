@@ -21,4 +21,5 @@ export interface ControllerBackground {
   start(share: LocationShare, serverNow: number, isCurrent: () => boolean): Promise<void>;
   stop(): Promise<void>;
   active(): Promise<boolean>;
+  recovering?(): Promise<boolean>;
 }

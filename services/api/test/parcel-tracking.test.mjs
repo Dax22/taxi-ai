@@ -13,7 +13,7 @@ const delivery = { description: 'Sealed parcel of test books', weightKg: 2, reci
 const ok = (response, status = 200) => { assert.equal(response.status, status, JSON.stringify(response.body)); return response.body; };
 const base = (ride) => `/api/parcels/${ride.id}`;
 const invite = async (sender, ride) => ok(await sender.send(base(ride) + '/invitation')).invitation;
-const create = (sender, ride, expectedLinkId = null, key = randomUUID()) => sender.post(base(ride) + '/link', { expectedLinkId }, key);
+const create = (sender, ride, expectedLinkId = null, key = randomUUID(), recipientEmail = 'parcel-recipient@example.test') => sender.post(base(ride) + '/link', { expectedLinkId, recipientEmail }, key);
 const accept = (recipient, token, key = randomUUID()) => recipient.post('/api/parcels/accept', { token }, key);
 const received = async (recipient, ride) => ok(await recipient.send(`/api/parcels/received/${ride.id}`)).parcel;
 const book = async (customer, extra = {}) => ok(await customer.post('/api/rides', { ...route, vehicleCategory: 'standard', delivery, ...extra }), 201).ride;
@@ -41,6 +41,9 @@ const login = async (actor) => ok(await actor.post('/api/auth/login', { email: a
 async function fixture(t, options) {
   const h = await harness(t, options), actors = await participants(h), recipient = h.client(), outsider = h.client();
   await recipient.register('parcel-recipient'); await outsider.register('parcel-outsider');
+  // Isolated mailbox-verification fixtures. These are not live email tests.
+  for (const actor of [recipient, outsider]) h.db.prepare('INSERT INTO account_email_verifications VALUES (?,?,?)')
+    .run(actor.user.id, actor.user.email, h.now);
   return { h, ...actors, recipient, outsider, ride: await book(actors.customer) };
 }
 function privateSnapshot(parcel, customer, driver, ride) {
@@ -100,6 +103,11 @@ test('car courier booking, pickup, recipient tracking and verified delivery comp
   assert.equal((await invite(customer, ride)).canCreate, false);
   assert.equal((await create(customer, ride, created.invitation.link.id)).status, 409);
   assert.equal(h.db.prepare('SELECT count(*) AS n FROM payments WHERE ride_id=?').get(ride.id).n, 1);
+  const recipientRecord = ok(await recipient.send(base(ride) + '/operations')).operations;
+  assert.equal(recipientRecord.state, 'delivered');
+  assert.equal(recipientRecord.evidence.method, 'recipient_pin');
+  assert.equal(recipientRecord.evidence.position, undefined, 'Recipients do not receive saved handover coordinates.');
+  assert.equal(recipientRecord.evidence.locationRecorded, false, 'Old GPS is not invented as a handover position.');
 });
 
 test('parcel links are sender-only and bind one signed-in recipient without granting booking or payment authority', async (t) => {
@@ -163,7 +171,7 @@ test('replacing and revoking parcel links immediately removes the former recipie
   const first = ok(await create(customer, ride));
   ok(await accept(recipient, first.token));
   assert.equal((await create(customer, ride)).body.error.code, 'STALE_VERSION');
-  const replacement = ok(await create(customer, ride, first.invitation.link.id));
+  const replacement = ok(await create(customer, ride, first.invitation.link.id, randomUUID(), outsider.user.email));
   assert.equal((await recipient.send(`/api/parcels/received/${ride.id}`)).status, 404);
   assert.deepEqual(ok(await recipient.send('/api/parcels/received')).parcels, []);
   assert.equal((await accept(outsider, first.token)).status, 404);
@@ -209,7 +217,7 @@ test('native parcel access uses bearer account membership and agrees with web ac
   assert.equal((await native(h, path + '/invitation', undefined, undefined, undefined, { Cookie: customer.cookie })).status, 401);
   assert.equal((await native(h, path + '/invitation', senderPhone.accessToken, undefined, undefined, { Origin: h.base })).status, 403);
   assert.equal((await native(h, path + '/link', senderPhone.accessToken, { expectedLinkId: null }, '')).status, 400);
-  const created = ok(await native(h, path + '/link', senderPhone.accessToken, { expectedLinkId: null }));
+  const created = ok(await native(h, path + '/link', senderPhone.accessToken, { expectedLinkId: null, recipientEmail: recipient.user.email }));
   assert.equal((await native(h, '/parcels/accept', created.token, { token: created.token })).status, 401);
   const key = randomUUID(), accepted = ok(await native(h, '/parcels/accept', receiverPhone.accessToken, { token: created.token }, key));
   assert.equal(accepted.parcel.rideId, ride.id);
@@ -236,7 +244,8 @@ test('courier matching excludes unapproved or incompatible vehicles and the parc
     vehicle: { ...DETAILS.vehicle, category: 'motorcycle', payloadKg: 20 } });
   await approveApplication(fixtureApi(admin), motorcycle.user.id); await motorcycle.online();
   let ride = await book(customer);
-  const created = ok(await create(customer, ride)); ok(await accept(recipientDriver, created.token));
+  h.db.prepare('INSERT INTO account_email_verifications VALUES (?,?,?)').run(recipientDriver.user.id, recipientDriver.user.email, h.now);
+  const created = ok(await create(customer, ride, null, randomUUID(), recipientDriver.user.email)); ok(await accept(recipientDriver, created.token));
   for (const driver of [recipientDriver, unapproved, motorcycle]) {
     const list = await driver.send('/api/rides');
     if (list.status === 200) assert.equal(list.body.available.some((item) => item.id === ride.id), false);
@@ -285,6 +294,7 @@ test('competing link replacement has one winner and per-parcel invitation limits
 test('native car courier booking and work contracts retain delivery details through recipient-verified completion', async (t) => {
   const h = await harness(t), { customer, driver } = await participants(h, 1, { online: false });
   const recipient = h.client(); await recipient.register('native-car-recipient');
+  h.db.prepare('INSERT INTO account_email_verifications VALUES (?,?,?)').run(recipient.user.id, recipient.user.email, h.now);
   const sender = await phone(h, customer), courier = await phone(h, driver), receiver = await phone(h, recipient), clientId = randomUUID();
   ok(await native(h, `/work/online?clientId=${clientId}`, courier.accessToken, { mode: 'sample', areaId: 'wuse-ii' }));
   let ride = parseBookingRide(ok(await native(h, '/booking/requests', sender.accessToken, { ...route, vehicleCategory: 'standard', delivery }))).ride;
@@ -294,7 +304,7 @@ test('native car courier booking and work contracts retain delivery details thro
   assert.equal(current.current.find((item) => item.id === ride.id).service, 'delivery');
   const work = parseWork(ok(await native(h, `/work?clientId=${clientId}`, courier.accessToken)));
   assert.equal(work.available.find((item) => item.id === ride.id).service, 'delivery');
-  const created = ok(await native(h, `/parcels/${ride.id}/link`, sender.accessToken, { expectedLinkId: null }));
+  const created = ok(await native(h, `/parcels/${ride.id}/link`, sender.accessToken, { expectedLinkId: null, recipientEmail: recipient.user.email }));
   ok(await native(h, '/parcels/accept', receiver.accessToken, { token: created.token }));
   const action = async (credentials, name, extra = {}) => {
     ride = parseJourney(ok(await native(h, `/journeys/${ride.id}/${name}`, credentials.accessToken,
@@ -315,4 +325,82 @@ test('native car courier booking and work contracts retain delivery details thro
   assert.equal(completed.status, 'completed'); assert.equal(completed.dropoffPin, null);
   const history = parseActivity(ok(await native(h, '/activity?mode=customer', sender.accessToken)), 'customer');
   assert.equal(history.history.find((item) => item.id === ride.id).service, 'delivery');
+});
+
+// Loopback-only integration with the disposable harness; no hosted accounts or providers.
+test('sender-authorized return closes the parcel without recording successful delivery', async t => {
+  const { h, customer, driver, recipient, ride: requested } = await fixture(t);
+  let ride = await confirm(customer, driver, requested);
+  const pickupPin = ride.trip.pickupPin;
+  await driver.shareTripLocation(ride.id);
+  ride = await step(driver, ride, 'depart'); ride = await step(driver, ride, 'arrive');
+  ride = await step(driver, ride, 'start', { pickupPin });
+  const path = `/api/parcels/${ride.id}/operations`;
+  const command = async (actor, action, expectedVersion, extra = {}) => ok(await actor.post(path, { action, expectedVersion, ...extra }));
+  await command(driver, 'report', 0, { reason: 'recipient_unavailable' });
+  await command(driver, 'request_return', 1);
+  assert.equal((await driver.post(path, { action: 'authorize_return', expectedVersion: 2, note: 'Not the sender.' })).status, 409);
+  await command(customer, 'authorize_return', 2, { note: 'Return the sealed parcel to me.' });
+  const result = await command(customer, 'confirm_return', 3, { confirmation: 'RECEIVED' });
+  assert.equal(result.operations.state, 'returned'); assert.equal(result.operations.evidence, null);
+  ride = ok(await customer.send(`/api/rides/${ride.id}`)).ride;
+  assert.equal(ride.status, 'cancelled'); assert.equal(ride.delivery.verifiedAt, null);
+  assert.equal(ok(await customer.send(`/api/rides/${ride.id}/location`)).share, null);
+  assert.equal(h.db.prepare('SELECT count(*) AS n FROM payments WHERE ride_id=?').get(ride.id).n, 0);
+  assert.equal((await recipient.send(path)).status, 404, 'A parcel recipient still needs an accepted invitation.');
+});
+
+test('loopback parcel handover writes a timestamped evidence record without exposing the delivery code', async t => {
+  const { h, customer, driver, ride: requested } = await fixture(t);
+  let ride = await confirm(customer, driver, requested); const pickupPin = ride.trip.pickupPin;
+  await driver.shareTripLocation(ride.id);
+  ride = await step(driver, ride, 'depart'); ride = await step(driver, ride, 'arrive');
+  ride = await step(driver, ride, 'start', { pickupPin });
+  const pin = ride.delivery.dropoffPin ?? ok(await customer.send(`/api/rides/${ride.id}`)).ride.delivery.dropoffPin;
+  ride = await step(driver, ride, 'complete', { deliveryPin: pin });
+  const record = ok(await customer.send(`/api/parcels/${ride.id}/operations`)).operations;
+  assert.equal(record.state, 'delivered'); assert.equal(record.evidence.verifiedAt, h.now);
+  assert.equal(record.evidence.method, 'recipient_pin'); assert.equal(record.evidence.position.lat, 9.08);
+  assert.equal(record.evidence.locationRecorded, true);
+  assert.equal(JSON.stringify(record).includes(pin), false);
+});
+
+test('disposable-database evidence failure rolls back handover and permits one same-key retry', async t => {
+  const { h, customer, driver, ride: requested } = await fixture(t);
+  let ride = await confirm(customer, driver, requested); const pickupPin = ride.trip.pickupPin;
+  await driver.shareTripLocation(ride.id);
+  ride = await step(driver, ride, 'depart'); ride = await step(driver, ride, 'arrive');
+  ride = await step(driver, ride, 'start', { pickupPin });
+  const pin = ok(await customer.send(`/api/rides/${ride.id}`)).ride.delivery.dropoffPin;
+  const path = `/api/rides/${ride.id}/complete`, key = randomUUID(), payload = { expectedVersion: ride.version, deliveryPin: pin };
+  h.db.exec("CREATE TRIGGER fixture_evidence_failure BEFORE INSERT ON delivery_handover_evidence BEGIN SELECT RAISE(ABORT, 'fixture storage failure'); END");
+  assert.equal((await driver.post(path, payload, key)).status, 500);
+  assert.equal(ok(await customer.send(`/api/rides/${ride.id}`)).ride.status, 'in_progress');
+  assert.equal(h.db.prepare('SELECT count(*) AS n FROM delivery_handover_evidence').get().n, 0);
+  assert.equal(h.db.prepare('SELECT count(*) AS n FROM payments WHERE ride_id=?').get(ride.id).n, 0);
+  h.db.exec('DROP TRIGGER fixture_evidence_failure');
+  assert.equal(ok(await driver.post(path, payload, key)).ride.status, 'completed');
+  assert.equal(ok(await driver.post(path, payload, key)).replayed, true);
+  assert.equal(h.db.prepare('SELECT count(*) AS n FROM delivery_handover_evidence').get().n, 1);
+});
+
+test('disposable-database return failure rolls back trip closure and tracking cleanup', async t => {
+  const { h, customer, driver, ride: requested } = await fixture(t);
+  let ride = await confirm(customer, driver, requested); const pickupPin = ride.trip.pickupPin;
+  await driver.shareTripLocation(ride.id);
+  ride = await step(driver, ride, 'depart'); ride = await step(driver, ride, 'arrive');
+  ride = await step(driver, ride, 'start', { pickupPin });
+  const path = `/api/parcels/${ride.id}/operations`;
+  ok(await customer.post(path, { action: 'request_return', expectedVersion: 0 }));
+  ok(await customer.post(path, { action: 'authorize_return', expectedVersion: 1, note: 'Return the fixture parcel.' }));
+  const key = randomUUID(), payload = { action: 'confirm_return', expectedVersion: 2, confirmation: 'RECEIVED' };
+  h.db.exec("CREATE TRIGGER fixture_return_failure BEFORE INSERT ON delivery_exception_events WHEN NEW.kind='return_received' BEGIN SELECT RAISE(ABORT, 'fixture storage failure'); END");
+  assert.equal((await customer.post(path, payload, key)).status, 500);
+  assert.equal(ok(await customer.send(`/api/rides/${ride.id}`)).ride.status, 'in_progress');
+  assert.equal(ok(await customer.send(path)).operations.state, 'return_authorized');
+  assert.equal(ok(await customer.send(`/api/rides/${ride.id}/location`)).share.active, true);
+  h.db.exec('DROP TRIGGER fixture_return_failure');
+  assert.equal(ok(await customer.post(path, payload, key)).operations.state, 'returned');
+  assert.equal(ok(await customer.post(path, payload, key)).replayed, true);
+  assert.equal(ok(await customer.send(`/api/rides/${ride.id}/location`)).share, null);
 });
