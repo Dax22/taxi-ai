@@ -72,7 +72,7 @@ export async function matchingParity(t, db) {
   await scenario('application verification missing', sql("UPDATE driver_applications SET verification_json=NULL WHERE driver_id='driver'"));
   await scenario('application details missing', sql("UPDATE driver_applications SET details_json=NULL WHERE driver_id='driver'"));
   await scenario('required document removed', sql("DELETE FROM driver_documents WHERE kind='vehicle_photo'"));
-  await scenario('Nigeria document deadline expired', sql("UPDATE driver_documents SET expires_on='2025-12-31' WHERE kind='insurance'"));
+  await scenario('Nigeria document deadline expired', sql("UPDATE driver_documents SET expires_on='2025-12-31' WHERE kind='driving_licence'"));
   await scenario('web session expired at boundary', sql('UPDATE sessions SET expires_at=?', now));
   await scenario('web session belongs to someone else', sql("UPDATE sessions SET user_id='customer'"));
   await scenario('availability heartbeat stale at boundary', sql('UPDATE driver_availability SET seen_at=?', now - 60_000));
