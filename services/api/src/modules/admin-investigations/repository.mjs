@@ -49,14 +49,22 @@ export function createAdminInvestigationsRepository(db) {
       FROM eats_location_shares WHERE order_id=? ORDER BY started_at,id LIMIT 501`).all(id),
     safety: id => db.prepare(`SELECT id,reporter_id AS reporterId,kind,note,status,created_at AS createdAt,updated_at AS updatedAt,
       acknowledged_by AS acknowledgedBy,resolved_at AS resolvedAt FROM safety_incidents WHERE ride_id=? ORDER BY created_at,id LIMIT 501`).all(id),
+    locationEvidence: (kind,id) => db.prepare(`SELECT resource_kind AS resourceKind,transaction_id AS transactionId,share_id AS shareId,
+      driver_id AS driverId,sequence,latitude,longitude,accuracy_meters AS accuracyMeters,captured_at AS capturedAt,recorded_at AS recordedAt
+      FROM investigation_location_evidence WHERE resource_kind=? AND transaction_id=? ORDER BY captured_at,share_id,sequence LIMIT 5001`)
+      .all(kind==='food'?'food':'ride',id),
+    locationEvidenceCount: (kind,id) => (db.prepare('SELECT count(*) AS n FROM investigation_location_evidence WHERE resource_kind=? AND transaction_id=?')
+      .get(kind==='food'?'food':'ride',id)).n,
+    guestPassenger: id => db.prepare('SELECT snapshot_json AS snapshotJson FROM guest_ride_passengers WHERE ride_id=?').get(id),
     handover: id => db.prepare(`SELECT verified_at AS verifiedAt,verification_method AS method,position_recorded AS positionRecorded
       FROM delivery_handover_evidence WHERE ride_id=?`).get(id),
     prior: (kind,id) => db.prepare(`SELECT id,actor_id AS actorId,case_reference AS caseReference,requesting_authority AS requestingAuthority,
-      legal_basis AS legalBasis,archive_sha256 AS archiveSha256,created_at AS createdAt
+      legal_basis AS legalBasis,included_documents AS includedDocuments,included_messages AS includedMessages,included_location AS includedLocation,
+      archive_sha256 AS archiveSha256,created_at AS createdAt
       FROM investigation_exports WHERE service=? AND transaction_id=? ORDER BY created_at DESC,id DESC LIMIT 30`).all(kind,id),
     record: row => db.prepare(`INSERT INTO investigation_exports(id,actor_id,service,transaction_id,driver_id,case_reference,requesting_authority,
-      authority_reference,legal_basis,purpose,included_documents,included_messages,manifest_sha256,archive_sha256,archive_bytes,created_at)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(row.id,row.actorId,row.kind,row.transactionId,row.driverId,row.caseReference,row.requestingAuthority,row.authorityReference,
-       row.legalBasis,row.purpose,row.includeDocuments?1:0,row.includeMessages?1:0,row.manifestSha256,row.archiveSha256,row.archiveBytes,row.createdAt),
+      authority_reference,legal_basis,purpose,included_documents,included_messages,included_location,manifest_sha256,archive_sha256,archive_bytes,created_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(row.id,row.actorId,row.kind,row.transactionId,row.driverId,row.caseReference,row.requestingAuthority,row.authorityReference,
+       row.legalBasis,row.purpose,row.includeDocuments?1:0,row.includeMessages?1:0,row.includeLocation?1:0,row.manifestSha256,row.archiveSha256,row.archiveBytes,row.createdAt),
   });
 }

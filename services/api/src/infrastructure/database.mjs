@@ -44,6 +44,7 @@ migrations.push('055_matching_intelligence.sql');
 migrations.push('056_production_acceptance.sql');
 migrations.push('057_mobile_operations.sql');
 migrations.push('058_investigation_exports.sql');
+migrations.push('059_investigation_location_evidence.sql');
 export const SCHEMA_VERSION = migrations.length;
 
 export function transaction(db, run) {

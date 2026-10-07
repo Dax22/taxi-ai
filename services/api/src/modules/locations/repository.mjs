@@ -27,6 +27,7 @@ function trackingRepository(db, food) {
   const table = food ? 'eats_location_shares' : 'location_shares';
   const commands = food ? 'eats_location_commands' : 'location_share_commands';
   const resourceColumn = food ? 'order_id' : 'ride_id';
+  const resourceKind = food ? 'food' : 'ride';
   const shares = `id, ${resourceColumn} AS rideId, driver_id AS driverId, active, session_hash AS sessionHash, client_hash AS clientHash,
     started_at AS startedAt, seen_at AS seenAt, stopped_at AS stoppedAt, sequence, position_json AS positionJson`;
   return {
@@ -44,6 +45,18 @@ function trackingRepository(db, food) {
     },
     async update(id, sequence, value, now) {
       (await db.prepare(`UPDATE ${table} SET sequence = ?, position_json = ?, seen_at = ? WHERE id = ?`).run(sequence, JSON.stringify(value), now, id));
+    },
+    async recordEvidence({ shareId, rideId, driverId, sequence, value, now, force = false }) {
+      const last = await db.prepare(`SELECT captured_at AS capturedAt FROM investigation_location_evidence
+        WHERE resource_kind=? AND share_id=? ORDER BY captured_at DESC,sequence DESC LIMIT 1`).get(resourceKind, shareId);
+      if (!force && last && value.capturedAt < Number(last.capturedAt) + 15_000) return false;
+      return (await db.prepare(`INSERT INTO investigation_location_evidence
+        (resource_kind,transaction_id,share_id,driver_id,sequence,latitude,longitude,accuracy_meters,captured_at,recorded_at)
+        VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT(resource_kind,share_id,sequence) DO NOTHING`)
+        .run(resourceKind, rideId, shareId, driverId, sequence, value.lat, value.lng, value.accuracy, value.capturedAt, now)).changes === 1;
+    },
+    async pruneEvidence(before) {
+      await db.prepare('DELETE FROM investigation_location_evidence WHERE resource_kind=? AND recorded_at<?').run(resourceKind, before);
     },
     shareCommand: async (actorId, key) => (await db.prepare(`SELECT fingerprint, share_id AS id FROM ${commands} WHERE actor_id = ? AND key = ?`).get(actorId, key)),
     async saveShareCommand(actorId, key, fingerprint, id) {

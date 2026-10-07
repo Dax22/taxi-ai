@@ -174,6 +174,9 @@ test('location sharing requires a booking, driver approval, session/CSRF and the
   assert.equal((await rider.post(`/api/location-shares/${share.id}/position`, fix())).status, 403);
   assert.equal((await driver.send(`/api/location-shares/${share.id}/position`, { method: 'POST', data: fix(), headers: { 'X-CSRF-Token': 'bad' } })).status, 403);
   assert.equal((await owner.post(`/api/location-shares/${share.id}/position`, fix())).status, 200);
+  const evidence = h.db.prepare(`SELECT sequence,latitude,longitude,accuracy_meters AS accuracyMeters,captured_at AS capturedAt
+    FROM investigation_location_evidence WHERE resource_kind='ride' AND transaction_id=? ORDER BY sequence`).all(ride.id);
+  assert.equal(evidence.length, 1); assert.equal(evidence[0].sequence, 1); assert.equal(evidence[0].latitude, points.pickup.lat);
   const read = (await rider.get(`/api/rides/${ride.id}/location`)).body.share;
   assert.equal(read.position.lat, points.pickup.lat); assert.equal(read.owned, false);
   assert.ok(!JSON.stringify(read).includes('Hash'));

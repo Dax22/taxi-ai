@@ -3,7 +3,7 @@ import { exportRequest, ref, parse, pick, iso, wat, csv, asMoney, timelineRow } 
 
 const MAX_EVENTS = 500;
 const FILE_LIMIT = 10 * 1024 * 1024;
-const LIMITS = {maxDriverDocuments:8,maxChatRows:MAX_EVENTS,maxTimelineRows:3000};
+const LIMITS = {maxDriverDocuments:8,maxChatRows:MAX_EVENTS,maxTimelineRows:3000,maxLocationRows:5000};
 const time = value => ({utc:iso(value),nigeria:wat(value)});
 function limited(rows,label) {
   check(rows.length<=MAX_EVENTS,'EXPORT_TOO_LARGE',`The ${label} exceeds ${MAX_EVENTS} entries. Request a scoped manual evidence review.`);
@@ -31,9 +31,9 @@ export function createAdminInvestigationsService({ repository, requirePermission
     await requirePermission(userId,'investigations.read');
     ref(kind,id);const row=kind==='food'?await repository.food(id):await repository.ride(id);
     check(row && (kind==='food'||Boolean(row.parcelDetailsJson)===(kind==='courier')),'NOT_FOUND','The selected transaction was not found.');
-    const docs=row.workerId?await repository.documents(row.workerId):[];
+    const docs=row.workerId?await repository.documents(row.workerId):[],locationEvidenceAvailable=Number(await repository.locationEvidenceCount(kind,id));
     return {viewerId:userId,record:{service:kind,id,status:row.tripStatus??row.orderStatus??row.requestStatus,createdAt:Number(row.createdAt),
-      customerName:row.customerName,workerName:row.workerName??null,driverDocumentsAvailable:docs.length},
+      customerName:row.customerName,workerName:row.workerName??null,driverDocumentsAvailable:docs.length,locationEvidenceAvailable},
       history:await repository.prior(kind,id),notice:'Exports are limited to one recorded transaction and require a documented, reviewed legal authority. Preview does not access document contents or current GPS.'};
   }
   async function create(userId,data) {
@@ -47,6 +47,7 @@ export function createAdminInvestigationsService({ repository, requirePermission
       check(input.kind!=='food'||!input.includeMessages,'INVALID_INPUT','Food orders do not have the ride chat history.');
       const service=input.kind,driverId=row.workerId??null;
       const snapshot=service==='food'?parse(row.snapshotJson)||{}:null;
+      const guest=service==='ride'?parse((await repository.guestPassenger(row.id))?.snapshotJson):null;
       const application=driverId?await repository.driver(driverId):null;
       const details=parse(application?.detailsJson)||{},verification=parse(application?.verificationJson)||{};
       const documentRows=driverId?await repository.documents(driverId):[];
@@ -69,6 +70,7 @@ export function createAdminInvestigationsService({ repository, requirePermission
       const trip={schemaVersion:1,service,id:row.id,
         exportedAtUtc:iso(now),caseReference:input.caseReference,
         customer:user(row.customerId,row.customerName,row.customerEmail),
+        passenger:guest?.kind==='guest'?pick(guest,['kind','name','phone']):{kind:'self',name:row.customerName??null},
         driverOrCourier:driverId?user(driverId,row.workerName,row.workerEmail):null,
         status:row.tripStatus??row.orderStatus??row.requestStatus,
         bookingOrOrder:service==='food'?{
@@ -94,8 +96,13 @@ export function createAdminInvestigationsService({ repository, requirePermission
           {legacyMode:row.paymentMode??null,legacyStatus:row.paymentStatus??null,legacyReference:row.paymentReference??null,
             legacyPaidAtUtc:iso(row.paidAt),providerReference:row.checkoutReference??null,providerStatus:row.checkoutStatus??null,providerPaidAtUtc:iso(row.checkoutPaidAt)},
         paymentWarning:'Amounts and fare agreements are not proof of successful payment. Provider status/reference and paid timestamp, when recorded, are shown separately.',
-        locationHistoryWarning:'Taxi Ai does not keep a historical GPS breadcrumb trail here. Planned booking geometry is NOT evidence of where a driver actually travelled. Closed active-sharing positions are deleted by the application.',
+        locationHistoryWarning:'Taxi Ai retains a bounded, sampled active-trip GPS evidence trail for 180 days. Planned booking geometry is separate and is NOT evidence of where a driver actually travelled.',
       };
+      const locationEvidence=input.includeLocation?await repository.locationEvidence(service,row.id):[];
+      check(locationEvidence.length<=LIMITS.maxLocationRows,'EXPORT_TOO_LARGE','The GPS evidence trail exceeds the case export limit.');
+      trip.actualLocationEvidence={included:input.includeLocation,availableCount:Number(await repository.locationEvidenceCount(service,row.id)),
+        exportedCount:locationEvidence.length,retentionDays:180,samplingPolicy:'accepted active-share fixes sampled at no more than one stored point per 15 seconds, plus the final fix',
+        source:'driver_shared_gps',warning:'This is recorded device GPS evidence with reported accuracy; it may contain ordinary GPS measurement error.'};
       const timeline=[];
       if(service==='food'){
         const events=parse(row.eventsJson);
@@ -134,7 +141,7 @@ export function createAdminInvestigationsService({ repository, requirePermission
       const caseInfo={exportId,createdAtUtc:iso(now),createdAtNigeria:wat(now),service,transactionId:row.id,
         caseReference:input.caseReference,requestingAuthority:input.requestingAuthority,authorityReference:input.authorityReference,
         legalBasis:input.legalBasis,recordedPurpose:input.purpose,preparedByStaffId:userId,
-        sensitiveDocumentsRequested:input.includeDocuments,sensitiveChatRequested:input.includeMessages,
+        sensitiveDocumentsRequested:input.includeDocuments,sensitiveChatRequested:input.includeMessages,sensitiveLocationRequested:input.includeLocation,
         notice:'Requesting authority and legal basis are declarations entered by staff, not independently verified by Taxi Ai.'};
       const plan=trip.bookingOrOrder.plannedRoute??null;
       const locations=[];
@@ -148,12 +155,20 @@ export function createAdminInvestigationsService({ repository, requirePermission
           'Customer delivery destination from saved order; NOT courier movement history.']);
       }
       for(const share of trip.locationShareSessions){
-        locations.push(['share_started','sharing_metadata_no_coordinates',share.startedAtUtc,'','','',
-          'Location sharing began; coordinates are not retained here.']);
-        if(share.stoppedAtUtc)locations.push(['share_stopped','sharing_metadata_no_coordinates',share.stoppedAtUtc,'','','',
-          'Location sharing ended and live GPS value was cleared.']);
+        locations.push(['share_started','sharing_session_metadata',share.startedAtUtc,'','','',
+          'Location sharing began. Historical coordinates are separate and included only when specifically authorized.']);
+        if(share.stoppedAtUtc)locations.push(['share_stopped','sharing_session_metadata',share.stoppedAtUtc,'','','',
+          'Location sharing ended; the live location value was cleared.']);
       }
+      for(const fix of locationEvidence)locations.push(['gps_fix','actual_driver_shared_gps',iso(fix.capturedAt),'',fix.latitude,fix.longitude,
+        'Device GPS fix; accuracy '+fix.accuracyMeters+' metres; stored sampling is not every raw device update.']);
       add('locations.csv',csv(['record_type','location_evidence_type','time_utc','location_name','latitude','longitude','limitations'],locations));
+      if(input.includeLocation&&locationEvidence.length){
+        const coordinates=locationEvidence.map(f=>[Number(f.longitude),Number(f.latitude)]);
+        const geometry=coordinates.length>1?{type:'LineString',coordinates}:{type:'Point',coordinates:coordinates[0]};
+        add('actual-route.geojson',JSON.stringify({type:'FeatureCollection',features:[{type:'Feature',properties:{service,transactionId:row.id,
+          evidenceType:'sampled_actual_driver_shared_gps',retentionDays:180},geometry}]},null,2)+'\n');
+      }
       const fare=service==='food'?trip.payment.total:trip.bookingOrOrder.agreedFare;
       const money=value=>value?`NGN ${value.formattedNgn} (${value.amountKobo} kobo)`:'Not recorded';
       const summaryText=[
@@ -187,9 +202,10 @@ export function createAdminInvestigationsService({ repository, requirePermission
         `CURRENT APPLICATION STATUS: ${driver?.applicationAtExport?.applicationStatus??'Not available'}`,
         `AVAILABLE DRIVER DOCUMENT REFERENCES: ${driver?.documents?.length??0}`,
         `DRIVER ORIGINAL DOCUMENT IMAGES ATTACHED: ${input.includeDocuments?'Requested; see manifest and driver.json':'No'}`,
-        `CHAT MESSAGES ATTACHED: ${input.includeMessages?'Requested; see chat.csv':'No'}`,'',
+        `CHAT MESSAGES ATTACHED: ${input.includeMessages?'Requested; see chat.csv':'No'}`,
+        `ACTUAL GPS EVIDENCE ATTACHED: ${input.includeLocation?locationEvidence.length+' sampled fixes':'No'}`,'',
         'IMPORTANT: A planned route/coordinate is not evidence of the actual path the vehicle drove.',
-        'Actual driver GPS breadcrumb history is not retained by Taxi Ai in this release.',
+        'When authorized, locations.csv and actual-route.geojson contain the bounded sampled driver-shared GPS evidence retained by Taxi Ai.',
         'All times above are UTC. timeline.csv also includes Nigeria time (WAT).',
         'Driver details/documents may be newer than the journey and represent the state at export time.',
         'The staff-declared legal basis has not been independently verified by the software.',
@@ -226,12 +242,19 @@ export function createAdminInvestigationsService({ repository, requirePermission
         add('chat.csv',csv(['sequence','sent_at_utc','sent_at_nigeria','sender_account_id','message'],
           messages.map(m=>[m.sequence,iso(m.createdAt),wat(m.createdAt),m.senderId,m.body])));
       }
+      add('certificate-of-authenticity.txt',[
+        'TAXI AI — RECORDS EXPORT CERTIFICATE',`Export ID: ${exportId}`,`Case reference: ${input.caseReference}`,
+        `Transaction: ${service} / ${row.id}`,`Exported UTC: ${iso(now)}`,`Prepared by staff account: ${userId}`,
+        'Taxi AI certifies that the files in this package were generated from records available to its production application for the identified transaction at the stated export time.',
+        'The accompanying manifest lists a SHA-256 digest for each exported file. The separate audited export receipt records the SHA-256 digest of the complete ZIP archive.',
+        'This certificate authenticates the system export process only. It does not independently prove the truth of a user-supplied statement, GPS accuracy, document authenticity, payment settlement, or legal sufficiency of the requesting authority.',
+      ].join('\n')+'\n');
       add('README.txt',[
         'TAXI AI — CASE-SCOPED INVESTIGATION EVIDENCE EXPORT',`Export ID: ${exportId}`,
         `Case reference: ${input.caseReference}`,`Transaction: ${service} / ${row.id}`,`Exported UTC: ${iso(now)}`,
         'Only recorded facts are included; original source data has not been edited by this export.',
-        'Route coordinates in trip.json are PLANNED booking preview geometry, not a historical track.',
-        'Taxi Ai clears live-shared driver/courier GPS positions on sharing end. This export contains no reconstructed travelled path.',
+        'Route coordinates in trip.json are PLANNED booking preview geometry and remain separate from observed GPS.',
+        input.includeLocation?'locations.csv and actual-route.geojson include retained sampled driver-shared GPS fixes when available.':'Historical GPS fixes were not included in this export.',
         'Driver application fields and document files are as stored AT EXPORT TIME, not necessarily at the time of the trip.',
         'Call records are signaling metadata, not recordings. Pickup and delivery PINs are deliberately omitted.',
         'Payment records reflect provider/transaction states, not evidence of a bank transfer unless separately verified.',
@@ -240,17 +263,18 @@ export function createAdminInvestigationsService({ repository, requirePermission
         'Do not redistribute more personal information than the verified legal request authorizes.',
         'Transfer via an approved encrypted channel, preserve a separate secure copy of the archive hash, and record each recipient and handover.',
         `Case basis entered by staff: ${input.legalBasis}`,`Prepared for: ${input.requestingAuthority}`,`Documents attached: ${includedDocuments}`,
-        `Ride chat rows attached: ${includedMessages}`,
+        `Ride chat rows attached: ${includedMessages}`,`Historical GPS rows attached: ${locationEvidence.length}`,
       ].join('\n')+'\n');
-      const manifest={schemaVersion:1,exportId,createdAtUtc:iso(now),caseReference:input.caseReference,service,transactionId:row.id,
+      const manifest={schemaVersion:2,exportId,createdAtUtc:iso(now),caseReference:input.caseReference,service,transactionId:row.id,
+        scopes:{driverDocuments:input.includeDocuments,chatMessages:input.includeMessages,historicalLocation:input.includeLocation},
         files:entries.map(e=>({path:e.name,sizeBytes:e.body.length,sha256:sha256(e.body)})),
-        limitations:['No continuous historical GPS location trail exists in this feature.','Driver documents represent current stored files.','No biometric templates, passwords, payment-card details, PIN values, push tokens or call audio are included.']};
+        limitations:['GPS evidence is sampled and reflects device-reported fixes rather than every raw location update.','Driver documents represent current stored files.','No biometric templates, passwords, payment-card details, PIN values, push tokens or call audio are included.']};
       const manifestBytes=Buffer.from(JSON.stringify(manifest,null,2)+'\n');
       add('manifest.json',manifestBytes);
       const zip=evidenceZip(entries),archiveSha256=sha256(zip),manifestSha256=sha256(manifestBytes);
       await repository.record({id:exportId,actorId:userId,kind:service,transactionId:row.id,driverId,caseReference:input.caseReference,
         requestingAuthority:input.requestingAuthority,authorityReference:input.authorityReference,legalBasis:input.legalBasis,purpose:input.purpose,
-        includeDocuments:input.includeDocuments,includeMessages:input.includeMessages,archiveSha256,manifestSha256,archiveBytes:zip.length,createdAt:now});
+        includeDocuments:input.includeDocuments,includeMessages:input.includeMessages,includeLocation:input.includeLocation,archiveSha256,manifestSha256,archiveBytes:zip.length,createdAt:now});
       await audit.record(userId,'admin.investigation.export',row.id,now);
       const filename=`taxi-ai-evidence-${service}-${row.id.slice(0,8)}-${exportId}.zip`;
       return {content:zip,filename,sha256:archiveSha256,exportId,createdAt:now};
