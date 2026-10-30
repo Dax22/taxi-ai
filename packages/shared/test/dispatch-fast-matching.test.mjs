@@ -48,7 +48,7 @@ test('fast solver is bounded, deterministic and does not mutate input',()=>{
 test('new live dispatch batch path preserves legacy maximum coverage and total pickup cost',()=>{
  for(let iteration=0;iteration<100;iteration++){
   const candidates=make(16,16,160).map(x=>({
-   driverId:x.driverId,rideId:x.rideId,pickupEtaSeconds:50+(x.cost+10000),
+   driverId:x.driverId,rideId:x.rideId,pickupEtaSeconds:100+Math.floor((x.cost+10000)/6),
    distanceMeters:1500,createdAt:now,expiresAt:now+300000,
   }));
   const fast=allocateDispatchOffers(candidates,now,{mode:'batch',solver:'fast'});
