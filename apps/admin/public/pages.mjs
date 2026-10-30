@@ -2,6 +2,7 @@ import { transactions, transactionDetail, people, personDetail, businesses, busi
 import { insights, brief, platform, savedReports, campaigns, accessAudit } from './command-center-insights.mjs';
 import { restrictions, restrictionImpact, restrictionDetail } from './moderation-pages.mjs';
 import { safetyAlerts, safetyAlertDetail } from './safety-alert-pages.mjs';
+import { rideIntegrity, rideIntegrityDetail } from './ride-integrity-page.mjs';
 import { operations } from './operations-page.mjs';
 import { staff, audit } from './staff-pages.mjs';
 import { cases, caseDetail } from './case-pages.mjs';
@@ -157,4 +158,4 @@ function analytics(data, route, access) {
   fragment.append(reportingNote(data.range), el('p', 'Completion and cancellation rates divide by all requests in this period. Expired requests are shown separately. The average fare is rounded down to a whole kobo.', 'definition-note'));
   return fragment;
 }
-export const renderPage = (route, data, access) => ({ safetyAlerts, safetyAlertDetail, transactions, transactionDetail, people, personDetail, businesses, businessDetail, transactionExport, liveTransaction, diagnosis, workItems, workDetail, insights, brief, platform, savedReports, campaigns, accessAudit, restrictions, restrictionImpact, restrictionDetail, overview, accounts, account, trips, trip, analytics, operations, staff, audit, cases, case: caseDetail, finance, financeDetail, compliance, complianceDetail, complianceDocument, demand, matching, mobile, acceptance, investigations, coverage, announcements })[route.name](data, route, access);
+export const renderPage = (route, data, access) => ({ safetyAlerts, safetyAlertDetail, rideIntegrity, rideIntegrityDetail, transactions, transactionDetail, people, personDetail, businesses, businessDetail, transactionExport, liveTransaction, diagnosis, workItems, workDetail, insights, brief, platform, savedReports, campaigns, accessAudit, restrictions, restrictionImpact, restrictionDetail, overview, accounts, account, trips, trip, analytics, operations, staff, audit, cases, case: caseDetail, finance, financeDetail, compliance, complianceDetail, complianceDocument, demand, matching, mobile, acceptance, investigations, coverage, announcements })[route.name](data, route, access);

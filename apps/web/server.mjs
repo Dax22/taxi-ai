@@ -305,7 +305,7 @@ export function createAppServer({ runtime = createRuntimeConfig({}), db = openDa
   const workers = createWorkerRuntime({ coordinator: application.workerCoordinator, config: { ...workerConfig, matchingFast }, wakeups: db,
     regions: () => application.dispatch.regions(), dispatch: application.dispatch, onError: (name) => telemetry.event(name),
     maintenance: async ({ lease, active }) => {
-      for (const service of [application.rides, application.availability, application.calls, application.locations, application.foodTracking, application.backgroundLocations,
+      for (const service of [application.rides, application.availability, application.calls, application.locations, application.rideIntegrity, application.foodTracking, application.backgroundLocations,
         application.safety, application.guestRides, application.family, application.vehicleChecks, application.devices, application.mobileOperations, application.googleAuth]) {
         if (!active()) return;
         const held = await db.transaction(async () => {

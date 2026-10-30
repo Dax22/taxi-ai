@@ -1,5 +1,6 @@
 export const commandSections={
  'safety-alerts':['Safety alerts','Possible crash, loud distress and manual panic reports.','cases.safety','safetyAlerts'],
+ 'ride-integrity':['Ride integrity','Review tracking gaps and cancellations after pickup arrival.','moderation.read','rideIntegrity'],
  transactions:['All transactions','Every ride, kitchen order and parcel delivery.','transactions.read','transactions'],
  'transactions-export':['Transaction export','Export the complete filtered cohort.','transactions.export','transactionExport'],
  investigations:['Investigation evidence','Case-specific trip, location, fare and driver disclosures.','investigations.read','investigations'],
@@ -28,8 +29,8 @@ export function commandRoute(location){
  if(['live','diagnosis'].includes(section)||section==='transactions'&&parts.length>1){
   if(parts.length!==3||!['ride','courier','food'].includes(parts[1])||!uuid(parts[2]))throw new Error('Choose a valid transaction.');
   if(section==='transactions'){name='transactionDetail';title='Transaction summary';}
- }else if(parts.length===2&&['people','businesses','work','restrictions','safety-alerts'].includes(section)&&uuid(parts[1])){
-  name={people:'personDetail',businesses:'businessDetail',work:'workDetail',restrictions:'restrictionDetail','safety-alerts':'safetyAlertDetail'}[section];title=meta[0]+' details';
+ }else if(parts.length===2&&['people','businesses','work','restrictions','safety-alerts','ride-integrity'].includes(section)&&uuid(parts[1])){
+  name={people:'personDetail',businesses:'businessDetail',work:'workDetail',restrictions:'restrictionDetail','safety-alerts':'safetyAlertDetail','ride-integrity':'rideIntegrityDetail'}[section];title=meta[0]+' details';
  }else if(parts.length!==1)throw new Error('This dashboard page does not exist.');
  const query=new URLSearchParams(location.search);
  return {path,query,section,name,permission:meta[2],title,description:meta[1],apiPath:'/api/admin/console/'+parts.join('/')+(query.size?'?'+query:'')};

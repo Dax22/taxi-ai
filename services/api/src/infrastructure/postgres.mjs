@@ -22,6 +22,7 @@ POSTGRES_MIGRATIONS.push('030_production_acceptance.sql');
 POSTGRES_MIGRATIONS.push('031_mobile_operations.sql');
 POSTGRES_MIGRATIONS.push('032_investigation_exports.sql');
 POSTGRES_MIGRATIONS.push('033_investigation_location_evidence.sql');
+POSTGRES_MIGRATIONS.push('034_ride_integrity_signals.sql');
 export const POSTGRES_SCHEMA_VERSION = POSTGRES_MIGRATIONS.length;
 const safeNumber = (value) => {
   const result = Number(value);

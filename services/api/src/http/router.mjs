@@ -4,6 +4,7 @@ import { adminInsightRoutes } from '../modules/admin-insights/routes.mjs';
 import { adminTransactionRoutes } from '../modules/admin-transactions/routes.mjs';
 import { adminInvestigationRoutes } from '../modules/admin-investigations/routes.mjs';
 import { adminSafetyAlertRoutes } from '../modules/admin-safety-alerts/routes.mjs';
+import { rideIntegrityRoutes } from '../modules/ride-integrity/routes.mjs';
 import { checkoutPaymentRoutes } from '../modules/checkout-payments/routes.mjs';
 import { deliveryUpdateRoutes } from '../modules/delivery-updates/routes.mjs';
 import { safetyMonitoringRoutes } from '../modules/safety-monitoring/routes.mjs';
@@ -53,6 +54,7 @@ export function createApiRouter(application, { secure = false } = {}) {
   routes.push(...adminAccountControlRoutes(application.accountControls), ...accountNoticeRoutes(application.accountControls));
   routes.push(...adminTransactionRoutes(application.adminTransactions), ...adminInvestigationRoutes(application.adminInvestigations), ...adminWorkRoutes(application.adminWork), ...adminInsightRoutes(application.adminInsights));
   routes.push(...adminSafetyAlertRoutes(application.adminSafetyAlerts));
+  routes.push(...rideIntegrityRoutes(application.rideIntegrity));
   routes.push(...checkoutPaymentRoutes(application.checkoutPayments));
   routes.push(...deliveryUpdateRoutes(application.deliveryUpdates));
   routes.push(...staffAccessRoutes(application.staffAccess), ...adminCasesRoutes(application.adminCases), ...adminOperationsRoutes(application.adminOperations));

@@ -49,6 +49,8 @@ import { createDriversService } from './modules/drivers/service.mjs';
 import { createDriverFaceChecks } from './modules/driver-face-checks/service.mjs';
 import { vehicleDetails, eligibility } from './modules/drivers/domain.mjs';
 import { createRidesRepository } from './modules/rides/repository.mjs';
+import { createRideIntegrityRepository } from './modules/ride-integrity/repository.mjs';
+import { createRideIntegrityService } from './modules/ride-integrity/service.mjs';
 import { createDeliveriesRepository } from './modules/deliveries/repository.mjs';
 import { createDeliveriesService } from './modules/deliveries/service.mjs';
 import { createRidesService } from './modules/rides/service.mjs';
@@ -370,6 +372,8 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
   const adminInvestigations = createAdminInvestigationsService({ repository: createAdminInvestigationsRepository(db),
     requirePermission: staffAccess.requirePermission, audit, unitOfWork, tokens, clock,
     archiveCodec: { zip: evidenceZip, sha256: evidenceSha256 } });
+  const rideIntegrity = createRideIntegrityService({ repository: createRideIntegrityRepository(db),
+    requirePermission: staffAccess.requirePermission, unitOfWork, tokens, audit, clock });
   const adminTransactions = createAdminTransactionsService({ repository: createAdminTransactionsRepository(db),
     requirePermission: staffAccess.requirePermission, audit, unitOfWork, clock,
     deliveryStateFor: deliveryOperationState,
@@ -498,5 +502,5 @@ export function createApplication({ db, clock = Date.now, callConfig = createCal
       emergencyPartnerConfigured: Boolean(safetyAlertProvider.available && safetyAlertProvider.emergencyService),
       liveAcceptanceVerified: false, notice: 'Configuration flags only. Real-device and provider acceptance must be verified separately.' }),
     unitOfWork, tokens, audit, clock });
-  return Object.freeze({ adminSafetyAlerts, accountControls, adminInvestigations, adminTransactions, adminWork, adminInsights, accounts, devices, mobileOperations, drivers, rides, dispatch, dispatchMl, dispatchPerformance, eats, chat, calls, locations, foodTracking, backgroundLocations, availability, payments, checkoutPayments, safety, safetyMonitoring, guestRides, parcelTracking, deliveryOperations, family, familyDelivery, vehicleChecks, adminConsole, staffAccess, adminCases, adminOperations, adminFinance, adminCompliance, adminDemand, adminMatching, adminMobile, adminAcceptance, announcements, googleAuth, accountEmail, notifications, deliveryUpdates, rateLimiter, realtime, workerCoordinator, clock });
+  return Object.freeze({ adminSafetyAlerts, accountControls, adminInvestigations, rideIntegrity, adminTransactions, adminWork, adminInsights, accounts, devices, mobileOperations, drivers, rides, dispatch, dispatchMl, dispatchPerformance, eats, chat, calls, locations, foodTracking, backgroundLocations, availability, payments, checkoutPayments, safety, safetyMonitoring, guestRides, parcelTracking, deliveryOperations, family, familyDelivery, vehicleChecks, adminConsole, staffAccess, adminCases, adminOperations, adminFinance, adminCompliance, adminDemand, adminMatching, adminMobile, adminAcceptance, announcements, googleAuth, accountEmail, notifications, deliveryUpdates, rateLimiter, realtime, workerCoordinator, clock });
 }

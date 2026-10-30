@@ -10,6 +10,8 @@ export function staffPermission(path, user, staff) {
     if (path === `/api/admin/console/${section}` || path.startsWith(`/api/admin/console/${section}/`)) return permission;
   }
   if (path === '/api/admin/console/safety-alerts' || path.startsWith('/api/admin/console/safety-alerts/')) return 'cases.safety';
+  if (path === '/api/admin/console/ride-integrity' || path.startsWith('/api/admin/console/ride-integrity/'))
+    return /\/review$/.test(path) ? 'moderation.manage' : 'moderation.read';
   if (path === '/api/admin/console/operations' || path === '/api/admin/console/matching') return 'operations.read';
   if (path === '/api/admin/console/acceptance') return 'acceptance.read';
   if (/^\/api\/admin\/console\/acceptance\/[a-z0-9_.-]{3,80}\/result$/.test(path)) return 'acceptance.manage';
