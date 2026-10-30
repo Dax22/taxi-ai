@@ -1,4 +1,5 @@
 import { EXPANDED_RADIUS_METERS, REQUEST_MS } from './matching.mjs';
+import { allocateFastMatching } from './dispatch-fast-matching.mjs';
 
 /** Deterministic dispatch rules. These are policy settings, not learned weights. */
 export const DISPATCH_POLICY = Object.freeze({
@@ -174,6 +175,25 @@ function batchAllocation(edges) {
   return links.filter(({ link }) => link.capacity === 0).map(({ edge }) => edge);
 }
 
+/**
+ * Exact algorithm with a safety fallback to the existing Bellman-Ford solver.
+ * Only pre-screened ride/driver IDs and policy costs enter the faster matcher.
+ * This does not change vehicle/GPS eligibility, offered fare or commission.
+ */
+function batchAllocationFast(edges) {
+  try {
+    const rows=edges.map(edge=>({
+      driverId:edge.candidate.driverId,
+      rideId:edge.candidate.rideId,
+      cost:edge.cost,
+      original:edge,
+    }));
+    return allocateFastMatching(rows).map(item=>item.original);
+  } catch {
+    return batchAllocation(edges);
+  }
+}
+
 function validateInput(candidates, now) {
   if (!Number.isSafeInteger(now) || now < 0 || now > Number.MAX_SAFE_INTEGER - DISPATCH_POLICY.offerTtlMs) {
     throw new TypeError('A valid server time is required.');
@@ -204,11 +224,12 @@ export function boundedDispatchCandidates(candidates, now) {
  * the bounded graph. Waiting credits improve priority; availability, graph caps
  * and expiring requests mean this cannot guarantee that every rider is served.
  */
-export function allocateDispatchOffers(candidates, now, { mode = 'sequential' } = {}) {
+export function allocateDispatchOffers(candidates, now, { mode = 'sequential', solver = 'fast' } = {}) {
   validateInput(candidates, now);
   if (!['sequential', 'batch'].includes(mode)) throw new TypeError('Unknown dispatch mode.');
+  if (!['fast', 'legacy'].includes(solver)) throw new TypeError('Unknown batch solver.');
   const edges = boundedEdges(candidates, now);
-  const chosen = mode === 'batch' ? batchAllocation(edges) : greedyAllocation(edges);
+  const chosen = mode === 'batch' ? (solver === 'fast' ? batchAllocationFast(edges) : batchAllocation(edges)) : greedyAllocation(edges);
   return chosen.sort(compareEdges).map(({ candidate, etaSource, reasons }) => ({ ...candidate,
     offerExpiresAt: Math.min(now + DISPATCH_POLICY.offerTtlMs, candidate.expiresAt),
     dispatch: { policyVersion: DISPATCH_POLICY.version, mode,
