@@ -88,7 +88,7 @@ export function createDispatchService({ repository, candidates, candidateFor, ge
             && estimate.estimatedAt <= commitNow && commitNow - estimate.estimatedAt < 30_000;
           eligible.push({ ...live, pickupEtaSeconds: road ? estimate.durationSeconds : null, estimatedAt: road ? estimate.estimatedAt : null });
         }
-        for (const edge of allocateDispatchOffers(eligible, commitNow, { mode })) {
+        for (const edge of allocateDispatchOffers(eligible, commitNow, { mode, solver: config.solver ?? 'fast' })) {
           const offer = { id: tokens.id(), rideId: edge.rideId, driverId: edge.driverId, availabilityId: edge.availabilityId,
             mode, policyVersion: edge.dispatch.policyVersion, etaSource: edge.dispatch.etaSource,
             pickupEtaSeconds: edge.pickupEtaSeconds, estimatedAt: edge.estimatedAt, createdAt: commitNow, expiresAt: edge.offerExpiresAt };
